@@ -74,8 +74,6 @@ Optional development dependencies:
 
 https://github.com/ekmungai/eloquent-ifrs/raw/refs/heads/master/README.md
 
-
-
 ## Usage Overview
 
 ### Clients / Suppliers
@@ -170,11 +168,11 @@ All reconciled entries update the bank account balance in IFRS, ensuring your le
 
 ## Roadmap
 
-| Phase       | Deliverables                                                                                  |
-| ----------- | --------------------------------------------------------------------------------------------- |
-| **Phase 1** | Installation, IFRS configuration, chart of accounts, GST, basic seeding. (Complete)           |
-| **Phase 2** | User auth with roles, client/supplier/vendor CRUD, Wise reconciliation foundation. (Complete) |
-| **Phase 3** | Time tracking, purchase orders, allocation logic.                                             |
-| **Phase 4** | Invoice generation, status tracking, payment recording and assignment.                        |
-| **Phase 5** | Document attachments and full reporting suite.                                                |
-| **Phase 6** | Advanced reconciliation (auto‑create missing transactions) and dashboard widgets.             |
+| Phase       | Deliverables                                                                       |
+| ----------- | ---------------------------------------------------------------------------------- |
+| **Phase 1** | Installation, IFRS configuration, chart of accounts, GST, basic seeding.           |
+| **Phase 2** | User auth with roles, client/supplier/vendor CRUD, Wise reconciliation foundation. |
+| **Phase 3** | Time tracking, purchase orders, allocation logic.                                  |
+| **Phase 4** | Invoice generation, status tracking, payment recording and assignment.             |
+| **Phase 5** | Document attachments and full reporting suite.                                     |
+| **Phase 6** | Advanced reconciliation (auto‑create missing transactions) and dashboard widgets.  |
