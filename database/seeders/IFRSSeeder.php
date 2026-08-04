@@ -6,6 +6,7 @@ use App\Models\User;
 use IFRS\Models\Account;
 use IFRS\Models\Entity;
 use IFRS\Models\Currency;
+use IFRS\Models\ExchangeRate;
 use IFRS\Models\Vat;
 use IFRS\Models\Category;
 use Illuminate\Database\Seeder;
@@ -58,6 +59,64 @@ class IFRSSeeder extends Seeder
 
         // Update currency with correct entity_id
         DB::table('ifrs_currencies')->where('id', $audId)->update(['entity_id' => $entityId]);
+
+        // ============================================
+        // MULTI-CURRENCY SUPPORT
+        // ============================================
+        
+        $currencies = [
+            ['code' => 'USD', 'name' => 'US Dollar'],
+            ['code' => 'EUR', 'name' => 'Euro'],
+            ['code' => 'GBP', 'name' => 'British Pound'],
+            ['code' => 'NZD', 'name' => 'New Zealand Dollar'],
+        ];
+
+        // Approximate exchange rates to AUD (as of mid-2025)
+        // These should be updated via API in production
+        $exchangeRates = [
+            'USD' => 0.65,  // 1 AUD = ~0.65 USD
+            'EUR' => 0.60,  // 1 AUD = ~0.60 EUR
+            'GBP' => 0.51,  // 1 AUD = ~0.51 GBP
+            'NZD' => 1.09,  // 1 AUD = ~1.09 NZD
+        ];
+
+        foreach ($currencies as $currency) {
+            $exists = DB::table('ifrs_currencies')->where('currency_code', $currency['code'])->exists();
+            $currencyId = null;
+            
+            if (!$exists) {
+                $currencyId = DB::table('ifrs_currencies')->insertGetId([
+                    'currency_code' => $currency['code'],
+                    'name' => $currency['name'],
+                    'entity_id' => $entityId,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            } else {
+                $currencyId = DB::table('ifrs_currencies')->where('currency_code', $currency['code'])->value('id');
+            }
+
+            // Create exchange rate to AUD (if not exists)
+            $rateExists = DB::table('ifrs_exchange_rates')
+                ->where('currency_id', $currencyId)
+                ->where('entity_id', $entityId)
+                ->whereDate('valid_from', now()->startOfYear())
+                ->exists();
+            
+            if (!$rateExists) {
+                DB::table('ifrs_exchange_rates')->insert([
+                    'currency_id' => $currencyId,
+                    'entity_id' => $entityId,
+                    'rate' => $exchangeRates[$currency['code']],
+                    'valid_from' => now()->startOfYear(),
+                    'valid_to' => null,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        }
+
+        $this->command->info('Multi-currency support added: USD, EUR, GBP, NZD with exchange rates.');
 
         // Delete temp entity if exists
         DB::table('ifrs_entities')->where('name', '_TEMP_')->delete();
