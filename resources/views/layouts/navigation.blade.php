@@ -42,7 +42,7 @@
                 title="Add Client">+</a>
         </div>
 
-        <!-- Suppliers & Vendors -->
+        <!-- Suppliers -->
         <div class="flex items-center justify-between group">
             <a href="{{ route('suppliers.index') }}"
                 class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors flex-1 {{ request()->routeIs('suppliers.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
@@ -56,14 +56,6 @@
                 class="text-slate-500 hover:text-white px-2 text-lg font-bold transition-colors"
                 title="Add Supplier">+</a>
         </div>
-
-        <!-- Vendors (filtered view) -->
-        <a href="{{ route('suppliers.index', ['type' => 'vendor']) }}"
-            class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->get('type') === 'vendor' ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}"
-            style="padding-left: 2.5rem;">
-            <span class="text-sm">Vendors</span>
-            <span class="ml-auto text-xs bg-slate-600 px-2 py-0.5 rounded text-xs">View</span>
-        </a>
 
         <!-- Divider -->
         <div class="my-4 border-t border-slate-700"></div>
