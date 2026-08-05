@@ -129,19 +129,24 @@ class Estimate extends Model
      */
     public function recalculateTotals(): void
     {
+        // Unset cached items to ensure we get fresh data from DB
+        $this->unsetRelation('items');
         $items = $this->items;
-        
+
         $subtotal = $items->sum('total');
         $taxAmount = $items->sum('tax_amount');
         $discountAmount = $items->sum('discount_amount');
-        $total = $subtotal - $discountAmount + $taxAmount;
+        $total = $subtotal;
 
-        $this->updateQuietly([
-            'subtotal' => $subtotal,
-            'tax_amount' => $taxAmount,
-            'discount_amount' => $discountAmount,
-            'total' => $total,
-        ]);
+        // Use withoutEvents to prevent saved event from triggering recalculateTotals again
+        static::withoutEvents(function () use ($subtotal, $taxAmount, $discountAmount, $total) {
+            $this->updateQuietly([
+                'subtotal' => $subtotal,
+                'tax_amount' => $taxAmount,
+                'discount_amount' => $discountAmount,
+                'total' => $total,
+            ]);
+        });
     }
 
     /**
@@ -159,6 +164,14 @@ class Estimate extends Model
     {
         $allowedTransitions = self::$transitions[$this->status] ?? [];
         return in_array($status, $allowedTransitions);
+    }
+
+    /**
+     * Get valid transitions from current status
+     */
+    public function getValidTransitions(): array
+    {
+        return self::$transitions[$this->status] ?? [];
     }
 
     /**
@@ -206,6 +219,9 @@ class Estimate extends Model
         if (!$this->canTransitionTo(self::STATUS_CONVERTED)) {
             return null;
         }
+
+        // Ensure fresh items data
+        $this->unsetRelation('items');
 
         $invoice = Invoice::create([
             'client_id' => $this->client_id,
