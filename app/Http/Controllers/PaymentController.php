@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\PaymentReceiptMail;
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -93,7 +94,16 @@ class PaymentController extends Controller
             DB::commit();
 
             // Send receipt email if client has email
-            // Mail::to($payment->client->email)->send(new PaymentReceiptMail($payment));
+            if ($payment->client->email) {
+                try {
+                    Mail::to($payment->client->email)->send(new PaymentReceiptMail($payment));
+                } catch (\Exception $e) {
+                    \Log::error('Failed to send payment receipt email', [
+                        'payment_id' => $payment->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
 
             return redirect()->route('payments.show', $payment)
                 ->with('success', 'Payment recorded successfully.');

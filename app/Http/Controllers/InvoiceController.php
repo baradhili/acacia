@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\InvoiceMail;
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
@@ -250,8 +251,18 @@ class InvoiceController extends Controller
 
         $invoice->markAsSent();
 
-        // Send email notification (if email is configured)
-        // Mail::to($invoice->client->email)->send(new InvoiceMail($invoice));
+        // Send email notification with PDF attachment
+        if ($invoice->client->email) {
+            try {
+                Mail::to($invoice->client->email)->send(new InvoiceMail($invoice));
+            } catch (\Exception $e) {
+                // Log error but don't fail the request
+                \Log::error('Failed to send invoice email', [
+                    'invoice_id' => $invoice->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
 
         return back()->with('success', 'Invoice marked as sent.');
     }
