@@ -131,6 +131,9 @@ class IFRSSeeder extends Seeder
             ]
         );
 
+        // Assign admin role to the user
+        $user->assignRole('admin');
+
         // Set authenticated user for IFRS operations
         Auth::login($user);
 
