@@ -434,24 +434,24 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 
 ### Phase 4 — Invoices, Credit Notes & Payments
 
-- [ ] `Invoice` model + migration (wraps IFRS invoice, status, due_date, client_id)
-- [ ] `InvoiceItem` model (description, qty, unit_price, tax_id, discount, total)
-- [ ] Invoice CRUD UI
-- [ ] Generate invoice from selected time entries
-- [ ] Generate invoice for PO (partial or full)
-- [ ] Australian invoice numbering (INV-YYYY-NNNN)
+- [x] `Invoice` model + migration (wraps IFRS invoice, status, due_date, client_id)
+- [x] `InvoiceItem` model (description, qty, unit_price, tax_id, discount, total)
+- [x] Invoice CRUD UI
+- [x] Generate invoice from selected time entries
+- [x] Generate invoice for PO (partial or full)
+- [x] Australian invoice numbering (INV-YYYY-NNNN)
 - [ ] Invoice status state machine: draft → sent → viewed → partially_paid → paid → overdue → cancelled
 - [ ] Email invoice to client with PDF attachment
-- [ ] PDF rendering via dompdf (Australian-format template)
+- [x] PDF rendering via dompdf (Australian-format template)
 - [ ] Customisable invoice template (Blade)
 - [ ] Customer portal: view invoice (signed URL)
 - [ ] Customer portal: pay invoice (Wise / bank transfer instructions)
 - [ ] Recurring invoices (daily/weekly/monthly/yearly)
 - [ ] Credit notes (full and partial)
 - [ ] Refund workflow
-- [ ] Overdue detection cron (mark `sent` → `overdue` past due_date)
-- [ ] `Payment` model + migration (client_id, amount, date, method, reference)
-- [ ] Payment create UI
+- [x] Overdue detection cron (mark `sent` → `overdue` past due_date)
+- [x] `Payment` model + migration (client_id, amount, date, method, reference)
+- [x] Payment create UI
 - [ ] Allocate payment to invoices (FIFO default)
 - [ ] Manual payment allocation override
 - [ ] Partial payment support
@@ -461,6 +461,63 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 - [ ] Feature tests for invoice lifecycle
 - [ ] Feature tests for payment allocation (FIFO + manual)
 - [ ] Feature tests for credit notes
+
+### Phase 4.5 - build out testing
+
+- [ ] Test invoice status transitions: draft → sent → viewed → partially_paid → paid → overdue → cancelled (valid and invalid transitions)
+- [ ] Test automatic overdue marking via cron for invoices past due_date
+- [ ] Test invoice email is dispatched when marking as sent
+- [ ] Test invoice PDF generation with Australian template
+- [ ] Test customer portal signed URL grants access without authentication and expires
+- [ ] Test customer portal payment flow shows Wise/bank transfer instructions
+- [ ] Test recurring invoice generation (daily/weekly/monthly/yearly) via scheduled command
+- [ ] Test invoice cancellation only allowed in draft state
+- [ ] Test full credit note application to an invoice reduces invoice balance and marks credit note applied
+- [ ] Test partial credit note application leaves remaining balance on credit note and invoice partially paid
+- [ ] Test credit note generation from a fully paid invoice (full refund) marks original invoice as refunded
+- [ ] Test refund workflow creates credit note and posts IFRS journal entries
+- [ ] Test voiding a credit note with partial allocations is prevented
+- [ ] Test FIFO allocation allocates payment to oldest invoices first
+- [ ] Test allocation handles payment exceeding total outstanding (creates client credit)
+- [ ] Test manual allocation override to a specific invoice with allocation_type = manual
+- [ ] Test removing an allocation and re-allocating updates statuses and amounts
+- [ ] Test partial payment covers multiple invoices correctly (pro-rata / FIFO)
+- [ ] Test payment posts IFRS journal entry (Dr Cash, Cr Revenue) on payment date
+- [ ] Test payment receipt email is sent to client
+- [ ] Test quote (estimate) creation and statuses (draft, sent, accepted, declined, expired)
+- [ ] Test converting an accepted quote to an invoice copies items and marks quote as converted
+- [ ] Test quote expiry cron marks quotes as expired past expiry date
+- [ ] Test quote PDF generation and email
+- [ ] Test purchase order email notification at 80% utilisation
+- [ ] Test purchase order email notification at 100% utilisation
+- [ ] Test purchase order prevents allocation exceeding remaining budget
+- [ ] Test purchase order status updates (open → partially_used → completed) on time allocation
+- [ ] Test purchase order can be reopened from completed if reversals occur
+- [ ] Test weekly timesheet view shows current week entries and totals
+- [ ] Test monthly timesheet view shows month entries and totals
+- [ ] Test time entry approval workflow: submit → submitted, approve → approved with timestamp, reject → rejected with reason
+- [ ] Test submitted time entries cannot be edited or deleted
+- [ ] Test only approved time entries can be allocated to purchase orders
+- [ ] Test project profitability report calculates revenue − staff cost correctly
+- [ ] Test time-by-client, time-by-staff, time-by-project reports filter correctly
+- [ ] Test Wise API sync handles paginated responses
+- [ ] Test Wise API sync skips duplicate transactions by source_id
+- [ ] Test auto-match all picks highest score when multiple ledger matches exist
+- [ ] Test manual match overrides an existing auto-match
+- [ ] Test reconciliation report shows correct matched/unmatched totals
+- [ ] Test Wise CSV import handles malformed rows gracefully (logs errors, imports valid rows)
+- [ ] Test contact custom fields (JSON) can be stored and retrieved
+- [ ] Test contact attachments can be uploaded and downloaded
+- [ ] Test contact aging report shows outstanding invoice buckets (0–30, 31–60, etc.)
+- [ ] Test soft-delete and restore of contacts
+- [ ] Test role middleware restricts routes to allowed roles
+- [ ] Test admin user CRUD (create, edit, delete) and non-admin cannot
+- [ ] Test user profile update includes salary/rate fields correctly
+- [ ] Test staff assignment to project with custom charge rate overrides default rate
+- [ ] Test navigation menu visibility by role
+- [ ] Test dashboard widgets show correct totals (revenue, outstanding, overdue)
+- [ ] Test export (CSV/Excel) data matches expected content if export exists
+- [ ] Test audit log captures invoice status changes and user actions
 
 ### Phase 5 — Bills, Expenses, Documents & Reporting
 
