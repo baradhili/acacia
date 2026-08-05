@@ -42,7 +42,7 @@
                 title="Add Client">+</a>
         </div>
 
-        <!-- Suppliers -->
+        <!-- Suppliers & Vendors -->
         <div class="flex items-center justify-between group">
             <a href="{{ route('suppliers.index') }}"
                 class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors flex-1 {{ request()->routeIs('suppliers.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
@@ -52,26 +52,18 @@
                 </svg>
                 Suppliers
             </a>
-            <a href="{{ route('suppliers.create') }}"
+            <a href="{{ route('suppliers.create', ['type' => 'supplier']) }}"
                 class="text-slate-500 hover:text-white px-2 text-lg font-bold transition-colors"
                 title="Add Supplier">+</a>
         </div>
 
-        <!-- Vendors -->
-        <div class="flex items-center justify-between group">
-            <a href="{{ route('vendors.index') }}"
-                class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors flex-1 {{ request()->routeIs('vendors.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
-                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4">
-                    </path>
-                </svg>
-                Vendors
-            </a>
-            <a href="{{ route('vendors.create') }}"
-                class="text-slate-500 hover:text-white px-2 text-lg font-bold transition-colors"
-                title="Add Vendor">+</a>
-        </div>
+        <!-- Vendors (filtered view) -->
+        <a href="{{ route('suppliers.index', ['type' => 'vendor']) }}"
+            class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->get('type') === 'vendor' ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}"
+            style="padding-left: 2.5rem;">
+            <span class="text-sm">Vendors</span>
+            <span class="ml-auto text-xs bg-slate-600 px-2 py-0.5 rounded text-xs">View</span>
+        </a>
 
         <!-- Divider -->
         <div class="my-4 border-t border-slate-700"></div>
