@@ -163,11 +163,9 @@ class CreditNote extends Model
         $newRemainingAmount = $this->remaining_amount - $amountToApply;
         $newAppliedAmount = ($this->applied_amount ?? 0) + $amountToApply;
 
-        // Refresh invoice to get updated amount_due
-        $invoice->refresh();
-        
-        // Set status to APPLIED only when the invoice is fully paid
-        $newStatus = $invoice->amount_due <= 0 ? self::STATUS_APPLIED : $this->status;
+        // Set status to APPLIED when credit note is fully used (remaining = 0)
+        $newStatus = $newRemainingAmount <= 0 ? self::STATUS_APPLIED : $this->status;
+
 
         $this->update([
             'invoice_id' => $invoice->id,

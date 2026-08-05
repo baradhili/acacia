@@ -13,6 +13,10 @@ use Illuminate\Support\Facades\Log;
 
 class Payment extends Model
 {
+    const STATUS_PENDING = 'pending';
+    const STATUS_COMPLETED = 'completed';
+    const STATUS_VOID = 'void';
+
     use HasFactory;
 
     protected $fillable = [
@@ -24,6 +28,7 @@ class Payment extends Model
         'payment_method',
         'reference',
         'notes',
+        'status',
         'ifrs_receipt_id',
         'credit_note_id',
     ];
@@ -192,11 +197,17 @@ class Payment extends Model
     /**
      * Allocate payment to specific invoice
      */
-    public function allocateToInvoice(Invoice $invoice, float $amount): PaymentAllocation
+    public function allocateToInvoice(Invoice $invoice, float $amount, string $allocationType = 'manual'): PaymentAllocation
     {
         // Ensure we don't allocate more than available
         $amount = min($amount, $this->unallocated_amount);
-        
+
+        if ($amount <= 0) {
+            return PaymentAllocation::where('payment_id', $this->id)
+                ->where('invoice_id', $invoice->id)
+                ->first() ?? new PaymentAllocation();
+        }
+
         $allocation = PaymentAllocation::firstOrCreate(
             [
                 'payment_id' => $this->id,
@@ -204,7 +215,7 @@ class Payment extends Model
             ],
             [
                 'amount' => $amount,
-                'allocation_type' => 'manual',
+                'allocation_type' => $allocationType,
             ]
         );
 
@@ -360,5 +371,26 @@ class Payment extends Model
     public function getIsPostedToIFRSAttribute(): bool
     {
         return $this->ifrs_receipt_id !== null;
+    }
+
+    /**
+     * Void this payment and restore invoice statuses
+     */
+    public function void(): bool
+    {
+        if ($this->status === self::STATUS_VOID) {
+            return false;
+        }
+
+        // Remove all allocations
+        foreach ($this->allocations as $allocation) {
+            $allocation->invoice->updateStatusFromPayments();
+        }
+        $this->allocations()->delete();
+
+        // Update status to void
+        $this->update(['status' => self::STATUS_VOID]);
+
+        return true;
     }
 }

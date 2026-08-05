@@ -249,15 +249,16 @@ class InvoiceTest extends TestCase
         $draftInvoice->cancel();
         $this->assertEquals(Invoice::STATUS_CANCELLED, $draftInvoice->status);
 
-        // Sent invoice cannot be cancelled
+        // Sent invoice can be cancelled (if not yet paid)
         $sentInvoice = Invoice::create([
             'client_id' => $this->client->id,
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
-        $this->assertFalse($sentInvoice->canBeCancelled());
-        $this->assertFalse($sentInvoice->canTransitionTo(Invoice::STATUS_CANCELLED));
+        $this->assertTrue($sentInvoice->canBeCancelled());
+        $sentInvoice->cancel();
+        $this->assertEquals(Invoice::STATUS_CANCELLED, $sentInvoice->status);
 
         // Paid invoice cannot be cancelled
         $paidInvoice = Invoice::create([
@@ -269,13 +270,13 @@ class InvoiceTest extends TestCase
         $this->assertFalse($paidInvoice->canBeCancelled());
     }
 
-    public function test_invoice_cancellation_route_requires_draft_status(): void
+    public function test_invoice_cancellation_route_requires_draft_or_sent_status(): void
     {
         $invoice = Invoice::create([
             'client_id' => $this->client->id,
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
-            'status' => Invoice::STATUS_SENT,
+            'status' => Invoice::STATUS_PAID,
         ]);
 
         $response = $this->actingAs($this->user)->post(route('invoices.cancel', $invoice));
@@ -388,7 +389,7 @@ class InvoiceTest extends TestCase
         $draftTransitions = $draftInvoice->getValidTransitions();
         $this->assertContains('sent', $draftTransitions);
         
-        // Test that sent can transition to viewed, partially_paid, paid, overdue
+        // Test that sent can transition to viewed, partially_paid, paid, overdue, cancelled
         $sentInvoice = new Invoice();
         $sentInvoice->status = Invoice::STATUS_SENT;
         $sentTransitions = $sentInvoice->getValidTransitions();
@@ -396,8 +397,8 @@ class InvoiceTest extends TestCase
         $this->assertContains('partially_paid', $sentTransitions);
         $this->assertContains('paid', $sentTransitions);
         $this->assertContains('overdue', $sentTransitions);
-        // Sent cannot be cancelled (only draft can)
-        $this->assertNotContains('cancelled', $sentTransitions);
+        // Sent can be cancelled (if not yet paid)
+        $this->assertContains('cancelled', $sentTransitions);
     }
 
     public function test_paid_invoice_cannot_be_edited(): void
@@ -456,8 +457,8 @@ class InvoiceTest extends TestCase
         $this->assertContains('partially_paid', $validTransitions);
         $this->assertContains('paid', $validTransitions);
         $this->assertContains('overdue', $validTransitions);
-        // Sent invoices cannot be cancelled
-        $this->assertNotContains('cancelled', $validTransitions);
+        // Sent invoices can be cancelled (if not yet paid)
+        $this->assertContains('cancelled', $validTransitions);
     }
 
     public function test_invoice_scope_outstanding_returns_correct_invoices(): void

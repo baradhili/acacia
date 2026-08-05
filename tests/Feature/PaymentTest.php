@@ -42,6 +42,9 @@ class PaymentTest extends TestCase
             'unit_price' => 100,
             'tax_rate' => 10,
         ]);
+
+        $this->invoice->refresh();
+        $this->invoice->recalculateTotals();
     }
 
     public function test_payment_list_page_requires_authentication(): void
@@ -314,6 +317,8 @@ class PaymentTest extends TestCase
             'unit_price' => 50,
             'tax_rate' => 10,
         ]);
+        $invoice1->refresh();
+        $invoice1->recalculateTotals();
 
         $invoice2 = Invoice::create([
             'client_id' => $this->client->id,
@@ -328,6 +333,8 @@ class PaymentTest extends TestCase
             'unit_price' => 50,
             'tax_rate' => 10,
         ]);
+        $invoice2->refresh();
+        $invoice2->recalculateTotals();
 
         // Create payment
         $payment = Payment::create([

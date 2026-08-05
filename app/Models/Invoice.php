@@ -71,8 +71,8 @@ class Invoice extends Model
     // Valid state transitions
     protected static array $transitions = [
         'draft' => ['sent', 'cancelled'],
-        'sent' => ['viewed', 'partially_paid', 'paid', 'overdue'],
-        'viewed' => ['partially_paid', 'paid', 'overdue'],
+        'sent' => ['viewed', 'partially_paid', 'paid', 'overdue', 'cancelled'],
+        'viewed' => ['partially_paid', 'paid', 'overdue', 'cancelled'],
         'partially_paid' => ['paid', 'overdue'],
         'paid' => [],  // Paid invoices cannot be cancelled
         'overdue' => ['partially_paid', 'paid'],
@@ -410,17 +410,13 @@ class Invoice extends Model
      */
     public function updateStatusFromPayments(): void
     {
-        if ($this->status === self::STATUS_CANCELLED || $this->status === self::STATUS_PAID) {
-            return;
-        }
-
         $amountPaid = $this->amount_paid;
         $total = (float) $this->total;
 
         if ($amountPaid <= 0) {
-            // No payments - status remains as is (could be sent, viewed, or overdue)
-            if ($this->is_overdue && $this->status !== self::STATUS_OVERDUE) {
-                $this->update(['status' => self::STATUS_OVERDUE]);
+            // No payments - revert to sent status (unless cancelled)
+            if ($this->status !== self::STATUS_CANCELLED) {
+                $this->update(['status' => self::STATUS_SENT, 'paid_at' => null]);
             }
         } elseif ($amountPaid >= $total) {
             // Fully paid

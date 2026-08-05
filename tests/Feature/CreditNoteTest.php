@@ -342,7 +342,7 @@ class CreditNoteTest extends TestCase
         $creditNote->refresh();
         $invoice->refresh();
 
-        $this->assertEquals(CreditNote::STATUS_ISSUED, $creditNote->status);
+        $this->assertEquals(CreditNote::STATUS_APPLIED, $creditNote->status);
         $this->assertEquals(0, $creditNote->remaining_amount);
         $this->assertEquals(55, $invoice->amount_due);
     }

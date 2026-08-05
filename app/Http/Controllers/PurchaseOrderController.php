@@ -138,7 +138,7 @@ class PurchaseOrderController extends Controller
             return back()->with('error', 'This purchase order cannot be reopened.');
         }
 
-        return back()->with('success', 'Purchase order reopened to draft.');
+        return back()->with('success', 'Purchase order reopened.');
     }
 
     public function allocateTime(Request $request, PurchaseOrder $purchaseOrder)
@@ -153,12 +153,20 @@ class PurchaseOrderController extends Controller
             return back()->with('error', 'Purchase order must be open to allocate time.');
         }
 
+        // Refresh to get latest budget info
+        $purchaseOrder->refresh();
+        $remainingBudget = $purchaseOrder->remaining;
+
         $timeEntries = TimeEntry::whereIn('id', $validated['time_entry_ids'])->get();
 
         foreach ($timeEntries as $entry) {
-            // Only link approved entries
+            // Only link approved entries and only if there's remaining budget
             if ($entry->status === TimeEntry::STATUS_APPROVED) {
-                $entry->update(['purchase_order_id' => $purchaseOrder->id]);
+                // Check if this entry would exceed the remaining budget
+                if ($entry->total <= $remainingBudget) {
+                    $entry->update(['purchase_order_id' => $purchaseOrder->id]);
+                    $remainingBudget -= $entry->total;
+                }
             }
         }
 
