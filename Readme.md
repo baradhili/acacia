@@ -378,11 +378,11 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 - [x] Configure reporting period start = 1 July (Australian FY)
 - [x] Seed Australian Chart of Accounts (assets, liabilities, equity, income, expenses)
 - [x] Configure GST tax codes: GST (10%), GST_FREE, INPUT
-- [ ] Set up exchange rates table for multi-currency (USD, EUR, GBP, NZD)
+- [x] Set up exchange rates table for multi-currency (USD, EUR, GBP, NZD)
 - [x] Install Spatie Laravel Permission and seed roles (admin, accountant, staff, client)
 - [x] Install and configure Doctrine DBAL for schema introspection
 - [x] Set up Laravel Pint + PHPUnit baseline config
-- [ ] Write smoke test: IFRS posting of a journal entry
+- [x] Write smoke test: IFRS posting of a journal entry
 - [x] Create database seeders for demo company (admin user + sample data)
 
 ### Phase 2 — Auth, Contacts & Wise Foundation
@@ -397,12 +397,10 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 - [x] Contact types: customer / supplier / vendor (separate models)
 - [ ] Per-contact billing & shipping addresses
 - [ ] Custom fields on contacts (JSON column)
-- [ ] Attach documents to contacts (polymorphic)
 - [ ] Contact detail view: transactions, aging, attachments
 - [x] Install GuzzleHTTP; create Wise API client service class
 - [x] Create `wise_transactions` migration + model
 - [x] Implement Wise CSV import endpoint
-- [ ] Implement Wise API fetch endpoint (with token + profile ID)
 - [ ] Add `reconcile:wise` artisan command (daily schedule)
 - [x] Build reconciliation dashboard (matched / unmatched counts)
 - [ ] Implement matching logic: reference → amount+date tolerance
@@ -493,6 +491,7 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 
 ### Phase 6 — Advanced Reconciliation, Automation & Dashboard
 
+- [ ] Implement Wise API fetch endpoint (with token + profile ID)
 - [ ] Auto-create missing cash receipt from unmatched Wise credit
 - [ ] Auto-create missing purchase from unmatched Wise debit
 - [ ] Manual override: link unmatched Wise txn to existing IFRS txn
