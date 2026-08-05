@@ -380,14 +380,12 @@ class InvoiceController extends Controller
     }
 
     /**
-     * Generate PDF
+     * Generate PDF view
      */
     public function pdf(Invoice $invoice)
     {
         $invoice->load(['client', 'project', 'items']);
         
-        // This would use dompdf in production
-        // For now, return a view that can be converted to PDF
         return view('invoices.pdf', compact('invoice'));
     }
 
@@ -398,10 +396,9 @@ class InvoiceController extends Controller
     {
         $invoice->load(['client', 'project', 'items']);
         
-        // In production, this would generate and download PDF using dompdf
-        // return PDF::loadView('invoices.pdf', compact('invoice'))->download('invoice-' . $invoice->invoice_number . '.pdf');
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('invoices.pdf', compact('invoice'));
+        $pdf->setPaper('a4', 'portrait');
         
-        return redirect()->route('invoices.show', $invoice)
-            ->with('info', 'PDF generation requires barryvdh/laravel-dompdf package.');
+        return $pdf->download('invoice-' . $invoice->invoice_number . '.pdf');
     }
 }
