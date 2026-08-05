@@ -139,7 +139,6 @@
         </div>
     </template>
 
-    @push('scripts')
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const container = document.getElementById('staff-container');
@@ -160,6 +159,5 @@
             });
         });
     </script>
-    @endpush
 
 @endsection
