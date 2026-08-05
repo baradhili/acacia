@@ -83,6 +83,36 @@
                 </div>
             </div>
 
+            <!-- Staff Assignment Section -->
+            <div class="mt-8 pt-6 border-t">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800">Staff Assignments</h3>
+                    <button type="button" id="add-staff-btn" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                        + Add Staff Member
+                    </button>
+                </div>
+
+                <div id="staff-container" class="space-y-3">
+                    @foreach($project->staffAssignments as $index => $assignment)
+                        <div class="staff-row flex gap-3 items-center">
+                            <select name="staff[{{ $index }}][user_id]" required
+                                class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                <option value="">Select Staff Member</option>
+                                @foreach($staff as $s)
+                                    <option value="{{ $s->id }}" {{ $assignment->user_id == $s->id ? 'selected' : '' }}>{{ $s->name }}</option>
+                                @endforeach
+                            </select>
+                            <input type="number" name="staff[{{ $index }}][hourly_rate]" placeholder="Hourly Rate" step="0.01" min="0"
+                                value="{{ $assignment->hourly_rate }}"
+                                class="w-32 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            <button type="button" class="remove-staff-btn text-red-600 hover:text-red-800">Remove</button>
+                        </div>
+                    @endforeach
+                </div>
+
+                <p class="text-sm text-gray-500 mt-2">Leave hourly rate blank to use project default rate. Note: This will replace all existing staff assignments.</p>
+            </div>
+
             <div class="mt-6 flex justify-end gap-3">
                 <a href="{{ route('projects.show', $project) }}" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-lg">
                     Cancel
@@ -93,5 +123,43 @@
             </div>
         </form>
     </div>
+
+    <template id="staff-row-template">
+        <div class="staff-row flex gap-3 items-center">
+            <select name="staff[@{{index}}][user_id]" required
+                class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <option value="">Select Staff Member</option>
+                @foreach($staff as $s)
+                    <option value="{{ $s->id }}">{{ $s->name }}</option>
+                @endforeach
+            </select>
+            <input type="number" name="staff[@{{index}}][hourly_rate]" placeholder="Hourly Rate" step="0.01" min="0"
+                class="w-32 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+            <button type="button" class="remove-staff-btn text-red-600 hover:text-red-800">Remove</button>
+        </div>
+    </template>
+
+    @push('scripts')
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const container = document.getElementById('staff-container');
+            const addBtn = document.getElementById('add-staff-btn');
+            const template = document.getElementById('staff-row-template');
+            let staffIndex = {{ $project->staffAssignments->count() }};
+
+            addBtn.addEventListener('click', function() {
+                const html = template.innerHTML.replace(/@{{index}}/g, staffIndex);
+                container.insertAdjacentHTML('beforeend', html);
+                staffIndex++;
+            });
+
+            container.addEventListener('click', function(e) {
+                if (e.target.classList.contains('remove-staff-btn')) {
+                    e.target.closest('.staff-row').remove();
+                }
+            });
+        });
+    </script>
+    @endpush
 
 @endsection

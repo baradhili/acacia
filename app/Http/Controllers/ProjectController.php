@@ -24,7 +24,8 @@ class ProjectController extends Controller
     public function create()
     {
         $clients = Client::orderBy('name')->pluck('name', 'id');
-        return view('projects.create', compact('clients'));
+        $staff = User::role(['staff', 'accountant', 'admin'])->orderBy('name')->get();
+        return view('projects.create', compact('clients', 'staff'));
     }
 
     public function store(Request $request)
@@ -39,11 +40,26 @@ class ProjectController extends Controller
             'status' => 'nullable|in:active,on_hold,completed,cancelled',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
+            'staff' => 'nullable|array',
+            'staff.*.user_id' => 'required|exists:users,id',
+            'staff.*.hourly_rate' => 'nullable|numeric|min:0',
         ]);
 
         $validated['status'] = $validated['status'] ?? Project::STATUS_ACTIVE;
 
         $project = Project::create($validated);
+
+        // Assign staff if provided
+        if (!empty($validated['staff'])) {
+            foreach ($validated['staff'] as $staffData) {
+                ProjectStaff::create([
+                    'project_id' => $project->id,
+                    'user_id' => $staffData['user_id'],
+                    'hourly_rate' => $staffData['hourly_rate'] ?? null,
+                    'is_active' => true,
+                ]);
+            }
+        }
 
         return redirect()->route('projects.show', $project)
             ->with('success', 'Project created successfully.');
@@ -61,7 +77,8 @@ class ProjectController extends Controller
     public function edit(Project $project)
     {
         $clients = Client::orderBy('name')->pluck('name', 'id');
-        return view('projects.edit', compact('project', 'clients'));
+        $staff = User::role(['staff', 'accountant', 'admin'])->orderBy('name')->get();
+        return view('projects.edit', compact('project', 'clients', 'staff'));
     }
 
     public function update(Request $request, Project $project)
@@ -76,9 +93,25 @@ class ProjectController extends Controller
             'status' => 'nullable|in:active,on_hold,completed,cancelled',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
+            'staff' => 'nullable|array',
+            'staff.*.user_id' => 'required|exists:users,id',
+            'staff.*.hourly_rate' => 'nullable|numeric|min:0',
         ]);
 
         $project->update($validated);
+
+        // Sync staff assignments
+        $project->staffAssignments()->delete();
+        if (!empty($validated['staff'])) {
+            foreach ($validated['staff'] as $staffData) {
+                ProjectStaff::create([
+                    'project_id' => $project->id,
+                    'user_id' => $staffData['user_id'],
+                    'hourly_rate' => $staffData['hourly_rate'] ?? null,
+                    'is_active' => true,
+                ]);
+            }
+        }
 
         return redirect()->route('projects.show', $project)
             ->with('success', 'Project updated successfully.');
