@@ -23,7 +23,9 @@ class TimeEntryController extends Controller
     public function create()
     {
         $projects = Project::where('status', 'active')->orderBy('name')->pluck('name', 'id');
-        $purchaseOrders = PurchaseOrder::open()->orderBy('po_number')->pluck('po_number', 'id');
+        $purchaseOrders = PurchaseOrder::whereNotIn('status', ['draft', 'cancelled'])
+            ->orderBy('po_number')
+            ->pluck('po_number', 'id');
 
         return view('time-entries.create', compact('projects', 'purchaseOrders'));
     }
@@ -72,7 +74,9 @@ class TimeEntryController extends Controller
         }
 
         $projects = Project::where('status', 'active')->orderBy('name')->pluck('name', 'id');
-        $purchaseOrders = PurchaseOrder::open()->orderBy('po_number')->pluck('po_number', 'id');
+        $purchaseOrders = PurchaseOrder::whereNotIn('status', ['draft', 'cancelled'])
+            ->orderBy('po_number')
+            ->pluck('po_number', 'id');
 
         return view('time-entries.edit', compact('timeEntry', 'projects', 'purchaseOrders'));
     }
