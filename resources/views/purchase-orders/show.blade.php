@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', '{{ $purchaseOrder->po_number }}')
+@section('title', $purchaseOrder->po_number)
 @section('content')
 
     <div class="mb-6 flex justify-between items-center">
@@ -18,7 +18,7 @@
 
     <!-- PO Info -->
     <div class="bg-white rounded-lg shadow p-6 mb-6">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div>
                 <h3 class="text-sm font-medium text-gray-500">Client</h3>
                 <p class="mt-1 text-gray-900">{{ $purchaseOrder->client->name ?? '-' }}</p>
@@ -42,7 +42,34 @@
                     {{ ucfirst(str_replace('_', ' ', $purchaseOrder->status)) }}
                 </span>
             </div>
+            <div>
+                <h3 class="text-sm font-medium text-gray-500">Dates</h3>
+                <p class="mt-1 text-gray-900">
+                    @if($purchaseOrder->start_date)
+                        {{ $purchaseOrder->start_date->format('d M Y') }}
+                        @if($purchaseOrder->end_date)
+                            - {{ $purchaseOrder->end_date->format('d M Y') }}
+                        @endif
+                    @else
+                        -
+                    @endif
+                </p>
+            </div>
         </div>
+
+        @if($purchaseOrder->status === 'draft' && $purchaseOrder->start_date && $purchaseOrder->start_date->isToday())
+            <div class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p class="text-sm text-blue-800">
+                    <strong>Note:</strong> This PO will be automatically activated today.
+                </p>
+            </div>
+        @elseif($purchaseOrder->status === 'draft' && $purchaseOrder->start_date && $purchaseOrder->start_date->isFuture())
+            <div class="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p class="text-sm text-yellow-800">
+                    <strong>Scheduled:</strong> This PO will be automatically activated on {{ $purchaseOrder->start_date->format('d M Y') }}.
+                </p>
+            </div>
+        @endif
 
         @if($purchaseOrder->description)
             <div class="mt-6 pt-6 border-t">

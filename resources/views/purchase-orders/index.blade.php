@@ -19,6 +19,7 @@
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Budget</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Used</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Utilization</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Start Date</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
@@ -32,11 +33,18 @@
                             </a>
                         </td>
                         <td class="px-6 py-4 text-gray-900">{{ $po->client->name ?? '-' }}</td>
-                        <td class="px-6 py-4 text-gray-900">{{ Str::limit($po->title, 40) }}</td>
+                        <td class="px-6 py-4 text-gray-900">{{ Str::limit($po->title, 30) }}</td>
                         <td class="px-6 py-4 text-right text-gray-900">${{ number_format($po->budgeted_amount, 2) }}</td>
                         <td class="px-6 py-4 text-right text-gray-900">${{ number_format($po->used_amount, 2) }}</td>
                         <td class="px-6 py-4 text-right">
                             <span class="text-gray-900">{{ number_format($po->utilization, 1) }}%</span>
+                        </td>
+                        <td class="px-6 py-4 text-gray-900">
+                            @if($po->start_date)
+                                {{ $po->start_date->format('d M Y') }}
+                            @else
+                                -
+                            @endif
                         </td>
                         <td class="px-6 py-4">
                             @php
@@ -61,7 +69,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="8" class="px-6 py-4 text-center text-gray-500">No purchase orders found.</td>
+                        <td colspan="9" class="px-6 py-4 text-center text-gray-500">No purchase orders found.</td>
                     </tr>
                 @endforelse
             </tbody>

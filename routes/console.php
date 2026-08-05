@@ -20,3 +20,9 @@ Schedule::command('po:check-utilization')
     ->dailyAt('06:00')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/po-utilization.log'));
+
+// Schedule PO activation check to run daily at 1 AM
+Schedule::command('po:activate-pending')
+    ->dailyAt('01:00')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/po-activation.log'));
