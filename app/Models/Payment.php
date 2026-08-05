@@ -2,10 +2,14 @@
 
 namespace App\Models;
 
+use IFRS\Models\Account;
+use IFRS\Models\LineItem;
+use IFRS\Transactions\JournalEntry;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Log;
 
 class Payment extends Model
 {
@@ -35,6 +39,10 @@ class Payment extends Model
     const METHOD_CASH = 'cash';
     const METHOD_CHEQUE = 'cheque';
     const METHOD_OTHER = 'other';
+
+    // IFRS Account codes for payment posting
+    const IFRS_BANK_ACCOUNT_CODE = 320; // Operating Account
+    const IFRS_REVENUE_ACCOUNT_CODE = 4100; // Consulting Revenue
 
     protected static function boot()
     {
@@ -263,5 +271,90 @@ class Payment extends Model
     public function scopeInDateRange($query, $startDate, $endDate)
     {
         return $query->whereBetween('payment_date', [$startDate, $endDate]);
+    }
+
+    /**
+     * Post payment to IFRS (Dr Cash / Cr Revenue on payment date)
+     * 
+     * For each allocation, posts:
+     * - Dr Bank (Asset) - the payment amount
+     * - Cr Revenue (Income) - the allocated amount
+     */
+    public function postToIFRS(): ?int
+    {
+        if ($this->ifrs_receipt_id) {
+            Log::info("Payment {$this->id} already posted to IFRS", ['ifrs_receipt_id' => $this->ifrs_receipt_id]);
+            return $this->ifrs_receipt_id;
+        }
+
+        try {
+            // Find the bank and revenue accounts
+            $bankAccount = Account::where('code', self::IFRS_BANK_ACCOUNT_CODE)->first();
+            $revenueAccount = Account::where('code', self::IFRS_REVENUE_ACCOUNT_CODE)->first();
+
+            if (!$bankAccount || !$revenueAccount) {
+                Log::error('IFRS accounts not found for payment posting', [
+                    'bank_code' => self::IFRS_BANK_ACCOUNT_CODE,
+                    'revenue_code' => self::IFRS_REVENUE_ACCOUNT_CODE,
+                ]);
+                return null;
+            }
+
+            // Create journal entry for the payment
+            // Dr Bank (Debit - increase asset)
+            // Cr Revenue (Credit - increase income)
+            $journalEntry = new JournalEntry([
+                'date' => $this->payment_date,
+                'narration' => "Payment received: {$this->payment_number} from {$this->client->name}",
+                'reference' => $this->payment_number,
+            ]);
+
+            // Debit bank (increase asset)
+            $journalEntry->addLineItem(
+                LineItem::create([
+                    'account_id' => $bankAccount->id,
+                    'amount' => $this->amount,
+                    'type' => LineItem::DEBIT,
+                    'tax_rate' => 0,
+                ])
+            );
+
+            // Credit revenue
+            $journalEntry->addLineItem(
+                LineItem::create([
+                    'account_id' => $revenueAccount->id,
+                    'amount' => $this->amount,
+                    'type' => LineItem::CREDIT,
+                    'tax_rate' => 0,
+                ])
+            );
+
+            $journalEntry->save();
+
+            // Store the IFRS receipt ID
+            $this->update(['ifrs_receipt_id' => $journalEntry->id]);
+
+            Log::info("Payment {$this->id} posted to IFRS", [
+                'ifrs_receipt_id' => $journalEntry->id,
+                'amount' => $this->amount,
+            ]);
+
+            return $journalEntry->id;
+
+        } catch (\Exception $e) {
+            Log::error('Failed to post payment to IFRS', [
+                'payment_id' => $this->id,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Check if payment has been posted to IFRS
+     */
+    public function getIsPostedToIFRSAttribute(): bool
+    {
+        return $this->ifrs_receipt_id !== null;
     }
 }
