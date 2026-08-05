@@ -244,4 +244,320 @@ class CreditNoteTest extends TestCase
         $withBalanceCount = CreditNote::withBalance()->count();
         $this->assertEquals(1, $withBalanceCount);
     }
+
+    // ============================================================
+    // Phase 4.5 - Credit Note Application Tests
+    // ============================================================
+
+    public function test_full_credit_note_application_reduces_invoice_balance(): void
+    {
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_SENT,
+        ]);
+
+        $invoice->items()->create([
+            'description' => 'Test Service',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+
+        $invoice->refresh();
+        $this->assertEquals(110, $invoice->amount_due);
+
+        // Create credit note for the full amount
+        $creditNote = CreditNote::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'reason' => 'Full refund',
+            'total' => 110,
+            'remaining_amount' => 110,
+            'status' => CreditNote::STATUS_ISSUED,
+        ]);
+
+        $creditNote->items()->create([
+            'description' => 'Credit for Service',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+            'total' => 110,
+        ]);
+
+        // Apply full credit note to invoice
+        $result = $creditNote->applyToInvoice($invoice);
+
+        $this->assertTrue($result);
+        $creditNote->refresh();
+        $invoice->refresh();
+
+        $this->assertEquals(CreditNote::STATUS_APPLIED, $creditNote->status);
+        $this->assertEquals(0, $creditNote->remaining_amount);
+        $this->assertNotNull($creditNote->applied_at);
+    }
+
+    public function test_partial_credit_note_application_leaves_remaining_balance(): void
+    {
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_SENT,
+        ]);
+
+        $invoice->items()->create([
+            'description' => 'Test Service',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+
+        $invoice->refresh();
+        $this->assertEquals(110, $invoice->amount_due);
+
+        // Create credit note for partial amount (55 = half of 110)
+        $creditNote = CreditNote::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'reason' => 'Partial refund',
+            'total' => 55,
+            'remaining_amount' => 55,
+            'status' => CreditNote::STATUS_ISSUED,
+        ]);
+
+        $creditNote->items()->create([
+            'description' => 'Partial Credit for Service',
+            'quantity' => 0.5,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+            'total' => 55,
+        ]);
+
+        // Apply partial credit note to invoice
+        $result = $creditNote->applyToInvoice($invoice, 55);
+
+        $this->assertTrue($result);
+        $creditNote->refresh();
+        $invoice->refresh();
+
+        $this->assertEquals(CreditNote::STATUS_ISSUED, $creditNote->status);
+        $this->assertEquals(0, $creditNote->remaining_amount);
+        $this->assertEquals(55, $invoice->amount_due);
+    }
+
+    public function test_voiding_credit_note_with_partial_allocations_is_prevented(): void
+    {
+        $creditNote = CreditNote::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'reason' => 'Test',
+            'total' => 100,
+            'remaining_amount' => 50, // Partially applied
+            'status' => CreditNote::STATUS_ISSUED,
+        ]);
+
+        // Should not be able to void a partially applied credit note
+        $result = $creditNote->void();
+
+        $this->assertFalse($result);
+        $this->assertEquals(CreditNote::STATUS_ISSUED, $creditNote->status);
+    }
+
+    public function test_voiding_unapplied_credit_note_succeeds(): void
+    {
+        $creditNote = CreditNote::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'reason' => 'Test',
+            'total' => 100,
+            'remaining_amount' => 100, // Not applied at all
+            'status' => CreditNote::STATUS_ISSUED,
+        ]);
+
+        $result = $creditNote->void();
+
+        $this->assertTrue($result);
+        $this->assertEquals(CreditNote::STATUS_VOID, $creditNote->status);
+    }
+
+    public function test_voiding_fully_applied_credit_note_is_prevented(): void
+    {
+        $creditNote = CreditNote::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'reason' => 'Test',
+            'total' => 100,
+            'remaining_amount' => 0, // Fully applied
+            'status' => CreditNote::STATUS_APPLIED,
+        ]);
+
+        $result = $creditNote->void();
+
+        $this->assertFalse($result);
+        $this->assertEquals(CreditNote::STATUS_APPLIED, $creditNote->status);
+    }
+
+    public function test_credit_note_from_fully_paid_invoice_marks_original_as_refunded(): void
+    {
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_PAID,
+            'paid_at' => now(),
+        ]);
+
+        $invoice->items()->create([
+            'description' => 'Test Service',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+
+        // Create credit note from invoice items
+        $creditNote = CreditNote::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'reason' => 'Full refund for paid invoice',
+            'total' => 110,
+            'remaining_amount' => 110,
+            'status' => CreditNote::STATUS_ISSUED,
+            'invoice_id' => $invoice->id,
+        ]);
+
+        $creditNote->items()->create([
+            'description' => 'Credit for Service (Full Refund)',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+            'total' => 110,
+        ]);
+
+        $this->assertEquals($invoice->id, $creditNote->invoice_id);
+        $this->assertEquals(110, $creditNote->total);
+    }
+
+    public function test_credit_note_status_constants_are_defined(): void
+    {
+        $this->assertEquals('issued', CreditNote::STATUS_ISSUED);
+        $this->assertEquals('applied', CreditNote::STATUS_APPLIED);
+        $this->assertEquals('void', CreditNote::STATUS_VOID);
+    }
+
+    public function test_credit_note_applied_at_is_set_on_application(): void
+    {
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_SENT,
+        ]);
+
+        $invoice->items()->create([
+            'description' => 'Test Service',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+
+        $creditNote = CreditNote::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'reason' => 'Test',
+            'total' => 110,
+            'remaining_amount' => 110,
+            'status' => CreditNote::STATUS_ISSUED,
+        ]);
+
+        $this->assertNull($creditNote->applied_at);
+
+        $creditNote->applyToInvoice($invoice);
+        $creditNote->refresh();
+
+        $this->assertNotNull($creditNote->applied_at);
+    }
+
+    public function test_credit_note_applied_amount_is_recorded(): void
+    {
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_SENT,
+        ]);
+
+        $invoice->items()->create([
+            'description' => 'Test Service',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+
+        $creditNote = CreditNote::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'reason' => 'Test',
+            'total' => 110,
+            'remaining_amount' => 110,
+            'status' => CreditNote::STATUS_ISSUED,
+        ]);
+
+        $creditNote->applyToInvoice($invoice, 55);
+        $creditNote->refresh();
+
+        $this->assertEquals(55, $creditNote->applied_amount);
+        $this->assertEquals(55, $creditNote->remaining_amount);
+    }
+
+    public function test_multiple_credit_notes_can_be_applied_to_single_invoice(): void
+    {
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_SENT,
+        ]);
+
+        $invoice->items()->create([
+            'description' => 'Test Service',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+
+        $invoice->refresh();
+        $this->assertEquals(110, $invoice->amount_due);
+
+        // Apply first credit note
+        $creditNote1 = CreditNote::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'reason' => 'First refund',
+            'total' => 30,
+            'remaining_amount' => 30,
+            'status' => CreditNote::STATUS_APPLIED,
+        ]);
+
+        $creditNote1->applyToInvoice($invoice, 30);
+        $invoice->refresh();
+
+        $this->assertEquals(80, $invoice->amount_due);
+
+        // Apply second credit note
+        $creditNote2 = CreditNote::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'reason' => 'Second refund',
+            'total' => 40,
+            'remaining_amount' => 40,
+            'status' => CreditNote::STATUS_APPLIED,
+        ]);
+
+        $creditNote2->applyToInvoice($invoice, 40);
+        $invoice->refresh();
+
+        $this->assertEquals(40, $invoice->amount_due);
+    }
 }
