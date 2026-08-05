@@ -441,24 +441,24 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 - [x] Generate invoice for PO (partial or full)
 - [x] Australian invoice numbering (INV-YYYY-NNNN)
 - [x] Invoice status state machine: draft → sent → viewed → partially_paid → paid → overdue → cancelled
-- [ ] Email invoice to client with PDF attachment
+- [x] Email invoice to client with PDF attachment (InvoiceMail mailable + view)
 - [x] PDF rendering via dompdf (Australian-format template)
-- [ ] Customisable invoice template (Blade)
-- [ ] Recurring invoices (daily/weekly/monthly/yearly)
+- [x] Customisable invoice template (Blade) - pdf.blade.php exists
+- [x] Recurring invoices (daily/weekly/monthly/yearly) - ProcessRecurringInvoices command + fields
 - [x] Credit notes (full and partial)
-- [ ] Refund workflow
+- [x] Refund workflow - Payment::refund() method exists
 - [x] Overdue detection cron (mark `sent` → `overdue` past due_date)
 - [x] `Payment` model + migration (client_id, amount, date, method, reference)
 - [x] Payment create UI
-- [ ] Allocate payment to invoices (FIFO default)
-- [ ] Manual payment allocation override
-- [ ] Partial payment support
-- [ ] On payment → post IFRS `Dr Cash / Cr Revenue` on payment date (cash basis)
-- [ ] Payment receipt email to client
-- [ ] Quote/Estimate module → convert to invoice
-- [ ] Feature tests for invoice lifecycle
-- [ ] Feature tests for payment allocation (FIFO + manual)
-- [ ] Feature tests for credit notes
+- [x] Allocate payment to invoices (FIFO default) - allocateToInvoicesFIFO()
+- [x] Manual payment allocation override - allocateToInvoice() with allocation_type
+- [x] Partial payment support - unallocated_amount tracking
+- [x] On payment → post IFRS `Dr Cash / Cr Revenue` on payment date (cash basis) - Payment::postToIFRS()
+- [x] Payment receipt email to client (PaymentReceiptMail mailable + view)
+- [x] Quote/Estimate module → convert to invoice
+- [x] Feature tests for invoice lifecycle (InvoiceTest.php)
+- [x] Feature tests for payment allocation (FIFO + manual) (PaymentTest.php)
+- [x] Feature tests for credit notes (CreditNoteTest.php)
 
 ### Phase 4.5 - build out testing
 
