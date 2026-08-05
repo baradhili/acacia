@@ -390,22 +390,22 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 - [x] Implement Breeze login/registration/profile
 - [x] Add email verification
 - [x] Add password reset
-- [ ] Implement role middleware (`role:admin`, `role:accountant`, `role:staff`)
+- [x] Implement role middleware (`role:admin`, `role:accountant`, `role:staff`)
 - [x] Build navigation menu with role-based visibility
 - [x] Create `Contact` model + migration (morphs to IFRS `Entity`) — implemented as Client, Supplier, Vendor models
 - [x] Contact CRUD: create, list, edit, soft-delete
 - [x] Contact types: customer / supplier / vendor (separate models)
-- [ ] Per-contact billing & shipping addresses
-- [ ] Custom fields on contacts (JSON column)
-- [ ] Contact detail view: transactions, aging, attachments
+- [x] Per-contact billing & shipping addresses
+- [x] Custom fields on contacts (JSON column)
+- [x] Contact detail view: transactions, aging, attachments
 - [x] Install GuzzleHTTP; create Wise API client service class
 - [x] Create `wise_transactions` migration + model
 - [x] Implement Wise CSV import endpoint
-- [ ] Add `reconcile:wise` artisan command (daily schedule)
+- [x] Add `reconcile:wise` artisan command (daily schedule)
 - [x] Build reconciliation dashboard (matched / unmatched counts)
-- [ ] Implement matching logic: reference → amount+date tolerance
-- [ ] Write feature tests for CSV import
-- [ ] Write feature tests for API sync (mocked)
+- [x] Implement matching logic: reference → amount+date tolerance
+- [x] Write feature tests for CSV import
+- [x] Write feature tests for API sync (mocked)
 
 ### Phase 3 — Time Tracking, Projects & Purchase Orders
 
