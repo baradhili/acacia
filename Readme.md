@@ -32,7 +32,7 @@ A **Laravel 13** accounting platform tailored for an Australian small profession
 - Financial year July–June with period locking
 - Journal entries and manual adjustments (accountant role only)
 
-### 2.2 Contacts (Clients, Suppliers, Vendors)
+### 2.2 Contacts (Clients, Suppliers)
 
 - Unified contact management inspired by Akaunting/Invoice Ninja
 - Each contact auto-created as an IFRS `Entity` (AUD currency)
@@ -430,6 +430,7 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 - [x] Feature tests for PO allocation logic
 - [x] Merge Suppliers and Vendors
 - [x] Create User Crud, update db and model to allow user/staff salary as well as charge out rate
+- [x] For existing project, allow the ability to add one or more staff and be able to set the charge rate specific to those staff on that project
 
 ### Phase 4 — Invoices, Credit Notes & Payments
 
@@ -437,7 +438,7 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 - [ ] `InvoiceItem` model (description, qty, unit_price, tax_id, discount, total)
 - [ ] Invoice CRUD UI
 - [ ] Generate invoice from selected time entries
-- [ ] Generate invoice from PO (partial or full)
+- [ ] Generate invoice for PO (partial or full)
 - [ ] Australian invoice numbering (INV-YYYY-NNNN)
 - [ ] Invoice status state machine: draft → sent → viewed → partially_paid → paid → overdue → cancelled
 - [ ] Email invoice to client with PDF attachment
