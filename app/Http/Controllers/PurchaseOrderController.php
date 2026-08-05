@@ -101,7 +101,7 @@ class PurchaseOrderController extends Controller
 
     public function activate(PurchaseOrder $purchaseOrder)
     {
-        if ($purchaseOrder->status !== PurchaseOrder::STATUS_DRAFT) {
+        if (!$purchaseOrder->canBeActivated()) {
             return back()->with('error', 'Only draft purchase orders can be activated.');
         }
 
@@ -112,13 +112,33 @@ class PurchaseOrderController extends Controller
 
     public function cancel(PurchaseOrder $purchaseOrder)
     {
-        if (in_array($purchaseOrder->status, [PurchaseOrder::STATUS_COMPLETED, PurchaseOrder::STATUS_CANCELLED])) {
+        if (!$purchaseOrder->canBeCancelled()) {
             return back()->with('error', 'This purchase order cannot be cancelled.');
         }
 
         $purchaseOrder->cancel();
 
         return back()->with('success', 'Purchase order cancelled.');
+    }
+
+    public function complete(PurchaseOrder $purchaseOrder)
+    {
+        if (!$purchaseOrder->canTransitionTo(PurchaseOrder::STATUS_COMPLETED)) {
+            return back()->with('error', 'This purchase order cannot be marked as completed.');
+        }
+
+        $purchaseOrder->complete();
+
+        return back()->with('success', 'Purchase order marked as completed.');
+    }
+
+    public function reopen(PurchaseOrder $purchaseOrder)
+    {
+        if (!$purchaseOrder->reopen()) {
+            return back()->with('error', 'This purchase order cannot be reopened.');
+        }
+
+        return back()->with('success', 'Purchase order reopened to draft.');
     }
 
     public function allocateTime(Request $request, PurchaseOrder $purchaseOrder)

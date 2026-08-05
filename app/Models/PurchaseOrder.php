@@ -43,6 +43,15 @@ class PurchaseOrder extends Model
     const STATUS_COMPLETED = 'completed';
     const STATUS_CANCELLED = 'cancelled';
 
+    // Valid state transitions
+    protected static array $transitions = [
+        'draft' => ['open', 'cancelled'],
+        'open' => ['partially_used', 'completed', 'cancelled'],
+        'partially_used' => ['completed', 'cancelled'],
+        'completed' => [],
+        'cancelled' => [],
+    ];
+
     protected static function boot()
     {
         parent::boot();
@@ -50,6 +59,9 @@ class PurchaseOrder extends Model
         static::creating(function ($po) {
             if (empty($po->po_number)) {
                 $po->po_number = self::generatePoNumber();
+            }
+            if (empty($po->status)) {
+                $po->status = self::STATUS_DRAFT;
             }
         });
     }
@@ -106,6 +118,39 @@ class PurchaseOrder extends Model
     }
 
     /**
+     * Check if a transition to the given status is valid
+     */
+    public function canTransitionTo(string $status): bool
+    {
+        $allowedTransitions = self::$transitions[$this->status] ?? [];
+        return in_array($status, $allowedTransitions);
+    }
+
+    /**
+     * Get valid transitions from current status
+     */
+    public function getValidTransitions(): array
+    {
+        return self::$transitions[$this->status] ?? [];
+    }
+
+    /**
+     * Check if PO can be cancelled
+     */
+    public function canBeCancelled(): bool
+    {
+        return $this->canTransitionTo(self::STATUS_CANCELLED);
+    }
+
+    /**
+     * Check if PO can be activated
+     */
+    public function canBeActivated(): bool
+    {
+        return $this->canTransitionTo(self::STATUS_OPEN);
+    }
+
+    /**
      * Recalculate used amount from time entries
      */
     public function recalculateUsedAmount(): void
@@ -119,33 +164,77 @@ class PurchaseOrder extends Model
     }
 
     /**
-     * Update status based on utilization
+     * Update status based on utilization (only for open/partially_used states)
      */
     public function updateStatus(): void
     {
+        // Only update status automatically for open or partially_used POs
+        if (!in_array($this->status, [self::STATUS_OPEN, self::STATUS_PARTIALLY_USED])) {
+            return;
+        }
+
         $utilization = $this->utilization;
 
         if ($utilization >= 100) {
-            $this->update(['status' => self::STATUS_COMPLETED]);
-        } elseif ($utilization > 0) {
-            $this->update(['status' => self::STATUS_PARTIALLY_USED]);
+            $this->transitionTo(self::STATUS_COMPLETED);
+        } elseif ($utilization > 0 && $this->status === self::STATUS_OPEN) {
+            $this->transitionTo(self::STATUS_PARTIALLY_USED);
         }
     }
 
     /**
-     * Activate PO
+     * Transition to a new status with validation
      */
-    public function activate(): void
+    public function transitionTo(string $status): bool
     {
-        $this->update(['status' => self::STATUS_OPEN]);
+        if (!$this->canTransitionTo($status)) {
+            return false;
+        }
+
+        $this->update(['status' => $status]);
+        return true;
     }
 
     /**
-     * Cancel PO
+     * Activate PO (draft → open)
      */
-    public function cancel(): void
+    public function activate(): bool
     {
-        $this->update(['status' => self::STATUS_CANCELLED]);
+        return $this->transitionTo(self::STATUS_OPEN);
+    }
+
+    /**
+     * Cancel PO (draft/open/partially_used → cancelled)
+     */
+    public function cancel(): bool
+    {
+        return $this->transitionTo(self::STATUS_CANCELLED);
+    }
+
+    /**
+     * Mark as completed manually
+     */
+    public function complete(): bool
+    {
+        return $this->transitionTo(self::STATUS_COMPLETED);
+    }
+
+    /**
+     * Reopen a completed or cancelled PO back to draft
+     */
+    public function reopen(): bool
+    {
+        if (in_array($this->status, [self::STATUS_DRAFT])) {
+            return false;
+        }
+
+        // Reset notification flags when reopening
+        $this->update([
+            'status' => self::STATUS_DRAFT,
+            'utilization_notified_80' => false,
+            'utilization_notified_100' => false,
+        ]);
+        return true;
     }
 
     /**
@@ -186,6 +275,17 @@ class PurchaseOrder extends Model
      * Scope for open POs
      */
     public function scopeOpen($query)
+    {
+        return $query->whereIn('status', [
+            self::STATUS_OPEN,
+            self::STATUS_PARTIALLY_USED,
+        ]);
+    }
+
+    /**
+     * Scope for active POs (can receive time allocations)
+     */
+    public function scopeActive($query)
     {
         return $query->whereIn('status', [
             self::STATUS_OPEN,
