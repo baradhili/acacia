@@ -23,7 +23,7 @@ class TimeEntryController extends Controller
     public function create()
     {
         $projects = Project::where('status', 'active')->orderBy('name')->pluck('name', 'id');
-        $purchaseOrders = PurchaseOrder::whereNotIn('status', ['draft', 'cancelled'])
+        $purchaseOrders = PurchaseOrder::whereNotIn('status', ['cancelled'])
             ->orderBy('po_number')
             ->pluck('po_number', 'id');
 
@@ -74,7 +74,7 @@ class TimeEntryController extends Controller
         }
 
         $projects = Project::where('status', 'active')->orderBy('name')->pluck('name', 'id');
-        $purchaseOrders = PurchaseOrder::whereNotIn('status', ['draft', 'cancelled'])
+        $purchaseOrders = PurchaseOrder::whereNotIn('status', ['cancelled'])
             ->orderBy('po_number')
             ->pluck('po_number', 'id');
 
