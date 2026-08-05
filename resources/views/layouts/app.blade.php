@@ -20,7 +20,7 @@
 
             <!-- Page Content -->
             <main class="ml-64 mt-16 p-6">
-                {{ $slot }}
+                @yield('content')
             </main>
         </div>
     </body>
