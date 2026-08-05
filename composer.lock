@@ -1348,16 +1348,16 @@
         },
         {
             "name": "laravel/framework",
-            "version": "v13.23.0",
+            "version": "v13.24.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/laravel/framework.git",
-                "reference": "92a707229148e57f08a249211c8a5a194159c619"
+                "reference": "6d481710375d2aa67656922ef760cdd2b18bcfe0"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/laravel/framework/zipball/92a707229148e57f08a249211c8a5a194159c619",
-                "reference": "92a707229148e57f08a249211c8a5a194159c619",
+                "url": "https://api.github.com/repos/laravel/framework/zipball/6d481710375d2aa67656922ef760cdd2b18bcfe0",
+                "reference": "6d481710375d2aa67656922ef760cdd2b18bcfe0",
                 "shasum": ""
             },
             "require": {
@@ -1377,7 +1377,7 @@
                 "guzzlehttp/guzzle": "^7.8.2",
                 "guzzlehttp/promises": "^2.0.3",
                 "guzzlehttp/uri-template": "^1.0",
-                "laravel/prompts": "^0.3.0",
+                "laravel/prompts": "^0.3.11",
                 "laravel/serializable-closure": "^2.0.10",
                 "league/commonmark": "^2.8.1",
                 "league/flysystem": "^3.25.1",
@@ -1571,20 +1571,20 @@
                 "issues": "https://github.com/laravel/framework/issues",
                 "source": "https://github.com/laravel/framework"
             },
-            "time": "2026-07-27T14:48:58+00:00"
+            "time": "2026-08-04T15:54:59+00:00"
         },
         {
             "name": "laravel/prompts",
-            "version": "v0.3.21",
+            "version": "v0.3.22",
             "source": {
                 "type": "git",
                 "url": "https://github.com/laravel/prompts.git",
-                "reference": "7753c65c281c2550c7c183f14e18062073b7d821"
+                "reference": "02b89b39e8972a998db4d5d4ad4719239dd4aee4"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/laravel/prompts/zipball/7753c65c281c2550c7c183f14e18062073b7d821",
-                "reference": "7753c65c281c2550c7c183f14e18062073b7d821",
+                "url": "https://api.github.com/repos/laravel/prompts/zipball/02b89b39e8972a998db4d5d4ad4719239dd4aee4",
+                "reference": "02b89b39e8972a998db4d5d4ad4719239dd4aee4",
                 "shasum": ""
             },
             "require": {
@@ -1628,9 +1628,9 @@
             "description": "Add beautiful and user-friendly forms to your command-line applications.",
             "support": {
                 "issues": "https://github.com/laravel/prompts/issues",
-                "source": "https://github.com/laravel/prompts/tree/v0.3.21"
+                "source": "https://github.com/laravel/prompts/tree/v0.3.22"
             },
-            "time": "2026-06-26T00:11:25+00:00"
+            "time": "2026-08-04T14:50:50+00:00"
         },
         {
             "name": "laravel/serializable-closure",
@@ -7688,25 +7688,25 @@
         },
         {
             "name": "orchestra/canvas",
-            "version": "v11.0.1",
+            "version": "v11.1.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/orchestral/canvas.git",
-                "reference": "d240410f4cd89b380d7d89b5bbaf60c32f4fb691"
+                "reference": "d13e6ec66cb1a285fcc7f092c804abaaf2e24ede"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/orchestral/canvas/zipball/d240410f4cd89b380d7d89b5bbaf60c32f4fb691",
-                "reference": "d240410f4cd89b380d7d89b5bbaf60c32f4fb691",
+                "url": "https://api.github.com/repos/orchestral/canvas/zipball/d13e6ec66cb1a285fcc7f092c804abaaf2e24ede",
+                "reference": "d13e6ec66cb1a285fcc7f092c804abaaf2e24ede",
                 "shasum": ""
             },
             "require": {
                 "composer-runtime-api": "^2.2",
                 "composer/semver": "^3.0",
-                "illuminate/console": "^13.0.0",
-                "illuminate/database": "^13.0.0",
-                "illuminate/filesystem": "^13.0.0",
-                "illuminate/support": "^13.0.0",
+                "illuminate/console": "^13.23.0",
+                "illuminate/database": "^13.23.0",
+                "illuminate/filesystem": "^13.23.0",
+                "illuminate/support": "^13.23.0",
                 "orchestra/canvas-core": "^11.0.0",
                 "orchestra/sidekick": "~1.1.23|~1.2.20",
                 "orchestra/testbench-core": "^11.0.0",
@@ -7714,7 +7714,8 @@
                 "symfony/yaml": "^7.4.0|^8.0.0"
             },
             "require-dev": {
-                "laravel/framework": "^13.0.0",
+                "laravel/doctor": "^0.1.0",
+                "laravel/framework": "^13.23.0",
                 "laravel/pint": "^1.24",
                 "mockery/mockery": "^1.6.10",
                 "phpstan/phpstan": "^2.1.14",
@@ -7753,9 +7754,9 @@
             "description": "Code Generators for Laravel Applications and Packages",
             "support": {
                 "issues": "https://github.com/orchestral/canvas/issues",
-                "source": "https://github.com/orchestral/canvas/tree/v11.0.1"
+                "source": "https://github.com/orchestral/canvas/tree/v11.1.0"
             },
-            "time": "2026-03-18T22:46:12+00:00"
+            "time": "2026-08-04T15:06:43+00:00"
         },
         {
             "name": "orchestra/canvas-core",
@@ -7824,16 +7825,16 @@
         },
         {
             "name": "orchestra/sidekick",
-            "version": "v1.2.20",
+            "version": "v1.2.21",
             "source": {
                 "type": "git",
                 "url": "https://github.com/orchestral/sidekick.git",
-                "reference": "267a71b56cb2fe1a634d69fc99889c671b77ff43"
+                "reference": "fcf69fe227b52beca2e0fe9777d4af4d44ab46a5"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/orchestral/sidekick/zipball/267a71b56cb2fe1a634d69fc99889c671b77ff43",
-                "reference": "267a71b56cb2fe1a634d69fc99889c671b77ff43",
+                "url": "https://api.github.com/repos/orchestral/sidekick/zipball/fcf69fe227b52beca2e0fe9777d4af4d44ab46a5",
+                "reference": "fcf69fe227b52beca2e0fe9777d4af4d44ab46a5",
                 "shasum": ""
             },
             "require": {
@@ -7849,7 +7850,7 @@
                 "mockery/mockery": "^1.5.1",
                 "orchestra/testbench-core": "^8.37.0|^9.14.0|^10.2.0|^11.0",
                 "phpstan/phpstan": "^2.1.14",
-                "phpunit/phpunit": "^10.0|^11.0|^12.0",
+                "phpunit/phpunit": "^10.0|^11.0|^12.0|^13.0",
                 "symfony/process": "^6.0|^7.0"
             },
             "type": "library",
@@ -7877,9 +7878,9 @@
             "description": "Packages Toolkit Utilities and Helpers for Laravel",
             "support": {
                 "issues": "https://github.com/orchestral/sidekick/issues",
-                "source": "https://github.com/orchestral/sidekick/tree/v1.2.20"
+                "source": "https://github.com/orchestral/sidekick/tree/v1.2.21"
             },
-            "time": "2026-01-12T11:09:33+00:00"
+            "time": "2026-08-04T23:01:29+00:00"
         },
         {
             "name": "orchestra/testbench",
@@ -7938,16 +7939,16 @@
         },
         {
             "name": "orchestra/testbench-core",
-            "version": "v11.3.5",
+            "version": "v11.3.6",
             "source": {
                 "type": "git",
                 "url": "https://github.com/orchestral/testbench-core.git",
-                "reference": "a6773cd554177edb800f1e610d128b5acf813783"
+                "reference": "769f8f2f31ca3fbc52d8c8bfad95829b012c9b99"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/orchestral/testbench-core/zipball/a6773cd554177edb800f1e610d128b5acf813783",
-                "reference": "a6773cd554177edb800f1e610d128b5acf813783",
+                "url": "https://api.github.com/repos/orchestral/testbench-core/zipball/769f8f2f31ca3fbc52d8c8bfad95829b012c9b99",
+                "reference": "769f8f2f31ca3fbc52d8c8bfad95829b012c9b99",
                 "shasum": ""
             },
             "require": {
@@ -7970,7 +7971,7 @@
                 "laravel/pint": "^1.24",
                 "laravel/serializable-closure": "^2.0.10",
                 "mockery/mockery": "^1.6.10",
-                "phpstan/phpstan": "^2.1.38",
+                "phpstan/phpstan": "~2.2.7",
                 "phpunit/phpunit": "^11.5.50|^12.5.8|^13.0.0",
                 "spatie/laravel-ray": "^1.43.6",
                 "symfony/process": "^7.4.5|^8.0.5",
@@ -7981,7 +7982,7 @@
                 "brianium/paratest": "Allow using parallel testing (^7.3).",
                 "ext-pcntl": "Required to use all features of the console signal trapping.",
                 "fakerphp/faker": "Allow using Faker for testing (^1.23).",
-                "laravel/framework": "Required for testing (^13.9.0).",
+                "laravel/framework": "Required for testing (^13.10.0).",
                 "mockery/mockery": "Allow using Mockery for testing (^1.6).",
                 "nunomaduro/collision": "Allow using Laravel style tests output and parallel testing (^8.9).",
                 "orchestra/testbench-dusk": "Allow using Laravel Dusk for testing (^11.0).",
@@ -8027,7 +8028,7 @@
                 "issues": "https://github.com/orchestral/testbench/issues",
                 "source": "https://github.com/orchestral/testbench-core"
             },
-            "time": "2026-06-23T11:50:08+00:00"
+            "time": "2026-08-04T23:07:07+00:00"
         },
         {
             "name": "orchestra/workbench",
@@ -10225,28 +10226,28 @@
         },
         {
             "name": "symfony/yaml",
-            "version": "v8.1.2",
+            "version": "v7.4.15",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/yaml.git",
-                "reference": "faabdbe998e8c5c599dceffa27aa265b185c0736"
+                "reference": "e101850ded5d2c0d44bf32abb8996404afec2dec"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/yaml/zipball/faabdbe998e8c5c599dceffa27aa265b185c0736",
-                "reference": "faabdbe998e8c5c599dceffa27aa265b185c0736",
+                "url": "https://api.github.com/repos/symfony/yaml/zipball/e101850ded5d2c0d44bf32abb8996404afec2dec",
+                "reference": "e101850ded5d2c0d44bf32abb8996404afec2dec",
                 "shasum": ""
             },
             "require": {
-                "php": ">=8.4.1",
+                "php": ">=8.2",
+                "symfony/deprecation-contracts": "^2.5|^3",
                 "symfony/polyfill-ctype": "^1.8"
             },
             "conflict": {
-                "symfony/console": "<7.4"
+                "symfony/console": "<6.4"
             },
             "require-dev": {
-                "symfony/console": "^7.4|^8.0",
-                "yaml/yaml-test-suite": "*"
+                "symfony/console": "^6.4|^7.0|^8.0"
             },
             "bin": [
                 "Resources/bin/yaml-lint"
@@ -10277,7 +10278,7 @@
             "description": "Loads and dumps YAML files",
             "homepage": "https://symfony.com",
             "support": {
-                "source": "https://github.com/symfony/yaml/tree/v8.1.2"
+                "source": "https://github.com/symfony/yaml/tree/v7.4.15"
             },
             "funding": [
                 {
@@ -10297,7 +10298,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-07-22T15:42:13+00:00"
+            "time": "2026-07-21T15:13:06+00:00"
         },
         {
             "name": "ta-tikoma/phpunit-architecture-test",
@@ -10477,12 +10478,12 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {},
+    "stability-flags": [],
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
         "php": "^8.3"
     },
-    "platform-dev": {},
-    "plugin-api-version": "2.9.0"
+    "platform-dev": [],
+    "plugin-api-version": "2.6.0"
 }
