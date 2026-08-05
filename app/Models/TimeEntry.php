@@ -97,10 +97,20 @@ class TimeEntry extends Model
 
     /**
      * Submit for approval
+     * Auto-approves if user is not an employee
      */
     public function submit(): void
     {
-        $this->update(['status' => self::STATUS_SUBMITTED]);
+        // Auto-approve if user is not an employee
+        if (!$this->user->hasRole('employee')) {
+            $this->update([
+                'status' => self::STATUS_APPROVED,
+                'approved_by' => $this->user_id,
+                'approved_at' => now(),
+            ]);
+        } else {
+            $this->update(['status' => self::STATUS_SUBMITTED]);
+        }
     }
 
     /**
