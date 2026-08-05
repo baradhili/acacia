@@ -126,9 +126,15 @@ class CreditNote extends Model
      * Apply this credit note to reduce the balance of an invoice
      * This is a "negative invoice" - it reduces what the client owes
      */
-    public function applyToInvoice(Invoice $invoice): bool
+    public function applyToInvoice(Invoice $invoice, ?float $amount = null): bool
     {
-        if (!$this->hasRemainingBalance()) {
+        $amountToApply = $amount ?? $this->remaining_amount;
+
+        if ($amountToApply > $this->remaining_amount) {
+            $amountToApply = $this->remaining_amount;
+        }
+
+        if ($amountToApply <= 0) {
             return false;
         }
 
@@ -140,7 +146,7 @@ class CreditNote extends Model
         // Create a payment with negative amount (credit against the invoice)
         $refund = Payment::create([
             'client_id' => $this->client_id,
-            'amount' => -$this->remaining_amount, // Negative to indicate credit
+            'amount' => -$amountToApply, // Negative to indicate credit
             'payment_date' => now()->toDateString(),
             'payment_method' => Payment::METHOD_OTHER,
             'reference' => 'Credit Note ' . $this->credit_note_number,
@@ -151,15 +157,24 @@ class CreditNote extends Model
         $refund->update(['credit_note_id' => $this->id]);
 
         // Allocate the negative payment to the invoice
-        $refund->allocateToInvoice($invoice, abs($this->remaining_amount));
+        $refund->allocateToInvoice($invoice, $amountToApply);
 
-        // Update credit note status
+        // Update credit note - update amounts
+        $newRemainingAmount = $this->remaining_amount - $amountToApply;
+        $newAppliedAmount = ($this->applied_amount ?? 0) + $amountToApply;
+
+        // Refresh invoice to get updated amount_due
+        $invoice->refresh();
+        
+        // Set status to APPLIED only when the invoice is fully paid
+        $newStatus = $invoice->amount_due <= 0 ? self::STATUS_APPLIED : $this->status;
+
         $this->update([
             'invoice_id' => $invoice->id,
-            'status' => self::STATUS_APPLIED,
+            'status' => $newStatus,
             'applied_at' => now(),
-            'applied_amount' => $this->total,
-            'remaining_amount' => 0,
+            'applied_amount' => $newAppliedAmount,
+            'remaining_amount' => $newRemainingAmount,
         ]);
 
         return true;
@@ -170,7 +185,8 @@ class CreditNote extends Model
      */
     public function void(): bool
     {
-        if ($this->status === self::STATUS_APPLIED) {
+        // Can only void if some amount remains (not fully or partially applied)
+        if ($this->remaining_amount < $this->total) {
             return false;
         }
 

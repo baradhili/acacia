@@ -130,6 +130,10 @@ class Payment extends Model
      */
     public function getUnallocatedAmountAttribute(): float
     {
+        // For negative payments (credits), unallocated is the absolute value minus allocations
+        if ($this->amount < 0) {
+            return abs($this->amount) - $this->allocated_amount;
+        }
         return max(0, (float) $this->amount - $this->allocated_amount);
     }
 
