@@ -155,9 +155,13 @@ class PurchaseOrder extends Model
      */
     public function recalculateUsedAmount(): void
     {
-        $total = $this->timeEntries()
+        $timeEntries = $this->timeEntries()
             ->where('status', TimeEntry::STATUS_APPROVED)
-            ->sum('total');
+            ->get();
+
+        $total = $timeEntries->sum(function ($entry) {
+            return $entry->hours * $entry->effective_rate;
+        });
 
         $this->update(['used_amount' => $total]);
         $this->updateStatus();
