@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class CreditNote extends Model
 {
@@ -73,33 +74,48 @@ class CreditNote extends Model
         return sprintf('CN-%s-%04d', $year, $nextNumber);
     }
 
+    /**
+     * A Credit Note is linked to a Client
+     */
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
     }
 
+    /**
+     * A Credit Note is optionally linked to an Invoice (the invoice it's correcting)
+     */
     public function invoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class);
     }
 
+    /**
+     * Get the user who created this credit note
+     */
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    /**
+     * Credit note line items
+     */
     public function items(): HasMany
     {
         return $this->hasMany(CreditNoteItem::class);
     }
 
+    /**
+     * Payment/refund created when credit note is applied
+     */
     public function refund(): HasOne
     {
         return $this->hasOne(Payment::class, 'credit_note_id');
     }
 
     /**
-     * Check if credit note has remaining balance
+     * Check if credit note has remaining balance to apply
      */
     public function hasRemainingBalance(): bool
     {
@@ -107,7 +123,8 @@ class CreditNote extends Model
     }
 
     /**
-     * Apply credit note to invoice
+     * Apply this credit note to reduce the balance of an invoice
+     * This is a "negative invoice" - it reduces what the client owes
      */
     public function applyToInvoice(Invoice $invoice): bool
     {
@@ -115,18 +132,30 @@ class CreditNote extends Model
             return false;
         }
 
-        // Create a payment with negative amount (credit)
+        // Verify the invoice belongs to the same client
+        if ($invoice->client_id !== $this->client_id) {
+            return false;
+        }
+
+        // Create a payment with negative amount (credit against the invoice)
         $refund = Payment::create([
             'client_id' => $this->client_id,
             'amount' => -$this->remaining_amount, // Negative to indicate credit
             'payment_date' => now()->toDateString(),
             'payment_method' => Payment::METHOD_OTHER,
             'reference' => 'Credit Note ' . $this->credit_note_number,
-            'notes' => 'Applied from Credit Note ' . $this->credit_note_number,
+            'notes' => 'Credit note ' . $this->credit_note_number . ' applied to invoice ' . $invoice->invoice_number,
         ]);
 
-        // Update credit note
+        // Link the payment to this credit note
+        $refund->update(['credit_note_id' => $this->id]);
+
+        // Allocate the negative payment to the invoice
+        $refund->allocateToInvoice($invoice, abs($this->remaining_amount));
+
+        // Update credit note status
         $this->update([
+            'invoice_id' => $invoice->id,
             'status' => self::STATUS_APPLIED,
             'applied_at' => now(),
             'applied_amount' => $this->total,
@@ -137,7 +166,7 @@ class CreditNote extends Model
     }
 
     /**
-     * Void the credit note
+     * Void the credit note (can only void issued credit notes)
      */
     public function void(): bool
     {
@@ -150,11 +179,19 @@ class CreditNote extends Model
     }
 
     /**
-     * Get formatted total
+     * Get the credit amount as a positive number for display
+     */
+    public function getCreditAmountAttribute(): float
+    {
+        return abs($this->total);
+    }
+
+    /**
+     * Get formatted total (always shown as negative for credit)
      */
     public function getFormattedTotalAttribute(): string
     {
-        return 'A$' . number_format($this->total, 2);
+        return '-$' . number_format($this->total, 2);
     }
 
     /**
@@ -162,7 +199,7 @@ class CreditNote extends Model
      */
     public function getFormattedRemainingAttribute(): string
     {
-        return 'A$' . number_format($this->remaining_amount, 2);
+        return '-$' . number_format($this->remaining_amount, 2);
     }
 
     /**
@@ -187,5 +224,13 @@ class CreditNote extends Model
     public function scopeWithBalance($query)
     {
         return $query->where('remaining_amount', '>', 0);
+    }
+
+    /**
+     * Scope for credit notes linked to a specific invoice
+     */
+    public function scopeForInvoice($query, Invoice $invoice)
+    {
+        return $query->where('invoice_id', $invoice->id);
     }
 }

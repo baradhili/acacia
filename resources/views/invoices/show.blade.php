@@ -31,6 +31,11 @@
             <a href="{{ route('invoices.downloadPdf', $invoice) }}" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg">
                 Download PDF
             </a>
+            @if($invoice->status !== 'cancelled' && $invoice->status !== 'draft')
+                <a href="{{ route('credit-notes.create-from-invoice', $invoice) }}" class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg">
+                    Create Credit Note
+                </a>
+            @endif
             @if($invoice->canBeCancelled())
                 <form action="{{ route('invoices.cancel', $invoice) }}" method="POST" class="inline"
                     onsubmit="return confirm('Are you sure you want to cancel this invoice?');">
@@ -161,7 +166,7 @@
                 </div>
 
                 @if($invoice->amount_due > 0 && $invoice->status !== 'cancelled')
-                    <div class="mt-4">
+                    <div class="mt-4 flex gap-2">
                         <button type="button" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg"
                             onclick="document.getElementById('paymentModal').classList.remove('hidden')">
                             Record Payment
@@ -169,6 +174,44 @@
                     </div>
                 @endif
             </div>
+
+            <!-- Credit Notes -->
+            @if($invoice->creditNotes->isNotEmpty())
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h2 class="text-lg font-semibold text-gray-800 mb-4">Credit Notes</h2>
+                    <table class="min-w-full">
+                        <thead>
+                            <tr class="border-b">
+                                <th class="text-left py-2 text-xs font-medium text-gray-500 uppercase">Credit Note #</th>
+                                <th class="text-left py-2 text-xs font-medium text-gray-500 uppercase">Date</th>
+                                <th class="text-right py-2 text-xs font-medium text-gray-500 uppercase">Amount</th>
+                                <th class="text-left py-2 text-xs font-medium text-gray-500 uppercase">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y">
+                            @foreach($invoice->creditNotes as $cn)
+                                <tr>
+                                    <td class="py-2">
+                                        <a href="{{ route('credit-notes.show', $cn) }}" class="text-indigo-600 hover:text-indigo-800">
+                                            {{ $cn->credit_note_number }}
+                                        </a>
+                                    </td>
+                                    <td class="py-2">{{ $cn->issue_date->format('d M Y') }}</td>
+                                    <td class="py-2 text-right text-orange-600">-${{ number_format($cn->total, 2) }}</td>
+                                    <td class="py-2">
+                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                                            @if($cn->status === 'applied') bg-green-100 text-green-800
+                                            @elseif($cn->status === 'void') bg-gray-100 text-gray-500
+                                            @else bg-blue-100 text-blue-800 @endif">
+                                            {{ ucfirst($cn->status) }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
 
             <!-- Notes -->
             @if($invoice->notes)

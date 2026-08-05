@@ -21,6 +21,7 @@ class Payment extends Model
         'reference',
         'notes',
         'ifrs_receipt_id',
+        'credit_note_id',
     ];
 
     protected $casts = [
@@ -87,9 +88,25 @@ class Payment extends Model
         return $this->belongsTo(User::class, 'received_by');
     }
 
+    /**
+     * Get the credit note this payment is linked to (for credit notes/refunds)
+     */
+    public function creditNote(): BelongsTo
+    {
+        return $this->belongsTo(CreditNote::class);
+    }
+
     public function allocations(): HasMany
     {
         return $this->hasMany(PaymentAllocation::class);
+    }
+
+    /**
+     * Check if this is a credit/refund payment (negative amount)
+     */
+    public function getIsCreditAttribute(): bool
+    {
+        return $this->amount < 0;
     }
 
     /**
