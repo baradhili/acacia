@@ -1,7 +1,11 @@
 <?php
 
 use App\Http\Controllers\ClientController;
+use App\Http\Controllers\CreditNoteController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\EstimateController;
+use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\PurchaseOrderController;
@@ -9,6 +13,7 @@ use App\Http\Controllers\ReconciliationController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TimeEntryController;
 use App\Http\Controllers\UserController;
+use App\Models\Client;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -58,6 +63,39 @@ Route::middleware('auth')->group(function () {
     Route::post('/purchase-orders/{purchaseOrder}/complete', [PurchaseOrderController::class, 'complete'])->name('purchase-orders.complete');
     Route::post('/purchase-orders/{purchaseOrder}/reopen', [PurchaseOrderController::class, 'reopen'])->name('purchase-orders.reopen');
     Route::post('/purchase-orders/{purchaseOrder}/allocate', [PurchaseOrderController::class, 'allocateTime'])->name('purchase-orders.allocate');
+    Route::get('/purchase-orders/{purchaseOrder}/create-invoice', [InvoiceController::class, 'createFromPurchaseOrder'])->name('purchase-orders.create-invoice');
+
+    // Invoices
+    Route::resource('invoices', InvoiceController::class);
+    Route::post('/invoices/{invoice}/send', [InvoiceController::class, 'send'])->name('invoices.send');
+    Route::post('/invoices/{invoice}/mark-viewed', [InvoiceController::class, 'markViewed'])->name('invoices.mark-viewed');
+    Route::post('/invoices/{invoice}/cancel', [InvoiceController::class, 'cancel'])->name('invoices.cancel');
+    Route::post('/invoices/{invoice}/record-payment', [InvoiceController::class, 'recordPayment'])->name('invoices.recordPayment');
+    Route::get('/invoices/{invoice}/pdf', [InvoiceController::class, 'pdf'])->name('invoices.pdf');
+    Route::get('/invoices/{invoice}/download-pdf', [InvoiceController::class, 'downloadPdf'])->name('invoices.downloadPdf');
+    Route::get('/create-invoice-from-time-entries', [InvoiceController::class, 'createFromTimeEntries'])->name('invoices.create-from-time-entries');
+    Route::post('/create-invoice-from-time-entries', [InvoiceController::class, 'createFromTimeEntries'])->name('invoices.create-from-time-entries.store');
+
+    // Payments
+    Route::resource('payments', PaymentController::class);
+    Route::get('/payments/client-invoices/{client}', [PaymentController::class, 'getClientInvoices'])->name('payments.client-invoices');
+    Route::post('/payments/{payment}/allocate', [PaymentController::class, 'allocate'])->name('payments.allocate');
+    Route::post('/payments/{payment}/remove-allocation/{invoice}', [PaymentController::class, 'removeAllocation'])->name('payments.removeAllocation');
+    Route::post('/payments/{payment}/reallocate-fifo', [PaymentController::class, 'reallocateFifo'])->name('payments.reallocateFifo');
+
+    // Credit Notes
+    Route::resource('credit-notes', CreditNoteController::class);
+    Route::post('/credit-notes/{creditNote}/void', [CreditNoteController::class, 'void'])->name('credit-notes.void');
+    Route::get('/credit-notes/create-from-invoice/{invoice}', [CreditNoteController::class, 'createFromInvoice'])->name('credit-notes.create-from-invoice');
+    Route::post('/credit-notes/{creditNote}/apply-to-invoice', [CreditNoteController::class, 'applyToInvoice'])->name('credit-notes.applyToInvoice');
+
+    // Estimates
+    Route::resource('estimates', EstimateController::class);
+    Route::post('/estimates/{estimate}/send', [EstimateController::class, 'send'])->name('estimates.send');
+    Route::post('/estimates/{estimate}/accept', [EstimateController::class, 'accept'])->name('estimates.accept');
+    Route::post('/estimates/{estimate}/reject', [EstimateController::class, 'reject'])->name('estimates.reject');
+    Route::post('/estimates/{estimate}/convert-to-invoice', [EstimateController::class, 'convertToInvoice'])->name('estimates.convertToInvoice');
+    Route::post('/estimates/{estimate}/duplicate', [EstimateController::class, 'duplicate'])->name('estimates.duplicate');
 
     // Reports
     Route::get('/reports/time-by-client', [\App\Http\Controllers\ReportController::class, 'timeByClient'])->name('reports.time-by-client');

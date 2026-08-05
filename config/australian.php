@@ -92,6 +92,34 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Invoice Settings
+    |--------------------------------------------------------------------------
+    |
+    | Default settings for invoices.
+    |
+    */
+
+    'invoice' => [
+        'due_days' => env('INVOICE_DUE_DAYS', 30),
+        'terms' => env('INVOICE_TERMS', 'Payment is due within 30 days of invoice date. Please include invoice number with payment.'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Estimate Settings
+    |--------------------------------------------------------------------------
+    |
+    | Default settings for estimates/quotes.
+    |
+    */
+
+    'estimate' => [
+        'validity_days' => env('ESTIMATE_VALIDITY_DAYS', 30),
+        'terms' => env('ESTIMATE_TERMS', 'This estimate is valid for 30 days from the date of issue.'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | BAS Settings
     |--------------------------------------------------------------------------
     |
