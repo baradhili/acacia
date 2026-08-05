@@ -409,25 +409,27 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 
 ### Phase 3 — Time Tracking, Projects & Purchase Orders
 
-- [ ] `Project` model + migration (client_id, name, budget_hours, budget_amount)
-- [ ] Project CRUD UI
-- [ ] Project staff assignment + per-staff rate
-- [ ] `TimeEntry` model + migration (start, end, hours, rate, billable, project_id, po_id)
-- [ ] Time entry create/edit UI (staff-facing)
-- [ ] Weekly timesheet view (per staff)
-- [ ] Monthly timesheet view (per staff)
-- [ ] Time entry approval workflow (staff submit → accountant/admin approves)
-- [ ] `PurchaseOrder` model + migration (client_id, project_id, budgeted_amount, used_amount, status)
-- [ ] PO CRUD UI
-- [ ] PO allocate-time endpoint (attach time entries to PO)
+- [x] `Project` model + migration (client_id, name, budget_hours, budget_amount)
+- [x] Project CRUD UI
+- [x] Project staff assignment + per-staff rate
+- [x] `TimeEntry` model + migration (start, end, hours, rate, billable, project_id, po_id)
+- [x] Time entry create/edit UI (staff-facing)
+- [x] Weekly timesheet view (per staff)
+- [x] Monthly timesheet view (per staff)
+- [x] Time entry approval workflow (staff submit → accountant/admin approves)
+- [x] `PurchaseOrder` model + migration (client_id, project_id, budgeted_amount, used_amount, status)
+- [x] PO CRUD UI
+- [x] PO allocate-time endpoint (attach time entries to PO)
 - [ ] Real-time used vs remaining budget calculation
 - [ ] PO status state machine: draft → open → partially_used → completed → cancelled
 - [ ] Email notification when PO hits 80% utilisation
 - [ ] Email notification when PO fully utilised
-- [ ] Project profitability report (revenue − staff cost)
-- [ ] Time-by-client / time-by-staff / time-by-project reports
+- [x] Project profitability report (revenue − staff cost)
+- [x] Time-by-client / time-by-staff / time-by-project reports
 - [ ] Feature tests for time entry lifecycle
 - [ ] Feature tests for PO allocation logic
+- [ ] Merge Suppliers and Vendors
+- [ ] Create User Crud, update db and model to allow user/staff salary as well as charge out rate
 
 ### Phase 4 — Invoices, Credit Notes & Payments
 
