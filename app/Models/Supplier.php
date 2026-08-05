@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use App\Traits\HasCustomFields;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Supplier extends Model
 {
-    use HasFactory;
+    use HasFactory, HasCustomFields;
 
     protected $fillable = [
         'name',
@@ -40,5 +41,6 @@ class Supplier extends Model
 
     protected $casts = [
         'same_as_billing' => 'boolean',
+        'custom_fields' => 'array',
     ];
 }
