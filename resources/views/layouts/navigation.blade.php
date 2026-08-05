@@ -18,56 +18,77 @@
             Dashboard
         </a>
 
+        <!-- Divider -->
+        <div class="my-4 border-t border-slate-700"></div>
+
+        <!-- Contacts -->
+        <p class="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Contacts</p>
+
         <!-- Clients -->
-        <a href="{{ route('clients.index') }}" 
-           class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('clients.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
-            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0M7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
-            </svg>
-            Clients
-        </a>
+        <div class="flex items-center justify-between group">
+            <a href="{{ route('clients.index') }}" 
+               class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors flex-1 {{ request()->routeIs('clients.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0M7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                </svg>
+                Clients
+            </a>
+            <a href="{{ route('clients.create') }}" class="text-slate-400 hover:text-white px-2 text-lg font-bold opacity-0 group-hover:opacity-100 transition-opacity" title="Add Client">+</a>
+        </div>
 
         <!-- Suppliers -->
-        <a href="{{ route('suppliers.index') }}" 
-           class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('suppliers.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
-            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
-            </svg>
-            Suppliers
-        </a>
+        <div class="flex items-center justify-between group">
+            <a href="{{ route('suppliers.index') }}" 
+               class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors flex-1 {{ request()->routeIs('suppliers.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+                </svg>
+                Suppliers
+            </a>
+            <a href="{{ route('suppliers.create') }}" class="text-slate-400 hover:text-white px-2 text-lg font-bold opacity-0 group-hover:opacity-100 transition-opacity" title="Add Supplier">+</a>
+        </div>
 
         <!-- Vendors -->
-        <a href="{{ route('vendors.index') }}" 
-           class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('vendors.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
-            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
-            </svg>
-            Vendors
-        </a>
+        <div class="flex items-center justify-between group">
+            <a href="{{ route('vendors.index') }}" 
+               class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors flex-1 {{ request()->routeIs('vendors.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                </svg>
+                Vendors
+            </a>
+            <a href="{{ route('vendors.create') }}" class="text-slate-400 hover:text-white px-2 text-lg font-bold opacity-0 group-hover:opacity-100 transition-opacity" title="Add Vendor">+</a>
+        </div>
 
         <!-- Divider -->
         <div class="my-4 border-t border-slate-700"></div>
 
         <!-- Time & Projects -->
         <p class="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Time & Projects</p>
-        
+
         <!-- Projects -->
-        <a href="{{ route('projects.index') }}" 
-           class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('projects.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
-            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-            </svg>
-            Projects
-        </a>
+        <div class="flex items-center justify-between group">
+            <a href="{{ route('projects.index') }}" 
+               class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors flex-1 {{ request()->routeIs('projects.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                Projects
+            </a>
+            <a href="{{ route('projects.create') }}" class="text-slate-400 hover:text-white px-2 text-lg font-bold opacity-0 group-hover:opacity-100 transition-opacity" title="Add Project">+</a>
+        </div>
 
         <!-- Time Entries -->
-        <a href="{{ route('time-entries.index') }}" 
-           class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('time-entries.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
-            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-            </svg>
-            Time Entries
-        </a>
+        <div class="flex items-center justify-between group">
+            <a href="{{ route('time-entries.index') }}" 
+               class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors flex-1 {{ request()->routeIs('time-entries.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Time Entries
+            </a>
+            <a href="{{ route('time-entries.create') }}" class="text-slate-400 hover:text-white px-2 text-lg font-bold opacity-0 group-hover:opacity-100 transition-opacity" title="Add Time Entry">+</a>
+        </div>
 
         <!-- My Timesheet -->
         <a href="{{ route('timesheets.weekly') }}" 
@@ -79,13 +100,16 @@
         </a>
 
         <!-- Purchase Orders -->
-        <a href="{{ route('purchase-orders.index') }}" 
-           class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('purchase-orders.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
-            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-            </svg>
-            Purchase Orders
-        </a>
+        <div class="flex items-center justify-between group">
+            <a href="{{ route('purchase-orders.index') }}" 
+               class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors flex-1 {{ request()->routeIs('purchase-orders.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                Purchase Orders
+            </a>
+            <a href="{{ route('purchase-orders.create') }}" class="text-slate-400 hover:text-white px-2 text-lg font-bold opacity-0 group-hover:opacity-100 transition-opacity" title="Add Purchase Order">+</a>
+        </div>
 
         <!-- Divider -->
         <div class="my-4 border-t border-slate-700"></div>
@@ -164,7 +188,7 @@
                     Time by Project
                 </a>
                 <a href="{{ route('projects.index') }}" 
-                   class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('projects.profitability') || request()->routeIs('projects.*') ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white' }}">
+                   class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('projects.profitability') ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white' }}">
                     Project Profitability
                 </a>
             </div>
@@ -175,7 +199,7 @@
 <!-- Top Bar -->
 <header class="fixed top-0 left-64 right-0 h-16 bg-white shadow-sm border-b border-gray-200 flex items-center justify-between px-6 z-30">
     <div>
-        <h1 class="text-xl font-semibold text-gray-800">{{ $title ?? 'Dashboard' }}</h1>
+        <h1 class="text-xl font-semibold text-gray-800">@yield('title', 'Dashboard')</h1>
     </div>
     <div class="flex items-center gap-4">
         <!-- User Menu -->
