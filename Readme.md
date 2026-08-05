@@ -440,14 +440,12 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 - [x] Generate invoice from selected time entries
 - [x] Generate invoice for PO (partial or full)
 - [x] Australian invoice numbering (INV-YYYY-NNNN)
-- [ ] Invoice status state machine: draft → sent → viewed → partially_paid → paid → overdue → cancelled
+- [x] Invoice status state machine: draft → sent → viewed → partially_paid → paid → overdue → cancelled
 - [ ] Email invoice to client with PDF attachment
 - [x] PDF rendering via dompdf (Australian-format template)
 - [ ] Customisable invoice template (Blade)
-- [ ] Customer portal: view invoice (signed URL)
-- [ ] Customer portal: pay invoice (Wise / bank transfer instructions)
 - [ ] Recurring invoices (daily/weekly/monthly/yearly)
-- [ ] Credit notes (full and partial)
+- [x] Credit notes (full and partial)
 - [ ] Refund workflow
 - [x] Overdue detection cron (mark `sent` → `overdue` past due_date)
 - [x] `Payment` model + migration (client_id, amount, date, method, reference)
