@@ -8,6 +8,7 @@ use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\ReconciliationController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TimeEntryController;
+use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -24,6 +25,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    // Users (admin only)
+    Route::middleware('role:admin')->group(function () {
+        Route::resource('users', UserController::class);
+    });
 
     // Clients
     Route::resource('clients', ClientController::class);

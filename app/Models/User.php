@@ -13,7 +13,7 @@ use Illuminate\Notifications\Notifiable;
 use IFRS\Models\Entity;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['name', 'email', 'password'])]
+#[Fillable(['name', 'email', 'password', 'salary', 'charge_out_rate', 'position', 'phone'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -24,6 +24,8 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'salary' => 'decimal:2',
+            'charge_out_rate' => 'decimal:2',
         ];
     }
 
@@ -40,5 +42,22 @@ class User extends Authenticatable
     public function timeEntries(): HasMany
     {
         return $this->hasMany(TimeEntry::class);
+    }
+
+    /**
+     * Get effective hourly rate for time tracking
+     * Uses charge_out_rate if set, otherwise falls back to project rate
+     */
+    public function getEffectiveHourlyRateAttribute(): float
+    {
+        return (float) ($this->charge_out_rate ?? 0);
+    }
+
+    /**
+     * Check if user has a charge out rate set
+     */
+    public function hasChargeOutRate(): bool
+    {
+        return $this->charge_out_rate !== null && $this->charge_out_rate > 0;
     }
 }

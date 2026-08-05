@@ -30,6 +30,10 @@ class UserFactory extends Factory
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
+            'salary' => fake()->randomElement([null, 60000, 75000, 85000, 100000, 120000]),
+            'charge_out_rate' => fake()->randomElement([null, 100, 150, 175, 200, 250]),
+            'position' => fake()->randomElement(['Developer', 'Designer', 'Manager', 'Consultant', 'Analyst']),
+            'phone' => fake()->optional()->phoneNumber(),
         ];
     }
 
@@ -40,6 +44,26 @@ class UserFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'email_verified_at' => null,
+        ]);
+    }
+
+    /**
+     * Indicate that the user has a charge out rate.
+     */
+    public function withChargeOutRate(float $rate = 150): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'charge_out_rate' => $rate,
+        ]);
+    }
+
+    /**
+     * Indicate that the user has a salary.
+     */
+    public function withSalary(float $salary = 80000): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'salary' => $salary,
         ]);
     }
 }
