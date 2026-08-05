@@ -147,11 +147,7 @@ class TimeEntryController extends Controller
         }
 
         $timeEntry->approve(Auth::id());
-
-        // Update PO used amount if linked
-        if ($timeEntry->purchase_order_id) {
-            $timeEntry->purchaseOrder->recalculateUsedAmount();
-        }
+        // PO used_amount is recalculated automatically via TimeEntryObserver
 
         return back()->with('success', 'Time entry approved.');
     }
