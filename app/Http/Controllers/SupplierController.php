@@ -7,30 +7,21 @@ use Illuminate\Http\Request;
 
 class SupplierController extends Controller
 {
-    public function index(Request $request)
+    public function index()
     {
-        $query = Supplier::query();
-
-        // Filter by type if provided
-        if ($request->has('type') && in_array($request->type, ['supplier', 'vendor'])) {
-            $query->where('type', $request->type);
-        }
-
-        $suppliers = $query->paginate(15);
+        $suppliers = Supplier::paginate(15);
         return view('suppliers.index', compact('suppliers'));
     }
 
-    public function create(Request $request)
+    public function create()
     {
-        $type = $request->get('type', Supplier::TYPE_SUPPLIER);
-        return view('suppliers.create', compact('type'));
+        return view('suppliers.create');
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'type' => 'required|in:supplier,vendor',
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:50',
             'address' => 'nullable|string|max:500',
@@ -45,7 +36,7 @@ class SupplierController extends Controller
 
         Supplier::create($validated);
 
-        return redirect()->route('suppliers.index')->with('success', ucfirst($validated['type']) . ' created successfully.');
+        return redirect()->route('suppliers.index')->with('success', 'Supplier created successfully.');
     }
 
     public function show(Supplier $supplier)
@@ -62,7 +53,6 @@ class SupplierController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'type' => 'required|in:supplier,vendor',
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:50',
             'address' => 'nullable|string|max:500',
@@ -77,13 +67,12 @@ class SupplierController extends Controller
 
         $supplier->update($validated);
 
-        return redirect()->route('suppliers.index')->with('success', ucfirst($validated['type']) . ' updated successfully.');
+        return redirect()->route('suppliers.index')->with('success', 'Supplier updated successfully.');
     }
 
     public function destroy(Supplier $supplier)
     {
-        $type = $supplier->type;
         $supplier->delete();
-        return redirect()->route('suppliers.index')->with('success', ucfirst($type) . ' deleted successfully.');
+        return redirect()->route('suppliers.index')->with('success', 'Supplier deleted successfully.');
     }
 }

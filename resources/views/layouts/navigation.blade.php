@@ -52,7 +52,7 @@
                 </svg>
                 Suppliers
             </a>
-            <a href="{{ route('suppliers.create', ['type' => 'supplier']) }}"
+            <a href="{{ route('suppliers.create') }}"
                 class="text-slate-500 hover:text-white px-2 text-lg font-bold transition-colors"
                 title="Add Supplier">+</a>
         </div>
