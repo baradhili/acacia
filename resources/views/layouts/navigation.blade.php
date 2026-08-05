@@ -163,8 +163,8 @@
                    class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('reports.time-by-project') ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white' }}">
                     Time by Project
                 </a>
-                <a href="{{ route('projects.profitability') }}" 
-                   class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('projects.profitability') ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white' }}">
+                <a href="{{ route('projects.index') }}" 
+                   class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('projects.profitability') || request()->routeIs('projects.*') ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white' }}">
                     Project Profitability
                 </a>
             </div>
