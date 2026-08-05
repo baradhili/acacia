@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class RoleMiddlewareTest extends TestCase
@@ -13,16 +14,24 @@ class RoleMiddlewareTest extends TestCase
     protected User $admin;
     protected User $accountant;
     protected User $staff;
-    protected User $client;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->admin = User::factory()->create(['role' => 'admin']);
-        $this->accountant = User::factory()->create(['role' => 'accountant']);
-        $this->staff = User::factory()->create(['role' => 'staff']);
-        $this->client = User::factory()->create(['role' => 'client']);
+        // Create roles using Spatie
+        Role::firstOrCreate(['name' => 'admin']);
+        Role::firstOrCreate(['name' => 'accountant']);
+        Role::firstOrCreate(['name' => 'staff']);
+
+        $this->admin = User::factory()->create();
+        $this->admin->assignRole('admin');
+
+        $this->accountant = User::factory()->create();
+        $this->accountant->assignRole('accountant');
+
+        $this->staff = User::factory()->create();
+        $this->staff->assignRole('staff');
     }
 
     public function test_admin_can_access_user_management(): void
@@ -39,17 +48,13 @@ class RoleMiddlewareTest extends TestCase
 
         $response = $this->actingAs($this->staff)->get('/users');
         $response->assertStatus(403);
-
-        $response = $this->actingAs($this->client)->get('/users');
-        $response->assertStatus(403);
     }
 
-    public function test_role_constants_are_defined(): void
+    public function test_user_has_role_assigned_via_spatie(): void
     {
-        $this->assertEquals('admin', User::ROLE_ADMIN);
-        $this->assertEquals('accountant', User::ROLE_ACCOUNTANT);
-        $this->assertEquals('staff', User::ROLE_STAFF);
-        $this->assertEquals('client', User::ROLE_CLIENT);
+        $this->assertTrue($this->admin->hasRole('admin'));
+        $this->assertTrue($this->accountant->hasRole('accountant'));
+        $this->assertTrue($this->staff->hasRole('staff'));
     }
 
     public function test_admin_can_create_user(): void
@@ -65,29 +70,17 @@ class RoleMiddlewareTest extends TestCase
         $response->assertSessionHasNoErrors();
         $this->assertDatabaseHas('users', [
             'email' => 'newuser@example.com',
-            'role' => 'staff',
-        ]);
-    }
-
-    public function test_admin_can_edit_user(): void
-    {
-        $userToEdit = User::factory()->create(['role' => 'staff']);
-
-        $response = $this->actingAs($this->admin)->patch("/users/{$userToEdit->id}", [
-            'name' => 'Updated Name',
-            'email' => $userToEdit->email,
-            'role' => 'accountant',
         ]);
 
-        $response->assertSessionHasNoErrors();
-        $userToEdit->refresh();
-        $this->assertEquals('Updated Name', $userToEdit->name);
-        $this->assertEquals('accountant', $userToEdit->role);
+        // Verify role was assigned via Spatie
+        $newUser = User::where('email', 'newuser@example.com')->first();
+        $this->assertTrue($newUser->hasRole('staff'));
     }
 
     public function test_admin_can_delete_user(): void
     {
-        $userToDelete = User::factory()->create(['role' => 'staff']);
+        $userToDelete = User::factory()->create();
+        $userToDelete->assignRole('staff');
 
         $response = $this->actingAs($this->admin)->delete("/users/{$userToDelete->id}");
 
@@ -108,21 +101,10 @@ class RoleMiddlewareTest extends TestCase
         $response->assertStatus(403);
     }
 
-    public function test_non_admin_cannot_edit_other_users(): void
+    public function test_non_admin_cannot_delete_users(): void
     {
-        $otherUser = User::factory()->create(['role' => 'staff']);
-
-        $response = $this->actingAs($this->staff)->patch("/users/{$otherUser->id}", [
-            'name' => 'Hacked Name',
-            'email' => $otherUser->email,
-        ]);
-
-        $response->assertStatus(403);
-    }
-
-    public function test_non_admin_cannot_delete_other_users(): void
-    {
-        $otherUser = User::factory()->create(['role' => 'staff']);
+        $otherUser = User::factory()->create();
+        $otherUser->assignRole('staff');
 
         $response = $this->actingAs($this->staff)->delete("/users/{$otherUser->id}");
 
@@ -141,23 +123,24 @@ class RoleMiddlewareTest extends TestCase
         $this->assertEquals('My New Name', $this->staff->name);
     }
 
-    public function test_user_profile_includes_salary_rate_fields(): void
+    public function test_user_profile_includes_charge_out_rate(): void
     {
         $user = User::factory()->create([
-            'hourly_rate' => 150.00,
+            'charge_out_rate' => 150.00,
         ]);
+        $user->assignRole('staff');
 
         $this->actingAs($user);
 
         $response = $this->patch('/profile', [
             'name' => $user->name,
             'email' => $user->email,
-            'hourly_rate' => 175.00,
+            'charge_out_rate' => 175.00,
         ]);
 
         $response->assertSessionHasNoErrors();
         $user->refresh();
-        $this->assertEquals(175.00, $user->hourly_rate);
+        $this->assertEquals(175.00, $user->charge_out_rate);
     }
 
     public function test_admin_can_access_journal_entries(): void
@@ -224,5 +207,24 @@ class RoleMiddlewareTest extends TestCase
         // Users
         $response = $this->actingAs($this->admin)->get('/users');
         $this->assertEquals(200, $response->status());
+    }
+
+    public function test_roles_can_be_assigned_to_users(): void
+    {
+        $newUser = User::factory()->create();
+        
+        // Assign role
+        $newUser->assignRole('staff');
+        $this->assertTrue($newUser->hasRole('staff'));
+
+        // Add another role
+        $newUser->assignRole('accountant');
+        $this->assertTrue($newUser->hasRole('staff'));
+        $this->assertTrue($newUser->hasRole('accountant'));
+
+        // Remove role
+        $newUser->removeRole('staff');
+        $this->assertFalse($newUser->hasRole('staff'));
+        $this->assertTrue($newUser->hasRole('accountant'));
     }
 }

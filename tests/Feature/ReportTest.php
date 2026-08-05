@@ -10,6 +10,7 @@ use App\Models\TimeEntry;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class ReportTest extends TestCase
@@ -25,8 +26,17 @@ class ReportTest extends TestCase
     {
         parent::setUp();
 
-        $this->user = User::factory()->create(['role' => 'admin']);
-        $this->staff = User::factory()->create(['role' => 'staff']);
+        // Create roles using Spatie
+        Role::firstOrCreate(['name' => 'admin']);
+        Role::firstOrCreate(['name' => 'accountant']);
+        Role::firstOrCreate(['name' => 'staff']);
+
+        $this->user = User::factory()->create();
+        $this->user->assignRole('admin');
+
+        $this->staff = User::factory()->create();
+        $this->staff->assignRole('staff');
+
         $this->client = Client::factory()->create();
         $this->project = Project::factory()->create([
             'client_id' => $this->client->id,

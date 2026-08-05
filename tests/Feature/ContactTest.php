@@ -6,6 +6,7 @@ use App\Models\Client;
 use App\Models\Document;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class ContactTest extends TestCase
@@ -19,8 +20,16 @@ class ContactTest extends TestCase
     {
         parent::setUp();
 
-        $this->admin = User::factory()->create(['role' => 'admin']);
-        $this->staff = User::factory()->create(['role' => 'staff']);
+        // Create roles using Spatie
+        Role::firstOrCreate(['name' => 'admin']);
+        Role::firstOrCreate(['name' => 'accountant']);
+        Role::firstOrCreate(['name' => 'staff']);
+
+        $this->admin = User::factory()->create();
+        $this->admin->assignRole('admin');
+
+        $this->staff = User::factory()->create();
+        $this->staff->assignRole('staff');
     }
 
     public function test_client_list_page_requires_authentication(): void

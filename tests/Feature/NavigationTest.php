@@ -4,9 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\Client;
 use App\Models\Invoice;
-use App\Models\InvoiceItem;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class NavigationTest extends TestCase
@@ -21,8 +21,17 @@ class NavigationTest extends TestCase
     {
         parent::setUp();
 
-        $this->admin = User::factory()->create(['role' => 'admin']);
-        $this->staff = User::factory()->create(['role' => 'staff']);
+        // Create roles using Spatie
+        Role::firstOrCreate(['name' => 'admin']);
+        Role::firstOrCreate(['name' => 'accountant']);
+        Role::firstOrCreate(['name' => 'staff']);
+
+        $this->admin = User::factory()->create();
+        $this->admin->assignRole('admin');
+
+        $this->staff = User::factory()->create();
+        $this->staff->assignRole('staff');
+
         $this->client = Client::factory()->create();
     }
 
@@ -172,16 +181,6 @@ class NavigationTest extends TestCase
         // Staff has limited menu
         $staffResponse = $this->actingAs($this->staff)->get('/dashboard');
         $staffResponse->assertStatus(200);
-    }
-
-    public function test_client_portal_navigation(): void
-    {
-        $clientUser = User::factory()->create(['role' => 'client']);
-
-        $response = $this->actingAs($clientUser)->get('/dashboard');
-
-        $response->assertStatus(200);
-        // Client portal should show client-specific navigation
     }
 
     public function test_dashboard_widget_cash_flow(): void
