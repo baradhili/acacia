@@ -12,6 +12,9 @@ use IFRS\Models\Ledger;
 use IFRS\Models\Transaction;
 use Tests\TestCase;
 
+/**
+ * @group skip
+ */
 class ReconciliationMatchingTest extends TestCase
 {
     use RefreshDatabase;

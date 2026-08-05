@@ -124,10 +124,11 @@ class PaymentTest extends TestCase
             'payment_method' => 'bank_transfer',
         ]);
 
-        $payment->allocateToInvoice($this->invoice, 55);
+        // Allocate only $30 of the $55 payment
+        $payment->allocateToInvoice($this->invoice, 30);
 
-        $this->assertEquals(55, $payment->allocated_amount);
-        $this->assertEquals(55, $payment->unallocated_amount);
+        $this->assertEquals(30, $payment->allocated_amount);
+        $this->assertEquals(25, $payment->unallocated_amount);
     }
 
     public function test_full_payment_updates_invoice_status(): void

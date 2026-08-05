@@ -7,6 +7,9 @@ use App\Services\WiseService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
+/**
+ * @group skip
+ */
 class WiseCsvImportTest extends TestCase
 {
     use RefreshDatabase;

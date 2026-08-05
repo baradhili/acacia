@@ -36,6 +36,18 @@ class TimeEntry extends Model
         'billable' => 'boolean',
     ];
 
+    protected static function boot()
+    {
+        parent::boot();
+
+        // Calculate hours from start/end times when saving
+        static::saving(function ($entry) {
+            if ($entry->start_time && $entry->end_time) {
+                $entry->hours = $entry->calculateHours();
+            }
+        });
+    }
+
     // Status constants
     const STATUS_DRAFT = 'draft';
     const STATUS_SUBMITTED = 'submitted';
@@ -97,20 +109,10 @@ class TimeEntry extends Model
 
     /**
      * Submit for approval
-     * Auto-approves if user is not an employee
      */
     public function submit(): void
     {
-        // Auto-approve if user is not an employee
-        if (!$this->user->hasRole('employee')) {
-            $this->update([
-                'status' => self::STATUS_APPROVED,
-                'approved_by' => $this->user_id,
-                'approved_at' => now(),
-            ]);
-        } else {
-            $this->update(['status' => self::STATUS_SUBMITTED]);
-        }
+        $this->update(['status' => self::STATUS_SUBMITTED]);
     }
 
     /**
