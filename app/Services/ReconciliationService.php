@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\WiseTransaction;
+use App\Models\BankTransaction;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use IFRS\Models\Ledger;
@@ -16,7 +16,7 @@ class ReconciliationService
     /**
      * Attempt to auto-match a Wise transaction against IFRS ledgers
      */
-    public function matchTransaction(WiseTransaction $wiseTransaction): ?int
+    public function matchTransaction(BankTransaction $wiseTransaction): ?int
     {
         $matchedLedger = $this->findMatchingLedger($wiseTransaction);
 
@@ -31,7 +31,7 @@ class ReconciliationService
     /**
      * Find a matching ledger entry
      */
-    private function findMatchingLedger(WiseTransaction $wiseTransaction): ?Ledger
+    private function findMatchingLedger(BankTransaction $wiseTransaction): ?Ledger
     {
         $query = Ledger::query();
 
@@ -54,7 +54,7 @@ class ReconciliationService
         $query->whereBetween('date', [$dateFrom, $dateTo]);
 
         // For credits, look for debit entries and vice versa
-        if ($wiseTransaction->type === WiseTransaction::TYPE_CREDIT) {
+        if ($wiseTransaction->type === BankTransaction::TYPE_CREDIT) {
             $query->where('entry_type', 'debit');
         } else {
             $query->where('entry_type', 'credit');
@@ -72,7 +72,7 @@ class ReconciliationService
         $unmatched = 0;
         $errors = [];
 
-        $pendingTransactions = WiseTransaction::pending()->get();
+        $pendingTransactions = BankTransaction::pending()->get();
 
         foreach ($pendingTransactions as $transaction) {
             try {
@@ -97,7 +97,7 @@ class ReconciliationService
     /**
      * Manual match a Wise transaction to a ledger entry
      */
-    public function manualMatch(WiseTransaction $wiseTransaction, int $ledgerId, string $type = 'ledger'): bool
+    public function manualMatch(BankTransaction $wiseTransaction, int $ledgerId, string $type = 'ledger'): bool
     {
         $wiseTransaction->markAsMatched($ledgerId, $type);
         return true;
@@ -106,7 +106,7 @@ class ReconciliationService
     /**
      * Get matching candidates for a Wise transaction
      */
-    public function getMatchingCandidates(WiseTransaction $wiseTransaction): Collection
+    public function getMatchingCandidates(BankTransaction $wiseTransaction): Collection
     {
         $amount = $wiseTransaction->amount;
         $dateFrom = $wiseTransaction->transaction_date->copy()
@@ -127,7 +127,7 @@ class ReconciliationService
     /**
      * Calculate match score between Wise transaction and ledger
      */
-    public function calculateMatchScore(WiseTransaction $wiseTransaction, Ledger $ledger): float
+    public function calculateMatchScore(BankTransaction $wiseTransaction, Ledger $ledger): float
     {
         $score = 0;
 

@@ -2,7 +2,7 @@
 
 namespace Tests\Feature\Reconciliation;
 
-use App\Models\WiseTransaction;
+use App\Models\BankTransaction;
 use App\Services\ReconciliationService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -58,15 +58,15 @@ class ReconciliationMatchingTest extends TestCase
         ]);
 
         // Create Wise transaction
-        $wiseTxn = WiseTransaction::create([
-            'wise_id' => 'WISE001',
+        $wiseTxn = BankTransaction::create([
+            'source' => 'wise', 'source_id' => 'WISE001',
             'reference' => 'INV-2025-0001',
             'amount' => 1500.00,
             'currency' => 'AUD',
             'type' => 'CREDIT',
             'transaction_date' => '2025-07-15',
-            'created_at_wise' => '2025-07-15',
-            'status' => WiseTransaction::STATUS_PENDING,
+            'created_at_source' => '2025-07-15',
+            'status' => BankTransaction::STATUS_PENDING,
         ]);
 
         $matchedId = $this->service->matchTransaction($wiseTxn);
@@ -76,7 +76,7 @@ class ReconciliationMatchingTest extends TestCase
 
         // Verify status changed
         $wiseTxn->refresh();
-        $this->assertEquals(WiseTransaction::STATUS_MATCHED, $wiseTxn->status);
+        $this->assertEquals(BankTransaction::STATUS_MATCHED, $wiseTxn->status);
         $this->assertEquals($ledger->id, $wiseTxn->matched_transaction_id);
     }
 
@@ -100,15 +100,15 @@ class ReconciliationMatchingTest extends TestCase
         ]);
 
         // Create Wise transaction 3 days later
-        $wiseTxn = WiseTransaction::create([
-            'wise_id' => 'WISE001',
+        $wiseTxn = BankTransaction::create([
+            'source' => 'wise', 'source_id' => 'WISE001',
             'reference' => 'INV-2025-0001',
             'amount' => 1500.00,
             'currency' => 'AUD',
             'type' => 'CREDIT',
             'transaction_date' => '2025-07-16',
-            'created_at_wise' => '2025-07-16',
-            'status' => WiseTransaction::STATUS_PENDING,
+            'created_at_source' => '2025-07-16',
+            'status' => BankTransaction::STATUS_PENDING,
         ]);
 
         $matchedId = $this->service->matchTransaction($wiseTxn);
@@ -136,15 +136,15 @@ class ReconciliationMatchingTest extends TestCase
         ]);
 
         // Create Wise transaction
-        $wiseTxn = WiseTransaction::create([
-            'wise_id' => 'WISE001',
+        $wiseTxn = BankTransaction::create([
+            'source' => 'wise', 'source_id' => 'WISE001',
             'reference' => 'INV-2025-0001',
             'amount' => 1500.00,
             'currency' => 'AUD',
             'type' => 'CREDIT',
             'transaction_date' => '2025-07-15',
-            'created_at_wise' => '2025-07-15',
-            'status' => WiseTransaction::STATUS_PENDING,
+            'created_at_source' => '2025-07-15',
+            'status' => BankTransaction::STATUS_PENDING,
         ]);
 
         $matchedId = $this->service->matchTransaction($wiseTxn);
@@ -172,15 +172,15 @@ class ReconciliationMatchingTest extends TestCase
         ]);
 
         // Create Wise transaction
-        $wiseTxn = WiseTransaction::create([
-            'wise_id' => 'WISE001',
+        $wiseTxn = BankTransaction::create([
+            'source' => 'wise', 'source_id' => 'WISE001',
             'reference' => 'INV-2025-0001',
             'amount' => 1500.00,
             'currency' => 'AUD',
             'type' => 'CREDIT',
             'transaction_date' => '2025-07-15',
-            'created_at_wise' => '2025-07-15',
-            'status' => WiseTransaction::STATUS_PENDING,
+            'created_at_source' => '2025-07-15',
+            'status' => BankTransaction::STATUS_PENDING,
         ]);
 
         $matchedId = $this->service->matchTransaction($wiseTxn);
@@ -206,8 +206,8 @@ class ReconciliationMatchingTest extends TestCase
             'reference' => 'INV-2025-0001',
         ]);
 
-        $wiseTxn = new WiseTransaction([
-            'wise_id' => 'WISE001',
+        $wiseTxn = new BankTransaction([
+            'source' => 'wise', 'source_id' => 'WISE001',
             'reference' => 'INV-2025-0001',
             'amount' => 1500.00,
             'currency' => 'AUD',
@@ -223,22 +223,22 @@ class ReconciliationMatchingTest extends TestCase
 
     public function test_manual_match_works(): void
     {
-        $wiseTxn = WiseTransaction::create([
-            'wise_id' => 'WISE001',
+        $wiseTxn = BankTransaction::create([
+            'source' => 'wise', 'source_id' => 'WISE001',
             'reference' => 'INV-2025-0001',
             'amount' => 1500.00,
             'currency' => 'AUD',
             'type' => 'CREDIT',
             'transaction_date' => '2025-07-15',
-            'created_at_wise' => '2025-07-15',
-            'status' => WiseTransaction::STATUS_PENDING,
+            'created_at_source' => '2025-07-15',
+            'status' => BankTransaction::STATUS_PENDING,
         ]);
 
         $result = $this->service->manualMatch($wiseTxn, 123, 'ledger');
 
         $this->assertTrue($result);
         $wiseTxn->refresh();
-        $this->assertEquals(WiseTransaction::STATUS_MATCHED, $wiseTxn->status);
+        $this->assertEquals(BankTransaction::STATUS_MATCHED, $wiseTxn->status);
         $this->assertEquals(123, $wiseTxn->matched_transaction_id);
     }
 
@@ -262,26 +262,26 @@ class ReconciliationMatchingTest extends TestCase
         ]);
 
         // Create two Wise transactions - one matchable, one not
-        WiseTransaction::create([
-            'wise_id' => 'WISE001',
+        BankTransaction::create([
+            'source' => 'wise', 'source_id' => 'WISE001',
             'reference' => 'INV-2025-0001',
             'amount' => 1500.00,
             'currency' => 'AUD',
             'type' => 'CREDIT',
             'transaction_date' => '2025-07-15',
-            'created_at_wise' => '2025-07-15',
-            'status' => WiseTransaction::STATUS_PENDING,
+            'created_at_source' => '2025-07-15',
+            'status' => BankTransaction::STATUS_PENDING,
         ]);
 
-        WiseTransaction::create([
-            'wise_id' => 'WISE002',
+        BankTransaction::create([
+            'source' => 'wise', 'source_id' => 'WISE002',
             'reference' => 'NO-MATCH',
             'amount' => 999.00,
             'currency' => 'AUD',
             'type' => 'CREDIT',
             'transaction_date' => '2025-07-15',
-            'created_at_wise' => '2025-07-15',
-            'status' => WiseTransaction::STATUS_PENDING,
+            'created_at_source' => '2025-07-15',
+            'status' => BankTransaction::STATUS_PENDING,
         ]);
 
         $results = $this->service->autoMatchAll();

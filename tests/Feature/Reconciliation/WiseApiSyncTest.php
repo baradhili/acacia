@@ -2,7 +2,7 @@
 
 namespace Tests\Feature\Reconciliation;
 
-use App\Models\WiseTransaction;
+use App\Models\BankTransaction;
 use App\Services\WiseService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -127,38 +127,38 @@ class WiseApiSyncTest extends TestCase
     public function test_get_statistics_returns_correct_counts(): void
     {
         // Create some test transactions
-        WiseTransaction::create([
-            'wise_id' => 'WISE001',
+        BankTransaction::create([
+            'source' => 'wise', 'source_id' => 'WISE001',
             'reference' => 'INV-001',
             'amount' => 100.00,
             'currency' => 'AUD',
             'type' => 'CREDIT',
             'transaction_date' => now(),
-            'created_at_wise' => now(),
-            'status' => WiseTransaction::STATUS_PENDING,
+            'created_at_source' => now(),
+            'status' => BankTransaction::STATUS_PENDING,
         ]);
 
-        WiseTransaction::create([
-            'wise_id' => 'WISE002',
+        BankTransaction::create([
+            'source' => 'wise', 'source_id' => 'WISE002',
             'reference' => 'INV-002',
             'amount' => 200.00,
             'currency' => 'AUD',
             'type' => 'CREDIT',
             'transaction_date' => now(),
-            'created_at_wise' => now(),
-            'status' => WiseTransaction::STATUS_MATCHED,
+            'created_at_source' => now(),
+            'status' => BankTransaction::STATUS_MATCHED,
             'matched_transaction_id' => 1,
         ]);
 
-        WiseTransaction::create([
-            'wise_id' => 'WISE003',
+        BankTransaction::create([
+            'source' => 'wise', 'source_id' => 'WISE003',
             'reference' => 'INV-003',
             'amount' => 300.00,
             'currency' => 'AUD',
             'type' => 'DEBIT',
             'transaction_date' => now(),
-            'created_at_wise' => now(),
-            'status' => WiseTransaction::STATUS_IGNORED,
+            'created_at_source' => now(),
+            'status' => BankTransaction::STATUS_IGNORED,
         ]);
 
         $stats = $this->wiseService->getStatistics();
@@ -171,32 +171,32 @@ class WiseApiSyncTest extends TestCase
 
     public function test_get_unmatched_transactions(): void
     {
-        WiseTransaction::create([
-            'wise_id' => 'WISE001',
+        BankTransaction::create([
+            'source' => 'wise', 'source_id' => 'WISE001',
             'reference' => 'INV-001',
             'amount' => 100.00,
             'currency' => 'AUD',
             'type' => 'CREDIT',
             'transaction_date' => now(),
-            'created_at_wise' => now(),
-            'status' => WiseTransaction::STATUS_PENDING,
+            'created_at_source' => now(),
+            'status' => BankTransaction::STATUS_PENDING,
         ]);
 
-        WiseTransaction::create([
-            'wise_id' => 'WISE002',
+        BankTransaction::create([
+            'source' => 'wise', 'source_id' => 'WISE002',
             'reference' => 'INV-002',
             'amount' => 200.00,
             'currency' => 'AUD',
             'type' => 'CREDIT',
             'transaction_date' => now(),
-            'created_at_wise' => now(),
-            'status' => WiseTransaction::STATUS_MATCHED,
+            'created_at_source' => now(),
+            'status' => BankTransaction::STATUS_MATCHED,
             'matched_transaction_id' => 1,
         ]);
 
         $unmatched = $this->wiseService->getUnmatchedTransactions();
 
         $this->assertCount(1, $unmatched);
-        $this->assertEquals('WISE001', $unmatched->first()->wise_id);
+        $this->assertEquals('WISE001', $unmatched->first()->source_id);
     }
 }

@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\WiseTransaction;
+use App\Models\BankTransaction;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
@@ -92,9 +92,9 @@ class WiseService
     /**
      * Import a single Wise row
      */
-    private function importWiseRow(array $row): WiseTransaction
+    private function importWiseRow(array $row): BankTransaction
     {
-        $wiseId = $row[0] ?? null;
+        $sourceId = $row[0] ?? null;
         $date = $row[1] ?? null;
         $reference = $row[2] ?? '';
         $amount = abs(floatval($row[3] ?? 0));
@@ -103,21 +103,24 @@ class WiseService
         $merchant = $row[6] ?? null;
 
         // Check if already exists
-        $existing = WiseTransaction::where('wise_id', $wiseId)->first();
+        $existing = BankTransaction::where('source', BankTransaction::SOURCE_WISE)
+            ->where('source_id', $sourceId)
+            ->first();
         if ($existing) {
             return $existing;
         }
 
-        return WiseTransaction::create([
-            'wise_id' => $wiseId ?? 'CSV-' . uniqid(),
+        return BankTransaction::create([
+            'source' => BankTransaction::SOURCE_WISE,
+            'source_id' => $sourceId ?? 'CSV-' . uniqid(),
             'reference' => $reference,
             'amount' => $amount,
             'currency' => $currency,
             'type' => $type,
             'transaction_date' => Carbon::parse($date),
-            'created_at_wise' => Carbon::parse($date),
+            'created_at_source' => Carbon::parse($date),
             'merchant_name' => $merchant,
-            'status' => WiseTransaction::STATUS_PENDING,
+            'status' => BankTransaction::STATUS_PENDING,
         ]);
     }
 
@@ -126,7 +129,7 @@ class WiseService
      */
     public function getUnmatchedTransactions(): Collection
     {
-        return WiseTransaction::pending()
+        return BankTransaction::pending()
             ->orderBy('transaction_date', 'desc')
             ->get();
     }
@@ -137,10 +140,10 @@ class WiseService
     public function getStatistics(): array
     {
         return [
-            'total' => WiseTransaction::count(),
-            'pending' => WiseTransaction::pending()->count(),
-            'matched' => WiseTransaction::matched()->count(),
-            'ignored' => WiseTransaction::where('status', 'IGNORED')->count(),
+            'total' => BankTransaction::count(),
+            'pending' => BankTransaction::pending()->count(),
+            'matched' => BankTransaction::matched()->count(),
+            'ignored' => BankTransaction::where('status', 'IGNORED')->count(),
         ];
     }
 }
