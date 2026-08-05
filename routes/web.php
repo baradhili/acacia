@@ -8,7 +8,6 @@ use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\ReconciliationController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TimeEntryController;
-use App\Http\Controllers\VendorController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -29,11 +28,8 @@ Route::middleware('auth')->group(function () {
     // Clients
     Route::resource('clients', ClientController::class);
 
-    // Suppliers
+    // Suppliers (includes vendors via type filter)
     Route::resource('suppliers', SupplierController::class);
-
-    // Vendors
-    Route::resource('vendors', VendorController::class);
 
     // Projects
     Route::resource('projects', ProjectController::class);
