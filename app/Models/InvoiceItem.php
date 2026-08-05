@@ -41,6 +41,19 @@ class InvoiceItem extends Model
         static::saving(function ($item) {
             $item->calculateTotals();
         });
+
+        // Recalculate parent invoice totals when items change
+        static::saved(function ($item) {
+            if ($item->invoice_id) {
+                $item->invoice->recalculateTotals();
+            }
+        });
+
+        static::deleted(function ($item) {
+            if ($item->invoice_id) {
+                $item->invoice->recalculateTotals();
+            }
+        });
     }
 
     public function invoice(): BelongsTo

@@ -74,7 +74,7 @@ class Invoice extends Model
         'sent' => ['viewed', 'partially_paid', 'paid', 'overdue', 'cancelled'],
         'viewed' => ['partially_paid', 'paid', 'overdue', 'cancelled'],
         'partially_paid' => ['paid', 'overdue', 'cancelled'],
-        'paid' => ['cancelled'],
+        'paid' => [],  // Paid invoices cannot be cancelled
         'overdue' => ['partially_paid', 'paid', 'cancelled'],
         'cancelled' => [],
     ];
@@ -98,8 +98,11 @@ class Invoice extends Model
             }
         });
 
+        // Recalculate when items change (not via recalculateTotals to avoid recursion)
         static::saved(function ($invoice) {
-            $invoice->recalculateTotals();
+            if (!isset($invoice->preventRecalculation)) {
+                $invoice->recalculateTotals();
+            }
         });
     }
 
@@ -181,18 +184,23 @@ class Invoice extends Model
     public function recalculateTotals(): void
     {
         $items = $this->items;
-        
+
+        // InvoiceItem.total includes tax (calculated in calculateTotals)
+        // So we use sum of totals directly, not adding tax again
         $subtotal = $items->sum('total');
         $taxAmount = $items->sum('tax_amount');
         $discountAmount = $items->sum('discount_amount');
-        $total = $subtotal - $discountAmount + $taxAmount;
+        $total = $subtotal;
 
-        $this->updateQuietly([
-            'subtotal' => $subtotal,
-            'tax_amount' => $taxAmount,
-            'discount_amount' => $discountAmount,
-            'total' => $total,
-        ]);
+        // Use withoutEvents to prevent the saved event from triggering recalculateTotals again
+        static::withoutEvents(function () use ($subtotal, $taxAmount, $discountAmount, $total) {
+            $this->updateQuietly([
+                'subtotal' => $subtotal,
+                'tax_amount' => $taxAmount,
+                'discount_amount' => $discountAmount,
+                'total' => $total,
+            ]);
+        });
     }
 
     /**
