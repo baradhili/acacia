@@ -2,7 +2,7 @@
 
 namespace Tests\Feature\Reconciliation;
 
-use App\Models\WiseTransaction;
+use App\Models\BankTransaction;
 use App\Services\WiseService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -38,24 +38,24 @@ class WiseCsvImportTest extends TestCase
             $this->assertEmpty($result['errors']);
 
             // Verify transactions were created
-            $this->assertDatabaseHas('wise_transactions', [
-                'wise_id' => 'WISE001',
+            $this->assertDatabaseHas('bank_transactions', [
+                'source' => 'wise', 'source_id' => 'WISE001',
                 'reference' => 'INV-2025-0001',
                 'amount' => 1500.00,
                 'currency' => 'AUD',
                 'type' => 'CREDIT',
             ]);
 
-            $this->assertDatabaseHas('wise_transactions', [
-                'wise_id' => 'WISE002',
+            $this->assertDatabaseHas('bank_transactions', [
+                'source' => 'wise', 'source_id' => 'WISE002',
                 'reference' => 'INV-2025-0002',
                 'amount' => 750.50,
                 'currency' => 'AUD',
                 'type' => 'CREDIT',
             ]);
 
-            $this->assertDatabaseHas('wise_transactions', [
-                'wise_id' => 'WISE003',
+            $this->assertDatabaseHas('bank_transactions', [
+                'source' => 'wise', 'source_id' => 'WISE003',
                 'reference' => 'EXP-001',
                 'amount' => 200.00,
                 'currency' => 'AUD',
@@ -69,15 +69,15 @@ class WiseCsvImportTest extends TestCase
     public function test_ignores_duplicate_transactions(): void
     {
         // Create existing transaction
-        WiseTransaction::create([
-            'wise_id' => 'WISE001',
+        BankTransaction::create([
+            'source' => 'wise', 'source_id' => 'WISE001',
             'reference' => 'INV-2025-0001',
             'amount' => 1500.00,
             'currency' => 'AUD',
             'type' => 'CREDIT',
             'transaction_date' => '2025-07-15',
-            'created_at_wise' => '2025-07-15',
-            'status' => WiseTransaction::STATUS_PENDING,
+            'created_at_source' => '2025-07-15',
+            'status' => BankTransaction::STATUS_PENDING,
         ]);
 
         // Create CSV with duplicate
@@ -92,7 +92,7 @@ class WiseCsvImportTest extends TestCase
 
             // Should skip the duplicate
             $this->assertEquals(1, $result['imported']);
-            $this->assertEquals(1, WiseTransaction::count());
+            $this->assertEquals(1, BankTransaction::count());
         } finally {
             unlink($tempFile);
         }
@@ -113,18 +113,18 @@ class WiseCsvImportTest extends TestCase
 
             $this->assertEquals(3, $result['imported']);
 
-            $this->assertDatabaseHas('wise_transactions', [
-                'wise_id' => 'WISE001',
+            $this->assertDatabaseHas('bank_transactions', [
+                'source' => 'wise', 'source_id' => 'WISE001',
                 'currency' => 'USD',
             ]);
 
-            $this->assertDatabaseHas('wise_transactions', [
-                'wise_id' => 'WISE002',
+            $this->assertDatabaseHas('bank_transactions', [
+                'source' => 'wise', 'source_id' => 'WISE002',
                 'currency' => 'EUR',
             ]);
 
-            $this->assertDatabaseHas('wise_transactions', [
-                'wise_id' => 'WISE003',
+            $this->assertDatabaseHas('bank_transactions', [
+                'source' => 'wise', 'source_id' => 'WISE003',
                 'currency' => 'GBP',
             ]);
         } finally {
@@ -143,8 +143,8 @@ class WiseCsvImportTest extends TestCase
         try {
             $this->wiseService->importFromCsv($tempFile);
 
-            $transaction = WiseTransaction::where('wise_id', 'WISE001')->first();
-            $this->assertEquals(WiseTransaction::STATUS_PENDING, $transaction->status);
+            $transaction = BankTransaction::where('source_id', 'WISE001')->first();
+            $this->assertEquals(BankTransaction::STATUS_PENDING, $transaction->status);
             $this->assertNull($transaction->matched_at);
         } finally {
             unlink($tempFile);

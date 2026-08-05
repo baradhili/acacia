@@ -8,15 +8,16 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('wise_transactions', function (Blueprint $table) {
+        Schema::create('bank_transactions', function (Blueprint $table) {
             $table->id();
-            $table->string('wise_id')->unique(); // Wise transaction ID
+            $table->string('source'); // wise, manual, etc.
+            $table->string('source_id')->nullable(); // External ID from source
             $table->string('reference'); // Payment reference
             $table->decimal('amount', 15, 2);
             $table->string('currency', 3);
             $table->string('type'); // DEBIT, CREDIT
             $table->date('transaction_date');
-            $table->dateTime('created_at_wise'); // Original Wise timestamp
+            $table->dateTime('created_at_source'); // Original timestamp from source
             $table->string('merchant_name')->nullable();
             $table->string('status'); // PENDING, MATCHED, IGNORED
             $table->unsignedBigInteger('matched_transaction_id')->nullable();
@@ -26,6 +27,7 @@ return new class extends Migration
             $table->timestamps();
 
             // Indexes for matching queries
+            $table->index(['source', 'source_id']);
             $table->index(['reference', 'amount', 'transaction_date']);
             $table->index(['status']);
         });
@@ -33,6 +35,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('wise_transactions');
+        Schema::dropIfExists('bank_transactions');
     }
 };

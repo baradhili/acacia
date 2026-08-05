@@ -36,6 +36,7 @@ class Supplier extends Model
         'same_as_billing',
         // Additional
         'abn',
+        'category',
         'notes',
     ];
 

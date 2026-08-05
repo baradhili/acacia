@@ -32,7 +32,7 @@ A **Laravel 13** accounting platform tailored for an Australian small profession
 - Financial year July–June with period locking
 - Journal entries and manual adjustments (accountant role only)
 
-### 2.2 Contacts (Clients, Suppliers, Vendors)
+### 2.2 Contacts (Clients, Suppliers)
 
 - Unified contact management inspired by Akaunting/Invoice Ninja
 - Each contact auto-created as an IFRS `Entity` (AUD currency)
@@ -409,25 +409,28 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 
 ### Phase 3 — Time Tracking, Projects & Purchase Orders
 
-- [ ] `Project` model + migration (client_id, name, budget_hours, budget_amount)
-- [ ] Project CRUD UI
-- [ ] Project staff assignment + per-staff rate
-- [ ] `TimeEntry` model + migration (start, end, hours, rate, billable, project_id, po_id)
-- [ ] Time entry create/edit UI (staff-facing)
-- [ ] Weekly timesheet view (per staff)
-- [ ] Monthly timesheet view (per staff)
-- [ ] Time entry approval workflow (staff submit → accountant/admin approves)
-- [ ] `PurchaseOrder` model + migration (client_id, project_id, budgeted_amount, used_amount, status)
-- [ ] PO CRUD UI
-- [ ] PO allocate-time endpoint (attach time entries to PO)
-- [ ] Real-time used vs remaining budget calculation
-- [ ] PO status state machine: draft → open → partially_used → completed → cancelled
-- [ ] Email notification when PO hits 80% utilisation
-- [ ] Email notification when PO fully utilised
-- [ ] Project profitability report (revenue − staff cost)
-- [ ] Time-by-client / time-by-staff / time-by-project reports
-- [ ] Feature tests for time entry lifecycle
-- [ ] Feature tests for PO allocation logic
+- [x] `Project` model + migration (client_id, name, budget_hours, budget_amount)
+- [x] Project CRUD UI
+- [x] Project staff assignment + per-staff rate
+- [x] `TimeEntry` model + migration (start, end, hours, rate, billable, project_id, po_id)
+- [x] Time entry create/edit UI (staff-facing)
+- [x] Weekly timesheet view (per staff)
+- [x] Monthly timesheet view (per staff)
+- [x] Time entry approval workflow (staff submit → accountant/admin approves)
+- [x] `PurchaseOrder` model + migration (client_id, project_id, budgeted_amount, used_amount, status)
+- [x] PO CRUD UI
+- [x] PO allocate-time endpoint (attach time entries to PO)
+- [x] Real-time used vs remaining budget calculation
+- [x] PO status state machine: draft → open → partially_used → completed → cancelled
+- [x] Email notification when PO hits 80% utilisation
+- [x] Email notification when PO fully utilised
+- [x] Project profitability report (revenue − staff cost)
+- [x] Time-by-client / time-by-staff / time-by-project reports
+- [x] Feature tests for time entry lifecycle
+- [x] Feature tests for PO allocation logic
+- [x] Merge Suppliers and Vendors
+- [x] Create User Crud, update db and model to allow user/staff salary as well as charge out rate
+- [x] For existing project, allow the ability to add one or more staff and be able to set the charge rate specific to those staff on that project
 
 ### Phase 4 — Invoices, Credit Notes & Payments
 
@@ -435,7 +438,7 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 - [ ] `InvoiceItem` model (description, qty, unit_price, tax_id, discount, total)
 - [ ] Invoice CRUD UI
 - [ ] Generate invoice from selected time entries
-- [ ] Generate invoice from PO (partial or full)
+- [ ] Generate invoice for PO (partial or full)
 - [ ] Australian invoice numbering (INV-YYYY-NNNN)
 - [ ] Invoice status state machine: draft → sent → viewed → partially_paid → paid → overdue → cancelled
 - [ ] Email invoice to client with PDF attachment
@@ -537,7 +540,7 @@ See `CHANGELOG.md`. Versions follow SemVer.
 | ------- | ---------------------------------------------------- |
 | 0.1.0   | Phase 1 complete — IFRS core, GST, Chart of Accounts |
 | 0.2.0   | Phase 2 complete — Auth, contacts, Wise CSV          |
-|         |                                                      |
+| 0.3.0   | Phase 3 complete — Time tracking, POs, user mgmt     |
 |         |                                                      |
 |         |                                                      |
 |         |                                                      |

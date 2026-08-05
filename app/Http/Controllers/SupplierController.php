@@ -30,6 +30,7 @@ class SupplierController extends Controller
             'postcode' => 'nullable|string|max:20',
             'country' => 'nullable|string|max:100',
             'abn' => 'nullable|string|max:20',
+            'category' => 'nullable|string|max:100',
             'notes' => 'nullable|string',
         ]);
 
@@ -60,6 +61,7 @@ class SupplierController extends Controller
             'postcode' => 'nullable|string|max:20',
             'country' => 'nullable|string|max:100',
             'abn' => 'nullable|string|max:20',
+            'category' => 'nullable|string|max:100',
             'notes' => 'nullable|string',
         ]);
 

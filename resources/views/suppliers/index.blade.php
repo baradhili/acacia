@@ -1,4 +1,7 @@
-<x-app-layout title="Suppliers">
+@extends('layouts.app')
+@section('title', 'Suppliers')
+@section('content')
+
     <div class="mb-6 flex justify-between items-center">
         <h1 class="text-2xl font-bold text-gray-800">Suppliers</h1>
         <a href="{{ route('suppliers.create') }}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
@@ -48,4 +51,5 @@
             @endif
         </div>
     </div>
-</x-app-layout>
+
+@endsection

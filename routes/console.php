@@ -14,3 +14,15 @@ Schedule::command('reconcile:wise --days=7')
     ->withoutOverlapping()
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/wise-reconciliation.log'));
+
+// Schedule PO utilization check to run daily at 6 AM
+Schedule::command('po:check-utilization')
+    ->dailyAt('06:00')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/po-utilization.log'));
+
+// Schedule PO activation check to run daily at 1 AM
+Schedule::command('po:activate-pending')
+    ->dailyAt('01:00')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/po-activation.log'));

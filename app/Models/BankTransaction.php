@@ -5,18 +5,19 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class WiseTransaction extends Model
+class BankTransaction extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'wise_id',
+        'source',
+        'source_id',
         'reference',
         'amount',
         'currency',
         'type',
         'transaction_date',
-        'created_at_wise',
+        'created_at_source',
         'merchant_name',
         'status',
         'matched_transaction_id',
@@ -28,9 +29,13 @@ class WiseTransaction extends Model
     protected $casts = [
         'amount' => 'decimal:2',
         'transaction_date' => 'date',
-        'created_at_wise' => 'datetime',
+        'created_at_source' => 'datetime',
         'matched_at' => 'datetime',
     ];
+
+    // Source constants
+    const SOURCE_WISE = 'wise';
+    const SOURCE_MANUAL = 'manual';
 
     // Status constants
     const STATUS_PENDING = 'PENDING';
@@ -55,6 +60,14 @@ class WiseTransaction extends Model
     public function scopeMatched($query)
     {
         return $query->where('status', self::STATUS_MATCHED);
+    }
+
+    /**
+     * Scope for a specific source
+     */
+    public function scopeFromSource($query, string $source)
+    {
+        return $query->where('source', $source);
     }
 
     /**

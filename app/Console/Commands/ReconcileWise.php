@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Models\WiseTransaction;
+use App\Models\BankTransaction;
 use App\Services\ReconciliationService;
 use App\Services\WiseService;
 use Carbon\Carbon;
@@ -29,7 +29,7 @@ class ReconcileWise extends Command
         $dryRun = $this->option('dry-run');
         $days = (int) $this->option('days');
         $autoMatch = $this->option('auto-match');
-
+	
         $this->info('Starting Wise reconciliation...');
 
         if ($dryRun) {
@@ -56,25 +56,26 @@ class ReconcileWise extends Command
             // Import transactions
             $imported = 0;
             foreach ($transactions as $wiseTxn) {
-                $wiseId = $wiseTxn['id'] ?? null;
-                if (!$wiseId) continue;
+                $sourceId = $wiseTxn['id'] ?? null;
+                if (!$sourceId) continue;
 
                 // Check if already exists
-                if (WiseTransaction::where('wise_id', $wiseId)->exists()) {
+                if (BankTransaction::where('source', BankTransaction::SOURCE_WISE)->where('source_id', $sourceId)->exists()) {
                     continue;
                 }
 
                 if (!$dryRun) {
-                    WiseTransaction::create([
-                        'wise_id' => $wiseId,
+                    BankTransaction::create([
+                        'source' => BankTransaction::SOURCE_WISE,
+                        'source_id' => $sourceId,
                         'reference' => $wiseTxn['reference'] ?? '',
                         'amount' => abs($wiseTxn['amount'] ?? 0),
                         'currency' => $wiseTxn['currency'] ?? 'AUD',
                         'type' => ($wiseTxn['type'] ?? 'DEBIT') === 'CREDIT' ? 'CREDIT' : 'DEBIT',
                         'transaction_date' => Carbon::parse($wiseTxn['date'] ?? now()),
-                        'created_at_wise' => Carbon::parse($wiseTxn['created'] ?? now()),
+                        'created_at_source' => Carbon::parse($wiseTxn['created'] ?? now()),
                         'merchant_name' => $wiseTxn['merchantName'] ?? null,
-                        'status' => WiseTransaction::STATUS_PENDING,
+                        'status' => BankTransaction::STATUS_PENDING,
                     ]);
                 }
                 $imported++;
