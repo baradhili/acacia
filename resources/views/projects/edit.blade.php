@@ -96,15 +96,15 @@
                     @foreach($project->staffAssignments as $index => $assignment)
                         <div class="staff-row flex gap-3 items-center">
                             <select name="staff[{{ $index }}][user_id]" required
-                                class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                class="staff-select flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                                 <option value="">Select Staff Member</option>
                                 @foreach($staff as $s)
-                                    <option value="{{ $s->id }}" {{ $assignment->user_id == $s->id ? 'selected' : '' }}>{{ $s->name }}</option>
+                                    <option value="{{ $s->id }}" data-rate="{{ $s->charge_out_rate ?? '' }}" {{ $assignment->user_id == $s->id ? 'selected' : '' }}>{{ $s->name }}</option>
                                 @endforeach
                             </select>
                             <input type="number" name="staff[{{ $index }}][hourly_rate]" placeholder="Hourly Rate" step="0.01" min="0"
                                 value="{{ $assignment->hourly_rate }}"
-                                class="w-32 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                class="hourly-rate-input w-32 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                             <button type="button" class="remove-staff-btn text-red-600 hover:text-red-800">Remove</button>
                         </div>
                     @endforeach
@@ -127,14 +127,14 @@
     <template id="staff-row-template">
         <div class="staff-row flex gap-3 items-center">
             <select name="staff[@{{index}}][user_id]" required
-                class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                class="staff-select flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                 <option value="">Select Staff Member</option>
                 @foreach($staff as $s)
-                    <option value="{{ $s->id }}">{{ $s->name }}</option>
+                    <option value="{{ $s->id }}" data-rate="{{ $s->charge_out_rate ?? '' }}">{{ $s->name }}</option>
                 @endforeach
             </select>
             <input type="number" name="staff[@{{index}}][hourly_rate]" placeholder="Hourly Rate" step="0.01" min="0"
-                class="w-32 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                class="hourly-rate-input w-32 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
             <button type="button" class="remove-staff-btn text-red-600 hover:text-red-800">Remove</button>
         </div>
     </template>
@@ -146,11 +146,24 @@
             const template = document.getElementById('staff-row-template');
             let staffIndex = {{ $project->staffAssignments->count() }};
 
-            addBtn.addEventListener('click', function() {
+            function addStaffRow() {
                 const html = template.innerHTML.replace(/@{{index}}/g, staffIndex);
                 container.insertAdjacentHTML('beforeend', html);
                 staffIndex++;
-            });
+            }
+
+            function handleStaffChange(e) {
+                if (e.target.classList.contains('staff-select')) {
+                    const selectedOption = e.target.options[e.target.selectedIndex];
+                    const rate = selectedOption.dataset.rate;
+                    const rateInput = e.target.closest('.staff-row').querySelector('.hourly-rate-input');
+                    rateInput.value = rate || '';
+                }
+            }
+
+            addBtn.addEventListener('click', addStaffRow);
+
+            container.addEventListener('change', handleStaffChange);
 
             container.addEventListener('click', function(e) {
                 if (e.target.classList.contains('remove-staff-btn')) {
