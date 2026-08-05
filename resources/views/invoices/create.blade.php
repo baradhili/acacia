@@ -31,14 +31,17 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1">Project</label>
                     <select name="project_id" id="projectSelect"
                         class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
-                        <option value="">Select Project</option>
-                        @if($selectedClient && isset($projects[$selectedClient->id]))
-                            @foreach($projects[$selectedClient->id] as $project)
-                                <option value="{{ $project->id }}" {{ old('project_id', $selectedProject?->id) == $project->id ? 'selected' : '' }}>
-                                    {{ $project->name }}
-                                </option>
-                            @endforeach
-                        @endif
+                        <option value="">Select Project (optional)</option>
+                        @php
+                            $allProjects = App\Models\Project::with('client')->orderBy('name')->get();
+                        @endphp
+                        @foreach($allProjects as $project)
+                            <option value="{{ $project->id }}" 
+                                data-client-id="{{ $project->client_id }}"
+                                {{ old('project_id', $selectedProject?->id) == $project->id ? 'selected' : '' }}>
+                                {{ $project->name }} ({{ $project->client->name ?? 'No client' }})
+                            </option>
+                        @endforeach
                     </select>
                     @error('project_id')
                         <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
@@ -47,19 +50,19 @@
                 
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Purchase Order</label>
-                    <select name="purchase_order_id"
+                    <select name="purchase_order_id" id="poSelect"
                         class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
-                        <option value="">Select PO</option>
-                        @if($selectedClient)
-                            @php
-                                $pos = \App\Models\PurchaseOrder::where('client_id', $selectedClient->id)->open()->get();
-                            @endphp
-                            @foreach($pos as $po)
-                                <option value="{{ $po->id }}" {{ old('purchase_order_id', $selectedPO?->id) == $po->id ? 'selected' : '' }}>
-                                    {{ $po->po_number }} - {{ Str::limit($po->title, 30) }}
-                                </option>
-                            @endforeach
-                        @endif
+                        <option value="">Select PO (optional)</option>
+                        @php
+                            $allPOs = App\Models\PurchaseOrder::with('client')->open()->orderBy('po_number', 'desc')->get();
+                        @endphp
+                        @foreach($allPOs as $po)
+                            <option value="{{ $po->id }}" 
+                                data-client-id="{{ $po->client_id }}"
+                                {{ old('purchase_order_id', $selectedPO?->id) == $po->id ? 'selected' : '' }}>
+                                {{ $po->po_number }} - {{ Str::limit($po->title, 25) }} ({{ $po->client->name ?? 'No client' }})
+                            </option>
+                        @endforeach
                     </select>
                 </div>
             </div>
@@ -269,6 +272,23 @@
         }
         
         attachEventListeners();
+        
+        // Auto-select client when project or PO is selected
+        document.getElementById('projectSelect').addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const clientId = selectedOption.dataset.clientId;
+            if (clientId) {
+                document.getElementById('clientSelect').value = clientId;
+            }
+        });
+        
+        document.getElementById('poSelect').addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const clientId = selectedOption.dataset.clientId;
+            if (clientId) {
+                document.getElementById('clientSelect').value = clientId;
+            }
+        });
     </script>
 
 @endsection
