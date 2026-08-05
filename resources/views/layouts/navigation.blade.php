@@ -148,27 +148,53 @@
         <!-- Invoicing -->
         <p class="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Invoicing</p>
 
-        <a href="#"
-            class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors text-slate-300 hover:bg-slate-700 hover:text-white">
-            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z">
-                </path>
-            </svg>
-            Invoices
-            <span class="ml-auto text-xs bg-yellow-500 text-yellow-900 px-2 py-0.5 rounded">Soon</span>
-        </a>
+        <!-- Invoices -->
+        <div class="flex items-center justify-between group">
+            <a href="{{ route('invoices.index') }}"
+                class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors flex-1 {{ request()->routeIs('invoices.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z">
+                    </path>
+                </svg>
+                Invoices
+            </a>
+            <a href="{{ route('invoices.create') }}"
+                class="text-slate-500 hover:text-white px-2 text-lg font-bold transition-colors"
+                title="New Invoice">+</a>
+        </div>
 
-        <a href="#"
-            class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors text-slate-300 hover:bg-slate-700 hover:text-white">
-            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z">
-                </path>
-            </svg>
-            Payments
-            <span class="ml-auto text-xs bg-yellow-500 text-yellow-900 px-2 py-0.5 rounded">Soon</span>
-        </a>
+        <!-- Payments -->
+        <div class="flex items-center justify-between group">
+            <a href="{{ route('payments.index') }}"
+                class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors flex-1 {{ request()->routeIs('payments.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z">
+                    </path>
+                </svg>
+                Payments
+            </a>
+            <a href="{{ route('payments.create') }}"
+                class="text-slate-500 hover:text-white px-2 text-lg font-bold transition-colors"
+                title="Record Payment">+</a>
+        </div>
+
+        <!-- Estimates -->
+        <div class="flex items-center justify-between group">
+            <a href="{{ route('estimates.index') }}"
+                class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors flex-1 {{ request()->routeIs('estimates.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2">
+                    </path>
+                </svg>
+                Estimates
+            </a>
+            <a href="{{ route('estimates.create') }}"
+                class="text-slate-500 hover:text-white px-2 text-lg font-bold transition-colors"
+                title="New Estimate">+</a>
+        </div>
 
         <!-- Divider -->
         <div class="my-4 border-t border-slate-700"></div>

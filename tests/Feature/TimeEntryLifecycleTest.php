@@ -1,5 +1,7 @@
 <?php
 
+namespace Tests\Feature;
+
 use App\Models\Client;
 use App\Models\Project;
 use App\Models\TimeEntry;
@@ -8,164 +10,183 @@ use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-uses(RefreshDatabase::class);
+class TimeEntryLifecycleTest extends TestCase
+{
+    use RefreshDatabase;
 
-beforeEach(function () {
-    $this->user = User::factory()->create();
-    $this->client = Client::factory()->create();
-    $this->project = Project::factory()->create([
-        'client_id' => $this->client->id,
-        'hourly_rate' => 100,
-    ]);
-});
+    protected User $user;
+    protected Client $client;
+    protected Project $project;
 
-test('can create time entry with start/end times', function () {
-    $response = $this->actingAs($this->user)->post(route('time-entries.store'), [
-        'project_id' => $this->project->id,
-        'start_time' => '2024-01-15T09:00',
-        'end_time' => '2024-01-15T17:00',
-        'description' => 'Development work',
-        'billable' => true,
-    ]);
+    protected function setUp(): void
+    {
+        parent::setUp();
 
-    $response->assertRedirect(route('time-entries.index'));
+        $this->user = User::factory()->create();
+        $this->client = Client::factory()->create();
+        $this->project = Project::factory()->create([
+            'client_id' => $this->client->id,
+            'hourly_rate' => 100,
+        ]);
+    }
 
-    $this->assertDatabaseHas('time_entries', [
-        'user_id' => $this->user->id,
-        'project_id' => $this->project->id,
-        'description' => 'Development work',
-        'status' => 'draft',
-    ]);
+    public function test_can_create_time_entry_with_start_end_times(): void
+    {
+        $response = $this->actingAs($this->user)->post(route('time-entries.store'), [
+            'project_id' => $this->project->id,
+            'start_time' => '2024-01-15T09:00',
+            'end_time' => '2024-01-15T17:00',
+            'description' => 'Development work',
+            'billable' => true,
+        ]);
 
-    $entry = TimeEntry::first();
-    expect($entry->hours)->toBe(8.0);
-});
+        $response->assertRedirect(route('time-entries.index'));
 
-test('can calculate hours from start/end times', function () {
-    $entry = TimeEntry::create([
-        'user_id' => $this->user->id,
-        'project_id' => $this->project->id,
-        'start_time' => Carbon::parse('2024-01-15 09:00'),
-        'end_time' => Carbon::parse('2024-01-15 12:30'),
-        'description' => 'Morning work',
-    ]);
+        $this->assertDatabaseHas('time_entries', [
+            'user_id' => $this->user->id,
+            'project_id' => $this->project->id,
+            'description' => 'Development work',
+            'status' => 'draft',
+        ]);
 
-    expect($entry->hours)->toBe(3.5);
-});
+        $entry = TimeEntry::first();
+        $this->assertEquals(8.0, $entry->hours);
+    }
 
-test('can submit time entry for approval', function () {
-    $entry = TimeEntry::create([
-        'user_id' => $this->user->id,
-        'project_id' => $this->project->id,
-        'start_time' => Carbon::parse('2024-01-15 09:00'),
-        'end_time' => Carbon::parse('2024-01-15 17:00'),
-        'hours' => 8,
-        'description' => 'Full day work',
-    ]);
+    public function test_can_calculate_hours_from_start_end_times(): void
+    {
+        $entry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $this->project->id,
+            'start_time' => Carbon::parse('2024-01-15 09:00'),
+            'end_time' => Carbon::parse('2024-01-15 12:30'),
+            'description' => 'Morning work',
+        ]);
 
-    $response = $this->actingAs($this->user)->post(route('time-entries.submit', $entry));
-    $response->assertSessionHas('success');
+        $this->assertEquals(3.5, $entry->hours);
+    }
 
-    $entry->refresh();
-    expect($entry->status)->toBe('submitted');
-});
+    public function test_can_submit_time_entry_for_approval(): void
+    {
+        $entry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $this->project->id,
+            'start_time' => Carbon::parse('2024-01-15 09:00'),
+            'end_time' => Carbon::parse('2024-01-15 17:00'),
+            'hours' => 8,
+            'description' => 'Full day work',
+        ]);
 
-test('only draft entries can be submitted', function () {
-    $entry = TimeEntry::create([
-        'user_id' => $this->user->id,
-        'project_id' => $this->project->id,
-        'start_time' => Carbon::parse('2024-01-15 09:00'),
-        'end_time' => Carbon::parse('2024-01-15 17:00'),
-        'hours' => 8,
-        'status' => 'submitted',
-    ]);
+        $response = $this->actingAs($this->user)->post(route('time-entries.submit', $entry));
+        $response->assertSessionHas('success');
 
-    $response = $this->actingAs($this->user)->post(route('time-entries.submit', $entry));
-    $response->assertSessionHas('error');
-});
+        $entry->refresh();
+        $this->assertEquals('submitted', $entry->status);
+    }
 
-test('can approve time entry', function () {
-    $approver = User::factory()->create();
+    public function test_only_draft_entries_can_be_submitted(): void
+    {
+        $entry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $this->project->id,
+            'start_time' => Carbon::parse('2024-01-15 09:00'),
+            'end_time' => Carbon::parse('2024-01-15 17:00'),
+            'hours' => 8,
+            'status' => 'submitted',
+        ]);
 
-    $entry = TimeEntry::create([
-        'user_id' => $this->user->id,
-        'project_id' => $this->project->id,
-        'start_time' => Carbon::parse('2024-01-15 09:00'),
-        'end_time' => Carbon::parse('2024-01-15 17:00'),
-        'hours' => 8,
-        'status' => 'submitted',
-    ]);
+        $response = $this->actingAs($this->user)->post(route('time-entries.submit', $entry));
+        $response->assertSessionHas('error');
+    }
 
-    $response = $this->actingAs($approver)->post(route('time-entries.approve', $entry));
-    $response->assertSessionHas('success');
+    public function test_can_approve_time_entry(): void
+    {
+        $approver = User::factory()->create();
 
-    $entry->refresh();
-    expect($entry->status)->toBe('approved')
-        ->and($entry->approved_by)->toBe($approver->id)
-        ->and($entry->approved_at)->not->toBeNull();
-});
+        $entry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $this->project->id,
+            'start_time' => Carbon::parse('2024-01-15 09:00'),
+            'end_time' => Carbon::parse('2024-01-15 17:00'),
+            'hours' => 8,
+            'status' => 'submitted',
+        ]);
 
-test('can reject time entry with reason', function () {
-    $approver = User::factory()->create();
+        $response = $this->actingAs($approver)->post(route('time-entries.approve', $entry));
+        $response->assertSessionHas('success');
 
-    $entry = TimeEntry::create([
-        'user_id' => $this->user->id,
-        'project_id' => $this->project->id,
-        'start_time' => Carbon::parse('2024-01-15 09:00'),
-        'end_time' => Carbon::parse('2024-01-15 17:00'),
-        'hours' => 8,
-        'status' => 'submitted',
-    ]);
+        $entry->refresh();
+        $this->assertEquals('approved', $entry->status);
+        $this->assertEquals($approver->id, $entry->approved_by);
+        $this->assertNotNull($entry->approved_at);
+    }
 
-    $response = $this->actingAs($approver)->post(route('time-entries.reject', $entry), [
-        'reason' => 'Timesheet incomplete',
-    ]);
-    $response->assertSessionHas('success');
+    public function test_can_reject_time_entry_with_reason(): void
+    {
+        $approver = User::factory()->create();
 
-    $entry->refresh();
-    expect($entry->status)->toBe('rejected')
-        ->and($entry->rejection_reason)->toBe('Timesheet incomplete');
-});
+        $entry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $this->project->id,
+            'start_time' => Carbon::parse('2024-01-15 09:00'),
+            'end_time' => Carbon::parse('2024-01-15 17:00'),
+            'hours' => 8,
+            'status' => 'submitted',
+        ]);
 
-test('only draft entries can be edited', function () {
-    $entry = TimeEntry::create([
-        'user_id' => $this->user->id,
-        'project_id' => $this->project->id,
-        'start_time' => Carbon::parse('2024-01-15 09:00'),
-        'end_time' => Carbon::parse('2024-01-15 17:00'),
-        'hours' => 8,
-        'status' => 'submitted',
-    ]);
+        $response = $this->actingAs($approver)->post(route('time-entries.reject', $entry), [
+            'reason' => 'Timesheet incomplete',
+        ]);
+        $response->assertSessionHas('success');
 
-    $response = $this->actingAs($this->user)->get(route('time-entries.edit', $entry));
-    $response->assertRedirect(route('time-entries.show', $entry))
-        ->assertSessionHas('error');
-});
+        $entry->refresh();
+        $this->assertEquals('rejected', $entry->status);
+        $this->assertEquals('Timesheet incomplete', $entry->rejection_reason);
+    }
 
-test('only draft entries can be deleted', function () {
-    $entry = TimeEntry::create([
-        'user_id' => $this->user->id,
-        'project_id' => $this->project->id,
-        'start_time' => Carbon::parse('2024-01-15 09:00'),
-        'end_time' => Carbon::parse('2024-01-15 17:00'),
-        'hours' => 8,
-        'status' => 'approved',
-    ]);
+    public function test_only_draft_entries_can_be_edited(): void
+    {
+        $entry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $this->project->id,
+            'start_time' => Carbon::parse('2024-01-15 09:00'),
+            'end_time' => Carbon::parse('2024-01-15 17:00'),
+            'hours' => 8,
+            'status' => 'submitted',
+        ]);
 
-    $response = $this->actingAs($this->user)->delete(route('time-entries.destroy', $entry));
-    $response->assertSessionHas('error');
+        $response = $this->actingAs($this->user)->get(route('time-entries.edit', $entry));
+        $response->assertRedirect(route('time-entries.show', $entry));
+        $response->assertSessionHas('error');
+    }
 
-    $this->assertDatabaseHas('time_entries', ['id' => $entry->id]);
-});
+    public function test_only_draft_entries_can_be_deleted(): void
+    {
+        $entry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $this->project->id,
+            'start_time' => Carbon::parse('2024-01-15 09:00'),
+            'end_time' => Carbon::parse('2024-01-15 17:00'),
+            'hours' => 8,
+            'status' => 'approved',
+        ]);
 
-test('total calculated correctly', function () {
-    $entry = TimeEntry::create([
-        'user_id' => $this->user->id,
-        'project_id' => $this->project->id,
-        'start_time' => Carbon::parse('2024-01-15 09:00'),
-        'end_time' => Carbon::parse('2024-01-15 17:00'),
-        'hours' => 8,
-    ]);
+        $response = $this->actingAs($this->user)->delete(route('time-entries.destroy', $entry));
+        $response->assertSessionHas('error');
 
-    expect($entry->total)->toBe(800.0); // 8 hours * $100 hourly rate
-});
+        $this->assertDatabaseHas('time_entries', ['id' => $entry->id]);
+    }
+
+    public function test_total_calculated_correctly(): void
+    {
+        $entry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $this->project->id,
+            'start_time' => Carbon::parse('2024-01-15 09:00'),
+            'end_time' => Carbon::parse('2024-01-15 17:00'),
+            'hours' => 8,
+        ]);
+
+        $this->assertEquals(800.0, $entry->total); // 8 hours * $100 hourly rate
+    }
+}

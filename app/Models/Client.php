@@ -78,8 +78,71 @@ class Client extends Model
         return $this->hasMany(Invoice::class);
     }
 
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    public function creditNotes(): HasMany
+    {
+        return $this->hasMany(CreditNote::class);
+    }
+
+    public function estimates(): HasMany
+    {
+        return $this->hasMany(Estimate::class);
+    }
+
     public function documents(): MorphMany
     {
         return $this->morphMany(Document::class, 'documentable');
+    }
+
+    /**
+     * Get total outstanding amount (AR aging)
+     */
+    public function getOutstandingAmountAttribute(): float
+    {
+        return $this->invoices()
+            ->whereIn('status', [
+                Invoice::STATUS_SENT,
+                Invoice::STATUS_VIEWED,
+                Invoice::STATUS_PARTIALLY_PAID,
+                Invoice::STATUS_OVERDUE,
+            ])
+            ->sum('total') - $this->invoices()
+            ->whereIn('status', [
+                Invoice::STATUS_SENT,
+                Invoice::STATUS_VIEWED,
+                Invoice::STATUS_PARTIALLY_PAID,
+                Invoice::STATUS_OVERDUE,
+            ])
+            ->with('allocations')
+            ->get()
+            ->sum('amount_paid');
+    }
+
+    /**
+     * Get overdue amount
+     */
+    public function getOverdueAmountAttribute(): float
+    {
+        return $this->invoices()
+            ->overdue()
+            ->sum('total') - $this->invoices()
+            ->overdue()
+            ->with('allocations')
+            ->get()
+            ->sum('amount_paid');
+    }
+
+    /**
+     * Get available credit from credit notes
+     */
+    public function getAvailableCreditAttribute(): float
+    {
+        return $this->creditNotes()
+            ->where('remaining_amount', '>', 0)
+            ->sum('remaining_amount');
     }
 }

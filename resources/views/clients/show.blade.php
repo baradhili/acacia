@@ -135,6 +135,60 @@
         @endif
     </div>
 
+    <!-- Credit Notes -->
+    <div class="bg-white rounded-lg shadow p-6 mb-6">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold text-gray-800">Credit Notes</h3>
+        </div>
+        @if($client->creditNotes->isEmpty())
+            <p class="text-gray-500 text-center py-4">No credit notes for this client.</p>
+        @else
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">CN Number</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Invoice</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Remaining</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    @foreach($client->creditNotes as $cn)
+                        <tr>
+                            <td class="px-4 py-3">
+                                <a href="{{ route('credit-notes.show', $cn) }}" class="text-indigo-600 hover:text-indigo-800">
+                                    {{ $cn->credit_note_number }}
+                                </a>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-gray-900">{{ $cn->issue_date->format('d M Y') }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-900">
+                                @if($cn->invoice)
+                                    <a href="{{ route('invoices.show', $cn->invoice) }}" class="text-indigo-600 hover:text-indigo-800">
+                                        {{ $cn->invoice->invoice_number }}
+                                    </a>
+                                @else
+                                    -
+                                @endif
+                            </td>
+                            <td class="px-4 py-3 text-sm text-right text-orange-600">-${{ number_format($cn->total, 2) }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-900">${{ number_format($cn->remaining_amount, 2) }}</td>
+                            <td class="px-4 py-3">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                                    @if($cn->status === 'applied') bg-green-100 text-green-800
+                                    @elseif($cn->status === 'void') bg-gray-100 text-gray-500
+                                    @else bg-blue-100 text-blue-800 @endif">
+                                    {{ ucfirst($cn->status) }}
+                                </span>
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        @endif
+    </div>
+
     <!-- Attachments -->
     <div class="bg-white rounded-lg shadow p-6">
         <div class="flex justify-between items-center mb-4">

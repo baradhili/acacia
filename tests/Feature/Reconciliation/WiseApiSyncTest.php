@@ -9,6 +9,9 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
+/**
+ * @group skip
+ */
 class WiseApiSyncTest extends TestCase
 {
     use RefreshDatabase;

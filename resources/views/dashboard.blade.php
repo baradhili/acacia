@@ -103,49 +103,7 @@
             <div class="px-6 py-4 border-b border-gray-200">
                 <h2 class="text-lg font-semibold text-gray-800">Welcome to Laravel ERP</h2>
             </div>
-            <div class="p-6">
-                <p class="text-gray-600 mb-4">
-                    Your Professional Services Accounting System is ready. This dashboard provides quick access to all major functions.
-                </p>
-                <div class="space-y-2 text-sm text-gray-500">
-                    <div class="flex items-center">
-                        <svg class="w-4 h-4 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                        </svg>
-                        IFRS Accounting configured
-                    </div>
-                    <div class="flex items-center">
-                        <svg class="w-4 h-4 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                        </svg>
-                        Australian GST (10%) enabled
-                    </div>
-                    <div class="flex items-center">
-                        <svg class="w-4 h-4 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                        </svg>
-                        Chart of Accounts seeded
-                    </div>
-                    <div class="flex items-center">
-                        <svg class="w-4 h-4 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                        </svg>
-                        Time Tracking & Projects
-                    </div>
-                    <div class="flex items-center">
-                        <svg class="w-4 h-4 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                        </svg>
-                        Purchase Orders
-                    </div>
-                    <div class="flex items-center">
-                        <svg class="w-4 h-4 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                        </svg>
-                        Bank Reconciliation (Wise)
-                    </div>
-                </div>
-            </div>
+            
         </div>
     </div>
 

@@ -26,3 +26,9 @@ Schedule::command('po:activate-pending')
     ->dailyAt('01:00')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/po-activation.log'));
+
+// Schedule overdue invoice check to run daily at 7 AM
+Schedule::command('invoices:mark-overdue')
+    ->dailyAt('07:00')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/invoices-overdue.log'));
