@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Client;
+use App\Models\Document;
 use Illuminate\Http\Request;
+use IFRS\Models\Entity;
 
 class ClientController extends Controller
 {
@@ -40,7 +42,50 @@ class ClientController extends Controller
 
     public function show(Client $client)
     {
-        return view('clients.show', compact('client'));
+        // Get IFRS Entity linked to this client
+        $entity = Entity::where('name', 'like', '%' . $client->name . '%')->first();
+
+        // Get recent transactions if entity exists
+        $transactions = collect();
+        $aging = [
+            'current' => 0,
+            'days_30' => 0,
+            'days_60' => 0,
+            'days_90' => 0,
+            'over_90' => 0,
+        ];
+
+        if ($entity) {
+            // Get ledgers for this entity (receivables)
+            $ledgers = $entity->ledgers()->with('account')->get();
+
+            // Group by aging buckets
+            $now = now();
+            foreach ($ledgers as $ledger) {
+                $amount = abs($ledger->amount);
+                $date = $ledger->created_at;
+
+                if ($date->diffInDays($now) <= 30) {
+                    $aging['current'] += $amount;
+                } elseif ($date->diffInDays($now) <= 60) {
+                    $aging['days_30'] += $amount;
+                } elseif ($date->diffInDays($now) <= 90) {
+                    $aging['days_60'] += $amount;
+                } elseif ($date->diffInDays($now) <= 90) {
+                    $aging['days_90'] += $amount;
+                } else {
+                    $aging['over_90'] += $amount;
+                }
+            }
+
+            // Get recent transactions
+            $transactions = $ledgers->sortByDesc('created_at')->take(10);
+        }
+
+        // Get documents
+        $documents = $client->documents()->with('uploadedBy')->latest()->get();
+
+        return view('clients.show', compact('client', 'transactions', 'aging', 'documents'));
     }
 
     public function edit(Client $client)

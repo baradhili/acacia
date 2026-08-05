@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'wise' => [
+        'api_url' => env('WISE_API_URL', 'https://api.wise.com'),
+        'token' => env('WISE_TOKEN'),
+        'profile_id' => env('WISE_PROFILE_ID'),
+    ],
+
 ];
