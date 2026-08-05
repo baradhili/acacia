@@ -193,9 +193,20 @@ class PaymentController extends Controller
                 Invoice::STATUS_PARTIALLY_PAID,
                 Invoice::STATUS_OVERDUE,
             ])
-            ->where('amount_due', '>', 0)
-            ->orderBy('due_date')
-            ->get(['id', 'invoice_number', 'total', 'due_date']);
+            ->withSum('allocations', 'amount')
+            ->get()
+            ->filter(function ($invoice) {
+                return $invoice->total - ($invoice->allocations_sum_amount ?? 0) > 0;
+            })
+            ->values()
+            ->map(function ($invoice) {
+                return [
+                    'id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'total' => $invoice->total,
+                    'due_date' => $invoice->due_date,
+                ];
+            });
 
         return response()->json($invoices);
     }
