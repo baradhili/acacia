@@ -1,4 +1,7 @@
-<x-app-layout title="Projects">
+@extends('layouts.app')
+@section('title', 'Projects')
+@section('content')
+
     <div class="mb-6 flex justify-between items-center">
         <h1 class="text-2xl font-bold text-gray-800">Projects</h1>
         <a href="{{ route('projects.create') }}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg">
@@ -67,4 +70,5 @@
     <div class="mt-4">
         {{ $projects->links() }}
     </div>
-</x-app-layout>
+
+@endsection

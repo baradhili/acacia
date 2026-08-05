@@ -1,4 +1,7 @@
-<x-app-layout title="{{ $vendor->name }}">
+@extends('layouts.app')
+@section('title', '{{ $vendor->name }}')
+@section('content')
+
     <div class="mb-6 flex justify-between items-center">
         <h1 class="text-2xl font-bold text-gray-800">{{ $vendor->name }}</h1>
         <div class="flex gap-3">
@@ -69,4 +72,5 @@
             </div>
         @endif
     </div>
-</x-app-layout>
+
+@endsection

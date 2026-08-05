@@ -1,4 +1,7 @@
-<x-app-layout title="Project Profitability">
+@extends('layouts.app')
+@section('title', 'Project Profitability')
+@section('content')
+
     <div class="mb-6 flex justify-between items-center">
         <h1 class="text-2xl font-bold text-gray-800">Project Profitability: {{ $project->name }}</h1>
         <a href="{{ route('projects.show', $project) }}" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg">
@@ -75,4 +78,5 @@
             </tfoot>
         </table>
     </div>
-</x-app-layout>
+
+@endsection

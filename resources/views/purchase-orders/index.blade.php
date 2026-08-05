@@ -1,4 +1,7 @@
-<x-app-layout title="Purchase Orders">
+@extends('layouts.app')
+@section('title', 'Purchase Orders')
+@section('content')
+
     <div class="mb-6 flex justify-between items-center">
         <h1 class="text-2xl font-bold text-gray-800">Purchase Orders</h1>
         <a href="{{ route('purchase-orders.create') }}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg">
@@ -68,4 +71,5 @@
     <div class="mt-4">
         {{ $purchaseOrders->links() }}
     </div>
-</x-app-layout>
+
+@endsection

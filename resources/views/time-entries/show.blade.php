@@ -1,4 +1,7 @@
-<x-app-layout title="Time Entry">
+@extends('layouts.app')
+@section('title', 'Time Entry')
+@section('content')
+
     <div class="mb-6 flex justify-between items-center">
         <h1 class="text-2xl font-bold text-gray-800">Time Entry</h1>
         <a href="{{ route('time-entries.index') }}" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg">
@@ -121,4 +124,5 @@
             </div>
         @endif
     </div>
-</x-app-layout>
+
+@endsection

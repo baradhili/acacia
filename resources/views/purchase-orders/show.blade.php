@@ -1,4 +1,7 @@
-<x-app-layout title="{{ $purchaseOrder->po_number }}">
+@extends('layouts.app')
+@section('title', '{{ $purchaseOrder->po_number }}')
+@section('content')
+
     <div class="mb-6 flex justify-between items-center">
         <h1 class="text-2xl font-bold text-gray-800">{{ $purchaseOrder->po_number }}</h1>
         <div class="flex gap-3">
@@ -136,4 +139,5 @@
             <p class="text-gray-500 text-center py-4">No time entries linked to this purchase order.</p>
         @endif
     </div>
-</x-app-layout>
+
+@endsection

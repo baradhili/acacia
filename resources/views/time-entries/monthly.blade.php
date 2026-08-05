@@ -1,4 +1,7 @@
-<x-app-layout title="Monthly Timesheet">
+@extends('layouts.app')
+@section('title', 'Monthly Timesheet')
+@section('content')
+
     <div class="mb-6 flex justify-between items-center">
         <h1 class="text-2xl font-bold text-gray-800">Monthly Timesheet</h1>
         <a href="{{ route('time-entries.create') }}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg">
@@ -95,4 +98,5 @@
             </tfoot>
         </table>
     </div>
-</x-app-layout>
+
+@endsection

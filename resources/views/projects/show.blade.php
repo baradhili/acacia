@@ -1,4 +1,7 @@
-<x-app-layout title="{{ $project->name }}">
+@extends('layouts.app')
+@section('title', '{{ $project->name }}')
+@section('content')
+
     <div class="mb-6 flex justify-between items-center">
         <h1 class="text-2xl font-bold text-gray-800">{{ $project->name }}</h1>
         <div class="flex gap-3">
@@ -169,4 +172,5 @@
             <p class="text-gray-500 text-center py-4">No time entries for this project.</p>
         @endif
     </div>
-</x-app-layout>
+
+@endsection

@@ -1,4 +1,7 @@
-<x-app-layout title="Time Entries">
+@extends('layouts.app')
+@section('title', 'Time Entries')
+@section('content')
+
     <div class="mb-6 flex justify-between items-center">
         <h1 class="text-2xl font-bold text-gray-800">Time Entries</h1>
         <div class="flex gap-3">
@@ -67,4 +70,5 @@
     <div class="mt-4">
         {{ $timeEntries->links() }}
     </div>
-</x-app-layout>
+
+@endsection

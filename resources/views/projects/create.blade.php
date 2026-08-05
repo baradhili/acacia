@@ -1,4 +1,7 @@
-<x-app-layout title="Create Project">
+@extends('layouts.app')
+@section('title', 'Create Project')
+@section('content')
+
     <div class="mb-6">
         <h1 class="text-2xl font-bold text-gray-800">Create Project</h1>
     </div>
@@ -87,4 +90,5 @@
             </div>
         </form>
     </div>
-</x-app-layout>
+
+@endsection

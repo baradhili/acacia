@@ -1,4 +1,7 @@
-<x-app-layout title="Import Wise Transactions">
+@extends('layouts.app')
+@section('title', 'Import Wise Transactions')
+@section('content')
+
     <div class="mb-6 flex items-center">
         <a href="{{ route('reconciliation.index') }}" class="text-gray-500 hover:text-gray-700 mr-4">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -50,4 +53,5 @@
             </div>
         </form>
     </div>
-</x-app-layout>
+
+@endsection

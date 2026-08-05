@@ -1,4 +1,7 @@
-<x-app-layout title="Time by Staff Report">
+@extends('layouts.app')
+@section('title', 'Time by Staff Report')
+@section('content')
+
     <div class="mb-6">
         <h1 class="text-2xl font-bold text-gray-800">Time by Staff Report</h1>
     </div>
@@ -79,4 +82,5 @@
             </tbody>
         </table>
     </div>
-</x-app-layout>
+
+@endsection

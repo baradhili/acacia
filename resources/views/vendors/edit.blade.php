@@ -1,4 +1,7 @@
-<x-app-layout title="Edit Vendor">
+@extends('layouts.app')
+@section('title', 'Edit Vendor')
+@section('content')
+
     <div class="mb-6">
         <h1 class="text-2xl font-bold text-gray-800">Edit Vendor</h1>
     </div>
@@ -79,4 +82,5 @@
             </div>
         </form>
     </div>
-</x-app-layout>
+
+@endsection

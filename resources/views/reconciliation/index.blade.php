@@ -1,4 +1,7 @@
-<x-app-layout title="Wise Reconciliation">
+@extends('layouts.app')
+@section('title', 'Wise Reconciliation')
+@section('content')
+
     <div class="mb-6">
         <h1 class="text-2xl font-bold text-gray-800">Wise Reconciliation</h1>
     </div>
@@ -75,4 +78,5 @@
         <h3 class="text-lg font-semibold text-blue-800 mb-2">Phase 6 Preview</h3>
         <p class="text-blue-700">Full Wise API integration with automatic transaction matching and reconciliation will be available in Phase 6. This foundation prepares the system for those features.</p>
     </div>
-</x-app-layout>
+
+@endsection

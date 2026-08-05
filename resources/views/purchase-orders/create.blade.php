@@ -1,4 +1,7 @@
-<x-app-layout title="Create Purchase Order">
+@extends('layouts.app')
+@section('title', 'Create Purchase Order')
+@section('content')
+
     <div class="mb-6">
         <h1 class="text-2xl font-bold text-gray-800">Create Purchase Order</h1>
     </div>
@@ -69,4 +72,5 @@
             </div>
         </form>
     </div>
-</x-app-layout>
+
+@endsection

@@ -1,4 +1,7 @@
-<x-app-layout title="Create Time Entry">
+@extends('layouts.app')
+@section('title', 'Create Time Entry')
+@section('content')
+
     <div class="mb-6">
         <h1 class="text-2xl font-bold text-gray-800">Create Time Entry</h1>
     </div>
@@ -83,4 +86,5 @@
             </div>
         </form>
     </div>
-</x-app-layout>
+
+@endsection
