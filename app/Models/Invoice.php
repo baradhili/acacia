@@ -71,12 +71,12 @@ class Invoice extends Model
     // Valid state transitions
     protected static array $transitions = [
         'draft' => ['sent', 'cancelled'],
-        'sent' => ['viewed', 'partially_paid', 'paid', 'overdue', 'cancelled'],
-        'viewed' => ['partially_paid', 'paid', 'overdue', 'cancelled'],
-        'partially_paid' => ['paid', 'overdue', 'cancelled'],
+        'sent' => ['viewed', 'partially_paid', 'paid', 'overdue'],
+        'viewed' => ['partially_paid', 'paid', 'overdue'],
+        'partially_paid' => ['paid', 'overdue'],
         'paid' => [],  // Paid invoices cannot be cancelled
-        'overdue' => ['partially_paid', 'paid', 'cancelled'],
-        'cancelled' => [],
+        'overdue' => ['partially_paid', 'paid'],
+        'cancelled' => [],  // Cancelled invoices are final
     ];
 
     protected static function boot()
@@ -314,6 +314,14 @@ class Invoice extends Model
     }
 
     /**
+     * Mark invoice as overdue
+     */
+    public function markAsOverdue(): bool
+    {
+        return $this->transitionTo(self::STATUS_OVERDUE);
+    }
+
+    /**
      * Cancel invoice
      */
     public function cancel(): bool
@@ -441,6 +449,6 @@ class Invoice extends Model
      */
     public function hasOutstandingBalance(): bool
     {
-        return $this->amount_due > 0;
+        return $this->status !== self::STATUS_PAID && $this->amount_due > 0;
     }
 }
