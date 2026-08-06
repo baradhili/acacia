@@ -136,6 +136,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/tax-summary', [\App\Http\Controllers\ReportController::class, 'taxSummary'])->name('reports.tax-summary');
     Route::get('/reports/export/account-statement/pdf', [\App\Http\Controllers\ReportController::class, 'exportAccountStatementPdf'])->name('reports.export.account-statement.pdf');
     Route::get('/reports/export/tax-summary/pdf', [\App\Http\Controllers\ReportController::class, 'exportTaxSummaryPdf'])->name('reports.export.tax-summary.pdf');
+    Route::get('/reports/export/account-statement/excel', [\App\Http\Controllers\ReportController::class, 'exportAccountStatementExcel'])->name('reports.export.account-statement.excel');
+    Route::get('/reports/export/tax-summary/excel', [\App\Http\Controllers\ReportController::class, 'exportTaxSummaryExcel'])->name('reports.export.tax-summary.excel');
 
     // Wise Reconciliation
     Route::get('/reconciliation', [ReconciliationController::class, 'index'])->name('reconciliation.index');
