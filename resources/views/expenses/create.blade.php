@@ -1,0 +1,161 @@
+@extends('layouts.app')
+
+@section('title', 'New Expense')
+
+@section('header')
+    <h2 class="text-xl font-semibold text-gray-800">New Expense</h2>
+@endsection
+
+@section('content')
+    <div class="max-w-2xl mx-auto">
+        <div class="bg-white rounded-lg shadow">
+            <div class="p-6">
+                <form method="POST" action="{{ route('expenses.store') }}" enctype="multipart/form-data">
+                    @csrf
+
+                    <div class="grid grid-cols-1 gap-6">
+                        <!-- Supplier -->
+                        <div>
+                            <label for="supplier_id" class="block text-sm font-medium text-gray-700">Supplier *</label>
+                            <select name="supplier_id" id="supplier_id" required
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                <option value="">Select Supplier</option>
+                                @foreach($suppliers as $id => $name)
+                                    <option value="{{ $id }}" {{ old('supplier_id') == $id ? 'selected' : '' }}>
+                                        {{ $name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('supplier_id')
+                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <!-- Category -->
+                        <div>
+                            <label for="category" class="block text-sm font-medium text-gray-700">Category *</label>
+                            <select name="category" id="category" required
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                <option value="">Select Category</option>
+                                @foreach($categories as $cat)
+                                    <option value="{{ $cat }}" {{ old('category') == $cat ? 'selected' : '' }}>
+                                        {{ ucwords(str_replace('_', ' ', $cat)) }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('category')
+                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <!-- Amount and Tax -->
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label for="amount" class="block text-sm font-medium text-gray-700">Amount (ex. GST) *</label>
+                                <div class="mt-1 relative rounded-md shadow-sm">
+                                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <span class="text-gray-500 sm:text-sm">$</span>
+                                    </div>
+                                    <input type="number" name="amount" id="amount" step="0.01" min="0.01" required
+                                        value="{{ old('amount') }}"
+                                        class="pl-7 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                </div>
+                                @error('amount')
+                                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                @enderror
+                            </div>
+
+                            <div>
+                                <label for="tax_amount" class="block text-sm font-medium text-gray-700">GST Amount</label>
+                                <div class="mt-1 relative rounded-md shadow-sm">
+                                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <span class="text-gray-500 sm:text-sm">$</span>
+                                    </div>
+                                    <input type="number" name="tax_amount" id="tax_amount" step="0.01" min="0" 
+                                        value="{{ old('tax_amount', '0.00') }}"
+                                        class="pl-7 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                </div>
+                                @error('tax_amount')
+                                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                @enderror
+                            </div>
+                        </div>
+
+                        <!-- Expense Date -->
+                        <div>
+                            <label for="expense_date" class="block text-sm font-medium text-gray-700">Expense Date *</label>
+                            <input type="date" name="expense_date" id="expense_date" required
+                                value="{{ old('expense_date', date('Y-m-d')) }}"
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                            @error('expense_date')
+                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <!-- Due Date -->
+                        <div>
+                            <label for="due_date" class="block text-sm font-medium text-gray-700">Due Date</label>
+                            <input type="date" name="due_date" id="due_date"
+                                value="{{ old('due_date') }}"
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                            @error('due_date')
+                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <!-- Reference -->
+                        <div>
+                            <label for="reference" class="block text-sm font-medium text-gray-700">Supplier Invoice #</label>
+                            <input type="text" name="reference" id="reference" maxlength="255"
+                                value="{{ old('reference') }}"
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                            @error('reference')
+                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <!-- Description -->
+                        <div>
+                            <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
+                            <textarea name="description" id="description" rows="2" maxlength="1000"
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">{{ old('description') }}</textarea>
+                            @error('description')
+                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <!-- Notes -->
+                        <div>
+                            <label for="notes" class="block text-sm font-medium text-gray-700">Notes</label>
+                            <textarea name="notes" id="notes" rows="2" maxlength="2000"
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">{{ old('notes') }}</textarea>
+                            @error('notes')
+                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <!-- Receipt Upload -->
+                        <div>
+                            <label for="receipt" class="block text-sm font-medium text-gray-700">Receipt</label>
+                            <input type="file" name="receipt" id="receipt" accept=".pdf,.jpg,.jpeg,.png"
+                                class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                            <p class="mt-1 text-xs text-gray-500">PDF, JPG, PNG up to 10MB</p>
+                            @error('receipt')
+                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+                    </div>
+
+                    <div class="mt-6 flex items-center justify-end gap-4">
+                        <a href="{{ route('expenses.index') }}" class="px-4 py-2 text-gray-700 hover:text-gray-900">
+                            Cancel
+                        </a>
+                        <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+                            Create Expense
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+@endsection
