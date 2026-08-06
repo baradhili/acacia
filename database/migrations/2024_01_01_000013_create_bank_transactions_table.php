@@ -12,13 +12,16 @@ return new class extends Migration
             $table->id();
             $table->string('source'); // wise, manual, etc.
             $table->string('source_id')->nullable(); // External ID from source
-            $table->string('reference'); // Payment reference
+            $table->string('reference')->nullable(); // Payment reference
+            $table->text('description')->nullable(); // Full description from source
             $table->decimal('amount', 15, 2);
             $table->string('currency', 3);
             $table->string('type'); // DEBIT, CREDIT
             $table->date('transaction_date');
-            $table->dateTime('created_at_source'); // Original timestamp from source
+            $table->dateTime('created_at_source')->nullable(); // Original timestamp from source
             $table->string('merchant_name')->nullable();
+            $table->string('payer_name')->nullable(); // Sender/payer name
+            $table->string('payee_name')->nullable(); // Recipient/payee name
             $table->string('status'); // PENDING, MATCHED, IGNORED
             $table->unsignedBigInteger('matched_transaction_id')->nullable();
             $table->string('matched_transaction_type')->nullable(); // cash_receipt, purchase
