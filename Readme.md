@@ -520,15 +520,15 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 - [x] `Expense` model (category, amount, date, supplier_id, due_date, total, status)
 - [x] Expense CRUD UI - expense can be "paid now" optionally
 - [x] Expense categories seed (travel, software, subcontractors, etc.)
-- [ ] Pay expense → IFRS `Cr Cash / Dr Expense` on payment date (cash basis)
+- [x] Pay expense → IFRS `Cr Cash / Dr Expense` on payment date (cash basis)
 - [x] Attach receipt to expense
 - [x] `Document` polymorphic model + migration
-- [ ] Document upload UI (drag-drop)
-- [ ] Document list per transaction
+- [x] Document upload UI (drag-drop)
+- [x] Document list per transaction
 - [x] Document download/delete
 - [x] Storage path: `storage/app/public/uploads/{year}/{month}/`
-- [ ] Account Statement report (IFRS)
-- [ ] Account Schedule report (IFRS)
+- [x] Account Statement report (IFRS)
+- [x] Account Schedule report (IFRS)
 - [x] Aging Schedule (AR + AP)
 - [x] Trial Balance
 - [x] Income Statement (P&L)
@@ -537,11 +537,11 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 - [x] GST/BAS Report (ATO format)
 - [x] Income by Customer report
 - [x] Expenses by Category report
-- [ ] Tax Summary report
+- [x] Tax Summary report
 - [x] Report filters: date range, currency, account, contact
-- [ ] Export reports to PDF
-- [ ] Export reports to Excel
-- [x] Feature tests for reporting
+- [x] Export reports to PDF (Account Statement, Tax Summary)
+- [x] Export reports to Excel (Account Statement, Tax Summary)
+- [x] Feature tests for IFRS reports
 
 ### Phase 6 — Advanced Reconciliation, Automation & Dashboard
 
