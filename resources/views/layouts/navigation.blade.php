@@ -258,6 +258,20 @@
                     class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('projects.profitability') ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white' }}">
                     Project Profitability
                 </a>
+                <div class="border-t border-slate-700 my-2"></div>
+                <p class="px-3 py-1 text-xs font-semibold text-slate-500 uppercase">IFRS Reports</p>
+                <a href="{{ route('reports.account-statement') }}"
+                    class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('reports.account-statement') ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white' }}">
+                    Account Statement
+                </a>
+                <a href="{{ route('reports.account-schedule') }}"
+                    class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('reports.account-schedule') ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white' }}">
+                    Account Schedule
+                </a>
+                <a href="{{ route('reports.tax-summary') }}"
+                    class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('reports.tax-summary') ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white' }}">
+                    Tax Summary
+                </a>
             </div>
         </div>
     </nav>

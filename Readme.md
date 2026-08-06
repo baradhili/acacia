@@ -517,57 +517,51 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 
 ### Phase 5 — Bills, Expenses, Documents & Reporting
 
-- [ ] `Expense` model (category, amount, date, supplier_id, due_date, total, status)
-- [ ] - [ ] Expense CRUD UI - expense can be "paid now" optionally
-- [ ] Expense categories seed (travel, software, subcontractors, etc.)
-- [ ] Pay expense → IFRS `Cr Cash / Dr Expense` on payment date (cash basis)
-- [ ] Attach receipt to expense
-- [ ] `Document` polymorphic model + migration
-- [ ] Document upload UI (drag-drop)
-- [ ] Document list per transaction
-- [ ] Document download/delete
-- [ ] Storage path: `storage/app/public/uploads/{year}/{month}/`
-- [ ] Account Statement report (IFRS)
-- [ ] Account Schedule report (IFRS)
-- [ ] Aging Schedule (AR + AP)
-- [ ] Trial Balance
-- [ ] Income Statement (P&L)
-- [ ] Balance Sheet
-- [ ] Cash Flow Statement
-- [ ] GST/BAS Report (ATO format)
-- [ ] Income by Customer report
-- [ ] Expenses by Category report
-- [ ] Tax Summary report
-- [ ] Report filters: date range, currency, account, contact
-- [ ] Export reports to PDF
-- [ ] Export reports to Excel
-- [ ] Feature tests for reporting
+- [x] `Expense` model (category, amount, date, supplier_id, due_date, total, status)
+- [x] Expense CRUD UI - expense can be "paid now" optionally
+- [x] Expense categories seed (travel, software, subcontractors, etc.)
+- [x] Pay expense → IFRS `Cr Cash / Dr Expense` on payment date (cash basis)
+- [x] Attach receipt to expense
+- [x] `Document` polymorphic model + migration
+- [x] Document upload UI (drag-drop)
+- [x] Document list per transaction
+- [x] Document download/delete
+- [x] Storage path: `storage/app/public/uploads/{year}/{month}/`
+- [x] Account Statement report (IFRS)
+- [x] Account Schedule report (IFRS)
+- [x] Aging Schedule (AR + AP)
+- [x] Trial Balance
+- [x] Income Statement (P&L)
+- [x] Balance Sheet
+- [x] Cash Flow Statement
+- [x] GST/BAS Report (ATO format)
+- [x] Income by Customer report
+- [x] Expenses by Category report
+- [x] Tax Summary report
+- [x] Report filters: date range, currency, account, contact
+- [x] Export reports to PDF (Account Statement, Tax Summary)
+- [x] Export reports to Excel (Account Statement, Tax Summary)
+- [x] Feature tests for IFRS reports
 
 ### Phase 6 — Advanced Reconciliation, Automation & Dashboard
 
-- [ ] Implement Wise API fetch endpoint (with token + profile ID)
 - [ ] Auto-create missing cash receipt from unmatched Wise credit
-- [ ] Auto-create missing purchase from unmatched Wise debit
-- [ ] Manual override: link unmatched Wise txn to existing IFRS txn
-- [ ] "Ignore" action for non-business Wise transactions
+- [ ] - [ ] Auto-create missing purchase from unmatched Wise debit
+- [ ] Manual override: link unmatched Bank txn to existing IFRS txn
+- [ ] "Ignore" action for non-business Bank transactions
 - [ ] Reconciliation history log
-- [ ] Multi-currency Wise balance display
 - [ ] Dashboard widget: cash flow (30-day)
 - [ ] Dashboard widget: AR aging summary
 - [ ] Dashboard widget: recent invoices & payments
 - [ ] Dashboard widget: outstanding PO budgets
 - [ ] Dashboard widget: unbilled time entries
-- [ ] Dashboard widget: Wise balance + unreconciled count
+- [ ] Dashboard widget: Bank balance + unreconciled count
 - [ ] Dashboard widget: monthly P&L trend (chart)
 - [ ] Email notifications: invoice viewed, payment received, overdue reminder
 - [ ] Scheduled monthly client statements
 - [ ] Audit log for all create/edit/delete actions on financial records
 - [ ] Period locking (close prior FY)
-- [ ] Webhook: invoice.paid
-- [ ] Webhook: payment.received
-- [ ] API tokens for external integration (Laravel Sanctum)
-- [ ] OpenAPI spec for REST API
-- [ ] Documentation site (Markdown → static)
+- [ ] Documentation site (github docs)
 - [ ] Production deployment guide (Forge/Sail/Docker)
 - [ ] Backup & restore runbook
 - [ ] End-to-end test suite (cypress/dusk optional)

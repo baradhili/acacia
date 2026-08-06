@@ -45,7 +45,7 @@ class PurchaseOrderController extends Controller
     {
         $purchaseOrder->load(['client', 'project', 'timeEntries' => function ($q) {
             $q->orderBy('start_time', 'desc');
-        }]);
+        }, 'documents']);
 
         return view('purchase-orders.show', compact('purchaseOrder'));
     }

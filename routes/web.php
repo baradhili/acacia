@@ -3,7 +3,9 @@
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\CreditNoteController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\EstimateController;
+use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ProfileController;
@@ -89,6 +91,22 @@ Route::middleware('auth')->group(function () {
     Route::get('/credit-notes/create-from-invoice/{invoice}', [CreditNoteController::class, 'createFromInvoice'])->name('credit-notes.create-from-invoice');
     Route::post('/credit-notes/{creditNote}/apply-to-invoice', [CreditNoteController::class, 'applyToInvoice'])->name('credit-notes.applyToInvoice');
 
+    // Expenses
+    Route::resource('expenses', ExpenseController::class);
+    Route::post('/expenses/{expense}/submit', [ExpenseController::class, 'submit'])->name('expenses.submit');
+    Route::post('/expenses/{expense}/approve', [ExpenseController::class, 'approve'])->name('expenses.approve');
+    Route::post('/expenses/{expense}/pay', [ExpenseController::class, 'pay'])->name('expenses.pay');
+    Route::post('/expenses/{expense}/cancel', [ExpenseController::class, 'cancel'])->name('expenses.cancel');
+    Route::get('/expenses/{expense}/receipt', [ExpenseController::class, 'downloadReceipt'])->name('expenses.download-receipt');
+
+    // Documents (API)
+    Route::get('/documents', [DocumentController::class, 'index'])->name('documents.index');
+    Route::post('/documents', [DocumentController::class, 'store'])->name('documents.store');
+    Route::get('/documents/{document}', [DocumentController::class, 'show'])->name('documents.show');
+    Route::get('/documents/{document}/download', [DocumentController::class, 'download'])->name('documents.download');
+    Route::delete('/documents/{document}', [DocumentController::class, 'destroy'])->name('documents.destroy');
+    Route::get('/documents/model/{type}/{id}', [DocumentController::class, 'forModel'])->name('documents.for-model');
+
     // Estimates
     Route::resource('estimates', EstimateController::class);
     Route::post('/estimates/{estimate}/send', [EstimateController::class, 'send'])->name('estimates.send');
@@ -101,6 +119,25 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/time-by-client', [\App\Http\Controllers\ReportController::class, 'timeByClient'])->name('reports.time-by-client');
     Route::get('/reports/time-by-staff', [\App\Http\Controllers\ReportController::class, 'timeByStaff'])->name('reports.time-by-staff');
     Route::get('/reports/time-by-project', [\App\Http\Controllers\ReportController::class, 'timeByProject'])->name('reports.time-by-project');
+
+    // Financial Reports
+    Route::get('/reports/trial-balance', [\App\Http\Controllers\ReportController::class, 'trialBalance'])->name('reports.trial-balance');
+    Route::get('/reports/income-statement', [\App\Http\Controllers\ReportController::class, 'incomeStatement'])->name('reports.income-statement');
+    Route::get('/reports/balance-sheet', [\App\Http\Controllers\ReportController::class, 'balanceSheet'])->name('reports.balance-sheet');
+    Route::get('/reports/cash-flow', [\App\Http\Controllers\ReportController::class, 'cashFlowStatement'])->name('reports.cash-flow');
+
+    // Business Reports
+    Route::get('/reports/income-by-customer', [\App\Http\Controllers\ReportController::class, 'incomeByCustomer'])->name('reports.income-by-customer');
+    Route::get('/reports/expenses-by-category', [\App\Http\Controllers\ReportController::class, 'expensesByCategory'])->name('reports.expenses-by-category');
+    Route::get('/reports/aging', [\App\Http\Controllers\ReportController::class, 'agingReport'])->name('reports.aging');
+    Route::get('/reports/gst', [\App\Http\Controllers\ReportController::class, 'gstReport'])->name('reports.gst');
+    Route::get('/reports/account-statement', [\App\Http\Controllers\ReportController::class, 'accountStatement'])->name('reports.account-statement');
+    Route::get('/reports/account-schedule', [\App\Http\Controllers\ReportController::class, 'accountSchedule'])->name('reports.account-schedule');
+    Route::get('/reports/tax-summary', [\App\Http\Controllers\ReportController::class, 'taxSummary'])->name('reports.tax-summary');
+    Route::get('/reports/export/account-statement/pdf', [\App\Http\Controllers\ReportController::class, 'exportAccountStatementPdf'])->name('reports.export.account-statement.pdf');
+    Route::get('/reports/export/tax-summary/pdf', [\App\Http\Controllers\ReportController::class, 'exportTaxSummaryPdf'])->name('reports.export.tax-summary.pdf');
+    Route::get('/reports/export/account-statement/excel', [\App\Http\Controllers\ReportController::class, 'exportAccountStatementExcel'])->name('reports.export.account-statement.excel');
+    Route::get('/reports/export/tax-summary/excel', [\App\Http\Controllers\ReportController::class, 'exportTaxSummaryExcel'])->name('reports.export.tax-summary.excel');
 
     // Wise Reconciliation
     Route::get('/reconciliation', [ReconciliationController::class, 'index'])->name('reconciliation.index');

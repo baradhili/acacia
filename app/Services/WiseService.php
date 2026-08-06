@@ -54,6 +54,10 @@ class WiseService
 
     /**
      * Parse Wise CSV and import transactions
+     * 
+     * Expected CSV columns (Wise export format):
+     * TransferWise ID, Date, Date Time, Amount, Currency, Description, 
+     * Payment Reference, Running Balance, ...
      */
     public function importFromCsv(string $filePath): array
     {
@@ -67,12 +71,20 @@ class WiseService
         }
 
         // Skip header row
-        fgetcsv($handle);
+        $headers = fgetcsv($handle);
+        $headers = array_map('trim', $headers);
+        
+        // Normalize header names to indices
+        $columnMap = $this->mapCsvColumns($headers);
 
         while (($row = fgetcsv($handle)) !== false) {
+            // Skip empty rows
+            if (empty(array_filter($row))) {
+                continue;
+            }
+            
             try {
-                // Wise CSV format: Date, Reference, Amount, Currency, Type, Merchant
-                $this->importWiseRow($row);
+                $this->importWiseRowFromMapped($row, $columnMap);
                 $imported++;
             } catch (\Exception $e) {
                 $errors[] = "Row {$imported}: " . $e->getMessage();
@@ -90,7 +102,110 @@ class WiseService
     }
 
     /**
-     * Import a single Wise row
+     * Map CSV header names to column indices
+     */
+    private function mapCsvColumns(array $headers): array
+    {
+        $map = [];
+        foreach ($headers as $index => $header) {
+            $normalized = strtolower(trim($header));
+            $map[$normalized] = $index;
+        }
+        return $map;
+    }
+
+    /**
+     * Import a single Wise row using column map
+     */
+    private function importWiseRowFromMapped(array $row, array $columnMap): BankTransaction
+    {
+        $getColumn = function(string $name) use ($row, $columnMap): ?string {
+            $normalized = strtolower(trim($name));
+            $index = $columnMap[$normalized] ?? null;
+            if ($index === null || !isset($row[$index])) {
+                return null;
+            }
+            return trim($row[$index]);
+        };
+
+        $sourceId = $getColumn('TransferWise ID') ?: $getColumn('TransferWise ID ');
+        $date = $getColumn('Date');
+        $amount = $getColumn('Amount');
+        $currency = $getColumn('Currency') ?: 'AUD';
+        $description = $getColumn('Description') ?: '';
+        $reference = $getColumn('Payment Reference') ?: '';
+        $type = strtoupper($getColumn('Transaction Type') ?: 'DEBIT');
+        $merchant = $getColumn('Payer Name') ?: $getColumn('Payee Name');
+        $payerName = $getColumn('Payer Name');
+        $payeeName = $getColumn('Payee Name');
+
+        // Skip empty or invalid rows
+        if (empty($sourceId) && empty($date)) {
+            throw new \InvalidArgumentException('Empty row');
+        }
+
+        // Parse amount - handle negative values and convert to positive for storage
+        $amountValue = floatval(str_replace(',', '', $amount ?? '0'));
+        
+        // If amount is negative in CSV (debit), store as negative; if positive (credit), store as positive
+        // The type column indicates direction
+        if ($type === 'DEBIT' && $amountValue > 0) {
+            $amountValue = -$amountValue; // Outgoing money
+        }
+
+        // Parse date (format: DD-MM-YYYY)
+        $transactionDate = null;
+        if ($date) {
+            try {
+                $transactionDate = Carbon::createFromFormat('d-m-Y', trim($date));
+            } catch (\Exception $e) {
+                try {
+                    $transactionDate = Carbon::parse(trim($date));
+                } catch (\Exception $e2) {
+                    throw new \InvalidArgumentException("Invalid date format: {$date}");
+                }
+            }
+        }
+
+        // Build reference from description if not provided
+        if (empty($reference) && !empty($description)) {
+            // Extract reference from description like "Received money from X with reference Y"
+            if (preg_match('/reference\s+(\S+)/i', $description, $matches)) {
+                $reference = $matches[1];
+            }
+        }
+
+        // Check if already exists
+        $sourceIdValue = trim($sourceId ?? '');
+        if (!empty($sourceIdValue)) {
+            $existing = BankTransaction::where('source', BankTransaction::SOURCE_WISE)
+                ->where('source_id', $sourceIdValue)
+                ->first();
+            if ($existing) {
+                return $existing;
+            }
+        }
+
+        return BankTransaction::create([
+            'source' => BankTransaction::SOURCE_WISE,
+            'source_id' => !empty($sourceIdValue) ? $sourceIdValue : 'CSV-' . uniqid(),
+            'reference' => $reference,
+            'description' => $description,
+            'amount' => $amountValue,
+            'currency' => $currency,
+            'type' => $type,
+            'transaction_date' => $transactionDate,
+            'created_at_source' => $transactionDate,
+            'merchant_name' => $merchant,
+            'payer_name' => $payerName,
+            'payee_name' => $payeeName,
+            'status' => BankTransaction::STATUS_PENDING,
+        ]);
+    }
+
+    /**
+     * Legacy import method for backward compatibility
+     * @deprecated Use importFromCsv() instead
      */
     private function importWiseRow(array $row): BankTransaction
     {

@@ -220,6 +220,52 @@
                     <p class="text-gray-600">{{ $invoice->notes }}</p>
                 </div>
             @endif
+
+            <!-- Documents -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4">Documents</h2>
+                
+                <!-- Upload Form -->
+                <form action="{{ route('documents.store') }}" method="POST" enctype="multipart/form-data" class="mb-4">
+                    @csrf
+                    <input type="hidden" name="documentable_type" value="Invoice">
+                    <input type="hidden" name="documentable_id" value="{{ $invoice->id }}">
+                    <div id="documentUploadArea" class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-indigo-500 transition">
+                        <svg class="mx-auto h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                        </svg>
+                        <p class="mt-1 text-sm text-gray-600">Drop files or click to upload</p>
+                        <p class="text-xs text-gray-500">PDF, JPG, PNG, DOC up to 20MB</p>
+                    </div>
+                    <input type="file" name="file" id="documentFile" class="hidden" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar">
+                </form>
+
+                <!-- Document List -->
+                @if($invoice->documents->count() > 0)
+                    <div class="border rounded-lg divide-y">
+                        @foreach($invoice->documents as $doc)
+                            <div class="flex items-center justify-between p-3">
+                                <div class="flex items-center">
+                                    <svg class="h-5 w-5 text-gray-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                                    </svg>
+                                    <span class="text-sm font-medium text-gray-900">{{ $doc->name }}</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <a href="{{ route('documents.download', $doc) }}" class="text-indigo-600 hover:text-indigo-900 text-sm">Download</a>
+                                    <form action="{{ route('documents.destroy', $doc) }}" method="POST" class="inline">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="text-red-600 hover:text-red-900 text-sm" onclick="return confirm('Delete?')">Delete</button>
+                                    </form>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @else
+                    <p class="text-sm text-gray-500 text-center py-2">No documents attached</p>
+                @endif
+            </div>
         </div>
 
         <!-- Sidebar -->
@@ -318,5 +364,30 @@
             </form>
         </div>
     </div>
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const uploadArea = document.getElementById('documentUploadArea');
+    const fileInput = document.getElementById('documentFile');
+    if (uploadArea && fileInput) {
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('border-indigo-500', 'bg-indigo-50'); });
+        uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('border-indigo-500', 'bg-indigo-50'));
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('border-indigo-500', 'bg-indigo-50');
+            if (e.dataTransfer.files.length) {
+                fileInput.files = e.dataTransfer.files;
+                fileInput.closest('form').submit();
+            }
+        });
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length) fileInput.closest('form').submit();
+        });
+    }
+});
+</script>
+@endpush
 
 @endsection
