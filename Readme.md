@@ -517,31 +517,31 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 
 ### Phase 5 — Bills, Expenses, Documents & Reporting
 
-- [ ] `Expense` model (category, amount, date, supplier_id, due_date, total, status)
-- [ ] - [ ] Expense CRUD UI - expense can be "paid now" optionally
-- [ ] Expense categories seed (travel, software, subcontractors, etc.)
+- [x] `Expense` model (category, amount, date, supplier_id, due_date, total, status)
+- [x] Expense CRUD UI - expense can be "paid now" optionally
+- [x] Expense categories seed (travel, software, subcontractors, etc.)
 - [ ] Pay expense → IFRS `Cr Cash / Dr Expense` on payment date (cash basis)
-- [ ] Attach receipt to expense
-- [ ] `Document` polymorphic model + migration
+- [x] Attach receipt to expense
+- [x] `Document` polymorphic model + migration
 - [ ] Document upload UI (drag-drop)
 - [ ] Document list per transaction
-- [ ] Document download/delete
-- [ ] Storage path: `storage/app/public/uploads/{year}/{month}/`
+- [x] Document download/delete
+- [x] Storage path: `storage/app/public/uploads/{year}/{month}/`
 - [ ] Account Statement report (IFRS)
 - [ ] Account Schedule report (IFRS)
-- [ ] Aging Schedule (AR + AP)
-- [ ] Trial Balance
-- [ ] Income Statement (P&L)
-- [ ] Balance Sheet
-- [ ] Cash Flow Statement
-- [ ] GST/BAS Report (ATO format)
-- [ ] Income by Customer report
-- [ ] Expenses by Category report
+- [x] Aging Schedule (AR + AP)
+- [x] Trial Balance
+- [x] Income Statement (P&L)
+- [x] Balance Sheet
+- [x] Cash Flow Statement
+- [x] GST/BAS Report (ATO format)
+- [x] Income by Customer report
+- [x] Expenses by Category report
 - [ ] Tax Summary report
-- [ ] Report filters: date range, currency, account, contact
+- [x] Report filters: date range, currency, account, contact
 - [ ] Export reports to PDF
 - [ ] Export reports to Excel
-- [ ] Feature tests for reporting
+- [x] Feature tests for reporting
 
 ### Phase 6 — Advanced Reconciliation, Automation & Dashboard
 
