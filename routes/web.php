@@ -131,6 +131,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/expenses-by-category', [\App\Http\Controllers\ReportController::class, 'expensesByCategory'])->name('reports.expenses-by-category');
     Route::get('/reports/aging', [\App\Http\Controllers\ReportController::class, 'agingReport'])->name('reports.aging');
     Route::get('/reports/gst', [\App\Http\Controllers\ReportController::class, 'gstReport'])->name('reports.gst');
+    Route::get('/reports/account-statement', [\App\Http\Controllers\ReportController::class, 'accountStatement'])->name('reports.account-statement');
+    Route::get('/reports/account-schedule', [\App\Http\Controllers\ReportController::class, 'accountSchedule'])->name('reports.account-schedule');
+    Route::get('/reports/tax-summary', [\App\Http\Controllers\ReportController::class, 'taxSummary'])->name('reports.tax-summary');
 
     // Wise Reconciliation
     Route::get('/reconciliation', [ReconciliationController::class, 'index'])->name('reconciliation.index');
