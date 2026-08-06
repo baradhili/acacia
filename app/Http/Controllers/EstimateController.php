@@ -108,7 +108,7 @@ class EstimateController extends Controller
 
     public function show(Estimate $estimate)
     {
-        $estimate->load(['client', 'project', 'creator', 'items']);
+        $estimate->load(['client', 'project', 'creator', 'items', 'documents']);
 
         return view('estimates.show', compact('estimate'));
     }

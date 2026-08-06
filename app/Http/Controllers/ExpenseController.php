@@ -137,7 +137,7 @@ class ExpenseController extends Controller
      */
     public function show(Expense $expense)
     {
-        $expense->load(['supplier', 'paidBy']);
+        $expense->load(['supplier', 'paidBy', 'documents']);
 
         return view('expenses.show', compact('expense'));
     }
