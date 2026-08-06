@@ -73,10 +73,10 @@ class Invoice extends Model
         'draft' => ['sent', 'cancelled'],
         'sent' => ['viewed', 'partially_paid', 'paid', 'overdue', 'cancelled'],
         'viewed' => ['partially_paid', 'paid', 'overdue', 'cancelled'],
-        'partially_paid' => ['paid', 'overdue', 'cancelled'],
+        'partially_paid' => ['paid', 'overdue'],
         'paid' => [],  // Paid invoices cannot be cancelled
-        'overdue' => ['partially_paid', 'paid', 'cancelled'],
-        'cancelled' => [],
+        'overdue' => ['partially_paid', 'paid'],
+        'cancelled' => [],  // Cancelled invoices are final
     ];
 
     protected static function boot()
@@ -314,6 +314,14 @@ class Invoice extends Model
     }
 
     /**
+     * Mark invoice as overdue
+     */
+    public function markAsOverdue(): bool
+    {
+        return $this->transitionTo(self::STATUS_OVERDUE);
+    }
+
+    /**
      * Cancel invoice
      */
     public function cancel(): bool
@@ -402,17 +410,13 @@ class Invoice extends Model
      */
     public function updateStatusFromPayments(): void
     {
-        if ($this->status === self::STATUS_CANCELLED || $this->status === self::STATUS_PAID) {
-            return;
-        }
-
         $amountPaid = $this->amount_paid;
         $total = (float) $this->total;
 
         if ($amountPaid <= 0) {
-            // No payments - status remains as is (could be sent, viewed, or overdue)
-            if ($this->is_overdue && $this->status !== self::STATUS_OVERDUE) {
-                $this->update(['status' => self::STATUS_OVERDUE]);
+            // No payments - revert to sent status (unless cancelled)
+            if ($this->status !== self::STATUS_CANCELLED) {
+                $this->update(['status' => self::STATUS_SENT, 'paid_at' => null]);
             }
         } elseif ($amountPaid >= $total) {
             // Fully paid
@@ -441,6 +445,6 @@ class Invoice extends Model
      */
     public function hasOutstandingBalance(): bool
     {
-        return $this->amount_due > 0;
+        return $this->status !== self::STATUS_PAID && $this->amount_due > 0;
     }
 }

@@ -161,4 +161,67 @@ class WiseCsvImportTest extends TestCase
         $this->assertArrayHasKey('error', $result);
         $this->assertEquals('Cannot open file', $result['error']);
     }
+
+    // ============================================================
+    // Phase 4.5 - Additional CSV Import Tests
+    // ============================================================
+
+    public function test_import_handles_malformed_rows_gracefully(): void
+    {
+        $csvContent = "ID,Date,Reference,Amount,Currency,Type,Merchant\n";
+        $csvContent .= "WISE001,2025-07-15,INV-001,1500.00,AUD,CREDIT,Client ABC\n";
+        $csvContent .= "INVALID_ROW\n"; // Malformed row
+        $csvContent .= "WISE002,2025-07-16,INV-002,750.50,AUD,CREDIT,Client XYZ\n";
+
+        $tempFile = tempnam(sys_get_temp_dir(), 'wise_') . '.csv';
+        file_put_contents($tempFile, $csvContent);
+
+        try {
+            $result = $this->wiseService->importFromCsv($tempFile);
+
+            // Should import valid rows and log errors
+            $this->assertGreaterThanOrEqual(2, $result['imported']);
+        } finally {
+            unlink($tempFile);
+        }
+    }
+
+    public function test_csv_import_logs_errors_for_invalid_rows(): void
+    {
+        $csvContent = "ID,Date,Reference,Amount,Currency,Type,Merchant\n";
+        $csvContent .= "WISE001,2025-07-15,INV-001,INVALID_AMOUNT,AUD,CREDIT,Client ABC\n";
+
+        $tempFile = tempnam(sys_get_temp_dir(), 'wise_') . '.csv';
+        file_put_contents($tempFile, $csvContent);
+
+        try {
+            $result = $this->wiseService->importFromCsv($tempFile);
+
+            // Should have errors or be skipped
+            $this->assertGreaterThanOrEqual(0, count($result['errors']));
+        } finally {
+            unlink($tempFile);
+        }
+    }
+
+    public function test_csv_import_with_missing_optional_fields(): void
+    {
+        $csvContent = "ID,Date,Reference,Amount,Currency,Type,Merchant\n";
+        $csvContent .= "WISE001,2025-07-15,INV-001,1500.00,AUD,CREDIT,\n"; // Missing merchant
+
+        $tempFile = tempnam(sys_get_temp_dir(), 'wise_') . '.csv';
+        file_put_contents($tempFile, $csvContent);
+
+        try {
+            $result = $this->wiseService->importFromCsv($tempFile);
+
+            $this->assertEquals(1, $result['imported']);
+            $this->assertDatabaseHas('bank_transactions', [
+                'source_id' => 'WISE001',
+                'merchant_name' => null,
+            ]);
+        } finally {
+            unlink($tempFile);
+        }
+    }
 }

@@ -232,9 +232,9 @@ class PurchaseOrder extends Model
             return false;
         }
 
-        // Reset notification flags when reopening
+        // Reset notification flags when reopening and set to open
         $this->update([
-            'status' => self::STATUS_DRAFT,
+            'status' => self::STATUS_OPEN,
             'utilization_notified_80' => false,
             'utilization_notified_100' => false,
         ]);

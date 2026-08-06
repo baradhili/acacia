@@ -11,8 +11,8 @@ use Illuminate\Support\Facades\Log;
 class WiseService
 {
     private string $apiUrl;
-    private string $token;
-    private string $profileId;
+    private ?string $token;
+    private ?string $profileId;
 
     public function __construct()
     {

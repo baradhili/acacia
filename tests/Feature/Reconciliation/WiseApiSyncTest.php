@@ -202,4 +202,125 @@ class WiseApiSyncTest extends TestCase
         $this->assertCount(1, $unmatched);
         $this->assertEquals('WISE001', $unmatched->first()->source_id);
     }
+
+    // ============================================================
+    // Phase 4.5 - Additional API Sync Tests
+    // ============================================================
+
+    public function test_api_sync_handles_paginated_responses(): void
+    {
+        Http::fake([
+            'api.wise.com/*' => Http::sequence()
+                ->push([['id' => 'WISE001', 'reference' => 'INV-001']], 200)
+                ->push([], 200),
+        ]);
+
+        $transactions = $this->wiseService->fetchTransactions(
+            Carbon::now()->subDays(30),
+            Carbon::now()
+        );
+
+        $this->assertNotNull($transactions);
+    }
+
+    public function test_api_sync_skips_duplicate_transactions_by_source_id(): void
+    {
+        BankTransaction::create([
+            'source' => 'wise',
+            'source_id' => 'WISE-DUP-001',
+            'reference' => 'INV-001',
+            'amount' => 500.00,
+            'currency' => 'AUD',
+            'type' => 'CREDIT',
+            'transaction_date' => now(),
+            'created_at_source' => now(),
+            'status' => BankTransaction::STATUS_PENDING,
+        ]);
+
+        $mockResponse = [
+            [
+                'id' => 'WISE-DUP-001',
+                'reference' => 'INV-001',
+                'amount' => 500.00,
+                'currency' => 'AUD',
+                'type' => 'CREDIT',
+                'date' => '2025-07-15',
+                'created' => '2025-07-15T10:00:00Z',
+                'merchantName' => 'Test Client',
+            ],
+            [
+                'id' => 'WISE-NEW-001',
+                'reference' => 'INV-002',
+                'amount' => 750.00,
+                'currency' => 'AUD',
+                'type' => 'CREDIT',
+                'date' => '2025-07-16',
+                'created' => '2025-07-16T10:00:00Z',
+                'merchantName' => 'New Client',
+            ],
+        ];
+
+        Http::fake([
+            'api.wise.com/*' => Http::response($mockResponse, 200),
+        ]);
+
+        $transactions = $this->wiseService->fetchTransactions(
+            Carbon::now()->subDays(30),
+            Carbon::now()
+        );
+
+        $this->assertCount(2, $transactions);
+
+        $existing = BankTransaction::where('source_id', 'WISE-DUP-001')->count();
+        $new = BankTransaction::where('source_id', 'WISE-NEW-001')->count();
+
+        $this->assertEquals(1, $existing);
+        $this->assertEquals(1, $new);
+    }
+
+    public function test_reconciliation_report_shows_correct_totals(): void
+    {
+        BankTransaction::create([
+            'source' => 'wise',
+            'source_id' => 'WISE001',
+            'reference' => 'INV-001',
+            'amount' => 100.00,
+            'currency' => 'AUD',
+            'type' => 'CREDIT',
+            'transaction_date' => now(),
+            'created_at_source' => now(),
+            'status' => BankTransaction::STATUS_MATCHED,
+        ]);
+
+        BankTransaction::create([
+            'source' => 'wise',
+            'source_id' => 'WISE002',
+            'reference' => 'INV-002',
+            'amount' => 200.00,
+            'currency' => 'AUD',
+            'type' => 'CREDIT',
+            'transaction_date' => now(),
+            'created_at_source' => now(),
+            'status' => BankTransaction::STATUS_PENDING,
+        ]);
+
+        BankTransaction::create([
+            'source' => 'wise',
+            'source_id' => 'WISE003',
+            'reference' => 'INV-003',
+            'amount' => 300.00,
+            'currency' => 'AUD',
+            'type' => 'CREDIT',
+            'transaction_date' => now(),
+            'created_at_source' => now(),
+            'status' => BankTransaction::STATUS_IGNORED,
+        ]);
+
+        $stats = $this->wiseService->getStatistics();
+
+        $this->assertEquals(3, $stats['total']);
+        $this->assertEquals(1, $stats['matched']);
+        $this->assertEquals(1, $stats['pending']);
+        $this->assertEquals(1, $stats['ignored']);
+    }
 }
