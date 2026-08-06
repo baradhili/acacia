@@ -15,6 +15,7 @@ use IFRS\Reports\IncomeStatement;
 use IFRS\Reports\BalanceSheet;
 use IFRS\Reports\TrialBalance;
 use IFRS\Reports\CashFlowStatement;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 
 class ReportController extends Controller
@@ -739,5 +740,152 @@ class ReportController extends Controller
             "salesByTaxRate", "purchasesByTaxRate",
             "totalSalesTax", "totalPurchaseTax", "netTaxPayable"
         ));
+    }
+
+    /**
+     * Export Account Statement to PDF
+     */
+    public function exportAccountStatementPdf(Request $request)
+    {
+        $startDate = $request->get("start_date")
+            ? Carbon::parse($request->start_date)->startOfDay()
+            : Carbon::now()->startOfMonth();
+
+        $endDate = $request->get("end_date")
+            ? Carbon::parse($request->end_date)->endOfDay()
+            : Carbon::now()->endOfDay();
+
+        $accountId = $request->get("account_id");
+
+        if (!$accountId) {
+            return back()->with("error", "Please select an account");
+        }
+
+        $account = Account::find($accountId);
+        $openingBalanceData = $account->getBalance(Carbon::parse($startDate)->subDay());
+        $openingBalance = $openingBalanceData["balance"] ?? 0;
+
+        $isDebitNormal = in_array($account->account_type, [
+            Account::ASSET, Account::DIRECT_COSTS, Account::EXPENSE,
+            Account::OPERATING_EXPENSE, Account::DIRECT_EXPENSE,
+            Account::OVERHEAD_EXPENSE, Account::OTHER_EXPENSE
+        ]);
+
+        $entries = IFRS\Models\Ledger::where("account_id", $accountId)
+            ->whereBetween("entry_date", [$startDate, $endDate])
+            ->orderBy("entry_date")
+            ->get();
+
+        $runningBalance = $openingBalance;
+        $transactions = collect();
+
+        foreach ($entries as $entry) {
+            if ($isDebitNormal) {
+                $runningBalance += $entry->debit ?? 0;
+                $runningBalance -= $entry->credit ?? 0;
+            } else {
+                $runningBalance += $entry->credit ?? 0;
+                $runningBalance -= $entry->debit ?? 0;
+            }
+
+            $transactions->push([
+                "date" => $entry->entry_date,
+                "reference" => $entry->reference ?? "",
+                "narration" => $entry->narration ?? "",
+                "debit" => $entry->debit,
+                "credit" => $entry->credit,
+                "balance" => $runningBalance,
+            ]);
+        }
+
+        $pdf = Pdf::loadView("reports.pdf.account-statement", [
+            "account" => $account,
+            "startDate" => $startDate,
+            "endDate" => $endDate,
+            "openingBalance" => $openingBalance,
+            "closingBalance" => $runningBalance,
+            "totalDebit" => $transactions->sum("debit"),
+            "totalCredit" => $transactions->sum("credit"),
+            "transactions" => $transactions,
+        ]);
+
+        $filename = "Account_Statement_{$account->code}_{$startDate->format('Ymd')}_{$endDate->format('Ymd')}.pdf";
+        return $pdf->download($filename);
+    }
+
+    /**
+     * Export Tax Summary to PDF
+     */
+    public function exportTaxSummaryPdf(Request $request)
+    {
+        $startDate = $request->get("start_date")
+            ? Carbon::parse($request->start_date)->startOfDay()
+            : Carbon::now()->startOfMonth();
+
+        $endDate = $request->get("end_date")
+            ? Carbon::parse($request->end_date)->endOfDay()
+            : Carbon::now()->endOfDay();
+
+        $invoices = \App\Models\Invoice::whereBetween("issue_date", [$startDate, $endDate])
+            ->where("status", "!=", "cancelled")
+            ->with("items")
+            ->get();
+
+        $salesByTaxRate = $invoices->flatMap(function ($invoice) {
+            return $invoice->items->map(function ($item) use ($invoice) {
+                return [
+                    "tax_rate" => $item->tax_rate ?? 0,
+                    "net_amount" => $item->quantity * $item->unit_price,
+                    "tax_amount" => ($item->quantity * $item->unit_price) * ($item->tax_rate / 100),
+                ];
+            });
+        })->groupBy("tax_rate")
+          ->map(function ($items, $rate) {
+              return [
+                  "tax_rate" => (float) $rate,
+                  "net_amount" => collect($items)->sum("net_amount"),
+                  "tax_amount" => collect($items)->sum("tax_amount"),
+              ];
+          })->sortByDesc("tax_rate");
+
+        $expenses = Expense::whereBetween("expense_date", [$startDate, $endDate])
+            ->whereIn("status", ["paid", "approved"])
+            ->get();
+
+        $purchasesByTaxRate = $expenses->map(function ($expense) {
+            $netAmount = $expense->amount;
+            $taxRate = $expense->tax_amount > 0 && $expense->amount > 0
+                ? ($expense->tax_amount / $expense->amount) * 100 : 0;
+            return [
+                "tax_rate" => round($taxRate, 2),
+                "net_amount" => $netAmount,
+                "tax_amount" => $expense->tax_amount,
+            ];
+        })->filter(fn($item) => $item["tax_rate"] > 0)
+          ->groupBy("tax_rate")
+          ->map(function ($items, $rate) {
+              return [
+                  "tax_rate" => (float) $rate,
+                  "net_amount" => collect($items)->sum("net_amount"),
+                  "tax_amount" => collect($items)->sum("tax_amount"),
+              ];
+          })->sortByDesc("tax_rate");
+
+        $totalSalesTax = $salesByTaxRate->sum("tax_amount");
+        $totalPurchaseTax = $purchasesByTaxRate->sum("tax_amount");
+        $netTaxPayable = $totalSalesTax - $totalPurchaseTax;
+
+        $pdf = Pdf::loadView("reports.pdf.tax-summary", [
+            "startDate" => $startDate,
+            "endDate" => $endDate,
+            "salesByTaxRate" => $salesByTaxRate,
+            "purchasesByTaxRate" => $purchasesByTaxRate,
+            "totalSalesTax" => $totalSalesTax,
+            "totalPurchaseTax" => $totalPurchaseTax,
+            "netTaxPayable" => $netTaxPayable,
+        ]);
+
+        $filename = "Tax_Summary_{$startDate->format('Ymd')}_{$endDate->format('Ymd')}.pdf";
+        return $pdf->download($filename);
     }
 }
