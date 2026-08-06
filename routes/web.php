@@ -120,6 +120,18 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/time-by-staff', [\App\Http\Controllers\ReportController::class, 'timeByStaff'])->name('reports.time-by-staff');
     Route::get('/reports/time-by-project', [\App\Http\Controllers\ReportController::class, 'timeByProject'])->name('reports.time-by-project');
 
+    // Financial Reports
+    Route::get('/reports/trial-balance', [\App\Http\Controllers\ReportController::class, 'trialBalance'])->name('reports.trial-balance');
+    Route::get('/reports/income-statement', [\App\Http\Controllers\ReportController::class, 'incomeStatement'])->name('reports.income-statement');
+    Route::get('/reports/balance-sheet', [\App\Http\Controllers\ReportController::class, 'balanceSheet'])->name('reports.balance-sheet');
+    Route::get('/reports/cash-flow', [\App\Http\Controllers\ReportController::class, 'cashFlowStatement'])->name('reports.cash-flow');
+
+    // Business Reports
+    Route::get('/reports/income-by-customer', [\App\Http\Controllers\ReportController::class, 'incomeByCustomer'])->name('reports.income-by-customer');
+    Route::get('/reports/expenses-by-category', [\App\Http\Controllers\ReportController::class, 'expensesByCategory'])->name('reports.expenses-by-category');
+    Route::get('/reports/aging', [\App\Http\Controllers\ReportController::class, 'agingReport'])->name('reports.aging');
+    Route::get('/reports/gst', [\App\Http\Controllers\ReportController::class, 'gstReport'])->name('reports.gst');
+
     // Wise Reconciliation
     Route::get('/reconciliation', [ReconciliationController::class, 'index'])->name('reconciliation.index');
     Route::get('/reconciliation/import', [ReconciliationController::class, 'import'])->name('reconciliation.import');
