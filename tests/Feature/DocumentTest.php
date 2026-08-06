@@ -261,4 +261,91 @@ class DocumentTest extends TestCase
         $invoice->refresh();
         $this->assertCount(3, $invoice->documents);
     }
+
+    public function test_can_upload_document_for_estimate(): void
+    {
+        $client = Client::factory()->create();
+        $estimate = \App\Models\Estimate::create([
+            'client_id' => $client->id,
+            'estimate_number' => 'EST-2024-0001',
+            'status' => 'draft',
+            'issue_date' => now(),
+            'valid_until' => now()->addDays(30),
+            'subtotal' => 100,
+            'tax_amount' => 10,
+            'discount_amount' => 0,
+            'total' => 110,
+        ]);
+        
+        $file = UploadedFile::fake()->create('estimate.pdf', 1024);
+        
+        $response = $this->actingAs($this->user)->post('/documents', [
+            'documentable_type' => 'Estimate',
+            'documentable_id' => $estimate->id,
+            'file' => $file,
+        ]);
+        
+        $response->assertStatus(201);
+        
+        $this->assertDatabaseHas('documents', [
+            'documentable_type' => 'App\Models\Estimate',
+            'documentable_id' => $estimate->id,
+        ]);
+    }
+
+    public function test_can_upload_document_for_purchase_order(): void
+    {
+        $client = Client::factory()->create();
+        $po = \App\Models\PurchaseOrder::create([
+            'client_id' => $client->id,
+            'po_number' => 'PO-2024-0001',
+            'title' => 'Test PO',
+            'status' => 'draft',
+            'budgeted_amount' => 5000,
+            'used_amount' => 0,
+        ]);
+        
+        $file = UploadedFile::fake()->create('po.pdf', 1024);
+        
+        $response = $this->actingAs($this->user)->post('/documents', [
+            'documentable_type' => 'PurchaseOrder',
+            'documentable_id' => $po->id,
+            'file' => $file,
+        ]);
+        
+        $response->assertStatus(201);
+        
+        $this->assertDatabaseHas('documents', [
+            'documentable_type' => 'App\Models\PurchaseOrder',
+            'documentable_id' => $po->id,
+        ]);
+    }
+
+    public function test_can_upload_document_for_payment(): void
+    {
+        $client = Client::factory()->create();
+        $payment = \App\Models\Payment::create([
+            'client_id' => $client->id,
+            'payment_number' => 'PAY-2024-0001',
+            'amount' => 500,
+            'payment_date' => now(),
+            'payment_method' => 'bank_transfer',
+            'status' => 'completed',
+        ]);
+        
+        $file = UploadedFile::fake()->create('receipt.pdf', 1024);
+        
+        $response = $this->actingAs($this->user)->post('/documents', [
+            'documentable_type' => 'Payment',
+            'documentable_id' => $payment->id,
+            'file' => $file,
+        ]);
+        
+        $response->assertStatus(201);
+        
+        $this->assertDatabaseHas('documents', [
+            'documentable_type' => 'App\Models\Payment',
+            'documentable_id' => $payment->id,
+        ]);
+    }
 }
