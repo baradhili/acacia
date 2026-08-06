@@ -500,9 +500,9 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 - [x] Test time-by-client, time-by-staff, time-by-project reports filter correctly
 - [x] Test Wise API sync handles paginated responses
 - [x] Test Wise API sync skips duplicate transactions by source_id
-- [ ] Test auto-match all picks highest score when multiple ledger matches exist
-- [ ] Test manual match overrides an existing auto-match
-- [ ] Test reconciliation report shows correct matched/unmatched totals
+- [x] Test auto-match all picks highest score when multiple ledger matches exist
+- [x] Test manual match overrides an existing auto-match
+- [x] Test reconciliation report shows correct matched/unmatched totals
 - [x] Test Wise CSV import handles malformed rows gracefully (logs errors, imports valid rows)
 - [x] Test contact custom fields (JSON) can be stored and retrieved
 - [x] Test contact attachments can be uploaded and downloaded
@@ -511,7 +511,7 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 - [x] Test role middleware restricts routes to allowed roles
 - [x] Test admin user CRUD (create, edit, delete) and non-admin cannot
 - [x] Test user profile update includes salary/rate fields correctly
-- [ ] Test staff assignment to project with custom charge rate overrides default rate
+- [x] Test staff assignment to project with custom charge rate overrides default rate
 - [x] Test navigation menu visibility by role
 - [ ] Test dashboard widgets show correct totals (revenue, outstanding, overdue)
 - [ ] Test export (CSV/Excel) data matches expected content if export exists
