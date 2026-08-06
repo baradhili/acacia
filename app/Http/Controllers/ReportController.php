@@ -201,7 +201,7 @@ class ReportController extends Controller
         $trialBalance = new TrialBalance();
         $trialBalance->before($endDate);
         
-        $accounts = Account::where('account_type', '!=', Account::TYPE_HEADER)->get();
+        $accounts = Account::all();
         
         $debitTotal = 0;
         $creditTotal = 0;
@@ -209,7 +209,7 @@ class ReportController extends Controller
         $accountLines = collect();
         foreach ($trialBalance->getData()['accounts'] as $item) {
             $account = Account::find($item['account']['id']);
-            if ($account && $account->account_type !== Account::TYPE_HEADER) {
+            if ($account) {
                 $balance = $item['balance'] ?? 0;
                 $isDebit = in_array($account->account_type, [
                     Account::ASSET, Account::EXPENSE, Account::DIRECT_COSTS
@@ -505,8 +505,7 @@ class ReportController extends Controller
 
         $accountId = $request->get("account_id");
 
-        $accounts = Account::where("account_type", "!=", Account::TYPE_HEADER)
-            ->orderBy("code")
+        $accounts = Account::orderBy("code")
             ->get(["id", "code", "name", "account_type"]);
 
         $statementData = null;
@@ -593,8 +592,7 @@ class ReportController extends Controller
 
         $accountId = $request->get("account_id");
 
-        $accounts = Account::where("account_type", "!=", Account::TYPE_HEADER)
-            ->orderBy("code")
+        $accounts = Account::orderBy("code")
             ->get(["id", "code", "name", "account_type"]);
 
         $scheduleData = null;
