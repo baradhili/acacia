@@ -87,7 +87,7 @@ class ExpenseController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'supplier_id' => 'required|exists:contacts,id',
+            'supplier_id' => 'required|exists:clients,id',
             'category' => 'required|string|in:' . implode(',', Expense::CATEGORIES),
             'amount' => 'required|numeric|min:0.01',
             'tax_amount' => 'nullable|numeric|min:0',
@@ -183,7 +183,7 @@ class ExpenseController extends Controller
         }
 
         $validated = $request->validate([
-            'supplier_id' => 'required|exists:contacts,id',
+            'supplier_id' => 'required|exists:clients,id',
             'category' => 'required|string|in:' . implode(',', Expense::CATEGORIES),
             'amount' => 'required|numeric|min:0.01',
             'tax_amount' => 'nullable|numeric|min:0',
