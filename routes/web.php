@@ -3,6 +3,7 @@
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\CreditNoteController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\EstimateController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\InvoiceController;
@@ -97,6 +98,14 @@ Route::middleware('auth')->group(function () {
     Route::post('/expenses/{expense}/pay', [ExpenseController::class, 'pay'])->name('expenses.pay');
     Route::post('/expenses/{expense}/cancel', [ExpenseController::class, 'cancel'])->name('expenses.cancel');
     Route::get('/expenses/{expense}/receipt', [ExpenseController::class, 'downloadReceipt'])->name('expenses.download-receipt');
+
+    // Documents (API)
+    Route::get('/documents', [DocumentController::class, 'index'])->name('documents.index');
+    Route::post('/documents', [DocumentController::class, 'store'])->name('documents.store');
+    Route::get('/documents/{document}', [DocumentController::class, 'show'])->name('documents.show');
+    Route::get('/documents/{document}/download', [DocumentController::class, 'download'])->name('documents.download');
+    Route::delete('/documents/{document}', [DocumentController::class, 'destroy'])->name('documents.destroy');
+    Route::get('/documents/model/{type}/{id}', [DocumentController::class, 'forModel'])->name('documents.for-model');
 
     // Estimates
     Route::resource('estimates', EstimateController::class);
