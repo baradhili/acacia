@@ -466,8 +466,6 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 - [x] Test automatic overdue marking via cron for invoices past due_date
 - [x] Test invoice email is dispatched when marking as sent
 - [x] Test invoice PDF generation with Australian template
-- [ ] Test customer portal signed URL grants access without authentication and expires
-- [ ] Test customer portal payment flow shows Wise/bank transfer instructions
 - [x] Test recurring invoice generation (daily/weekly/monthly/yearly) via scheduled command
 - [x] Test invoice cancellation only allowed in draft state
 - [x] Test full credit note application to an invoice reduces invoice balance and marks credit note applied
@@ -519,13 +517,11 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 
 ### Phase 5 — Bills, Expenses, Documents & Reporting
 
-- [ ] `Bill` model + migration (supplier_id, due_date, total, status)
-- [ ] Bill CRUD UI
-- [ ] `Expense` model (category, amount, date, supplier_id)
-- [ ] Expense CRUD UI
+- [ ] `Expense` model (category, amount, date, supplier_id, due_date, total, status)
+- [ ] - [ ] Expense CRUD UI - expense can be "paid now" optionally
 - [ ] Expense categories seed (travel, software, subcontractors, etc.)
-- [ ] Pay bill → IFRS `Cr Cash / Dr Expense` on payment date (cash basis)
-- [ ] Attach receipt to bill/expense
+- [ ] Pay expense → IFRS `Cr Cash / Dr Expense` on payment date (cash basis)
+- [ ] Attach receipt to expense
 - [ ] `Document` polymorphic model + migration
 - [ ] Document upload UI (drag-drop)
 - [ ] Document list per transaction
