@@ -225,11 +225,15 @@
                             class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
                             <option value="">Select Invoice</option>
                             @php
-                                $outstandingInvoices = App\Models\Invoice::where('client_id', $payment->client_id)
+                                $outstandingInvoices = App\Models\Invoice::with('allocations')
+                                    ->where('client_id', $payment->client_id)
                                     ->whereIn('status', ['sent', 'viewed', 'partially_paid', 'overdue'])
-                                    ->whereRaw('total - COALESCE(amount_paid, 0) > 0')
-                                    ->orderBy('due_date')
-                                    ->get();
+                                    ->get()
+                                    ->filter(function ($inv) {
+                                        return $inv->amount_due > 0;
+                                    })
+                                    ->sortBy('due_date')
+                                    ->values();
                             @endphp
                             @foreach($outstandingInvoices as $inv)
                                 <option value="{{ $inv->id }}">
