@@ -547,16 +547,15 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 
 - [ ] Auto-create missing cash receipt from unmatched Wise credit
 - [ ] - [ ] Auto-create missing purchase from unmatched Wise debit
-- [ ] Manual override: link unmatched Wise txn to existing IFRS txn
-- [ ] "Ignore" action for non-business Wise transactions
+- [ ] Manual override: link unmatched Bank txn to existing IFRS txn
+- [ ] "Ignore" action for non-business Bank transactions
 - [ ] Reconciliation history log
-- [ ] 
 - [ ] Dashboard widget: cash flow (30-day)
 - [ ] Dashboard widget: AR aging summary
 - [ ] Dashboard widget: recent invoices & payments
 - [ ] Dashboard widget: outstanding PO budgets
 - [ ] Dashboard widget: unbilled time entries
-- [ ] Dashboard widget: Wise balance + unreconciled count
+- [ ] Dashboard widget: Bank balance + unreconciled count
 - [ ] Dashboard widget: monthly P&L trend (chart)
 - [ ] Email notifications: invoice viewed, payment received, overdue reminder
 - [ ] Scheduled monthly client statements
