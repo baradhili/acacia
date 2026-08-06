@@ -227,7 +227,7 @@
                             @php
                                 $outstandingInvoices = App\Models\Invoice::where('client_id', $payment->client_id)
                                     ->whereIn('status', ['sent', 'viewed', 'partially_paid', 'overdue'])
-                                    ->where('amount_due', '>', 0)
+                                    ->whereRaw('total - COALESCE(amount_paid, 0) > 0')
                                     ->orderBy('due_date')
                                     ->get();
                             @endphp
