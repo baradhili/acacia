@@ -229,7 +229,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <!-- Upload Form -->
                     <form id="documentUploadForm" action="{{ route('documents.store') }}" method="POST" enctype="multipart/form-data" class="mb-4">
                         @csrf
-                        <input type="hidden" name="documentable_type" value="App\Models\Expense">
+                        <input type="hidden" name="documentable_type" value="Expense">
                         <input type="hidden" name="documentable_id" value="{{ $expense->id }}">
                         <div id="documentUploadArea" class="document-upload-area cursor-pointer">
                             <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">

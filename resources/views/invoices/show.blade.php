@@ -228,7 +228,7 @@
                 <!-- Upload Form -->
                 <form action="{{ route('documents.store') }}" method="POST" enctype="multipart/form-data" class="mb-4">
                     @csrf
-                    <input type="hidden" name="documentable_type" value="App\Models\Invoice">
+                    <input type="hidden" name="documentable_type" value="Invoice">
                     <input type="hidden" name="documentable_id" value="{{ $invoice->id }}">
                     <div id="documentUploadArea" class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-indigo-500 transition">
                         <svg class="mx-auto h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

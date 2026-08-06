@@ -45,6 +45,12 @@ class DocumentController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+        // Convert short class name to full namespace if needed
+        $documentableType = $request->documentable_type;
+        if (!str_contains($documentableType, '\\')) {
+            $documentableType = 'App\\Models\\' . $documentableType;
+        }
+
         $file = $request->file('file');
         $path = $file->store(
             'uploads/' . now()->format('Y/m'),
@@ -52,7 +58,7 @@ class DocumentController extends Controller
         );
 
         $document = Document::create([
-            'documentable_type' => $request->documentable_type,
+            'documentable_type' => $documentableType,
             'documentable_id' => $request->documentable_id,
             'name' => $file->getClientOriginalName(),
             'file_path' => $path,
@@ -107,7 +113,10 @@ class DocumentController extends Controller
      */
     public function forModel(Request $request, string $type, int $id)
     {
-        $documents = Document::where('documentable_type', $type)
+        // Convert short class name to full namespace
+        $fullType = 'App\\Models\\' . $type;
+        
+        $documents = Document::where('documentable_type', $fullType)
             ->where('documentable_id', $id)
             ->with('uploadedBy')
             ->orderBy('created_at', 'desc')
