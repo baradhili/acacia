@@ -545,13 +545,12 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 
 ### Phase 6 — Advanced Reconciliation, Automation & Dashboard
 
-- [ ] Implement Wise API fetch endpoint (with token + profile ID)
 - [ ] Auto-create missing cash receipt from unmatched Wise credit
-- [ ] Auto-create missing purchase from unmatched Wise debit
+- [ ] - [ ] Auto-create missing purchase from unmatched Wise debit
 - [ ] Manual override: link unmatched Wise txn to existing IFRS txn
 - [ ] "Ignore" action for non-business Wise transactions
 - [ ] Reconciliation history log
-- [ ] Multi-currency Wise balance display
+- [ ] 
 - [ ] Dashboard widget: cash flow (30-day)
 - [ ] Dashboard widget: AR aging summary
 - [ ] Dashboard widget: recent invoices & payments
@@ -563,11 +562,7 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 - [ ] Scheduled monthly client statements
 - [ ] Audit log for all create/edit/delete actions on financial records
 - [ ] Period locking (close prior FY)
-- [ ] Webhook: invoice.paid
-- [ ] Webhook: payment.received
-- [ ] API tokens for external integration (Laravel Sanctum)
-- [ ] OpenAPI spec for REST API
-- [ ] Documentation site (Markdown → static)
+- [ ] Documentation site (github docs)
 - [ ] Production deployment guide (Forge/Sail/Docker)
 - [ ] Backup & restore runbook
 - [ ] End-to-end test suite (cypress/dusk optional)
