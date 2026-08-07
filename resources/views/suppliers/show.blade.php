@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', '{{ $supplier->name }}')
+@section('title', $supplier->name)
 @section('content')
 
     <div class="mb-6 flex justify-between items-center">
