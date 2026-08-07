@@ -128,6 +128,7 @@ class FiscalPeriod extends Model
      */
     public function scopeBeforeDate($query, Carbon $date)
     {
+        // Use date() function to compare just the date portion, ignoring time
         return $query->whereDate('end_date', '<=', $date);
     }
 
