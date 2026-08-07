@@ -4,9 +4,14 @@
 
 @section('header')
     <div class="flex items-center justify-between">
-        <h2 class="text-xl font-semibold text-gray-800">
-            Expense {{ $expense->reference ? "#{$expense->reference}" : "#{$expense->id}" }}
-        </h2>
+        <div class="flex items-center gap-4">
+            @if($expense->supplier && $expense->supplier->logo_url)
+                <img src="{{ $expense->supplier->logo_url }}" alt="{{ $expense->supplier->name }} Logo" class="h-10 w-auto object-contain">
+            @endif
+            <h2 class="text-xl font-semibold text-gray-800">
+                Expense {{ $expense->reference ? "#{$expense->reference}" : "#{$expense->id}" }}
+            </h2>
+        </div>
         <div class="flex items-center gap-2">
             @if($expense->status === 'draft')
                 <form action="{{ route('expenses.submit', $expense) }}" method="POST" class="inline">
@@ -85,35 +90,7 @@
 
 @push('scripts')
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const uploadArea = document.getElementById('documentUploadArea');
-    const fileInput = document.getElementById('documentFile');
-    const form = document.getElementById('documentUploadForm');
-    
-    if (uploadArea && fileInput) {
-        uploadArea.addEventListener('click', () => fileInput.click());
-        uploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadArea.classList.add('border-indigo-500', 'bg-indigo-50');
-        });
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.classList.remove('border-indigo-500', 'bg-indigo-50');
-        });
-        uploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadArea.classList.remove('border-indigo-500', 'bg-indigo-50');
-            if (e.dataTransfer.files.length) {
-                fileInput.files = e.dataTransfer.files;
-                if (form) form.submit();
-            }
-        });
-        fileInput.addEventListener('change', () => {
-            if (fileInput.files.length) {
-                if (form) form.submit();
-            }
-        });
-    }
-});
+// No document delete handling on show view - delete only available in edit view
 </script>
 @endpush
 
@@ -177,6 +154,16 @@ document.addEventListener('DOMContentLoaded', function() {
                             <dt class="text-sm font-medium text-gray-500">Supplier</dt>
                             <dd class="mt-1 text-sm text-gray-900">{{ $expense->supplier->name ?? 'N/A' }}</dd>
                         </div>
+                        @if($expense->project)
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Project</dt>
+                            <dd class="mt-1 text-sm">
+                                <a href="{{ route('projects.show', $expense->project) }}" class="text-indigo-600 hover:text-indigo-900">
+                                    {{ $expense->project->name }}
+                                </a>
+                            </dd>
+                        </div>
+                        @endif
                         <div>
                             <dt class="text-sm font-medium text-gray-500">Category</dt>
                             <dd class="mt-1 text-sm text-gray-900">{{ ucwords(str_replace('_', ' ', $expense->category)) }}</dd>
@@ -224,44 +211,29 @@ document.addEventListener('DOMContentLoaded', function() {
             <!-- Documents Section -->
             <div class="bg-white rounded-lg shadow">
                 <div class="p-6">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Documents</h3>
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">Documents</h3>
+                        <a href="{{ route('expenses.edit', $expense) }}" class="text-sm text-indigo-600 hover:text-indigo-800">
+                            Upload in Edit View →
+                        </a>
+                    </div>
                     
-                    <!-- Upload Form -->
-                    <form id="documentUploadForm" action="{{ route('documents.store') }}" method="POST" enctype="multipart/form-data" class="mb-4">
-                        @csrf
-                        <input type="hidden" name="documentable_type" value="Expense">
-                        <input type="hidden" name="documentable_id" value="{{ $expense->id }}">
-                        <div id="documentUploadArea" class="document-upload-area cursor-pointer">
-                            <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                            <p class="mt-1 text-sm text-gray-600">Drop files here or click to upload</p>
-                            <p class="mt-1 text-xs text-gray-500">PDF, JPG, PNG, DOC up to 20MB</p>
-                        </div>
-                        <input type="file" name="file" id="documentFile" class="hidden" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar">
-                    </form>
-
                     <!-- Document List -->
                     @if($expense->documents->count() > 0)
                         <div class="border rounded-lg divide-y">
                             @foreach($expense->documents as $doc)
                                 <div class="document-list-item">
-                                    <div class="flex items-center">
-                                        <svg class="h-5 w-5 text-gray-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-                                        </svg>
-                                        <div>
-                                            <p class="text-sm font-medium text-gray-900">{{ $doc->name }}</p>
-                                            <p class="text-xs text-gray-500">{{ number_format($doc->size / 1024, 1) }} KB</p>
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center">
+                                            <svg class="h-5 w-5 text-gray-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                                            </svg>
+                                            <div>
+                                                <p class="text-sm font-medium text-gray-900">{{ $doc->name }}</p>
+                                                <p class="text-xs text-gray-500">{{ number_format($doc->size / 1024, 1) }} KB</p>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div class="flex items-center gap-2">
                                         <a href="{{ route('documents.download', $doc) }}" class="text-indigo-600 hover:text-indigo-900 text-sm">Download</a>
-                                        <form action="{{ route('documents.destroy', $doc) }}" method="POST" class="inline">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="text-red-600 hover:text-red-900 text-sm" onclick="return confirm('Delete this document?')">Delete</button>
-                                        </form>
                                     </div>
                                 </div>
                             @endforeach

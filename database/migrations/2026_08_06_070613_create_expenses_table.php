@@ -13,7 +13,9 @@ return new class extends Migration
     {
         Schema::create('expenses', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('supplier_id')->constrained('clients')->onDelete('cascade');
+            // Note: supplier_id foreign key is set up in a later migration
+            // to point to the suppliers table (not clients)
+            $table->unsignedBigInteger('supplier_id')->nullable();
             $table->string('category');
             $table->decimal('amount', 12, 2);
             $table->decimal('tax_amount', 12, 2)->default(0);

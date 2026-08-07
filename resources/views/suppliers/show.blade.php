@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', '{{ $supplier->name }}')
+@section('title', $supplier->name)
 @section('content')
 
     <div class="mb-6 flex justify-between items-center">
@@ -66,6 +66,34 @@
                 <h3 class="text-sm font-medium text-gray-500">Notes</h3>
                 <p class="mt-2 text-gray-700">{{ $supplier->notes }}</p>
             </div>
+        @endif
+    </div>
+
+    <!-- Documents -->
+    <div class="bg-white rounded-lg shadow p-6 mt-6">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-semibold text-gray-800">Documents</h2>
+            <a href="{{ route('suppliers.edit', $supplier) }}" class="text-sm text-indigo-600 hover:text-indigo-800">
+                Upload/Delete in Edit View →
+            </a>
+        </div>
+
+        @if($supplier->documents->count() > 0)
+            <div class="border rounded-lg divide-y">
+                @foreach($supplier->documents as $doc)
+                    <div class="flex items-center justify-between p-3">
+                        <div class="flex items-center">
+                            <svg class="h-5 w-5 text-gray-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                            </svg>
+                            <span class="text-sm font-medium text-gray-900">{{ $doc->name }}</span>
+                        </div>
+                        <a href="{{ route('documents.download', $doc) }}" class="text-indigo-600 hover:text-indigo-900 text-sm">Download</a>
+                    </div>
+                @endforeach
+            </div>
+        @else
+            <p class="text-sm text-gray-500 text-center py-2">No documents attached</p>
         @endif
     </div>
 

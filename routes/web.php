@@ -1,12 +1,14 @@
 <?php
 
 use App\Http\Controllers\ClientController;
+use App\Http\Controllers\ChartOfAccountsController;
 use App\Http\Controllers\CreditNoteController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\EstimateController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\LogoController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
@@ -31,6 +33,8 @@ Route::middleware('auth')->group(function () {
     // Profile
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::post('/profile/photo', [ProfileController::class, 'updatePhoto'])->name('profile.photo.update');
+    Route::delete('/profile/photo', [ProfileController::class, 'deletePhoto'])->name('profile.photo.delete');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     // Users (admin only)
@@ -40,9 +44,20 @@ Route::middleware('auth')->group(function () {
 
     // Clients
     Route::resource('clients', ClientController::class);
+    
+    // Client Logo
+    Route::post('/clients/{client}/logo', [LogoController::class, 'storeClient'])->name('clients.logo.store');
+    Route::delete('/clients/{client}/logo', [LogoController::class, 'destroyClient'])->name('clients.logo.destroy');
+
+    // Client Purchase Orders (API)
+    Route::get('/clients/{client}/purchase-orders', [ClientController::class, 'purchaseOrders'])->name('clients.purchase-orders');
 
     // Suppliers (includes vendors via type filter)
     Route::resource('suppliers', SupplierController::class);
+    
+    // Supplier Logo
+    Route::post('/suppliers/{supplier}/logo', [LogoController::class, 'storeSupplier'])->name('suppliers.logo.store');
+    Route::delete('/suppliers/{supplier}/logo', [LogoController::class, 'destroySupplier'])->name('suppliers.logo.destroy');
 
     // Projects
     Route::resource('projects', ProjectController::class);
@@ -143,6 +158,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/reconciliation', [ReconciliationController::class, 'index'])->name('reconciliation.index');
     Route::get('/reconciliation/import', [ReconciliationController::class, 'import'])->name('reconciliation.import');
     Route::post('/reconciliation/import', [ReconciliationController::class, 'processImport'])->name('reconciliation.process-import');
+
+    // Chart of Accounts
+    Route::get('/chart-of-accounts', [ChartOfAccountsController::class, 'index'])->name('chart-of-accounts.index');
 });
 
 require __DIR__.'/auth.php';

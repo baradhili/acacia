@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Client;
 use App\Models\Project;
 use App\Models\ProjectStaff;
+use App\Models\PurchaseOrder;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -13,7 +14,7 @@ class ProjectController extends Controller
 {
     public function index()
     {
-        $projects = Project::with('client')
+        $projects = Project::with(['client', 'purchaseOrder'])
             ->withSum('timeEntries as total_hours', 'hours')
             ->latest()
             ->paginate(15);
@@ -21,17 +22,30 @@ class ProjectController extends Controller
         return view('projects.index', compact('projects'));
     }
 
-    public function create()
+    public function create(Request $request)
     {
         $clients = Client::orderBy('name')->pluck('name', 'id');
         $staff = User::role(['staff', 'accountant', 'admin'])->orderBy('name')->get();
-        return view('projects.create', compact('clients', 'staff'));
+        
+        // Get purchase orders for selected client (via AJAX or pre-selected)
+        $clientId = $request->get('client_id');
+        $purchaseOrders = collect();
+        if ($clientId) {
+            $purchaseOrders = PurchaseOrder::where('client_id', $clientId)
+                ->whereNull('project_id')
+                ->whereIn('status', [PurchaseOrder::STATUS_OPEN, PurchaseOrder::STATUS_PARTIALLY_USED])
+                ->orderBy('po_number')
+                ->get();
+        }
+        
+        return view('projects.create', compact('clients', 'staff', 'purchaseOrders'));
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
             'client_id' => 'required|exists:clients,id',
+            'purchase_order_id' => 'nullable|exists:purchase_orders,id',
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'budget_hours' => 'nullable|numeric|min:0',
@@ -67,7 +81,7 @@ class ProjectController extends Controller
 
     public function show(Project $project)
     {
-        $project->load(['client', 'staffAssignments.user', 'timeEntries' => function ($q) {
+        $project->load(['client', 'purchaseOrder', 'staffAssignments.user', 'timeEntries' => function ($q) {
             $q->orderBy('start_time', 'desc');
         }]);
 
@@ -78,13 +92,25 @@ class ProjectController extends Controller
     {
         $clients = Client::orderBy('name')->pluck('name', 'id');
         $staff = User::role(['staff', 'accountant', 'admin'])->orderBy('name')->get();
-        return view('projects.edit', compact('project', 'clients', 'staff'));
+        
+        // Get available purchase orders for the project's client (excluding already linked)
+        $purchaseOrders = PurchaseOrder::where('client_id', $project->client_id)
+            ->where(function ($query) use ($project) {
+                $query->whereNull('project_id')
+                    ->orWhere('project_id', $project->id);
+            })
+            ->whereIn('status', [PurchaseOrder::STATUS_OPEN, PurchaseOrder::STATUS_PARTIALLY_USED])
+            ->orderBy('po_number')
+            ->get();
+            
+        return view('projects.edit', compact('project', 'clients', 'staff', 'purchaseOrders'));
     }
 
     public function update(Request $request, Project $project)
     {
         $validated = $request->validate([
             'client_id' => 'required|exists:clients,id',
+            'purchase_order_id' => 'nullable|exists:purchase_orders,id',
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'budget_hours' => 'nullable|numeric|min:0',

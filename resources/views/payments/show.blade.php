@@ -3,9 +3,14 @@
 @section('content')
 
     <div class="mb-6 flex justify-between items-center">
-        <div>
-            <h1 class="text-2xl font-bold text-gray-800">Payment {{ $payment->payment_number }}</h1>
-            <p class="text-gray-600">Received on {{ $payment->payment_date->format('d M Y') }}</p>
+        <div class="flex items-center gap-4">
+            @if($payment->client && $payment->client->logo_url)
+                <img src="{{ $payment->client->logo_url }}" alt="{{ $payment->client->name }} Logo" class="h-12 w-auto object-contain">
+            @endif
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">Payment {{ $payment->payment_number }}</h1>
+                <p class="text-gray-600">Received on {{ $payment->payment_date->format('d M Y') }}</p>
+            </div>
         </div>
         <div class="flex gap-2">
             @if ($payment->unallocated_amount > 0)
@@ -119,23 +124,12 @@
 
             <!-- Documents -->
             <div class="bg-white rounded-lg shadow p-6">
-                <h2 class="text-lg font-semibold text-gray-800 mb-4">Documents</h2>
-
-                <form action="{{ route('documents.store') }}" method="POST" enctype="multipart/form-data" class="mb-4">
-                    @csrf
-                    <input type="hidden" name="documentable_type" value="Payment">
-                    <input type="hidden" name="documentable_id" value="{{ $payment->id }}">
-                    <div id="documentUploadArea"
-                        class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-indigo-500 transition">
-                        <svg class="mx-auto h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                        </svg>
-                        <p class="mt-1 text-sm text-gray-600">Drop files or click to upload</p>
-                    </div>
-                    <input type="file" name="file" id="documentFile" class="hidden"
-                        accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar">
-                </form>
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold text-gray-800">Documents</h2>
+                    <a href="{{ route('payments.edit', $payment) }}" class="text-sm text-indigo-600 hover:text-indigo-800">
+                        Upload in Edit View →
+                    </a>
+                </div>
 
                 @if ($payment->documents->count() > 0)
                     <div class="border rounded-lg divide-y">
@@ -149,16 +143,8 @@
                                     </svg>
                                     <span class="text-sm font-medium text-gray-900">{{ $doc->name }}</span>
                                 </div>
-                                <div class="flex items-center gap-2">
-                                    <a href="{{ route('documents.download', $doc) }}"
-                                        class="text-indigo-600 hover:text-indigo-900 text-sm">Download</a>
-                                    <form action="{{ route('documents.destroy', $doc) }}" method="POST" class="inline">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" class="text-red-600 hover:text-red-900 text-sm"
-                                            onclick="return confirm('Delete?')">Delete</button>
-                                    </form>
-                                </div>
+                                <a href="{{ route('documents.download', $doc) }}"
+                                    class="text-indigo-600 hover:text-indigo-900 text-sm">Download</a>
                             </div>
                         @endforeach
                     </div>
@@ -280,30 +266,7 @@
 
     @push('scripts')
         <script>
-            document.addEventListener('DOMContentLoaded', function() {
-                const uploadArea = document.getElementById('documentUploadArea');
-                const fileInput = document.getElementById('documentFile');
-                if (uploadArea && fileInput) {
-                    uploadArea.addEventListener('click', () => fileInput.click());
-                    uploadArea.addEventListener('dragover', (e) => {
-                        e.preventDefault();
-                        uploadArea.classList.add('border-indigo-500', 'bg-indigo-50');
-                    });
-                    uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('border-indigo-500',
-                        'bg-indigo-50'));
-                    uploadArea.addEventListener('drop', (e) => {
-                        e.preventDefault();
-                        uploadArea.classList.remove('border-indigo-500', 'bg-indigo-50');
-                        if (e.dataTransfer.files.length) {
-                            fileInput.files = e.dataTransfer.files;
-                            fileInput.closest('form').submit();
-                        }
-                    });
-                    fileInput.addEventListener('change', () => {
-                        if (fileInput.files.length) fileInput.closest('form').submit();
-                    });
-                }
-            });
+        // No document delete handling on show view - delete only available in edit view
         </script>
     @endpush
 

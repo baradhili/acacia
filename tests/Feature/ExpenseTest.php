@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\Client;
+use App\Models\Supplier;
 use App\Models\Expense;
 use App\Models\User;
 use Carbon\Carbon;
@@ -35,9 +35,9 @@ class ExpenseTest extends TestCase
 
     public function test_expense_index_shows_expenses(): void
     {
-        $client = Client::factory()->create();
+        $supplier = Supplier::factory()->create();
         $expense = Expense::factory()->create([
-            'supplier_id' => $client->id,
+            'supplier_id' => $supplier->id,
         ]);
 
         $response = $this->actingAs($this->user)->get('/expenses');
@@ -47,10 +47,10 @@ class ExpenseTest extends TestCase
 
     public function test_can_create_expense(): void
     {
-        $client = Client::factory()->create();
+        $supplier = Supplier::factory()->create();
 
         $response = $this->actingAs($this->user)->post('/expenses', [
-            'supplier_id' => $client->id,
+            'supplier_id' => $supplier->id,
             'category' => 'travel',
             'amount' => 100.00,
             'tax_amount' => 10.00,
@@ -61,7 +61,7 @@ class ExpenseTest extends TestCase
 
         $response->assertRedirect('/expenses/1');
         $this->assertDatabaseHas('expenses', [
-            'supplier_id' => $client->id,
+            'supplier_id' => $supplier->id,
             'category' => 'travel',
             'amount' => 100.00,
             'total' => 110.00,
@@ -70,9 +70,9 @@ class ExpenseTest extends TestCase
 
     public function test_can_view_expense(): void
     {
-        $client = Client::factory()->create();
+        $supplier = Supplier::factory()->create();
         $expense = Expense::factory()->create([
-            'supplier_id' => $client->id,
+            'supplier_id' => $supplier->id,
         ]);
 
         $response = $this->actingAs($this->user)->get("/expenses/{$expense->id}");
@@ -82,14 +82,14 @@ class ExpenseTest extends TestCase
 
     public function test_can_update_expense(): void
     {
-        $client = Client::factory()->create();
+        $supplier = Supplier::factory()->create();
         $expense = Expense::factory()->draft()->create([
-            'supplier_id' => $client->id,
+            'supplier_id' => $supplier->id,
             'amount' => 100.00,
         ]);
 
         $response = $this->actingAs($this->user)->put("/expenses/{$expense->id}", [
-            'supplier_id' => $client->id,
+            'supplier_id' => $supplier->id,
             'category' => 'software',
             'amount' => 150.00,
             'tax_amount' => 15.00,
@@ -171,10 +171,10 @@ class ExpenseTest extends TestCase
 
     public function test_expense_filters(): void
     {
-        $client = Client::factory()->create();
+        $supplier = Supplier::factory()->create();
         
-        Expense::factory()->draft()->create(['supplier_id' => $client->id, 'category' => 'travel']);
-        Expense::factory()->paid()->create(['supplier_id' => $client->id, 'category' => 'software']);
+        Expense::factory()->draft()->create(['supplier_id' => $supplier->id, 'category' => 'travel']);
+        Expense::factory()->paid()->create(['supplier_id' => $supplier->id, 'category' => 'software']);
 
         // Filter by status
         $response = $this->actingAs($this->user)->get('/expenses?status=draft');

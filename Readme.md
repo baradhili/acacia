@@ -1,4 +1,9 @@
-# Professional Services Accounting System — Enhanced README
+# Professional Services Accounting System
+
+[![Tests](https://github.com/baradhili/laravel-erp/actions/workflows/tests.yml/badge.svg)](https://github.com/baradhili/laravel-erp/actions/workflows/tests.yml)
+[![Laravel](https://img.shields.io/badge/Laravel-13-red)](https://laravel.com)
+
+---
 
 Below is a significantly expanded README. The roadmap has been broken into granular, checkable tasks (`- [ ]`) so each can be tracked as "todo" / "done" in GitHub Issues, Projects, or any kanban board. Feature scope has been broadened using the public feature sets of **Akaunting** and **Invoice Ninja** as references, while staying true to the project's core: **cash-based accounting**, **Australian GST**, **Eloquent IFRS v5**, and **Wise reconciliation**.
 

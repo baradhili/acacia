@@ -6,6 +6,9 @@ use App\Models\Client;
 use App\Models\Document;
 use App\Models\Expense;
 use App\Models\Invoice;
+use App\Models\Payment;
+use App\Models\PurchaseOrder;
+use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -39,8 +42,8 @@ class DocumentTest extends TestCase
 
     public function test_can_upload_document_for_expense(): void
     {
-        $client = Client::factory()->create();
-        $expense = Expense::factory()->draft()->create(['supplier_id' => $client->id]);
+        $supplier = Supplier::factory()->create();
+        $expense = Expense::factory()->draft()->create(['supplier_id' => $supplier->id]);
         
         $file = UploadedFile::fake()->create('receipt.pdf', 1024);
         
@@ -128,8 +131,8 @@ class DocumentTest extends TestCase
 
     public function test_can_get_documents_for_model(): void
     {
-        $client = Client::factory()->create();
-        $expense = Expense::factory()->draft()->create(['supplier_id' => $client->id]);
+        $supplier = Supplier::factory()->create();
+        $expense = Expense::factory()->draft()->create(['supplier_id' => $supplier->id]);
         
         Document::factory()->count(3)->create([
             'documentable_type' => 'App\\Models\\Expense',
@@ -213,8 +216,8 @@ class DocumentTest extends TestCase
 
     public function test_document_polymorphic_relationship(): void
     {
-        $client = Client::factory()->create();
-        $expense = Expense::factory()->draft()->create(['supplier_id' => $client->id]);
+        $supplier = Supplier::factory()->create();
+        $expense = Expense::factory()->draft()->create(['supplier_id' => $supplier->id]);
         
         $document = Document::factory()->create([
             'documentable_type' => 'App\Models\Expense',
@@ -227,8 +230,8 @@ class DocumentTest extends TestCase
 
     public function test_expense_has_documents_relationship(): void
     {
-        $client = Client::factory()->create();
-        $expense = Expense::factory()->draft()->create(['supplier_id' => $client->id]);
+        $supplier = Supplier::factory()->create();
+        $expense = Expense::factory()->draft()->create(['supplier_id' => $supplier->id]);
         
         Document::factory()->count(2)->create([
             'documentable_type' => 'App\Models\Expense',

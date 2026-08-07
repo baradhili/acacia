@@ -8,6 +8,7 @@ use App\Models\Expense;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PurchaseOrder;
+use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
@@ -91,8 +92,8 @@ class DocumentModelTest extends TestCase
 
     public function test_document_morph_to_parent_model(): void
     {
-        $client = Client::factory()->create();
-        $expense = Expense::factory()->draft()->create(['supplier_id' => $client->id]);
+        $supplier = Supplier::factory()->create();
+        $expense = Expense::factory()->draft()->create(['supplier_id' => $supplier->id]);
         $document = Document::factory()->create([
             'documentable_type' => 'App\\Models\\Expense',
             'documentable_id' => $expense->id,
@@ -104,8 +105,8 @@ class DocumentModelTest extends TestCase
 
     public function test_expense_can_have_many_documents(): void
     {
-        $client = Client::factory()->create();
-        $expense = Expense::factory()->draft()->create(['supplier_id' => $client->id]);
+        $supplier = Supplier::factory()->create();
+        $expense = Expense::factory()->draft()->create(['supplier_id' => $supplier->id]);
 
         Document::factory()->count(3)->create([
             'documentable_type' => 'App\\Models\\Expense',
@@ -183,8 +184,9 @@ class DocumentModelTest extends TestCase
 
     public function test_documents_can_attach_to_different_model_types(): void
     {
+        $supplier = Supplier::factory()->create();
         $client = Client::factory()->create();
-        $expense = Expense::factory()->draft()->create(['supplier_id' => $client->id]);
+        $expense = Expense::factory()->draft()->create(['supplier_id' => $supplier->id]);
         $invoice = Invoice::create([
             'client_id' => $client->id,
             'invoice_number' => 'INV-2024-DIFF',

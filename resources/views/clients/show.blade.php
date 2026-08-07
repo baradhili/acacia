@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', '{{ $client->name }}')
+@section('title', $client->name)
 @section('content')
 
     <div class="mb-6 flex justify-between items-center">
@@ -193,8 +193,8 @@
     <div class="bg-white rounded-lg shadow p-6">
         <div class="flex justify-between items-center mb-4">
             <h3 class="text-lg font-semibold text-gray-800">Attachments</h3>
-            <a href="#" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
-                + Add Attachment
+            <a href="{{ route('clients.edit', $client) }}" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                Upload/Delete in Edit View →
             </a>
         </div>
         @if($documents->isEmpty())
@@ -210,11 +210,7 @@
                             <span class="ml-2 text-sm text-gray-900">{{ $document->name }}</span>
                             <span class="ml-2 text-xs text-gray-500">({{ number_format($document->size / 1024, 1) }} KB)</span>
                         </div>
-                        <div class="flex items-center text-sm text-gray-500">
-                            <span>{{ $document->uploadedBy?->name ?? 'Unknown' }}</span>
-                            <span class="mx-2">•</span>
-                            <span>{{ $document->created_at->format('d M Y') }}</span>
-                        </div>
+                        <a href="{{ route('documents.download', $document) }}" class="text-indigo-600 hover:text-indigo-900 text-sm">Download</a>
                     </li>
                 @endforeach
             </ul>

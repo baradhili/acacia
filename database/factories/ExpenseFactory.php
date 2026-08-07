@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
-use App\Models\Client;
 use App\Models\Expense;
+use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -31,7 +31,7 @@ class ExpenseFactory extends Factory
         $taxAmount = $amount * $taxRate;
 
         return [
-            'supplier_id' => Client::factory(),
+            'supplier_id' => Supplier::factory(),
             'category' => $this->faker->randomElement(Expense::CATEGORIES),
             'amount' => $amount,
             'tax_amount' => $taxAmount,

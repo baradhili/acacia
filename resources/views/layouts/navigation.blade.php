@@ -196,6 +196,22 @@
                 title="New Estimate">+</a>
         </div>
 
+        <!-- Expenses -->
+        <div class="flex items-center justify-between group">
+            <a href="{{ route('expenses.index') }}"
+                class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors flex-1 {{ request()->routeIs('expenses.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                    </path>
+                </svg>
+                Expenses
+            </a>
+            <a href="{{ route('expenses.create') }}"
+                class="text-slate-500 hover:text-white px-2 text-lg font-bold transition-colors"
+                title="Add Expense">+</a>
+        </div>
+
         <!-- Divider -->
         <div class="my-4 border-t border-slate-700"></div>
 
@@ -217,8 +233,8 @@
         <!-- Accounting -->
         <p class="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Accounting</p>
 
-        <a href="#"
-            class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors text-slate-300 hover:bg-slate-700 hover:text-white">
+        <a href="{{ route('chart-of-accounts.index') }}"
+            class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('chart-of-accounts.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
             <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z">
@@ -227,53 +243,74 @@
             Chart of Accounts
         </a>
 
-        <!-- Reports submenu -->
-        <div x-data="{ open: false }">
-            <button @click="open = !open"
-                class="w-full flex items-center px-3 py-2 mb-1 rounded-lg transition-colors text-slate-300 hover:bg-slate-700 hover:text-white">
-                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
-                    </path>
-                </svg>
-                Reports
-                <svg class="w-4 h-4 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                </svg>
-            </button>
-            <div x-show="open" class="pl-6 space-y-1">
-                <a href="{{ route('reports.time-by-client') }}"
-                    class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('reports.time-by-client') ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white' }}">
-                    Time by Client
-                </a>
-                <a href="{{ route('reports.time-by-staff') }}"
-                    class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('reports.time-by-staff') ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white' }}">
-                    Time by Staff
-                </a>
-                <a href="{{ route('reports.time-by-project') }}"
-                    class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('reports.time-by-project') ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white' }}">
-                    Time by Project
-                </a>
-                <a href="{{ route('projects.index') }}"
-                    class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('projects.profitability') ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white' }}">
-                    Project Profitability
-                </a>
-                <div class="border-t border-slate-700 my-2"></div>
-                <p class="px-3 py-1 text-xs font-semibold text-slate-500 uppercase">IFRS Reports</p>
-                <a href="{{ route('reports.account-statement') }}"
-                    class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('reports.account-statement') ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white' }}">
-                    Account Statement
-                </a>
-                <a href="{{ route('reports.account-schedule') }}"
-                    class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('reports.account-schedule') ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white' }}">
-                    Account Schedule
-                </a>
-                <a href="{{ route('reports.tax-summary') }}"
-                    class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('reports.tax-summary') ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white' }}">
-                    Tax Summary
-                </a>
-            </div>
-        </div>
+        <!-- Reports -->
+        <p class="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Reports</p>
+        <a href="{{ route('reports.time-by-client') }}"
+            class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('reports.time-by-client') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                </path>
+            </svg>
+            Time by Client
+        </a>
+        <a href="{{ route('reports.time-by-staff') }}"
+            class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('reports.time-by-staff') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                </path>
+            </svg>
+            Time by Staff
+        </a>
+        <a href="{{ route('reports.time-by-project') }}"
+            class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('reports.time-by-project') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                </path>
+            </svg>
+            Time by Project
+        </a>
+        <a href="{{ route('projects.index') }}"
+            class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('projects.profitability') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                </path>
+            </svg>
+            Project Profitability
+        </a>
+
+        <div class="border-t border-slate-700 my-2"></div>
+        <p class="px-3 py-1 text-xs font-semibold text-slate-500 uppercase">IFRS Reports</p>
+        <a href="{{ route('reports.account-statement') }}"
+            class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('reports.account-statement') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                </path>
+            </svg>
+            Account Statement
+        </a>
+        <a href="{{ route('reports.account-schedule') }}"
+            class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('reports.account-schedule') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                </path>
+            </svg>
+            Account Schedule
+        </a>
+        <a href="{{ route('reports.tax-summary') }}"
+            class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('reports.tax-summary') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                </path>
+            </svg>
+            Tax Summary
+        </a>
     </nav>
 </aside>
 

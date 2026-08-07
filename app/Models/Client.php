@@ -40,6 +40,7 @@ class Client extends Model
         // Additional
         'abn',
         'notes',
+        'logo',
     ];
 
     protected $casts = [
@@ -145,5 +146,16 @@ class Client extends Model
         return $this->creditNotes()
             ->where('remaining_amount', '>', 0)
             ->sum('remaining_amount');
+    }
+
+    /**
+     * Get the logo URL
+     */
+    public function getLogoUrlAttribute(): ?string
+    {
+        if ($this->logo && file_exists(public_path('storage/' . $this->logo))) {
+            return asset('storage/' . $this->logo);
+        }
+        return null;
     }
 }

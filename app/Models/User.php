@@ -14,7 +14,7 @@ use Illuminate\Notifications\Notifiable;
 use IFRS\Models\Entity;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['name', 'email', 'password', 'salary', 'charge_out_rate', 'position', 'phone'])]
+#[Fillable(['name', 'email', 'password', 'salary', 'charge_out_rate', 'position', 'phone', 'profile_photo'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -28,6 +28,30 @@ class User extends Authenticatable
             'salary' => 'decimal:2',
             'charge_out_rate' => 'decimal:2',
         ];
+    }
+
+    /**
+     * Get the profile photo URL
+     */
+    public function getProfilePhotoUrlAttribute(): ?string
+    {
+        if ($this->profile_photo && file_exists(public_path('storage/' . $this->profile_photo))) {
+            return asset('storage/' . $this->profile_photo);
+        }
+        return null;
+    }
+
+    /**
+     * Get initials for avatar fallback
+     */
+    public function getInitialsAttribute(): string
+    {
+        $names = explode(' ', $this->name);
+        $initials = '';
+        foreach (array_slice($names, 0, 2) as $name) {
+            $initials .= strtoupper(substr($name, 0, 1));
+        }
+        return $initials ?: strtoupper(substr($this->name, 0, 2));
     }
 
     public function entity(): BelongsTo
