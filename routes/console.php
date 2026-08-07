@@ -32,3 +32,9 @@ Schedule::command('invoices:mark-overdue')
     ->dailyAt('07:00')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/invoices-overdue.log'));
+
+// Schedule overdue payment reminders to run daily at 8 AM
+Schedule::command('notifications:overdue-reminders')
+    ->dailyAt('08:00')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/overdue-reminders.log'));
