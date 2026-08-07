@@ -101,7 +101,7 @@ class Invoice extends Model
 
         // Recalculate when items change (not via recalculateTotals to avoid recursion)
         static::saved(function ($invoice) {
-            if (!isset($invoice->preventRecalculation)) {
+            if (!isset($invoice->preventRecalculation) && $invoice->items()->exists()) {
                 $invoice->recalculateTotals();
             }
         });
@@ -185,6 +185,11 @@ class Invoice extends Model
     public function recalculateTotals(): void
     {
         $items = $this->items;
+
+        // Only recalculate if there are items to sum
+        if ($items->isEmpty()) {
+            return;
+        }
 
         // InvoiceItem.total includes tax (calculated in calculateTotals)
         // So we use sum of totals directly, not adding tax again

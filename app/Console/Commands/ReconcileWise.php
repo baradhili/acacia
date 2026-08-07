@@ -13,7 +13,10 @@ class ReconcileWise extends Command
     protected $signature = 'reconcile:wise 
                             {--days=30 : Number of days to fetch}
                             {--dry-run : Show what would be done without making changes}
-                            {--auto-match : Automatically match pending transactions}';
+                            {--auto-match : Automatically match pending transactions}
+                            {--auto-create-receipts : Auto-create cash receipts from unmatched Wise credits}
+                            {--auto-create-purchases : Auto-create expenses from unmatched Wise debits}
+                            {--category=other : Default expense category for auto-created purchases}';
 
     protected $description = 'Fetch transactions from Wise API and reconcile with IFRS ledger';
 
@@ -29,7 +32,10 @@ class ReconcileWise extends Command
         $dryRun = $this->option('dry-run');
         $days = (int) $this->option('days');
         $autoMatch = $this->option('auto-match');
-	
+        $autoCreateReceipts = $this->option('auto-create-receipts');
+        $autoCreatePurchases = $this->option('auto-create-purchases');
+        $category = $this->option('category');
+
         $this->info('Starting Wise reconciliation...');
 
         if ($dryRun) {
@@ -75,6 +81,7 @@ class ReconcileWise extends Command
                         'transaction_date' => Carbon::parse($wiseTxn['date'] ?? now()),
                         'created_at_source' => Carbon::parse($wiseTxn['created'] ?? now()),
                         'merchant_name' => $wiseTxn['merchantName'] ?? null,
+                        'payer_name' => $wiseTxn['payerName'] ?? null,
                         'status' => BankTransaction::STATUS_PENDING,
                     ]);
                 }
@@ -91,6 +98,36 @@ class ReconcileWise extends Command
             $this->info("Auto-matched: {$matchResults['matched']} transactions");
             if ($matchResults['unmatched'] > 0) {
                 $this->warn("Unmatched: {$matchResults['unmatched']} transactions");
+            }
+        }
+
+        // Auto-create cash receipts from unmatched credits
+        if ($autoCreateReceipts && !$dryRun) {
+            $this->info('Creating cash receipts from unmatched Wise credits...');
+            $receiptResults = $this->reconciliationService->autoCreateCashReceipts();
+            $this->info("Cash receipts created: {$receiptResults['count']}");
+            if ($receiptResults['skipped'] > 0) {
+                $this->warn("Skipped (no matching client): {$receiptResults['skipped']}");
+            }
+            if (!empty($receiptResults['errors'])) {
+                foreach ($receiptResults['errors'] as $error) {
+                    $this->error("Error: {$error['transaction_id']} - {$error['error']}");
+                }
+            }
+        }
+
+        // Auto-create expenses from unmatched debits
+        if ($autoCreatePurchases && !$dryRun) {
+            $this->info('Creating expenses from unmatched Wise debits...');
+            $expenseResults = $this->reconciliationService->autoCreatePurchases($category, true);
+            $this->info("Expenses created: {$expenseResults['count']}");
+            if ($expenseResults['skipped'] > 0) {
+                $this->warn("Skipped (no matching supplier): {$expenseResults['skipped']}");
+            }
+            if (!empty($expenseResults['errors'])) {
+                foreach ($expenseResults['errors'] as $error) {
+                    $this->error("Error: {$error['transaction_id']} - {$error['error']}");
+                }
             }
         }
 

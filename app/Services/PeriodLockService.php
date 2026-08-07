@@ -1,0 +1,172 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\FiscalPeriod;
+use App\Models\Invoice;
+use App\Models\Payment;
+use Carbon\Carbon;
+use Illuminate\Support\Collection;
+
+class PeriodLockService
+{
+    /**
+     * Check if a date is within a locked period
+     */
+    public function isDateLocked(Carbon $date): bool
+    {
+        $period = FiscalPeriod::containingDate($date)->first();
+
+        return $period && $period->isLocked();
+    }
+
+    /**
+     * Get the locked period for a date (if any)
+     */
+    public function getLockedPeriodForDate(Carbon $date): ?FiscalPeriod
+    {
+        return FiscalPeriod::containingDate($date)
+            ->locked()
+            ->first();
+    }
+
+    /**
+     * Lock all periods before a given date
+     */
+    public function lockPeriodsBeforeDate(Carbon $date, ?string $reason = null): array
+    {
+        $periods = FiscalPeriod::beforeDate($date)->unlocked()->get();
+        
+        $locked = 0;
+        $alreadyLocked = 0;
+
+        foreach ($periods as $period) {
+            if ($period->isLocked()) {
+                $alreadyLocked++;
+            } else {
+                $period->lock($reason);
+                $locked++;
+            }
+        }
+
+        return [
+            'locked' => $locked,
+            'already_locked' => $alreadyLocked,
+            'total_periods' => $periods->count(),
+        ];
+    }
+
+    /**
+     * Lock a specific period
+     */
+    public function lockPeriod(FiscalPeriod $period, ?string $reason = null): bool
+    {
+        return $period->lock($reason);
+    }
+
+    /**
+     * Unlock a specific period
+     */
+    public function unlockPeriod(FiscalPeriod $period): bool
+    {
+        return $period->unlock();
+    }
+
+    /**
+     * Validate that transactions can be created/modified in a period
+     */
+    public function validateTransactionDate(Carbon $date): array
+    {
+        $period = FiscalPeriod::containingDate($date)->first();
+
+        if (!$period) {
+            return [
+                'valid' => true,
+                'message' => 'No period defined for this date',
+            ];
+        }
+
+        if ($period->isLocked()) {
+            return [
+                'valid' => false,
+                'message' => "Period '{$period->name}' is locked. Contact an administrator to unlock.",
+                'period' => $period,
+                'locked_by' => $period->lockedBy?->name,
+                'locked_at' => $period->locked_at,
+                'lock_reason' => $period->lock_reason,
+            ];
+        }
+
+        return [
+            'valid' => true,
+            'message' => 'Transaction date is valid',
+            'period' => $period,
+        ];
+    }
+
+    /**
+     * Get all locked periods
+     */
+    public function getLockedPeriods(): Collection
+    {
+        return FiscalPeriod::locked()
+            ->orderBy('start_date', 'desc')
+            ->get();
+    }
+
+    /**
+     * Get all unlocked periods
+     */
+    public function getUnlockedPeriods(): Collection
+    {
+        return FiscalPeriod::unlocked()
+            ->orderBy('start_date', 'desc')
+            ->get();
+    }
+
+    /**
+     * Get period status summary
+     */
+    public function getPeriodStatus(): array
+    {
+        $periods = FiscalPeriod::all();
+
+        return [
+            'total' => $periods->count(),
+            'locked' => $periods->where('is_locked', true)->count(),
+            'unlocked' => $periods->where('is_locked', false)->count(),
+            'locked_periods' => $this->getLockedPeriods()->map(fn($p) => [
+                'name' => $p->name,
+                'locked_at' => $p->locked_at?->toIso8601String(),
+                'locked_by' => $p->lockedBy?->name,
+            ]),
+        ];
+    }
+
+    /**
+     * Create periods for a fiscal year
+     */
+    public function createPeriodsForYear(int $year, string $type = FiscalPeriod::TYPE_MONTHLY): array
+    {
+        return match ($type) {
+            FiscalPeriod::TYPE_MONTHLY => FiscalPeriod::createMonthlyPeriodsForYear($year),
+            FiscalPeriod::TYPE_QUARTERLY => FiscalPeriod::createQuarterlyPeriodsForYear($year),
+            FiscalPeriod::TYPE_ANNUAL => [FiscalPeriod::createAnnualPeriodForYear($year)],
+            default => throw new \InvalidArgumentException("Invalid period type: {$type}"),
+        };
+    }
+
+    /**
+     * Check if there are any transactions in a period
+     */
+    public function hasTransactionsInPeriod(FiscalPeriod $period): bool
+    {
+        $startDate = $period->start_date;
+        $endDate = $period->end_date;
+
+        $hasInvoices = Invoice::whereBetween('issue_date', [$startDate, $endDate])->exists();
+        $hasPayments = Payment::whereBetween('payment_date', [$startDate, $endDate])->exists();
+
+        return $hasInvoices || $hasPayments;
+    }
+}
