@@ -2,8 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Client;
 use App\Models\Expense;
+use App\Models\Project;
+use App\Models\Supplier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -15,7 +16,7 @@ class ExpenseController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Expense::with(['supplier', 'paidBy']);
+        $query = Expense::with(['supplier', 'project', 'paidBy']);
 
         // Filter by status
         if ($request->has('status') && $request->status) {
@@ -41,7 +42,7 @@ class ExpenseController extends Controller
         }
 
         $expenses = $query->latest()->paginate(15);
-        $suppliers = Client::orderBy('name')->pluck('name', 'id');
+        $suppliers = Supplier::orderBy('name')->pluck('name', 'id');
         $categories = Expense::CATEGORIES;
         $statuses = [
             'draft' => 'Draft',
@@ -62,9 +63,9 @@ class ExpenseController extends Controller
     /**
      * Show the form for creating a new resource.
      */
-    public function create()
+    public function create(Request $request)
     {
-        $suppliers = Client::orderBy('name')->pluck('name', 'id');
+        $suppliers = Supplier::orderBy('name')->pluck('name', 'id');
         $categories = Expense::CATEGORIES;
         $paymentMethods = [
             'bank_transfer' => 'Bank Transfer',
@@ -73,11 +74,21 @@ class ExpenseController extends Controller
             'cheque' => 'Cheque',
             'other' => 'Other',
         ];
+        
+        // Get projects for optional linking
+        $projects = Project::where('status', Project::STATUS_ACTIVE)
+            ->orderBy('name')
+            ->pluck('name', 'id');
+        
+        // Pre-select project if provided via query string
+        $selectedProject = $request->get('project_id');
 
         return view('expenses.create', compact(
             'suppliers',
             'categories',
-            'paymentMethods'
+            'paymentMethods',
+            'projects',
+            'selectedProject'
         ));
     }
 
@@ -87,7 +98,8 @@ class ExpenseController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'supplier_id' => 'required|exists:clients,id',
+            'supplier_id' => 'required|exists:suppliers,id',
+            'project_id' => 'nullable|exists:projects,id',
             'category' => 'required|string|in:' . implode(',', Expense::CATEGORIES),
             'amount' => 'required|numeric|min:0.01',
             'tax_amount' => 'nullable|numeric|min:0',
@@ -103,6 +115,7 @@ class ExpenseController extends Controller
 
         $expenseData = [
             'supplier_id' => $validated['supplier_id'],
+            'project_id' => $validated['project_id'] ?? null,
             'category' => $validated['category'],
             'amount' => $validated['amount'],
             'tax_amount' => $validated['tax_amount'] ?? 0,
@@ -137,7 +150,7 @@ class ExpenseController extends Controller
      */
     public function show(Expense $expense)
     {
-        $expense->load(['supplier', 'paidBy', 'documents']);
+        $expense->load(['supplier', 'project', 'paidBy', 'documents']);
 
         return view('expenses.show', compact('expense'));
     }
@@ -153,7 +166,7 @@ class ExpenseController extends Controller
                 ->with('error', 'This expense cannot be edited in its current status.');
         }
 
-        $suppliers = Client::orderBy('name')->pluck('name', 'id');
+        $suppliers = Supplier::orderBy('name')->pluck('name', 'id');
         $categories = Expense::CATEGORIES;
         $paymentMethods = [
             'bank_transfer' => 'Bank Transfer',
@@ -162,12 +175,16 @@ class ExpenseController extends Controller
             'cheque' => 'Cheque',
             'other' => 'Other',
         ];
+        
+        // Get projects for optional linking
+        $projects = Project::orderBy('name')->pluck('name', 'id');
 
         return view('expenses.edit', compact(
             'expense',
             'suppliers',
             'categories',
-            'paymentMethods'
+            'paymentMethods',
+            'projects'
         ));
     }
 
@@ -183,7 +200,8 @@ class ExpenseController extends Controller
         }
 
         $validated = $request->validate([
-            'supplier_id' => 'required|exists:clients,id',
+            'supplier_id' => 'required|exists:suppliers,id',
+            'project_id' => 'nullable|exists:projects,id',
             'category' => 'required|string|in:' . implode(',', Expense::CATEGORIES),
             'amount' => 'required|numeric|min:0.01',
             'tax_amount' => 'nullable|numeric|min:0',
@@ -199,6 +217,7 @@ class ExpenseController extends Controller
 
         $expenseData = [
             'supplier_id' => $validated['supplier_id'],
+            'project_id' => $validated['project_id'] ?? null,
             'category' => $validated['category'],
             'amount' => $validated['amount'],
             'tax_amount' => $validated['tax_amount'] ?? 0,

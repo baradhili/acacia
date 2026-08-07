@@ -32,6 +32,24 @@
                             @enderror
                         </div>
 
+                        <!-- Project (Optional) -->
+                        <div>
+                            <label for="project_id" class="block text-sm font-medium text-gray-700">Project (Optional)</label>
+                            <select name="project_id" id="project_id"
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                <option value="">-- No Project --</option>
+                                @foreach($projects as $id => $name)
+                                    <option value="{{ $id }}" {{ old('project_id', $expense->project_id) == $id ? 'selected' : '' }}>
+                                        {{ $name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            <p class="mt-1 text-xs text-gray-500">Link this expense to a project for tracking</p>
+                            @error('project_id')
+                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+
                         <!-- Category -->
                         <div>
                             <label for="category" class="block text-sm font-medium text-gray-700">Category *</label>

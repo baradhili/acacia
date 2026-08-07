@@ -154,6 +154,16 @@
                             <dt class="text-sm font-medium text-gray-500">Supplier</dt>
                             <dd class="mt-1 text-sm text-gray-900">{{ $expense->supplier->name ?? 'N/A' }}</dd>
                         </div>
+                        @if($expense->project)
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Project</dt>
+                            <dd class="mt-1 text-sm">
+                                <a href="{{ route('projects.show', $expense->project) }}" class="text-indigo-600 hover:text-indigo-900">
+                                    {{ $expense->project->name }}
+                                </a>
+                            </dd>
+                        </div>
+                        @endif
                         <div>
                             <dt class="text-sm font-medium text-gray-500">Category</dt>
                             <dd class="mt-1 text-sm text-gray-900">{{ ucwords(str_replace('_', ' ', $expense->category)) }}</dd>

@@ -43,6 +43,7 @@ class Expense extends Model
 
     protected $fillable = [
         'supplier_id',
+        'project_id',
         'category',
         'amount',
         'tax_amount',
@@ -71,11 +72,19 @@ class Expense extends Model
     ];
 
     /**
-     * Get the supplier (contact) for this expense
+     * Get the supplier for this expense
      */
     public function supplier(): BelongsTo
     {
-        return $this->belongsTo(Client::class, 'supplier_id');
+        return $this->belongsTo(Supplier::class, 'supplier_id');
+    }
+
+    /**
+     * Get the project for this expense (optional)
+     */
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class, 'project_id');
     }
 
     /**
