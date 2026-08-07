@@ -4,6 +4,7 @@ namespace Tests\Feature\Reconciliation;
 
 use App\Models\BankTransaction;
 use App\Models\Client;
+use App\Models\Expense;
 use App\Models\Payment;
 use App\Services\ReconciliationService;
 use Carbon\Carbon;
@@ -253,5 +254,179 @@ class AutoCreateCashReceiptTest extends TestCase
 
         $this->assertStringContainsString('WISE-12345', $payment->notes);
         $this->assertStringContainsString('INV-2025-0001', $payment->reference);
+    }
+
+    // ========================
+    // Auto-Create Purchase Tests (Task 2)
+    // ========================
+
+    public function test_creates_expense_from_unmatched_wise_debit(): void
+    {
+        $supplier = $this->createClient(['name' => 'AWS Cloud']);
+
+        $bankTxn = $this->createBankTransaction([
+            'type' => BankTransaction::TYPE_DEBIT,
+            'merchant_name' => 'AWS Cloud',
+            'amount' => 250.00,
+        ]);
+
+        $expense = $this->service->createPurchaseFromBankTransaction(
+            $bankTxn,
+            $supplier->id,
+            'software'
+        );
+
+        $this->assertNotNull($expense);
+        $this->assertInstanceOf(Expense::class, $expense);
+        $this->assertEquals($supplier->id, $expense->supplier_id);
+        $this->assertEquals(250.00, $expense->total);
+        $this->assertEquals('software', $expense->category);
+
+        // Verify bank transaction is marked as matched
+        $bankTxn->refresh();
+        $this->assertEquals(BankTransaction::STATUS_MATCHED, $bankTxn->status);
+        $this->assertEquals($expense->id, $bankTxn->matched_transaction_id);
+    }
+
+    public function test_cannot_create_expense_from_credit_transaction(): void
+    {
+        $supplier = $this->createClient();
+
+        $bankTxn = $this->createBankTransaction([
+            'type' => BankTransaction::TYPE_CREDIT,
+        ]);
+
+        $expense = $this->service->createPurchaseFromBankTransaction(
+            $bankTxn,
+            $supplier->id
+        );
+
+        $this->assertNull($expense);
+    }
+
+    public function test_returns_null_for_invalid_supplier(): void
+    {
+        $bankTxn = $this->createBankTransaction([
+            'type' => BankTransaction::TYPE_DEBIT,
+        ]);
+
+        $expense = $this->service->createPurchaseFromBankTransaction(
+            $bankTxn,
+            99999 // Non-existent supplier
+        );
+
+        $this->assertNull($expense);
+    }
+
+    public function test_marks_expense_as_paid_when_requested(): void
+    {
+        $supplier = $this->createClient();
+
+        $bankTxn = $this->createBankTransaction([
+            'type' => BankTransaction::TYPE_DEBIT,
+            'transaction_date' => Carbon::parse('2025-07-15'),
+        ]);
+
+        $expense = $this->service->createPurchaseFromBankTransaction(
+            $bankTxn,
+            $supplier->id,
+            'software',
+            null,
+            true // Mark as paid
+        );
+
+        $this->assertNotNull($expense);
+        $this->assertEquals(Expense::STATUS_PAID, $expense->status);
+        $this->assertNotNull($expense->ifrs_transaction_id);
+    }
+
+    public function test_does_not_mark_expense_as_paid_when_disabled(): void
+    {
+        $supplier = $this->createClient();
+
+        $bankTxn = $this->createBankTransaction([
+            'type' => BankTransaction::TYPE_DEBIT,
+        ]);
+
+        $expense = $this->service->createPurchaseFromBankTransaction(
+            $bankTxn,
+            $supplier->id,
+            'software',
+            null,
+            false // Don't mark as paid
+        );
+
+        $this->assertNotNull($expense);
+        $this->assertEquals(Expense::STATUS_DRAFT, $expense->status);
+    }
+
+    public function test_auto_create_purchases_for_all_unmatched_debits(): void
+    {
+        $supplier1 = $this->createClient(['name' => 'Google Cloud']);
+        $supplier2 = $this->createClient(['name' => 'AWS']);
+
+        // Create unmatched debit transactions
+        $txn1 = $this->createBankTransaction([
+            'type' => BankTransaction::TYPE_DEBIT,
+            'merchant_name' => 'Google Cloud',
+            'source_id' => 'WISE-DEBIT-001',
+            'amount' => 100.00,
+        ]);
+        $txn2 = $this->createBankTransaction([
+            'type' => BankTransaction::TYPE_DEBIT,
+            'merchant_name' => 'AWS',
+            'source_id' => 'WISE-DEBIT-002',
+            'amount' => 200.00,
+        ]);
+        // This one won't have a matching supplier
+        $txn3 = $this->createBankTransaction([
+            'type' => BankTransaction::TYPE_DEBIT,
+            'merchant_name' => 'Unknown Merchant',
+            'source_id' => 'WISE-DEBIT-003',
+            'amount' => 50.00,
+        ]);
+
+        $results = $this->service->autoCreatePurchases();
+
+        $this->assertEquals(2, $results['count']);
+        $this->assertEquals(1, $results['skipped']);
+        $this->assertCount(2, $results['created']);
+
+        // Verify all expenses were created
+        $this->assertDatabaseHas('expenses', [
+            'supplier_id' => $supplier1->id,
+            'total' => 100.00,
+        ]);
+        $this->assertDatabaseHas('expenses', [
+            'supplier_id' => $supplier2->id,
+            'total' => 200.00,
+        ]);
+    }
+
+    public function test_finds_supplier_by_merchant_name(): void
+    {
+        $supplier = $this->createClient(['name' => 'Microsoft Corporation']);
+
+        $bankTxn = $this->createBankTransaction([
+            'type' => BankTransaction::TYPE_DEBIT,
+            'merchant_name' => 'Microsoft Corporation',
+        ]);
+
+        $results = $this->service->autoCreatePurchases();
+
+        $this->assertEquals(1, $results['count']);
+        $this->assertDatabaseHas('expenses', ['supplier_id' => $supplier->id]);
+    }
+
+    public function test_suggests_expense_category_based_on_merchant(): void
+    {
+        $this->assertEquals('software', $this->service->suggestExpenseCategory('AWS Cloud'));
+        $this->assertEquals('software', $this->service->suggestExpenseCategory('Google Workspace'));
+        $this->assertEquals('software', $this->service->suggestExpenseCategory('Microsoft Azure'));
+        $this->assertEquals('travel', $this->service->suggestExpenseCategory('Qantas Airlines'));
+        $this->assertEquals('travel', $this->service->suggestExpenseCategory('Uber Trip'));
+        $this->assertEquals('meals', $this->service->suggestExpenseCategory('Starbucks Coffee'));
+        $this->assertEquals('office_supplies', $this->service->suggestExpenseCategory('Officeworks'));
+        $this->assertEquals('other', $this->service->suggestExpenseCategory('Random Merchant'));
     }
 }

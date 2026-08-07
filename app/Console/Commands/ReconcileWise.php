@@ -14,7 +14,9 @@ class ReconcileWise extends Command
                             {--days=30 : Number of days to fetch}
                             {--dry-run : Show what would be done without making changes}
                             {--auto-match : Automatically match pending transactions}
-                            {--auto-create-receipts : Auto-create cash receipts from unmatched Wise credits}';
+                            {--auto-create-receipts : Auto-create cash receipts from unmatched Wise credits}
+                            {--auto-create-purchases : Auto-create expenses from unmatched Wise debits}
+                            {--category=other : Default expense category for auto-created purchases}';
 
     protected $description = 'Fetch transactions from Wise API and reconcile with IFRS ledger';
 
@@ -31,6 +33,8 @@ class ReconcileWise extends Command
         $days = (int) $this->option('days');
         $autoMatch = $this->option('auto-match');
         $autoCreateReceipts = $this->option('auto-create-receipts');
+        $autoCreatePurchases = $this->option('auto-create-purchases');
+        $category = $this->option('category');
 
         $this->info('Starting Wise reconciliation...');
 
@@ -107,6 +111,21 @@ class ReconcileWise extends Command
             }
             if (!empty($receiptResults['errors'])) {
                 foreach ($receiptResults['errors'] as $error) {
+                    $this->error("Error: {$error['transaction_id']} - {$error['error']}");
+                }
+            }
+        }
+
+        // Auto-create expenses from unmatched debits
+        if ($autoCreatePurchases && !$dryRun) {
+            $this->info('Creating expenses from unmatched Wise debits...');
+            $expenseResults = $this->reconciliationService->autoCreatePurchases($category, true);
+            $this->info("Expenses created: {$expenseResults['count']}");
+            if ($expenseResults['skipped'] > 0) {
+                $this->warn("Skipped (no matching supplier): {$expenseResults['skipped']}");
+            }
+            if (!empty($expenseResults['errors'])) {
+                foreach ($expenseResults['errors'] as $error) {
                     $this->error("Error: {$error['transaction_id']} - {$error['error']}");
                 }
             }

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\BankTransaction;
 use App\Models\Client;
+use App\Models\Expense;
 use App\Models\Payment;
 use App\Models\User;
 use Carbon\Carbon;
@@ -450,5 +451,222 @@ class ReconciliationService
         }
 
         return null;
+    }
+
+    /**
+     * Auto-create a purchase/expense from an unmatched Wise debit
+     * 
+     * @param BankTransaction $bankTransaction The unmatched debit transaction
+     * @param int $supplierId The supplier to associate with the expense
+     * @param string $category The expense category
+     * @param int|null $paidByUserId The user recording the expense
+     * @param bool $markAsPaid Whether to mark the expense as paid immediately
+     * @return Expense|null The created expense or null on failure
+     */
+    public function createPurchaseFromBankTransaction(
+        BankTransaction $bankTransaction,
+        int $supplierId,
+        string $category = 'other',
+        ?int $paidByUserId = null,
+        bool $markAsPaid = true
+    ): ?Expense {
+        // Validate this is a debit transaction
+        if ($bankTransaction->type !== BankTransaction::TYPE_DEBIT) {
+            Log::warning("Cannot create purchase from credit transaction", [
+                'bank_transaction_id' => $bankTransaction->id,
+                'type' => $bankTransaction->type,
+            ]);
+            return null;
+        }
+
+        // Validate supplier exists
+        $supplier = Client::find($supplierId);
+        if (!$supplier) {
+            Log::error("Supplier not found for purchase creation", [
+                'supplier_id' => $supplierId,
+                'bank_transaction_id' => $bankTransaction->id,
+            ]);
+            return null;
+        }
+
+        // Validate category
+        $validCategories = Expense::CATEGORIES;
+        if (!in_array($category, $validCategories)) {
+            $category = 'other';
+        }
+
+        try {
+            // Create the expense
+            $expense = Expense::create([
+                'supplier_id' => $supplierId,
+                'category' => $category,
+                'amount' => $bankTransaction->amount,
+                'tax_amount' => 0, // GST not included in bank amount for simplicity
+                'total' => $bankTransaction->amount,
+                'expense_date' => $bankTransaction->transaction_date,
+                'due_date' => $bankTransaction->transaction_date,
+                'status' => Expense::STATUS_DRAFT,
+                'description' => "Auto-created from Wise transaction {$bankTransaction->source_id}. Description: {$bankTransaction->description}",
+                'reference' => $bankTransaction->reference,
+                'notes' => "Imported from Wise - {$bankTransaction->merchant_name}",
+                'paid_by_user_id' => $paidByUserId,
+                'paid_date' => $markAsPaid ? $bankTransaction->transaction_date : null,
+                'payment_method' => Payment::METHOD_BANK_TRANSFER,
+            ]);
+
+            // Mark bank transaction as matched
+            $bankTransaction->markAsMatched($expense->id, 'expense');
+
+            Log::info("Purchase/Expense created from unmatched Wise debit", [
+                'expense_id' => $expense->id,
+                'supplier_id' => $supplierId,
+                'amount' => $expense->total,
+                'bank_transaction_id' => $bankTransaction->id,
+            ]);
+
+            // Mark as paid if requested (creates IFRS journal entry)
+            if ($markAsPaid) {
+                $expense->markAsPaid(Payment::METHOD_BANK_TRANSFER, $paidByUserId);
+            }
+
+            return $expense;
+
+        } catch (\Exception $e) {
+            Log::error("Failed to create purchase from Wise transaction", [
+                'bank_transaction_id' => $bankTransaction->id,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Auto-create purchases/expenses for all unmatched Wise debits
+     * 
+     * @param string|null $category Default category to use
+     * @param bool $markAsPaid Whether to mark expenses as paid
+     * @return array Results with created expenses and errors
+     */
+    public function autoCreatePurchases(string $category = 'other', bool $markAsPaid = true): array
+    {
+        $transactions = BankTransaction::pending()
+            ->fromSource(BankTransaction::SOURCE_WISE)
+            ->where('type', BankTransaction::TYPE_DEBIT)
+            ->get();
+
+        $created = [];
+        $skipped = 0;
+        $errors = [];
+
+        foreach ($transactions as $transaction) {
+            // Try to find a matching supplier by merchant name
+            $matchedSupplierId = $this->findSupplierForTransaction($transaction);
+
+            if (!$matchedSupplierId) {
+                $skipped++;
+                $errors[] = [
+                    'transaction_id' => $transaction->id,
+                    'reference' => $transaction->reference,
+                    'error' => 'No matching supplier found',
+                ];
+                continue;
+            }
+
+            $expense = $this->createPurchaseFromBankTransaction(
+                $transaction,
+                $matchedSupplierId,
+                $category,
+                null,
+                $markAsPaid
+            );
+
+            if ($expense) {
+                $created[] = $expense;
+            } else {
+                $errors[] = [
+                    'transaction_id' => $transaction->id,
+                    'error' => 'Failed to create expense',
+                ];
+            }
+        }
+
+        return [
+            'created' => $created,
+            'count' => count($created),
+            'skipped' => $skipped,
+            'errors' => $errors,
+        ];
+    }
+
+    /**
+     * Find a supplier for a bank transaction based on merchant name
+     * 
+     * @param BankTransaction $transaction
+     * @return int|null Supplier ID or null
+     */
+    protected function findSupplierForTransaction(BankTransaction $transaction): ?int
+    {
+        // Try to match by merchant name
+        if (!empty($transaction->merchant_name)) {
+            $supplier = Client::where('name', 'like', '%' . $transaction->merchant_name . '%')->first();
+            if ($supplier) {
+                return $supplier->id;
+            }
+        }
+
+        // Try to match by payee name
+        if (!empty($transaction->payee_name)) {
+            $supplier = Client::where('name', 'like', '%' . $transaction->payee_name . '%')->first();
+            if ($supplier) {
+                return $supplier->id;
+            }
+        }
+
+        // Try to match by reference
+        if (!empty($transaction->reference)) {
+            $supplier = Client::where('name', 'like', '%' . $transaction->reference . '%')->first();
+            if ($supplier) {
+                return $supplier->id;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Get expense category suggestions based on merchant name
+     * 
+     * @param string $merchantName
+     * @return string Suggested category
+     */
+    public function suggestExpenseCategory(string $merchantName): string
+    {
+        $merchantLower = strtolower($merchantName);
+        
+        $categoryMap = [
+            'aws' => 'software',
+            'google' => 'software',
+            'microsoft' => 'software',
+            'slack' => 'software',
+            'zoom' => 'software',
+            'xero' => 'software',
+            'myob' => 'software',
+            'airline' => 'travel',
+            'hotel' => 'travel',
+            'uber' => 'travel',
+            'didi' => 'travel',
+            'restaurant' => 'meals',
+            'cafe' => 'meals',
+            'office' => 'office_supplies',
+            'staples' => 'office_supplies',
+        ];
+
+        foreach ($categoryMap as $keyword => $category) {
+            if (str_contains($merchantLower, $keyword)) {
+                return $category;
+            }
+        }
+
+        return 'other';
     }
 }
