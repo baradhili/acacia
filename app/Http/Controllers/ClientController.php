@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Client;
 use App\Models\Document;
+use App\Models\PurchaseOrder;
 use Illuminate\Http\Request;
 use IFRS\Models\Entity;
 
@@ -117,5 +118,23 @@ class ClientController extends Controller
     {
         $client->delete();
         return redirect()->route('clients.index')->with('success', 'Client deleted successfully.');
+    }
+
+    /**
+     * Get purchase orders for a client (for AJAX calls)
+     */
+    public function purchaseOrders(Request $request, Client $client)
+    {
+        $query = PurchaseOrder::where('client_id', $client->id)
+            ->whereIn('status', [PurchaseOrder::STATUS_OPEN, PurchaseOrder::STATUS_PARTIALLY_USED]);
+        
+        // If filtering for available POs (not linked to any project)
+        if ($request->boolean('available')) {
+            $query->whereNull('project_id');
+        }
+        
+        $purchaseOrders = $query->orderBy('po_number')->get();
+        
+        return response()->json($purchaseOrders);
     }
 }

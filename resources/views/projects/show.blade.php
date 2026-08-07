@@ -16,11 +16,21 @@
 
     <!-- Project Info -->
     <div class="bg-white rounded-lg shadow p-6 mb-6">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div>
                 <h3 class="text-sm font-medium text-gray-500">Client</h3>
                 <p class="mt-1 text-gray-900">{{ $project->client->name ?? '-' }}</p>
             </div>
+            @if($project->purchaseOrder)
+            <div>
+                <h3 class="text-sm font-medium text-gray-500">Purchase Order</h3>
+                <p class="mt-1 text-gray-900">
+                    <a href="{{ route('purchase-orders.show', $project->purchaseOrder) }}" class="text-indigo-600 hover:text-indigo-800">
+                        {{ $project->purchaseOrder->po_number }}
+                    </a>
+                </p>
+            </div>
+            @endif
             <div>
                 <h3 class="text-sm font-medium text-gray-500">Status</h3>
                 @php

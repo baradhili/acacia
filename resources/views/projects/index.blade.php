@@ -15,6 +15,7 @@
                 <tr>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Client</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">PO</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Budget Hours</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Logged Hours</th>
@@ -31,6 +32,15 @@
                             </a>
                         </td>
                         <td class="px-6 py-4 text-gray-900">{{ $project->client->name ?? '-' }}</td>
+                        <td class="px-6 py-4 text-gray-900">
+                            @if($project->purchaseOrder)
+                                <a href="{{ route('purchase-orders.show', $project->purchaseOrder) }}" class="text-indigo-600 hover:text-indigo-800">
+                                    {{ $project->purchaseOrder->po_number }}
+                                </a>
+                            @else
+                                -
+                            @endif
+                        </td>
                         <td class="px-6 py-4">
                             @php
                                 $statusColors = [
@@ -60,7 +70,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="7" class="px-6 py-4 text-center text-gray-500">No projects found.</td>
+                        <td colspan="8" class="px-6 py-4 text-center text-gray-500">No projects found.</td>
                     </tr>
                 @endforelse
             </tbody>

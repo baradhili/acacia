@@ -27,6 +27,23 @@
                 </div>
 
                 <div>
+                    <label for="purchase_order_id" class="block text-sm font-medium text-gray-700">Purchase Order</label>
+                    <select name="purchase_order_id" id="purchase_order_id"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        <option value="">-- No Purchase Order --</option>
+                        @foreach($purchaseOrders as $po)
+                            <option value="{{ $po->id }}" {{ $project->purchase_order_id == $po->id ? 'selected' : '' }}>
+                                {{ $po->po_number }} - {{ $po->title }} (${{ number_format($po->remaining, 2) }} remaining)
+                            </option>
+                        @endforeach
+                    </select>
+                    <p class="mt-1 text-xs text-gray-500">Select a purchase order after choosing a client</p>
+                    @error('purchase_order_id')
+                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div>
                     <label for="name" class="block text-sm font-medium text-gray-700">Project Name *</label>
                     <input type="text" name="name" id="name" value="{{ old('name', $project->name) }}" required
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
@@ -170,6 +187,48 @@
                     e.target.closest('.staff-row').remove();
                 }
             });
+
+            // Load purchase orders when client changes
+            const clientSelect = document.getElementById('client_id');
+            const poSelect = document.getElementById('purchase_order_id');
+            const currentClientId = clientSelect.value;
+
+            if (clientSelect && poSelect) {
+                // Pre-populate purchase orders on page load if client is selected
+                if (currentClientId) {
+                    loadPurchaseOrders(currentClientId);
+                }
+
+                clientSelect.addEventListener('change', function() {
+                    const clientId = this.value;
+                    
+                    // Clear existing options
+                    poSelect.innerHTML = '<option value="">-- No Purchase Order --</option>';
+                    
+                    if (!clientId) return;
+                    
+                    loadPurchaseOrders(clientId);
+                });
+            }
+
+            function loadPurchaseOrders(clientId) {
+                fetch(`/clients/${clientId}/purchase-orders?available=1`, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(po => {
+                        const option = document.createElement('option');
+                        option.value = po.id;
+                        option.textContent = `${po.po_number} - ${po.title} ($${parseFloat(po.remaining).toFixed(2)} remaining)`;
+                        poSelect.appendChild(option);
+                    });
+                })
+                .catch(error => console.error('Error loading purchase orders:', error));
+            }
         });
     </script>
 

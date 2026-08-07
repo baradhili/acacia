@@ -49,6 +49,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/clients/{client}/logo', [LogoController::class, 'storeClient'])->name('clients.logo.store');
     Route::delete('/clients/{client}/logo', [LogoController::class, 'destroyClient'])->name('clients.logo.destroy');
 
+    // Client Purchase Orders (API)
+    Route::get('/clients/{client}/purchase-orders', [ClientController::class, 'purchaseOrders'])->name('clients.purchase-orders');
+
     // Suppliers (includes vendors via type filter)
     Route::resource('suppliers', SupplierController::class);
     

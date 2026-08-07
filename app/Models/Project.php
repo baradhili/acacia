@@ -13,6 +13,7 @@ class Project extends Model
 
     protected $fillable = [
         'client_id',
+        'purchase_order_id',
         'name',
         'description',
         'budget_hours',
@@ -42,14 +43,19 @@ class Project extends Model
         return $this->belongsTo(Client::class);
     }
 
-    public function timeEntries(): HasMany
+    public function purchaseOrder(): BelongsTo
     {
-        return $this->hasMany(TimeEntry::class);
+        return $this->belongsTo(PurchaseOrder::class);
     }
 
     public function purchaseOrders(): HasMany
     {
         return $this->hasMany(PurchaseOrder::class);
+    }
+
+    public function timeEntries(): HasMany
+    {
+        return $this->hasMany(TimeEntry::class);
     }
 
     public function staffAssignments(): HasMany
