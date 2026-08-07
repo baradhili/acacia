@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('expenses', function (Blueprint $table) {
-            // Change supplier_id from referencing clients to referencing suppliers
+            // Ensure supplier_id exists and is nullable
             if (Schema::hasColumn('expenses', 'supplier_id')) {
                 $table->unsignedBigInteger('supplier_id')->nullable()->change();
             }
@@ -24,14 +24,11 @@ return new class extends Migration
             }
         });
         
-        // Update foreign key for supplier_id to point to suppliers table
+        // Add foreign key for supplier_id to point to suppliers table
         Schema::table('expenses', function (Blueprint $table) {
-            // Drop existing foreign key if it references clients
-            try {
-                $table->dropForeign(['supplier_id']);
-            } catch (\Exception $e) {
-                // Foreign key might not exist
-            }
+            // Drop existing foreign key if it exists
+            $table->dropForeign(['supplier_id']);
+            
             // Add new foreign key pointing to suppliers
             $table->foreign('supplier_id')
                 ->references('id')
