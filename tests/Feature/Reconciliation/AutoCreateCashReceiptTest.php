@@ -6,6 +6,7 @@ use App\Models\BankTransaction;
 use App\Models\Client;
 use App\Models\Expense;
 use App\Models\Payment;
+use App\Models\ReconciliationHistory;
 use App\Services\ReconciliationService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -620,5 +621,135 @@ class AutoCreateCashReceiptTest extends TestCase
         $result = $this->service->restoreIgnoredTransaction($bankTxn);
 
         $this->assertFalse($result);
+    }
+
+    // ========================
+    // Reconciliation History Tests (Task 5)
+    // ========================
+
+    public function test_ignore_creates_history_record(): void
+    {
+        $bankTxn = $this->createBankTransaction([
+            'status' => BankTransaction::STATUS_PENDING,
+        ]);
+
+        $this->service->ignoreTransaction($bankTxn, 'Personal expense');
+
+        $this->assertDatabaseHas('reconciliation_history', [
+            'bank_transaction_id' => $bankTxn->id,
+            'action' => ReconciliationHistory::ACTION_IGNORE,
+            'status' => ReconciliationHistory::STATUS_SUCCESS,
+        ]);
+    }
+
+    public function test_unlink_creates_history_record(): void
+    {
+        $bankTxn = $this->createBankTransaction([
+            'status' => BankTransaction::STATUS_MATCHED,
+            'matched_transaction_id' => 123,
+            'matched_transaction_type' => 'payment',
+        ]);
+
+        $this->service->unlinkTransaction($bankTxn, 'Wrong match');
+
+        $this->assertDatabaseHas('reconciliation_history', [
+            'bank_transaction_id' => $bankTxn->id,
+            'action' => ReconciliationHistory::ACTION_UNMATCH,
+            'status' => ReconciliationHistory::STATUS_SUCCESS,
+            'linked_transaction_id' => 123,
+            'linked_transaction_type' => 'payment',
+        ]);
+    }
+
+    public function test_restore_ignored_creates_history_record(): void
+    {
+        $bankTxn = $this->createBankTransaction([
+            'status' => BankTransaction::STATUS_IGNORED,
+        ]);
+
+        $this->service->restoreIgnoredTransaction($bankTxn);
+
+        $this->assertDatabaseHas('reconciliation_history', [
+            'bank_transaction_id' => $bankTxn->id,
+            'action' => ReconciliationHistory::ACTION_UNIGNORE,
+            'status' => ReconciliationHistory::STATUS_SUCCESS,
+        ]);
+    }
+
+    public function test_get_history_returns_records_for_transaction(): void
+    {
+        $bankTxn = $this->createBankTransaction([
+            'status' => BankTransaction::STATUS_PENDING,
+        ]);
+
+        // Create some history records
+        ReconciliationHistory::create([
+            'bank_transaction_id' => $bankTxn->id,
+            'action' => ReconciliationHistory::ACTION_AUTO_MATCH,
+            'status' => ReconciliationHistory::STATUS_FAILED,
+            'details' => 'No match found',
+        ]);
+        ReconciliationHistory::create([
+            'bank_transaction_id' => $bankTxn->id,
+            'action' => ReconciliationHistory::ACTION_IGNORE,
+            'status' => ReconciliationHistory::STATUS_SUCCESS,
+            'details' => 'Ignored',
+        ]);
+
+        $history = $this->service->getHistory($bankTxn);
+
+        $this->assertCount(2, $history);
+        $this->assertEquals(ReconciliationHistory::ACTION_IGNORE, $history->first()->action);
+    }
+
+    public function test_get_history_stats(): void
+    {
+        $bankTxn = $this->createBankTransaction();
+
+        ReconciliationHistory::create([
+            'bank_transaction_id' => $bankTxn->id,
+            'action' => ReconciliationHistory::ACTION_IGNORE,
+            'status' => ReconciliationHistory::STATUS_SUCCESS,
+        ]);
+        ReconciliationHistory::create([
+            'bank_transaction_id' => $bankTxn->id,
+            'action' => ReconciliationHistory::ACTION_AUTO_MATCH,
+            'status' => ReconciliationHistory::STATUS_FAILED,
+        ]);
+        ReconciliationHistory::create([
+            'bank_transaction_id' => $bankTxn->id,
+            'action' => ReconciliationHistory::ACTION_IGNORE,
+            'status' => ReconciliationHistory::STATUS_SUCCESS,
+        ]);
+
+        $stats = $this->service->getHistoryStats();
+
+        $this->assertEquals(3, $stats['total']);
+        $this->assertEquals(2, $stats['successful']);
+        $this->assertEquals(1, $stats['failed']);
+        $this->assertArrayHasKey('auto_match', $stats['by_action']);
+        $this->assertArrayHasKey('ignore', $stats['by_action']);
+    }
+
+    public function test_history_records_have_correct_linked_transaction(): void
+    {
+        $bankTxn = $this->createBankTransaction([
+            'status' => BankTransaction::STATUS_PENDING,
+        ]);
+
+        $this->service->manualOverrideLink(
+            $bankTxn,
+            'payment',
+            456,
+            'Manual link'
+        );
+
+        $history = ReconciliationHistory::where('bank_transaction_id', $bankTxn->id)
+            ->where('action', ReconciliationHistory::ACTION_MANUAL_MATCH)
+            ->first();
+
+        $this->assertNotNull($history);
+        $this->assertEquals(456, $history->linked_transaction_id);
+        $this->assertEquals('payment', $history->linked_transaction_type);
     }
 }

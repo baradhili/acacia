@@ -7,6 +7,7 @@ use App\Models\Client;
 use App\Models\Expense;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\ReconciliationHistory;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -24,6 +25,84 @@ class ReconciliationService
     private const DEFAULT_REVENUE_ACCOUNT_CODE = 4100; // Consulting Revenue
 
     /**
+     * Log a reconciliation action to history
+     */
+    protected function logHistory(
+        BankTransaction $bankTransaction,
+        string $action,
+        string $status,
+        ?int $linkedTransactionId = null,
+        ?string $linkedTransactionType = null,
+        ?string $details = null,
+        ?string $notes = null,
+        ?array $metadata = null
+    ): ReconciliationHistory {
+        return ReconciliationHistory::create([
+            'bank_transaction_id' => $bankTransaction->id,
+            'action' => $action,
+            'status' => $status,
+            'linked_transaction_id' => $linkedTransactionId,
+            'linked_transaction_type' => $linkedTransactionType,
+            'details' => $details,
+            'notes' => $notes,
+            'user_id' => auth()->id(),
+            'metadata' => $metadata,
+        ]);
+    }
+
+    /**
+     * Get reconciliation history for a transaction
+     */
+    public function getHistory(BankTransaction $bankTransaction): Collection
+    {
+        return ReconciliationHistory::forTransaction($bankTransaction->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+    }
+
+    /**
+     * Get reconciliation history with statistics
+     */
+    public function getHistoryStats(?Carbon $startDate = null, ?Carbon $endDate = null): array
+    {
+        $query = ReconciliationHistory::query();
+
+        if ($startDate) {
+            $query->where('created_at', '>=', $startDate);
+        }
+        if ($endDate) {
+            $query->where('created_at', '<=', $endDate);
+        }
+
+        $total = $query->count();
+        $successful = (clone $query)->where('status', ReconciliationHistory::STATUS_SUCCESS)->count();
+        $failed = (clone $query)->where('status', ReconciliationHistory::STATUS_FAILED)->count();
+
+        $byAction = (clone $query)
+            ->selectRaw('action, COUNT(*) as count')
+            ->groupBy('action')
+            ->pluck('count', 'action')
+            ->toArray();
+
+        $byUser = (clone $query)
+            ->whereNotNull('user_id')
+            ->selectRaw('user_id, COUNT(*) as count')
+            ->groupBy('user_id')
+            ->with('user:id,name,email')
+            ->get()
+            ->mapWithKeys(fn($item) => [$item->user?->name ?? 'Unknown' => $item->count])
+            ->toArray();
+
+        return [
+            'total' => $total,
+            'successful' => $successful,
+            'failed' => $failed,
+            'by_action' => $byAction,
+            'by_user' => $byUser,
+        ];
+    }
+
+    /**
      * Attempt to auto-match a Wise transaction against IFRS ledgers
      */
     public function matchTransaction(BankTransaction $wiseTransaction): ?int
@@ -32,8 +111,27 @@ class ReconciliationService
 
         if ($matchedLedger) {
             $wiseTransaction->markAsMatched($matchedLedger->id, 'ledger');
+            
+            $this->logHistory(
+                $wiseTransaction,
+                ReconciliationHistory::ACTION_AUTO_MATCH,
+                ReconciliationHistory::STATUS_SUCCESS,
+                $matchedLedger->id,
+                'ledger',
+                "Auto-matched to ledger entry #{$matchedLedger->id} ({$matchedLedger->reference})"
+            );
+            
             return $matchedLedger->id;
         }
+
+        $this->logHistory(
+            $wiseTransaction,
+            ReconciliationHistory::ACTION_AUTO_MATCH,
+            ReconciliationHistory::STATUS_FAILED,
+            null,
+            null,
+            'No matching ledger entry found'
+        );
 
         return null;
     }
@@ -278,6 +376,18 @@ class ReconciliationService
                 $this->postPaymentToIFRS($payment);
             }
 
+            // Log to history
+            $this->logHistory(
+                $bankTransaction,
+                ReconciliationHistory::ACTION_AUTO_CREATE_RECEIPT,
+                ReconciliationHistory::STATUS_SUCCESS,
+                $payment->id,
+                'payment',
+                "Auto-created cash receipt #{$payment->payment_number} for client #{$clientId}",
+                null,
+                ['amount' => $payment->amount, 'client_id' => $clientId]
+            );
+
             return $payment;
 
         } catch (\Exception $e) {
@@ -285,6 +395,16 @@ class ReconciliationService
                 'bank_transaction_id' => $bankTransaction->id,
                 'error' => $e->getMessage(),
             ]);
+            
+            $this->logHistory(
+                $bankTransaction,
+                ReconciliationHistory::ACTION_AUTO_CREATE_RECEIPT,
+                ReconciliationHistory::STATUS_FAILED,
+                null,
+                null,
+                $e->getMessage()
+            );
+            
             return null;
         }
     }
@@ -708,6 +828,16 @@ class ReconciliationService
                 'ignored_by' => auth()->id() ?? 'system',
             ]);
 
+            // Log to history
+            $this->logHistory(
+                $bankTransaction,
+                ReconciliationHistory::ACTION_IGNORE,
+                ReconciliationHistory::STATUS_SUCCESS,
+                null,
+                null,
+                $ignoreReason
+            );
+
             return true;
 
         } catch (\Exception $e) {
@@ -715,6 +845,16 @@ class ReconciliationService
                 'bank_transaction_id' => $bankTransaction->id,
                 'error' => $e->getMessage(),
             ]);
+            
+            $this->logHistory(
+                $bankTransaction,
+                ReconciliationHistory::ACTION_IGNORE,
+                ReconciliationHistory::STATUS_FAILED,
+                null,
+                null,
+                $e->getMessage()
+            );
+            
             return false;
         }
     }
@@ -783,6 +923,16 @@ class ReconciliationService
                 'restored_by' => auth()->id() ?? 'system',
             ]);
 
+            // Log to history
+            $this->logHistory(
+                $bankTransaction,
+                ReconciliationHistory::ACTION_UNIGNORE,
+                ReconciliationHistory::STATUS_SUCCESS,
+                null,
+                null,
+                'Restored from ignored status to pending'
+            );
+
             return true;
 
         } catch (\Exception $e) {
@@ -790,6 +940,16 @@ class ReconciliationService
                 'bank_transaction_id' => $bankTransaction->id,
                 'error' => $e->getMessage(),
             ]);
+            
+            $this->logHistory(
+                $bankTransaction,
+                ReconciliationHistory::ACTION_UNIGNORE,
+                ReconciliationHistory::STATUS_FAILED,
+                null,
+                null,
+                $e->getMessage()
+            );
+            
             return false;
         }
     }
@@ -860,6 +1020,16 @@ class ReconciliationService
                 'linked_by' => auth()->id() ?? 'system',
             ]);
 
+            // Log to history
+            $this->logHistory(
+                $bankTransaction,
+                ReconciliationHistory::ACTION_MANUAL_MATCH,
+                ReconciliationHistory::STATUS_SUCCESS,
+                $transactionId,
+                $transactionType,
+                $linkNotes
+            );
+
             return true;
 
         } catch (\Exception $e) {
@@ -869,6 +1039,16 @@ class ReconciliationService
                 'transaction_id' => $transactionId,
                 'error' => $e->getMessage(),
             ]);
+            
+            $this->logHistory(
+                $bankTransaction,
+                ReconciliationHistory::ACTION_MANUAL_MATCH,
+                ReconciliationHistory::STATUS_FAILED,
+                $transactionId,
+                $transactionType,
+                $e->getMessage()
+            );
+            
             return false;
         }
     }
@@ -1046,6 +1226,18 @@ class ReconciliationService
                 'reason' => $reason,
             ]);
 
+            // Log to history
+            $this->logHistory(
+                $bankTransaction,
+                ReconciliationHistory::ACTION_UNMATCH,
+                ReconciliationHistory::STATUS_SUCCESS,
+                $previousMatch['previous_transaction_id'],
+                $previousMatch['previous_transaction_type'],
+                "Unlinked previous match. Reason: " . ($reason ?? 'No reason provided'),
+                null,
+                ['previous_match' => $previousMatch]
+            );
+
             return true;
 
         } catch (\Exception $e) {
@@ -1053,6 +1245,16 @@ class ReconciliationService
                 'bank_transaction_id' => $bankTransaction->id,
                 'error' => $e->getMessage(),
             ]);
+            
+            $this->logHistory(
+                $bankTransaction,
+                ReconciliationHistory::ACTION_UNMATCH,
+                ReconciliationHistory::STATUS_FAILED,
+                null,
+                null,
+                $e->getMessage()
+            );
+            
             return false;
         }
     }
