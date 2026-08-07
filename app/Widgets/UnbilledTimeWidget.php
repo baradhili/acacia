@@ -2,7 +2,7 @@
 
 namespace App\Widgets;
 
-use App\Services\DashboardService;
+use App\Models\TimeEntry;
 use Arrilot\Widgets\AbstractWidget;
 
 class UnbilledTimeWidget extends AbstractWidget
@@ -11,9 +11,38 @@ class UnbilledTimeWidget extends AbstractWidget
 
     public function run()
     {
-        $service = app(DashboardService::class);
-        $data = $service->getUnbilledTimeWidget();
+        $entries = TimeEntry::with('project.client')
+            ->where('invoiced', false)
+            ->whereNull('deleted_at')
+            ->get()
+            ->map(function ($entry) {
+                return [
+                    'id' => $entry->id,
+                    'project_name' => $entry->project?->name ?? 'No Project',
+                    'client_name' => $entry->project?->client?->name ?? 'Unknown',
+                    'description' => $entry->description,
+                    'hours' => $entry->hours,
+                    'rate' => $entry->rate ?? $entry->project?->hourly_rate ?? 0,
+                    'amount' => $entry->hours * ($entry->rate ?? $entry->project?->hourly_rate ?? 0),
+                    'date' => $entry->date?->format('Y-m-d'),
+                ];
+            })
+            ->filter(function ($entry) {
+                return $entry['hours'] > 0;
+            })
+            ->sortByDesc('date')
+            ->take(20)
+            ->values();
 
-        return view('widgets.unbilled_time', $data);
+        $totalHours = $entries->sum('hours');
+        $totalAmount = $entries->sum('amount');
+
+        return view('widgets.unbilled_time', [
+            'entries' => $entries,
+            'count' => $entries->count(),
+            'total_hours' => round($totalHours, 2),
+            'total_amount' => $totalAmount,
+            'total_amount_formatted' => number_format($totalAmount, 2),
+        ]);
     }
 }
