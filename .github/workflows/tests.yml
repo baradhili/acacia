@@ -61,5 +61,8 @@ jobs:
           php artisan config:clear
           php artisan cache:clear
 
+      - name: Build frontend assets
+        run: npm install && npm run build
+
       - name: Run tests
         run: ./vendor/bin/pest
