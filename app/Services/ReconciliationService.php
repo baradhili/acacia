@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\BankTransaction;
 use App\Models\Client;
 use App\Models\Expense;
+use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\User;
 use Carbon\Carbon;
@@ -668,5 +669,268 @@ class ReconciliationService
         }
 
         return 'other';
+    }
+
+    /**
+     * Manually link a bank transaction to an existing IFRS transaction
+     * 
+     * @param BankTransaction $bankTransaction The bank transaction to link
+     * @param string $transactionType The type of IFRS transaction (invoice, payment, expense, ledger)
+     * @param int $transactionId The ID of the IFRS transaction
+     * @param string|null $notes Optional notes explaining the manual link
+     * @return bool Success status
+     */
+    public function manualOverrideLink(
+        BankTransaction $bankTransaction,
+        string $transactionType,
+        int $transactionId,
+        ?string $notes = null
+    ): bool {
+        // Validate transaction type
+        $validTypes = ['invoice', 'payment', 'expense', 'ledger'];
+        if (!in_array($transactionType, $validTypes)) {
+            Log::warning("Invalid transaction type for manual override", [
+                'transaction_type' => $transactionType,
+                'bank_transaction_id' => $bankTransaction->id,
+            ]);
+            return false;
+        }
+
+        // Validate that the transaction exists based on type
+        $transaction = $this->findTransaction($transactionType, $transactionId);
+        if (!$transaction) {
+            Log::error("Transaction not found for manual override", [
+                'transaction_type' => $transactionType,
+                'transaction_id' => $transactionId,
+            ]);
+            return false;
+        }
+
+        // Validate transaction is not already matched
+        if ($bankTransaction->status === BankTransaction::STATUS_MATCHED) {
+            Log::warning("Bank transaction already matched, cannot manually override", [
+                'bank_transaction_id' => $bankTransaction->id,
+            ]);
+            return false;
+        }
+
+        try {
+            // Build notes with explanation
+            $linkNotes = $notes ?? "Manually linked to {$transactionType} #{$transactionId}";
+            $linkNotes .= " on " . now()->toDateTimeString();
+
+            // Mark the bank transaction as matched with manual override
+            $bankTransaction->update([
+                'status' => BankTransaction::STATUS_MATCHED,
+                'matched_transaction_id' => $transactionId,
+                'matched_transaction_type' => $transactionType,
+                'matched_at' => now(),
+                'notes' => $bankTransaction->notes 
+                    ? $bankTransaction->notes . "\n" . $linkNotes
+                    : $linkNotes,
+            ]);
+
+            Log::info("Bank transaction manually linked to IFRS transaction", [
+                'bank_transaction_id' => $bankTransaction->id,
+                'transaction_type' => $transactionType,
+                'transaction_id' => $transactionId,
+                'linked_by' => auth()->id() ?? 'system',
+            ]);
+
+            return true;
+
+        } catch (\Exception $e) {
+            Log::error("Failed to manually link bank transaction", [
+                'bank_transaction_id' => $bankTransaction->id,
+                'transaction_type' => $transactionType,
+                'transaction_id' => $transactionId,
+                'error' => $e->getMessage(),
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Find an IFRS transaction by type and ID
+     * 
+     * @param string $type Transaction type (invoice, payment, expense, ledger)
+     * @param int $id Transaction ID
+     * @return mixed|null The transaction or null
+     */
+    protected function findTransaction(string $type, int $id): mixed
+    {
+        return match ($type) {
+            'invoice' => Invoice::find($id),
+            'payment' => Payment::find($id),
+            'expense' => Expense::find($id),
+            'ledger' => Ledger::find($id),
+            default => null,
+        };
+    }
+
+    /**
+     * Get available IFRS transactions for manual linking
+     * 
+     * @param BankTransaction $bankTransaction The bank transaction to match
+     * @param string $type Filter by transaction type (optional)
+     * @param int $limit Limit results
+     * @return Collection Available transactions
+     */
+    public function getAvailableTransactionsForLinking(
+        BankTransaction $bankTransaction,
+        ?string $type = null,
+        int $limit = 50
+    ): Collection {
+        $amount = $bankTransaction->amount;
+        $dateFrom = $bankTransaction->transaction_date->copy()->subDays(self::DATE_TOLERANCE_DAYS);
+        $dateTo = $bankTransaction->transaction_date->copy()->addDays(self::DATE_TOLERANCE_DAYS);
+
+        $results = collect();
+
+        // Search invoices if type is null or 'invoice'
+        if ($type === null || $type === 'invoice') {
+            $invoices = Invoice::whereBetween('total', [
+                    $amount - self::AMOUNT_TOLERANCE,
+                    $amount + self::AMOUNT_TOLERANCE,
+                ])
+                ->whereBetween('invoice_date', [$dateFrom, $dateTo])
+                ->whereIn('status', [Invoice::STATUS_SENT, Invoice::STATUS_VIEWED, Invoice::STATUS_PARTIALLY_PAID])
+                ->limit($limit)
+                ->get()
+                ->map(function ($invoice) {
+                    return [
+                        'type' => 'invoice',
+                        'id' => $invoice->id,
+                        'reference' => $invoice->invoice_number,
+                        'amount' => $invoice->total,
+                        'date' => $invoice->invoice_date,
+                        'client' => $invoice->client?->name ?? 'Unknown',
+                        'status' => $invoice->status,
+                    ];
+                });
+            $results = $results->merge($invoices);
+        }
+
+        // Search payments if type is null or 'payment'
+        if ($type === null || $type === 'payment') {
+            $payments = Payment::whereBetween('amount', [
+                    $amount - self::AMOUNT_TOLERANCE,
+                    $amount + self::AMOUNT_TOLERANCE,
+                ])
+                ->whereBetween('payment_date', [$dateFrom, $dateTo])
+                ->where('status', Payment::STATUS_COMPLETED)
+                ->limit($limit)
+                ->get()
+                ->map(function ($payment) {
+                    return [
+                        'type' => 'payment',
+                        'id' => $payment->id,
+                        'reference' => $payment->payment_number,
+                        'amount' => $payment->amount,
+                        'date' => $payment->payment_date,
+                        'client' => $payment->client?->name ?? 'Unknown',
+                        'status' => $payment->status,
+                    ];
+                });
+            $results = $results->merge($payments);
+        }
+
+        // Search expenses if type is null or 'expense'
+        if ($type === null || $type === 'expense') {
+            $expenses = Expense::whereBetween('total', [
+                    $amount - self::AMOUNT_TOLERANCE,
+                    $amount + self::AMOUNT_TOLERANCE,
+                ])
+                ->whereBetween('expense_date', [$dateFrom, $dateTo])
+                ->whereIn('status', [Expense::STATUS_APPROVED, Expense::STATUS_PAID])
+                ->limit($limit)
+                ->get()
+                ->map(function ($expense) {
+                    return [
+                        'type' => 'expense',
+                        'id' => $expense->id,
+                        'reference' => $expense->reference ?? "EXP-{$expense->id}",
+                        'amount' => $expense->total,
+                        'date' => $expense->expense_date,
+                        'supplier' => $expense->supplier?->name ?? 'Unknown',
+                        'category' => $expense->category,
+                        'status' => $expense->status,
+                    ];
+                });
+            $results = $results->merge($expenses);
+        }
+
+        // Search ledger entries if type is null or 'ledger'
+        if ($type === null || $type === 'ledger') {
+            $ledgers = Ledger::whereBetween('amount', [
+                    $amount - self::AMOUNT_TOLERANCE,
+                    $amount + self::AMOUNT_TOLERANCE,
+                ])
+                ->whereBetween('date', [$dateFrom, $dateTo])
+                ->with('account')
+                ->limit($limit)
+                ->get()
+                ->map(function ($ledger) {
+                    return [
+                        'type' => 'ledger',
+                        'id' => $ledger->id,
+                        'reference' => $ledger->reference ?? "Ledger-{$ledger->id}",
+                        'amount' => $ledger->amount,
+                        'date' => $ledger->date,
+                        'account' => $ledger->account?->name ?? 'Unknown',
+                        'entry_type' => $ledger->entry_type,
+                    ];
+                });
+            $results = $results->merge($ledgers);
+        }
+
+        return $results->take($limit);
+    }
+
+    /**
+     * Unlink a previously matched bank transaction
+     * 
+     * @param BankTransaction $bankTransaction The bank transaction to unlink
+     * @param string|null $reason Reason for unlinking
+     * @return bool Success status
+     */
+    public function unlinkTransaction(BankTransaction $bankTransaction, ?string $reason = null): bool
+    {
+        if ($bankTransaction->status !== BankTransaction::STATUS_MATCHED) {
+            return false;
+        }
+
+        try {
+            $previousMatch = [
+                'previous_transaction_id' => $bankTransaction->matched_transaction_id,
+                'previous_transaction_type' => $bankTransaction->matched_transaction_type,
+                'previous_matched_at' => $bankTransaction->matched_at,
+            ];
+
+            $bankTransaction->update([
+                'status' => BankTransaction::STATUS_PENDING,
+                'matched_transaction_id' => null,
+                'matched_transaction_type' => null,
+                'matched_at' => null,
+                'notes' => $bankTransaction->notes 
+                    ? $bankTransaction->notes . "\n" . "Unlinked on " . now()->toDateTimeString() . ". Reason: " . ($reason ?? 'No reason provided')
+                    : "Unlinked on " . now()->toDateTimeString() . ". Reason: " . ($reason ?? 'No reason provided'),
+            ]);
+
+            Log::info("Bank transaction unlinked", [
+                'bank_transaction_id' => $bankTransaction->id,
+                'previous_match' => $previousMatch,
+                'reason' => $reason,
+            ]);
+
+            return true;
+
+        } catch (\Exception $e) {
+            Log::error("Failed to unlink bank transaction", [
+                'bank_transaction_id' => $bankTransaction->id,
+                'error' => $e->getMessage(),
+            ]);
+            return false;
+        }
     }
 }

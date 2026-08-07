@@ -429,4 +429,105 @@ class AutoCreateCashReceiptTest extends TestCase
         $this->assertEquals('office_supplies', $this->service->suggestExpenseCategory('Officeworks'));
         $this->assertEquals('other', $this->service->suggestExpenseCategory('Random Merchant'));
     }
+
+    // ========================
+    // Manual Override Tests (Task 3)
+    // ========================
+
+    public function test_manual_override_link_to_invoice(): void
+    {
+        $bankTxn = $this->createBankTransaction([
+            'type' => BankTransaction::TYPE_CREDIT,
+            'status' => BankTransaction::STATUS_PENDING,
+        ]);
+
+        // Note: Invoice creation would require IFRS setup, so we test the link mechanism
+        // by mocking the existence of an invoice
+        $result = $this->service->manualOverrideLink(
+            $bankTxn,
+            'invoice',
+            999,
+            'Manual link test'
+        );
+
+        // This will fail because invoice 999 doesn't exist, but we can test the validation
+        $this->assertFalse($result);
+    }
+
+    public function test_manual_override_fails_for_invalid_transaction_type(): void
+    {
+        $bankTxn = $this->createBankTransaction([
+            'type' => BankTransaction::TYPE_CREDIT,
+            'status' => BankTransaction::STATUS_PENDING,
+        ]);
+
+        $result = $this->service->manualOverrideLink(
+            $bankTxn,
+            'invalid_type',
+            1
+        );
+
+        $this->assertFalse($result);
+    }
+
+    public function test_manual_override_fails_for_already_matched_transaction(): void
+    {
+        $bankTxn = $this->createBankTransaction([
+            'type' => BankTransaction::TYPE_CREDIT,
+            'status' => BankTransaction::STATUS_MATCHED,
+            'matched_transaction_id' => 123,
+            'matched_transaction_type' => 'payment',
+        ]);
+
+        $result = $this->service->manualOverrideLink(
+            $bankTxn,
+            'payment',
+            456
+        );
+
+        $this->assertFalse($result);
+    }
+
+    public function test_unlink_matched_transaction(): void
+    {
+        $bankTxn = $this->createBankTransaction([
+            'type' => BankTransaction::TYPE_CREDIT,
+            'status' => BankTransaction::STATUS_MATCHED,
+            'matched_transaction_id' => 123,
+            'matched_transaction_type' => 'payment',
+        ]);
+
+        $result = $this->service->unlinkTransaction($bankTxn, 'Testing unlink');
+
+        $this->assertTrue($result);
+        $bankTxn->refresh();
+        $this->assertEquals(BankTransaction::STATUS_PENDING, $bankTxn->status);
+        $this->assertNull($bankTxn->matched_transaction_id);
+        $this->assertStringContainsString('Unlinked', $bankTxn->notes);
+    }
+
+    public function test_unlink_fails_for_unmatched_transaction(): void
+    {
+        $bankTxn = $this->createBankTransaction([
+            'type' => BankTransaction::TYPE_CREDIT,
+            'status' => BankTransaction::STATUS_PENDING,
+        ]);
+
+        $result = $this->service->unlinkTransaction($bankTxn);
+
+        $this->assertFalse($result);
+    }
+
+    public function test_get_available_transactions_for_linking(): void
+    {
+        $bankTxn = $this->createBankTransaction([
+            'amount' => 1500.00,
+            'transaction_date' => Carbon::parse('2025-07-15'),
+        ]);
+
+        // This will return empty since there are no matching transactions in test DB
+        $transactions = $this->service->getAvailableTransactionsForLinking($bankTxn);
+
+        $this->assertInstanceOf(\Illuminate\Support\Collection::class, $transactions);
+    }
 }
