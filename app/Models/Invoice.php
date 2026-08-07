@@ -101,7 +101,7 @@ class Invoice extends Model
 
         // Recalculate when items change (not via recalculateTotals to avoid recursion)
         static::saved(function ($invoice) {
-            if (!isset($invoice->preventRecalculation)) {
+            if (!isset($invoice->preventRecalculation) && $invoice->items()->exists()) {
                 $invoice->recalculateTotals();
             }
         });
