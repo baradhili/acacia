@@ -19,7 +19,7 @@ jobs:
     env:
       APP_ENV: testing
       DB_CONNECTION: sqlite
-      DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
+      DB_DATABASE: database/database.sqlite
       DB_FOREIGN_KEYS: 'true'
       SESSION_DRIVER: array
       CACHE_STORE: array
@@ -55,6 +55,11 @@ jobs:
 
       - name: Run migrations
         run: php artisan migrate --force --no-interaction
+
+      - name: Clear caches
+        run: |
+          php artisan config:clear
+          php artisan cache:clear
 
       - name: Run tests
         run: php artisan test --no-interaction
