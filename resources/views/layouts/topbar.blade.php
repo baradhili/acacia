@@ -25,6 +25,10 @@
                     class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                     Profile
                 </a>
+                <button type="button" onclick="window.dispatchEvent(new CustomEvent('toggle-widget-edit'))"
+                    class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                    Customize Dashboard
+                </button>
                 <form method="POST" action="{{ route('logout') }}">
                     @csrf
                     <button type="submit"

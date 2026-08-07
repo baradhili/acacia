@@ -2,44 +2,19 @@
 @section('title', 'Dashboard')
 
 @section('content')
-<div x-data="widgetManager()">
-    <!-- Toolbar -->
-    <div class="flex justify-end mb-4 gap-2">
-        <template x-if="!isEditing">
-            <button 
-                @click="toggleEdit()"
-                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
-            >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-                </svg>
-                Customize Dashboard
-            </button>
-        </template>
-        <template x-if="isEditing">
-            <div class="flex gap-2">
-                <button 
-                    @click="resetLayout()"
-                    class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
-                >
-                    Reset Layout
-                </button>
-                <button 
-                    @click="toggleEdit()"
-                    class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                >
-                    Done Editing
-                </button>
-            </div>
-        </template>
-    </div>
-
+<div x-data="widgetManager()" @toggle-widget-edit.window="toggleEdit()">
     <!-- Edit Mode Instructions -->
-    <div x-show="isEditing" class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+    <div x-show="isEditing" class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex justify-between items-center">
         <p class="text-blue-800 text-sm">
-            <strong>Edit Mode:</strong> Drag widgets by their header (the blue handle) to reposition. 
-            Click "Done Editing" to save.
+            <strong>Edit Mode:</strong> Drag widgets by their header to reposition. 
+            Click "Done" in the profile menu to save.
         </p>
+        <button 
+            @click="toggleEdit()"
+            class="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+        >
+            Done
+        </button>
     </div>
 
     <!-- Widget Grid -->
