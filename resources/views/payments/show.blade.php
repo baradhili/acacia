@@ -8,13 +8,13 @@
             <p class="text-gray-600">Received on {{ $payment->payment_date->format('d M Y') }}</p>
         </div>
         <div class="flex gap-2">
-            @if($payment->unallocated_amount > 0)
+            @if ($payment->unallocated_amount > 0)
                 <button type="button" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg"
                     onclick="document.getElementById('allocateModal').classList.remove('hidden')">
                     Allocate to Invoice
                 </button>
             @endif
-            @if($payment->allocations->isNotEmpty())
+            @if ($payment->allocations->isNotEmpty())
                 <form action="{{ route('payments.reallocateFifo', $payment) }}" method="POST" class="inline">
                     @csrf
                     <button type="submit" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg"
@@ -23,13 +23,14 @@
                     </button>
                 </form>
             @endif
-            <a href="{{ route('payments.edit', $payment) }}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+            <a href="{{ route('payments.edit', $payment) }}"
+                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
                 Edit
             </a>
         </div>
     </div>
 
-    @if(session('success'))
+    @if (session('success'))
         <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
             {{ session('success') }}
         </div>
@@ -41,8 +42,8 @@
             <!-- Allocations -->
             <div class="bg-white rounded-lg shadow p-6">
                 <h2 class="text-lg font-semibold text-gray-800 mb-4">Invoice Allocations</h2>
-                
-                @if($payment->allocations->isNotEmpty())
+
+                @if ($payment->allocations->isNotEmpty())
                     <table class="min-w-full">
                         <thead>
                             <tr class="border-b">
@@ -54,23 +55,28 @@
                             </tr>
                         </thead>
                         <tbody class="divide-y">
-                            @foreach($payment->allocations as $allocation)
+                            @foreach ($payment->allocations as $allocation)
                                 <tr>
                                     <td class="py-3">
-                                        <a href="{{ route('invoices.show', $allocation->invoice) }}" class="text-indigo-600 hover:text-indigo-800">
+                                        <a href="{{ route('invoices.show', $allocation->invoice) }}"
+                                            class="text-indigo-600 hover:text-indigo-800">
                                             {{ $allocation->invoice->invoice_number }}
                                         </a>
                                     </td>
                                     <td class="py-3">{{ $allocation->invoice->due_date?->format('d M Y') }}</td>
-                                    <td class="py-3 text-right font-medium">${{ number_format($allocation->amount, 2) }}</td>
+                                    <td class="py-3 text-right font-medium">${{ number_format($allocation->amount, 2) }}
+                                    </td>
                                     <td class="py-3 text-center">
-                                        <span class="px-2 py-1 text-xs rounded-full 
+                                        <span
+                                            class="px-2 py-1 text-xs rounded-full 
                                             {{ $allocation->allocation_type === 'fifo' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800' }}">
                                             {{ ucfirst($allocation->allocation_type) }}
                                         </span>
                                     </td>
                                     <td class="py-3 text-right">
-                                        <form action="{{ route('payments.removeAllocation', [$payment, $allocation->invoice]) }}" method="POST" class="inline">
+                                        <form
+                                            action="{{ route('payments.removeAllocation', [$payment, $allocation->invoice]) }}"
+                                            method="POST" class="inline">
                                             @csrf
                                             <button type="submit" class="text-red-600 hover:text-red-800 text-sm"
                                                 onclick="return confirm('Remove this allocation?');">
@@ -84,7 +90,8 @@
                         <tfoot>
                             <tr class="border-t-2">
                                 <td colspan="2" class="py-3 font-bold">Total Allocated</td>
-                                <td class="py-3 text-right font-bold text-green-600">${{ number_format($payment->allocated_amount, 2) }}</td>
+                                <td class="py-3 text-right font-bold text-green-600">
+                                    ${{ number_format($payment->allocated_amount, 2) }}</td>
                                 <td colspan="2"></td>
                             </tr>
                         </tfoot>
@@ -93,7 +100,7 @@
                     <p class="text-gray-500">This payment has not been allocated to any invoices yet.</p>
                 @endif
 
-                @if($payment->unallocated_amount > 0)
+                @if ($payment->unallocated_amount > 0)
                     <div class="mt-4 p-4 bg-yellow-50 rounded-lg">
                         <p class="text-sm text-yellow-800">
                             <strong>Unallocated amount:</strong> ${{ number_format($payment->unallocated_amount, 2) }}
@@ -103,7 +110,7 @@
             </div>
 
             <!-- Notes -->
-            @if($payment->notes)
+            @if ($payment->notes)
                 <div class="bg-white rounded-lg shadow p-6">
                     <h2 class="text-lg font-semibold text-gray-800 mb-2">Notes</h2>
                     <p class="text-gray-600">{{ $payment->notes }}</p>
@@ -113,36 +120,43 @@
             <!-- Documents -->
             <div class="bg-white rounded-lg shadow p-6">
                 <h2 class="text-lg font-semibold text-gray-800 mb-4">Documents</h2>
-                
+
                 <form action="{{ route('documents.store') }}" method="POST" enctype="multipart/form-data" class="mb-4">
                     @csrf
                     <input type="hidden" name="documentable_type" value="Payment">
                     <input type="hidden" name="documentable_id" value="{{ $payment->id }}">
-                    <div id="documentUploadArea" class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-indigo-500 transition">
+                    <div id="documentUploadArea"
+                        class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-indigo-500 transition">
                         <svg class="mx-auto h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                         </svg>
                         <p class="mt-1 text-sm text-gray-600">Drop files or click to upload</p>
                     </div>
-                    <input type="file" name="file" id="documentFile" class="hidden" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar">
+                    <input type="file" name="file" id="documentFile" class="hidden"
+                        accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar">
                 </form>
 
-                @if($payment->documents->count() > 0)
+                @if ($payment->documents->count() > 0)
                     <div class="border rounded-lg divide-y">
-                        @foreach($payment->documents as $doc)
+                        @foreach ($payment->documents as $doc)
                             <div class="flex items-center justify-between p-3">
                                 <div class="flex items-center">
-                                    <svg class="h-5 w-5 text-gray-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                                    <svg class="h-5 w-5 text-gray-400 mr-2" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                                     </svg>
                                     <span class="text-sm font-medium text-gray-900">{{ $doc->name }}</span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <a href="{{ route('documents.download', $doc) }}" class="text-indigo-600 hover:text-indigo-900 text-sm">Download</a>
+                                    <a href="{{ route('documents.download', $doc) }}"
+                                        class="text-indigo-600 hover:text-indigo-900 text-sm">Download</a>
                                     <form action="{{ route('documents.destroy', $doc) }}" method="POST" class="inline">
                                         @csrf
                                         @method('DELETE')
-                                        <button type="submit" class="text-red-600 hover:text-red-900 text-sm" onclick="return confirm('Delete?')">Delete</button>
+                                        <button type="submit" class="text-red-600 hover:text-red-900 text-sm"
+                                            onclick="return confirm('Delete?')">Delete</button>
                                     </form>
                                 </div>
                             </div>
@@ -172,7 +186,7 @@
                         <dt class="text-sm text-gray-500">Payment Method</dt>
                         <dd class="font-medium">{{ $payment->formatted_method }}</dd>
                     </div>
-                    @if($payment->reference)
+                    @if ($payment->reference)
                         <div>
                             <dt class="text-sm text-gray-500">Reference</dt>
                             <dd class="font-medium">{{ $payment->reference }}</dd>
@@ -190,7 +204,8 @@
                 <h2 class="text-lg font-semibold text-gray-800 mb-4">Client</h2>
                 <p class="font-medium">{{ $payment->client->name }}</p>
                 <p class="text-gray-600">{{ $payment->client->email }}</p>
-                <a href="{{ route('clients.show', $payment->client) }}" class="text-indigo-600 hover:text-indigo-800 text-sm mt-2 inline-block">
+                <a href="{{ route('clients.show', $payment->client) }}"
+                    class="text-indigo-600 hover:text-indigo-800 text-sm mt-2 inline-block">
                     View Client →
                 </a>
             </div>
@@ -214,8 +229,9 @@
     <div id="allocateModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div class="bg-white rounded-lg p-6 w-full max-w-md">
             <h3 class="text-lg font-semibold mb-4">Allocate to Invoice</h3>
-            <p class="text-gray-600 mb-4">Unallocated: <strong>${{ number_format($payment->unallocated_amount, 2) }}</strong></p>
-            
+            <p class="text-gray-600 mb-4">Unallocated:
+                <strong>${{ number_format($payment->unallocated_amount, 2) }}</strong></p>
+
             <form action="{{ route('payments.allocate', $payment) }}" method="POST">
                 @csrf
                 <div class="space-y-4">
@@ -235,7 +251,7 @@
                                     ->sortBy('due_date')
                                     ->values();
                             @endphp
-                            @foreach($outstandingInvoices as $inv)
+                            @foreach ($outstandingInvoices as $inv)
                                 <option value="{{ $inv->id }}">
                                     {{ $inv->invoice_number }} - ${{ number_format($inv->amount_due, 2) }} due
                                 </option>
@@ -244,7 +260,8 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Amount *</label>
-                        <input type="number" name="amount" step="0.01" min="0.01" max="{{ $payment->unallocated_amount }}" required
+                        <input type="number" name="amount" step="0.01" min="0.01"
+                            max="{{ $payment->unallocated_amount }}" required
                             class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
                     </div>
                 </div>
@@ -261,29 +278,33 @@
         </div>
     </div>
 
-@push('scripts')
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const uploadArea = document.getElementById('documentUploadArea');
-    const fileInput = document.getElementById('documentFile');
-    if (uploadArea && fileInput) {
-        uploadArea.addEventListener('click', () => fileInput.click());
-        uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('border-indigo-500', 'bg-indigo-50'); });
-        uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('border-indigo-500', 'bg-indigo-50'));
-        uploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadArea.classList.remove('border-indigo-500', 'bg-indigo-50');
-            if (e.dataTransfer.files.length) {
-                fileInput.files = e.dataTransfer.files;
-                fileInput.closest('form').submit();
-            }
-        });
-        fileInput.addEventListener('change', () => {
-            if (fileInput.files.length) fileInput.closest('form').submit();
-        });
-    }
-});
-</script>
-@endpush
+    @push('scripts')
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const uploadArea = document.getElementById('documentUploadArea');
+                const fileInput = document.getElementById('documentFile');
+                if (uploadArea && fileInput) {
+                    uploadArea.addEventListener('click', () => fileInput.click());
+                    uploadArea.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        uploadArea.classList.add('border-indigo-500', 'bg-indigo-50');
+                    });
+                    uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('border-indigo-500',
+                        'bg-indigo-50'));
+                    uploadArea.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        uploadArea.classList.remove('border-indigo-500', 'bg-indigo-50');
+                        if (e.dataTransfer.files.length) {
+                            fileInput.files = e.dataTransfer.files;
+                            fileInput.closest('form').submit();
+                        }
+                    });
+                    fileInput.addEventListener('change', () => {
+                        if (fileInput.files.length) fileInput.closest('form').submit();
+                    });
+                }
+            });
+        </script>
+    @endpush
 
 @endsection
