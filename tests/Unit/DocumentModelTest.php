@@ -2,7 +2,7 @@
 
 namespace Tests\Unit;
 
-use App\Models\Client;
+use App\Models\Supplier;
 use App\Models\Document;
 use App\Models\Expense;
 use App\Models\Invoice;
@@ -91,8 +91,8 @@ class DocumentModelTest extends TestCase
 
     public function test_document_morph_to_parent_model(): void
     {
-        $client = Client::factory()->create();
-        $expense = Expense::factory()->draft()->create(['supplier_id' => $client->id]);
+        $supplier = Supplier::factory()->create();
+        $expense = Expense::factory()->draft()->create(['supplier_id' => $supplier->id]);
         $document = Document::factory()->create([
             'documentable_type' => 'App\\Models\\Expense',
             'documentable_id' => $expense->id,
@@ -104,8 +104,8 @@ class DocumentModelTest extends TestCase
 
     public function test_expense_can_have_many_documents(): void
     {
-        $client = Client::factory()->create();
-        $expense = Expense::factory()->draft()->create(['supplier_id' => $client->id]);
+        $supplier = Supplier::factory()->create();
+        $expense = Expense::factory()->draft()->create(['supplier_id' => $supplier->id]);
 
         Document::factory()->count(3)->create([
             'documentable_type' => 'App\\Models\\Expense',
@@ -118,9 +118,9 @@ class DocumentModelTest extends TestCase
 
     public function test_invoice_can_have_many_documents(): void
     {
-        $client = Client::factory()->create();
+        $supplier = Supplier::factory()->create();
         $invoice = Invoice::create([
-            'client_id' => $client->id,
+            'client_id' => $supplier->id,
             'invoice_number' => 'INV-2024-TEST',
             'status' => 'draft',
             'issue_date' => now(),
@@ -141,9 +141,9 @@ class DocumentModelTest extends TestCase
 
     public function test_payment_can_have_many_documents(): void
     {
-        $client = Client::factory()->create();
+        $supplier = Supplier::factory()->create();
         $payment = Payment::create([
-            'client_id' => $client->id,
+            'client_id' => $supplier->id,
             'payment_number' => 'PAY-2024-TEST',
             'amount' => 500,
             'payment_date' => now(),
@@ -162,9 +162,9 @@ class DocumentModelTest extends TestCase
 
     public function test_purchase_order_can_have_many_documents(): void
     {
-        $client = Client::factory()->create();
+        $supplier = Supplier::factory()->create();
         $po = PurchaseOrder::create([
-            'client_id' => $client->id,
+            'client_id' => $supplier->id,
             'po_number' => 'PO-2024-TEST',
             'title' => 'Test PO',
             'status' => 'draft',
@@ -183,10 +183,10 @@ class DocumentModelTest extends TestCase
 
     public function test_documents_can_attach_to_different_model_types(): void
     {
-        $client = Client::factory()->create();
-        $expense = Expense::factory()->draft()->create(['supplier_id' => $client->id]);
+        $supplier = Supplier::factory()->create();
+        $expense = Expense::factory()->draft()->create(['supplier_id' => $supplier->id]);
         $invoice = Invoice::create([
-            'client_id' => $client->id,
+            'client_id' => $supplier->id,
             'invoice_number' => 'INV-2024-DIFF',
             'status' => 'draft',
             'issue_date' => now(),

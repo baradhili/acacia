@@ -2,7 +2,7 @@
 
 namespace Tests\Unit;
 
-use App\Models\Client;
+use App\Models\Supplier;
 use App\Models\Document;
 use App\Models\Expense;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -42,9 +42,9 @@ class ExpenseModelTest extends TestCase
 
     public function test_amount_is_cast_as_decimal(): void
     {
-        $client = Client::factory()->create();
+        $supplier = Supplier::factory()->create();
         $expense = Expense::factory()->create([
-            'supplier_id' => $client->id,
+            'supplier_id' => $supplier->id,
             'amount' => 100.50,
         ]);
 
@@ -56,9 +56,9 @@ class ExpenseModelTest extends TestCase
 
     public function test_total_is_cast_as_decimal(): void
     {
-        $client = Client::factory()->create();
+        $supplier = Supplier::factory()->create();
         $expense = Expense::factory()->create([
-            'supplier_id' => $client->id,
+            'supplier_id' => $supplier->id,
             'amount' => 100,
             'tax_amount' => 10,
             'total' => 110,
@@ -72,9 +72,9 @@ class ExpenseModelTest extends TestCase
 
     public function test_expense_date_is_cast_as_date(): void
     {
-        $client = Client::factory()->create();
+        $supplier = Supplier::factory()->create();
         $expense = Expense::factory()->create([
-            'supplier_id' => $client->id,
+            'supplier_id' => $supplier->id,
             'expense_date' => '2024-06-15',
         ]);
 
@@ -86,9 +86,9 @@ class ExpenseModelTest extends TestCase
 
     public function test_due_date_is_cast_as_date(): void
     {
-        $client = Client::factory()->create();
+        $supplier = Supplier::factory()->create();
         $expense = Expense::factory()->create([
-            'supplier_id' => $client->id,
+            'supplier_id' => $supplier->id,
             'due_date' => '2024-07-15',
         ]);
 
@@ -100,19 +100,19 @@ class ExpenseModelTest extends TestCase
 
     public function test_expense_belongs_to_supplier(): void
     {
-        $client = Client::factory()->create();
+        $supplier = Supplier::factory()->create();
         $expense = Expense::factory()->create([
-            'supplier_id' => $client->id,
+            'supplier_id' => $supplier->id,
         ]);
 
-        $this->assertInstanceOf(Client::class, $expense->supplier);
-        $this->assertEquals($client->id, $expense->supplier->id);
+        $this->assertInstanceOf(Supplier::class, $expense->supplier);
+        $this->assertEquals($supplier->id, $expense->supplier->id);
     }
 
     public function test_expense_can_have_many_documents(): void
     {
-        $client = Client::factory()->create();
-        $expense = Expense::factory()->draft()->create(['supplier_id' => $client->id]);
+        $supplier = Supplier::factory()->create();
+        $expense = Expense::factory()->draft()->create(['supplier_id' => $supplier->id]);
 
         Document::factory()->count(3)->create([
             'documentable_type' => 'App\\Models\\Expense',
@@ -125,9 +125,9 @@ class ExpenseModelTest extends TestCase
 
     public function test_expense_status_can_be_set(): void
     {
-        $client = Client::factory()->create();
+        $supplier = Supplier::factory()->create();
         $expense = Expense::factory()->create([
-            'supplier_id' => $client->id,
+            'supplier_id' => $supplier->id,
             'status' => Expense::STATUS_DRAFT,
         ]);
 
@@ -136,8 +136,8 @@ class ExpenseModelTest extends TestCase
 
     public function test_expense_paid_status_exists(): void
     {
-        $client = Client::factory()->create();
-        $expense = Expense::factory()->paid()->create(['supplier_id' => $client->id]);
+        $supplier = Supplier::factory()->create();
+        $expense = Expense::factory()->paid()->create(['supplier_id' => $supplier->id]);
 
         $this->assertEquals(Expense::STATUS_PAID, $expense->status);
     }
@@ -161,9 +161,9 @@ class ExpenseModelTest extends TestCase
 
     public function test_total_matches_amount_plus_tax(): void
     {
-        $client = Client::factory()->create();
+        $supplier = Supplier::factory()->create();
         $expense = Expense::factory()->create([
-            'supplier_id' => $client->id,
+            'supplier_id' => $supplier->id,
             'amount' => 100,
             'tax_amount' => 10,
             'total' => 110,
@@ -176,8 +176,8 @@ class ExpenseModelTest extends TestCase
 
     public function test_expense_can_be_soft_deleted(): void
     {
-        $client = Client::factory()->create();
-        $expense = Expense::factory()->draft()->create(['supplier_id' => $client->id]);
+        $supplier = Supplier::factory()->create();
+        $expense = Expense::factory()->draft()->create(['supplier_id' => $supplier->id]);
         $expenseId = $expense->id;
 
         $expense->delete();

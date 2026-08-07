@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\Client;
+use App\Models\Supplier;
 use App\Models\Document;
 use App\Models\Expense;
 use App\Models\Invoice;
@@ -39,8 +39,8 @@ class DocumentTest extends TestCase
 
     public function test_can_upload_document_for_expense(): void
     {
-        $client = Client::factory()->create();
-        $expense = Expense::factory()->draft()->create(['supplier_id' => $client->id]);
+        $supplier = Supplier::factory()->create();
+        $expense = Expense::factory()->draft()->create(['supplier_id' => $supplier->id]);
         
         $file = UploadedFile::fake()->create('receipt.pdf', 1024);
         
@@ -62,9 +62,9 @@ class DocumentTest extends TestCase
 
     public function test_can_upload_document_for_invoice(): void
     {
-        $client = Client::factory()->create();
+        $supplier = Supplier::factory()->create();
         $invoice = Invoice::create([
-            'client_id' => $client->id,
+            'client_id' => $supplier->id,
             'invoice_number' => 'INV-2024-0001',
             'status' => 'draft',
             'issue_date' => now(),
@@ -128,8 +128,8 @@ class DocumentTest extends TestCase
 
     public function test_can_get_documents_for_model(): void
     {
-        $client = Client::factory()->create();
-        $expense = Expense::factory()->draft()->create(['supplier_id' => $client->id]);
+        $supplier = Supplier::factory()->create();
+        $expense = Expense::factory()->draft()->create(['supplier_id' => $supplier->id]);
         
         Document::factory()->count(3)->create([
             'documentable_type' => 'App\\Models\\Expense',
@@ -213,8 +213,8 @@ class DocumentTest extends TestCase
 
     public function test_document_polymorphic_relationship(): void
     {
-        $client = Client::factory()->create();
-        $expense = Expense::factory()->draft()->create(['supplier_id' => $client->id]);
+        $supplier = Supplier::factory()->create();
+        $expense = Expense::factory()->draft()->create(['supplier_id' => $supplier->id]);
         
         $document = Document::factory()->create([
             'documentable_type' => 'App\Models\Expense',
@@ -227,8 +227,8 @@ class DocumentTest extends TestCase
 
     public function test_expense_has_documents_relationship(): void
     {
-        $client = Client::factory()->create();
-        $expense = Expense::factory()->draft()->create(['supplier_id' => $client->id]);
+        $supplier = Supplier::factory()->create();
+        $expense = Expense::factory()->draft()->create(['supplier_id' => $supplier->id]);
         
         Document::factory()->count(2)->create([
             'documentable_type' => 'App\Models\Expense',
@@ -241,9 +241,9 @@ class DocumentTest extends TestCase
 
     public function test_invoice_has_documents_relationship(): void
     {
-        $client = Client::factory()->create();
+        $supplier = Supplier::factory()->create();
         $invoice = Invoice::create([
-            'client_id' => $client->id,
+            'client_id' => $supplier->id,
             'invoice_number' => 'INV-2024-0002',
             'status' => 'draft',
             'issue_date' => now(),
@@ -264,9 +264,9 @@ class DocumentTest extends TestCase
 
     public function test_can_upload_document_for_estimate(): void
     {
-        $client = Client::factory()->create();
+        $supplier = Supplier::factory()->create();
         $estimate = \App\Models\Estimate::create([
-            'client_id' => $client->id,
+            'client_id' => $supplier->id,
             'estimate_number' => 'EST-2024-0001',
             'status' => 'draft',
             'issue_date' => now(),
@@ -295,9 +295,9 @@ class DocumentTest extends TestCase
 
     public function test_can_upload_document_for_purchase_order(): void
     {
-        $client = Client::factory()->create();
+        $supplier = Supplier::factory()->create();
         $po = \App\Models\PurchaseOrder::create([
-            'client_id' => $client->id,
+            'client_id' => $supplier->id,
             'po_number' => 'PO-2024-0001',
             'title' => 'Test PO',
             'status' => 'draft',
@@ -323,9 +323,9 @@ class DocumentTest extends TestCase
 
     public function test_can_upload_document_for_payment(): void
     {
-        $client = Client::factory()->create();
+        $supplier = Supplier::factory()->create();
         $payment = \App\Models\Payment::create([
-            'client_id' => $client->id,
+            'client_id' => $supplier->id,
             'payment_number' => 'PAY-2024-0001',
             'amount' => 500,
             'payment_date' => now(),
