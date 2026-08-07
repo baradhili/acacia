@@ -38,3 +38,9 @@ Schedule::command('notifications:overdue-reminders')
     ->dailyAt('08:00')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/overdue-reminders.log'));
+
+// Schedule monthly client statements on the 1st of each month at 9 AM
+Schedule::command('statements:send')
+    ->monthlyOn(1, '09:00')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/client-statements.log'));
