@@ -1,5 +1,5 @@
 <div class="bg-white rounded-lg shadow">
-    <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+    <div class="widget-handle px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 cursor-grab">
         <h2 class="text-lg font-semibold text-gray-800">P&L Trend (12 Months)</h2>
         <a href="{{ route('reports.income-statement') }}" class="text-sm text-blue-600 hover:text-blue-800">Full Report</a>
     </div>

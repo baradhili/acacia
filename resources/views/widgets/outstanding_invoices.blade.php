@@ -1,7 +1,12 @@
-<div class="bg-white rounded-lg shadow p-6">
-    <div class="flex items-center justify-between">
+<div class="bg-white rounded-lg shadow h-full">
+    <div class="widget-handle p-4 border-b border-gray-200 bg-gray-50 cursor-grab flex items-center justify-between rounded-t-lg">
+        <p class="text-sm font-medium text-gray-600">Outstanding Invoices</p>
+        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
+        </svg>
+    </div>
+    <div class="p-4 flex items-center justify-between">
         <div>
-            <p class="text-sm text-gray-500">Outstanding Invoices</p>
             <p class="text-2xl font-bold text-gray-800">${{ $total }}</p>
         </div>
         <div class="p-3 bg-green-100 rounded-full">

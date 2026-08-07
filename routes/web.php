@@ -164,3 +164,11 @@ Route::middleware('auth')->group(function () {
 });
 
 require __DIR__.'/auth.php';
+
+// Widget Preferences
+Route::middleware(['auth'])->prefix('api/widget-preferences')->group(function () {
+    Route::get('/', [App\Http\Controllers\Api\WidgetPreferenceController::class, 'index']);
+    Route::post('/', [App\Http\Controllers\Api\WidgetPreferenceController::class, 'saveAll']);
+    Route::put('/', [App\Http\Controllers\Api\WidgetPreferenceController::class, 'update']);
+    Route::delete('/reset', [App\Http\Controllers\Api\WidgetPreferenceController::class, 'reset']);
+});
