@@ -4,9 +4,14 @@
 
 @section('header')
     <div class="flex items-center justify-between">
-        <h2 class="text-xl font-semibold text-gray-800">
-            Expense {{ $expense->reference ? "#{$expense->reference}" : "#{$expense->id}" }}
-        </h2>
+        <div class="flex items-center gap-4">
+            @if($expense->supplier && $expense->supplier->logo_url)
+                <img src="{{ $expense->supplier->logo_url }}" alt="{{ $expense->supplier->name }} Logo" class="h-10 w-auto object-contain">
+            @endif
+            <h2 class="text-xl font-semibold text-gray-800">
+                Expense {{ $expense->reference ? "#{$expense->reference}" : "#{$expense->id}" }}
+            </h2>
+        </div>
         <div class="flex items-center gap-2">
             @if($expense->status === 'draft')
                 <form action="{{ route('expenses.submit', $expense) }}" method="POST" class="inline">

@@ -3,9 +3,14 @@
 @section('content')
 
     <div class="mb-6 flex justify-between items-center">
-        <div>
-            <h1 class="text-2xl font-bold text-gray-800">Payment {{ $payment->payment_number }}</h1>
-            <p class="text-gray-600">Received on {{ $payment->payment_date->format('d M Y') }}</p>
+        <div class="flex items-center gap-4">
+            @if($payment->client && $payment->client->logo_url)
+                <img src="{{ $payment->client->logo_url }}" alt="{{ $payment->client->name }} Logo" class="h-12 w-auto object-contain">
+            @endif
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">Payment {{ $payment->payment_number }}</h1>
+                <p class="text-gray-600">Received on {{ $payment->payment_date->format('d M Y') }}</p>
+            </div>
         </div>
         <div class="flex gap-2">
             @if ($payment->unallocated_amount > 0)

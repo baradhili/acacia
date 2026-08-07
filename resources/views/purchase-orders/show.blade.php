@@ -3,7 +3,12 @@
 @section('content')
 
     <div class="mb-6 flex justify-between items-center">
-        <h1 class="text-2xl font-bold text-gray-800">{{ $purchaseOrder->po_number }}</h1>
+        <div class="flex items-center gap-4">
+            @if($purchaseOrder->client && $purchaseOrder->client->logo_url)
+                <img src="{{ $purchaseOrder->client->logo_url }}" alt="{{ $purchaseOrder->client->name }} Logo" class="h-12 w-auto object-contain">
+            @endif
+            <h1 class="text-2xl font-bold text-gray-800">{{ $purchaseOrder->po_number }}</h1>
+        </div>
         <div class="flex gap-3">
             @if($purchaseOrder->status === 'draft')
                 <a href="{{ route('purchase-orders.edit', $purchaseOrder) }}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg">

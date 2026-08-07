@@ -39,6 +39,7 @@ class Supplier extends Model
         'abn',
         'category',
         'notes',
+        'logo',
     ];
 
     protected $casts = [
@@ -49,5 +50,16 @@ class Supplier extends Model
     public function documents(): MorphMany
     {
         return $this->morphMany(Document::class, 'documentable');
+    }
+
+    /**
+     * Get the logo URL
+     */
+    public function getLogoUrlAttribute(): ?string
+    {
+        if ($this->logo && file_exists(public_path('storage/' . $this->logo))) {
+            return asset('storage/' . $this->logo);
+        }
+        return null;
     }
 }

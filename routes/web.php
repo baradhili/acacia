@@ -7,6 +7,7 @@ use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\EstimateController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\LogoController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
@@ -40,9 +41,17 @@ Route::middleware('auth')->group(function () {
 
     // Clients
     Route::resource('clients', ClientController::class);
+    
+    // Client Logo
+    Route::post('/clients/{client}/logo', [LogoController::class, 'storeClient'])->name('clients.logo.store');
+    Route::delete('/clients/{client}/logo', [LogoController::class, 'destroyClient'])->name('clients.logo.destroy');
 
     // Suppliers (includes vendors via type filter)
     Route::resource('suppliers', SupplierController::class);
+    
+    // Supplier Logo
+    Route::post('/suppliers/{supplier}/logo', [LogoController::class, 'storeSupplier'])->name('suppliers.logo.store');
+    Route::delete('/suppliers/{supplier}/logo', [LogoController::class, 'destroySupplier'])->name('suppliers.logo.destroy');
 
     // Projects
     Route::resource('projects', ProjectController::class);
