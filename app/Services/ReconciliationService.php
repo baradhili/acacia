@@ -672,6 +672,129 @@ class ReconciliationService
     }
 
     /**
+     * Ignore a bank transaction (mark as non-business)
+     * 
+     * @param BankTransaction $bankTransaction The transaction to ignore
+     * @param string|null $reason Reason for ignoring
+     * @return bool Success status
+     */
+    public function ignoreTransaction(BankTransaction $bankTransaction, ?string $reason = null): bool
+    {
+        // Cannot ignore already matched transactions
+        if ($bankTransaction->status === BankTransaction::STATUS_MATCHED) {
+            Log::warning("Cannot ignore matched bank transaction", [
+                'bank_transaction_id' => $bankTransaction->id,
+            ]);
+            return false;
+        }
+
+        // Cannot ignore already ignored transactions
+        if ($bankTransaction->status === BankTransaction::STATUS_IGNORED) {
+            Log::warning("Bank transaction is already ignored", [
+                'bank_transaction_id' => $bankTransaction->id,
+            ]);
+            return false;
+        }
+
+        try {
+            $ignoreReason = $reason ?? 'Marked as non-business transaction';
+            $ignoreReason .= " on " . now()->toDateTimeString();
+
+            $bankTransaction->markAsIgnored($ignoreReason);
+
+            Log::info("Bank transaction ignored", [
+                'bank_transaction_id' => $bankTransaction->id,
+                'reason' => $ignoreReason,
+                'ignored_by' => auth()->id() ?? 'system',
+            ]);
+
+            return true;
+
+        } catch (\Exception $e) {
+            Log::error("Failed to ignore bank transaction", [
+                'bank_transaction_id' => $bankTransaction->id,
+                'error' => $e->getMessage(),
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Ignore multiple bank transactions in batch
+     * 
+     * @param array $transactionIds Array of transaction IDs to ignore
+     * @param string|null $reason Reason for ignoring
+     * @return array Results with counts
+     */
+    public function ignoreTransactions(array $transactionIds, ?string $reason = null): array
+    {
+        $ignored = 0;
+        $skipped = 0;
+        $errors = [];
+
+        foreach ($transactionIds as $id) {
+            $bankTxn = BankTransaction::find($id);
+            
+            if (!$bankTxn) {
+                $errors[] = ['id' => $id, 'error' => 'Transaction not found'];
+                continue;
+            }
+
+            if ($this->ignoreTransaction($bankTxn, $reason)) {
+                $ignored++;
+            } else {
+                $skipped++;
+            }
+        }
+
+        return [
+            'ignored' => $ignored,
+            'skipped' => $skipped,
+            'errors' => $errors,
+        ];
+    }
+
+    /**
+     * Restore an ignored transaction back to pending
+     * 
+     * @param BankTransaction $bankTransaction The ignored transaction to restore
+     * @return bool Success status
+     */
+    public function restoreIgnoredTransaction(BankTransaction $bankTransaction): bool
+    {
+        if ($bankTransaction->status !== BankTransaction::STATUS_IGNORED) {
+            Log::warning("Bank transaction is not ignored", [
+                'bank_transaction_id' => $bankTransaction->id,
+                'current_status' => $bankTransaction->status,
+            ]);
+            return false;
+        }
+
+        try {
+            $bankTransaction->update([
+                'status' => BankTransaction::STATUS_PENDING,
+                'notes' => $bankTransaction->notes 
+                    ? $bankTransaction->notes . "\n" . "Restored from ignored on " . now()->toDateTimeString()
+                    : "Restored from ignored on " . now()->toDateTimeString(),
+            ]);
+
+            Log::info("Ignored bank transaction restored to pending", [
+                'bank_transaction_id' => $bankTransaction->id,
+                'restored_by' => auth()->id() ?? 'system',
+            ]);
+
+            return true;
+
+        } catch (\Exception $e) {
+            Log::error("Failed to restore ignored bank transaction", [
+                'bank_transaction_id' => $bankTransaction->id,
+                'error' => $e->getMessage(),
+            ]);
+            return false;
+        }
+    }
+
+    /**
      * Manually link a bank transaction to an existing IFRS transaction
      * 
      * @param BankTransaction $bankTransaction The bank transaction to link

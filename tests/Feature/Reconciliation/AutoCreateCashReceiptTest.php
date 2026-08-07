@@ -530,4 +530,95 @@ class AutoCreateCashReceiptTest extends TestCase
 
         $this->assertInstanceOf(\Illuminate\Support\Collection::class, $transactions);
     }
+
+    // ========================
+    // Ignore Transaction Tests (Task 4)
+    // ========================
+
+    public function test_ignore_pending_transaction(): void
+    {
+        $bankTxn = $this->createBankTransaction([
+            'status' => BankTransaction::STATUS_PENDING,
+        ]);
+
+        $result = $this->service->ignoreTransaction($bankTxn, 'Personal expense');
+
+        $this->assertTrue($result);
+        $bankTxn->refresh();
+        $this->assertEquals(BankTransaction::STATUS_IGNORED, $bankTxn->status);
+        $this->assertStringContainsString('Personal expense', $bankTxn->notes);
+    }
+
+    public function test_ignore_fails_for_matched_transaction(): void
+    {
+        $bankTxn = $this->createBankTransaction([
+            'status' => BankTransaction::STATUS_MATCHED,
+            'matched_transaction_id' => 123,
+            'matched_transaction_type' => 'payment',
+        ]);
+
+        $result = $this->service->ignoreTransaction($bankTxn, 'Wrong match');
+
+        $this->assertFalse($result);
+    }
+
+    public function test_ignore_fails_for_already_ignored_transaction(): void
+    {
+        $bankTxn = $this->createBankTransaction([
+            'status' => BankTransaction::STATUS_IGNORED,
+            'notes' => 'Already ignored',
+        ]);
+
+        $result = $this->service->ignoreTransaction($bankTxn, 'Try to ignore again');
+
+        $this->assertFalse($result);
+    }
+
+    public function test_ignore_multiple_transactions(): void
+    {
+        $txn1 = $this->createBankTransaction(['source_id' => 'WISE-IGN-1']);
+        $txn2 = $this->createBankTransaction(['source_id' => 'WISE-IGN-2']);
+        $txn3 = $this->createBankTransaction(['source_id' => 'WISE-IGN-3']);
+
+        $results = $this->service->ignoreTransactions(
+            [$txn1->id, $txn2->id, $txn3->id],
+            'Batch ignore test'
+        );
+
+        $this->assertEquals(3, $results['ignored']);
+        $this->assertEquals(0, $results['skipped']);
+
+        $txn1->refresh();
+        $txn2->refresh();
+        $txn3->refresh();
+        $this->assertEquals(BankTransaction::STATUS_IGNORED, $txn1->status);
+        $this->assertEquals(BankTransaction::STATUS_IGNORED, $txn2->status);
+        $this->assertEquals(BankTransaction::STATUS_IGNORED, $txn3->status);
+    }
+
+    public function test_restore_ignored_transaction(): void
+    {
+        $bankTxn = $this->createBankTransaction([
+            'status' => BankTransaction::STATUS_IGNORED,
+            'notes' => 'Previously ignored',
+        ]);
+
+        $result = $this->service->restoreIgnoredTransaction($bankTxn);
+
+        $this->assertTrue($result);
+        $bankTxn->refresh();
+        $this->assertEquals(BankTransaction::STATUS_PENDING, $bankTxn->status);
+        $this->assertStringContainsString('Restored', $bankTxn->notes);
+    }
+
+    public function test_restore_fails_for_pending_transaction(): void
+    {
+        $bankTxn = $this->createBankTransaction([
+            'status' => BankTransaction::STATUS_PENDING,
+        ]);
+
+        $result = $this->service->restoreIgnoredTransaction($bankTxn);
+
+        $this->assertFalse($result);
+    }
 }
