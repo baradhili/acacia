@@ -26,7 +26,7 @@ class PnLTrendWidget extends AbstractWidget
                 ->sum('amount');
 
             $expenses = Expense::where('status', Expense::STATUS_PAID)
-                ->whereBetween('paid_at', [$monthStart, $monthEnd])
+                ->whereBetween('paid_date', [$monthStart, $monthEnd])
                 ->sum('total');
 
             $invoicesIssued = Invoice::whereBetween('issue_date', [$monthStart, $monthEnd])

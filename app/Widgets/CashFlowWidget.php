@@ -28,13 +28,13 @@ class CashFlowWidget extends AbstractWidget
             ->sum('amount');
 
         $outflows = Expense::where('status', Expense::STATUS_PAID)
-            ->where('paid_at', '>=', $thirtyDaysAgo)
-            ->where('paid_at', '<=', $today)
+            ->where('paid_date', '>=', $thirtyDaysAgo)
+            ->where('paid_date', '<=', $today)
             ->sum('total');
 
         $previousOutflows = Expense::where('status', Expense::STATUS_PAID)
-            ->where('paid_at', '>=', $sixtyDaysAgo)
-            ->where('paid_at', '<', $thirtyDaysAgo)
+            ->where('paid_date', '>=', $sixtyDaysAgo)
+            ->where('paid_date', '<', $thirtyDaysAgo)
             ->sum('total');
 
         $netCashFlow = $inflows - $outflows;
