@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class BankTransaction extends Model
 {
@@ -22,6 +23,7 @@ class BankTransaction extends Model
         'merchant_name',
         'payer_name',
         'payee_name',
+        'client_id',
         'status',
         'matched_transaction_id',
         'matched_transaction_type',
@@ -48,6 +50,14 @@ class BankTransaction extends Model
     // Type constants
     const TYPE_DEBIT = 'DEBIT';
     const TYPE_CREDIT = 'CREDIT';
+
+    /**
+     * Get the client associated with this bank transaction
+     */
+    public function client(): BelongsTo
+    {
+        return $this->belongsTo(Client::class);
+    }
 
     /**
      * Scope for pending transactions

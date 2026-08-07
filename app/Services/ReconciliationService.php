@@ -3,8 +3,12 @@
 namespace App\Services;
 
 use App\Models\BankTransaction;
+use App\Models\Client;
+use App\Models\Payment;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use IFRS\Models\Ledger;
 
 class ReconciliationService
@@ -12,6 +16,10 @@ class ReconciliationService
     // Matching tolerances
     private const AMOUNT_TOLERANCE = 0.01; // $0.01 tolerance for amount matching
     private const DATE_TOLERANCE_DAYS = 3; // 3 days tolerance for date matching
+
+    // Default account codes
+    private const DEFAULT_BANK_ACCOUNT_CODE = 320; // Operating Account
+    private const DEFAULT_REVENUE_ACCOUNT_CODE = 4100; // Consulting Revenue
 
     /**
      * Attempt to auto-match a Wise transaction against IFRS ledgers
@@ -202,5 +210,245 @@ class ReconciliationService
             'amount_tolerance' => self::AMOUNT_TOLERANCE,
             'date_tolerance_days' => self::DATE_TOLERANCE_DAYS,
         ];
+    }
+
+    /**
+     * Auto-create a cash receipt (Payment) from an unmatched Wise credit
+     * 
+     * @param BankTransaction $bankTransaction The unmatched credit transaction
+     * @param int $clientId The client to associate with the payment
+     * @param int|null $receivedByUserId The user recording the payment
+     * @param bool $postToIFRS Whether to post the payment to IFRS immediately
+     * @return Payment|null The created payment or null on failure
+     */
+    public function createCashReceiptFromBankTransaction(
+        BankTransaction $bankTransaction,
+        int $clientId,
+        ?int $receivedByUserId = null,
+        bool $postToIFRS = true
+    ): ?Payment {
+        // Validate this is a credit transaction
+        if ($bankTransaction->type !== BankTransaction::TYPE_CREDIT) {
+            Log::warning("Cannot create cash receipt from debit transaction", [
+                'bank_transaction_id' => $bankTransaction->id,
+                'type' => $bankTransaction->type,
+            ]);
+            return null;
+        }
+
+        // Validate client exists
+        $client = Client::find($clientId);
+        if (!$client) {
+            Log::error("Client not found for cash receipt creation", [
+                'client_id' => $clientId,
+                'bank_transaction_id' => $bankTransaction->id,
+            ]);
+            return null;
+        }
+
+        try {
+            // Create the payment (cash receipt)
+            $payment = Payment::create([
+                'payment_number' => Payment::generatePaymentNumber(),
+                'client_id' => $clientId,
+                'received_by' => $receivedByUserId,
+                'amount' => $bankTransaction->amount,
+                'payment_date' => $bankTransaction->transaction_date,
+                'payment_method' => Payment::METHOD_BANK_TRANSFER,
+                'reference' => $bankTransaction->reference,
+                'notes' => "Auto-created from Wise transaction {$bankTransaction->source_id}. Description: {$bankTransaction->description}",
+                'status' => Payment::STATUS_COMPLETED,
+            ]);
+
+            // Mark bank transaction as matched
+            $bankTransaction->markAsMatched($payment->id, 'payment');
+
+            Log::info("Cash receipt created from unmatched Wise credit", [
+                'payment_id' => $payment->id,
+                'payment_number' => $payment->payment_number,
+                'client_id' => $clientId,
+                'amount' => $payment->amount,
+                'bank_transaction_id' => $bankTransaction->id,
+            ]);
+
+            // Optionally post to IFRS
+            if ($postToIFRS) {
+                $this->postPaymentToIFRS($payment);
+            }
+
+            return $payment;
+
+        } catch (\Exception $e) {
+            Log::error("Failed to create cash receipt from Wise transaction", [
+                'bank_transaction_id' => $bankTransaction->id,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Post a payment to IFRS (Dr Cash / Cr Revenue)
+     * 
+     * @param Payment $payment
+     * @return bool Success status
+     */
+    protected function postPaymentToIFRS(Payment $payment): bool
+    {
+        try {
+            $bankAccount = \IFRS\Models\Account::where('code', self::DEFAULT_BANK_ACCOUNT_CODE)->first();
+            $revenueAccount = \IFRS\Models\Account::where('code', self::DEFAULT_REVENUE_ACCOUNT_CODE)->first();
+
+            if (!$bankAccount || !$revenueAccount) {
+                Log::error('IFRS accounts not found for payment posting', [
+                    'bank_code' => self::DEFAULT_BANK_ACCOUNT_CODE,
+                    'revenue_code' => self::DEFAULT_REVENUE_ACCOUNT_CODE,
+                ]);
+                return false;
+            }
+
+            // Create journal entry
+            // Dr Bank (Debit - increase asset)
+            // Cr Revenue (Credit - increase income)
+            $journalEntry = new \IFRS\Transactions\JournalEntry([
+                'date' => $payment->payment_date,
+                'narration' => "Cash receipt: {$payment->payment_number} from {$payment->client->name}",
+                'reference' => $payment->payment_number,
+            ]);
+
+            $journalEntry->addLineItem(
+                \IFRS\Models\LineItem::create([
+                    'account_id' => $bankAccount->id,
+                    'amount' => $payment->amount,
+                    'type' => \IFRS\Models\LineItem::DEBIT,
+                    'tax_rate' => 0,
+                ])
+            );
+
+            $journalEntry->addLineItem(
+                \IFRS\Models\LineItem::create([
+                    'account_id' => $revenueAccount->id,
+                    'amount' => $payment->amount,
+                    'type' => \IFRS\Models\LineItem::CREDIT,
+                    'tax_rate' => 0,
+                ])
+            );
+
+            $journalEntry->save();
+
+            // Store the IFRS receipt ID
+            $payment->update(['ifrs_receipt_id' => $journalEntry->id]);
+
+            Log::info("Payment posted to IFRS", [
+                'payment_id' => $payment->id,
+                'ifrs_receipt_id' => $journalEntry->id,
+            ]);
+
+            return true;
+
+        } catch (\Exception $e) {
+            Log::error('Failed to post payment to IFRS', [
+                'payment_id' => $payment->id,
+                'error' => $e->getMessage(),
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Auto-create cash receipts for all unmatched Wise credits
+     * 
+     * @param int|null $clientId Optional client ID to filter by
+     * @return array Results with created payments and errors
+     */
+    public function autoCreateCashReceipts(?int $clientId = null): array
+    {
+        $query = BankTransaction::pending()
+            ->fromSource(BankTransaction::SOURCE_WISE)
+            ->where('type', BankTransaction::TYPE_CREDIT);
+
+        if ($clientId) {
+            $query->where('client_id', $clientId);
+        }
+
+        $transactions = $query->get();
+        $created = [];
+        $skipped = 0;
+        $errors = [];
+
+        foreach ($transactions as $transaction) {
+            // Try to find a matching client by payer name or reference
+            $matchedClientId = $this->findClientForTransaction($transaction, $clientId);
+
+            if (!$matchedClientId) {
+                $skipped++;
+                $errors[] = [
+                    'transaction_id' => $transaction->id,
+                    'reference' => $transaction->reference,
+                    'error' => 'No matching client found',
+                ];
+                continue;
+            }
+
+            $payment = $this->createCashReceiptFromBankTransaction(
+                $transaction,
+                $matchedClientId,
+                null,
+                true
+            );
+
+            if ($payment) {
+                $created[] = $payment;
+            } else {
+                $errors[] = [
+                    'transaction_id' => $transaction->id,
+                    'error' => 'Failed to create payment',
+                ];
+            }
+        }
+
+        return [
+            'created' => $created,
+            'count' => count($created),
+            'skipped' => $skipped,
+            'errors' => $errors,
+        ];
+    }
+
+    /**
+     * Find a client for a bank transaction based on payer name or reference
+     * 
+     * @param BankTransaction $transaction
+     * @param int|null $preferredClientId
+     * @return int|null Client ID or null
+     */
+    protected function findClientForTransaction(BankTransaction $transaction, ?int $preferredClientId = null): ?int
+    {
+        // If a preferred client ID is provided, verify it exists
+        if ($preferredClientId) {
+            $client = Client::find($preferredClientId);
+            if ($client) {
+                return $client->id;
+            }
+        }
+
+        // Try to match by payer name
+        if (!empty($transaction->payer_name)) {
+            $client = Client::where('name', 'like', '%' . $transaction->payer_name . '%')->first();
+            if ($client) {
+                return $client->id;
+            }
+        }
+
+        // Try to match by reference (often contains client name or invoice number)
+        if (!empty($transaction->reference)) {
+            // Try exact reference match with clients
+            $client = Client::where('name', 'like', '%' . $transaction->reference . '%')->first();
+            if ($client) {
+                return $client->id;
+            }
+        }
+
+        return null;
     }
 }
