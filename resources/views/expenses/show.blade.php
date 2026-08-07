@@ -85,33 +85,7 @@
 
 @push('scripts')
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-
-    // Handle delete forms via AJAX
-    document.querySelectorAll('.delete-document-form').forEach(form => {
-        form.addEventListener('submit', function(e) {
-            e.preventDefault();
-            if (!confirm('Delete this document?')) return;
-            
-            fetch(this.action, {
-                method: 'DELETE',
-                headers: {
-                    'X-CSRF-TOKEN': csrfToken,
-                    'Accept': 'application/json',
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                window.location.reload();
-            })
-            .catch(error => {
-                console.error('Delete failed:', error);
-                alert('Delete failed. Please try again.');
-            });
-        });
-    });
-});
+// No document delete handling on show view - delete only available in edit view
 </script>
 @endpush
 
@@ -234,22 +208,17 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div class="border rounded-lg divide-y">
                             @foreach($expense->documents as $doc)
                                 <div class="document-list-item">
-                                    <div class="flex items-center">
-                                        <svg class="h-5 w-5 text-gray-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-                                        </svg>
-                                        <div>
-                                            <p class="text-sm font-medium text-gray-900">{{ $doc->name }}</p>
-                                            <p class="text-xs text-gray-500">{{ number_format($doc->size / 1024, 1) }} KB</p>
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center">
+                                            <svg class="h-5 w-5 text-gray-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                                            </svg>
+                                            <div>
+                                                <p class="text-sm font-medium text-gray-900">{{ $doc->name }}</p>
+                                                <p class="text-xs text-gray-500">{{ number_format($doc->size / 1024, 1) }} KB</p>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div class="flex items-center gap-2">
                                         <a href="{{ route('documents.download', $doc) }}" class="text-indigo-600 hover:text-indigo-900 text-sm">Download</a>
-                                        <form action="{{ route('documents.destroy', $doc) }}" method="POST" class="inline delete-document-form">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="text-red-600 hover:text-red-900 text-sm">Delete</button>
-                                        </form>
                                     </div>
                                 </div>
                             @endforeach

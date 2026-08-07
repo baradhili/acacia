@@ -130,7 +130,8 @@ class DocumentViewUploadTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee('Test Invoice Document.pdf');
         $response->assertSee('Download');
-        $response->assertSee('Delete');
+        // Delete is not shown on show view - only in edit view
+        $response->assertDontSee('Delete');
     }
 
     public function test_can_delete_document_from_invoice_view(): void

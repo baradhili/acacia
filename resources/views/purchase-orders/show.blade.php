@@ -172,7 +172,7 @@
         <div class="flex justify-between items-center mb-4">
             <h3 class="text-lg font-semibold text-gray-800">Documents</h3>
             <a href="{{ route('purchase-orders.edit', $purchaseOrder) }}" class="text-sm text-indigo-600 hover:text-indigo-800">
-                Upload in Edit View →
+                Upload/Delete in Edit View →
             </a>
         </div>
 
@@ -186,14 +186,7 @@
                             </svg>
                             <span class="text-sm font-medium text-gray-900">{{ $doc->name }}</span>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <a href="{{ route('documents.download', $doc) }}" class="text-indigo-600 hover:text-indigo-900 text-sm">Download</a>
-                            <form action="{{ route('documents.destroy', $doc) }}" method="POST" class="inline delete-document-form">
-                                @csrf
-                                @method('DELETE')
-                                <button type="submit" class="text-red-600 hover:text-red-900 text-sm">Delete</button>
-                            </form>
-                        </div>
+                        <a href="{{ route('documents.download', $doc) }}" class="text-indigo-600 hover:text-indigo-900 text-sm">Download</a>
                     </div>
                 @endforeach
             </div>
@@ -204,33 +197,7 @@
 
 @push('scripts')
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-
-    // Handle delete forms via AJAX
-    document.querySelectorAll('.delete-document-form').forEach(form => {
-        form.addEventListener('submit', function(e) {
-            e.preventDefault();
-            if (!confirm('Delete this document?')) return;
-            
-            fetch(this.action, {
-                method: 'DELETE',
-                headers: {
-                    'X-CSRF-TOKEN': csrfToken,
-                    'Accept': 'application/json',
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                window.location.reload();
-            })
-            .catch(error => {
-                console.error('Delete failed:', error);
-                alert('Delete failed. Please try again.');
-            });
-        });
-    });
-});
+// No document delete handling on show view - delete only available in edit view
 </script>
 @endpush
 
