@@ -193,8 +193,8 @@
     <div class="bg-white rounded-lg shadow p-6">
         <div class="flex justify-between items-center mb-4">
             <h3 class="text-lg font-semibold text-gray-800">Attachments</h3>
-            <a href="#" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
-                + Add Attachment
+            <a href="{{ route('clients.edit', $client) }}" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                Upload in Edit View →
             </a>
         </div>
         @if($documents->isEmpty())

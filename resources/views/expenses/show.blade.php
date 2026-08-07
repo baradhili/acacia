@@ -86,33 +86,31 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const uploadArea = document.getElementById('documentUploadArea');
-    const fileInput = document.getElementById('documentFile');
-    const form = document.getElementById('documentUploadForm');
-    
-    if (uploadArea && fileInput) {
-        uploadArea.addEventListener('click', () => fileInput.click());
-        uploadArea.addEventListener('dragover', (e) => {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+
+    // Handle delete forms via AJAX
+    document.querySelectorAll('.delete-document-form').forEach(form => {
+        form.addEventListener('submit', function(e) {
             e.preventDefault();
-            uploadArea.classList.add('border-indigo-500', 'bg-indigo-50');
+            if (!confirm('Delete this document?')) return;
+            
+            fetch(this.action, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                window.location.reload();
+            })
+            .catch(error => {
+                console.error('Delete failed:', error);
+                alert('Delete failed. Please try again.');
+            });
         });
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.classList.remove('border-indigo-500', 'bg-indigo-50');
-        });
-        uploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadArea.classList.remove('border-indigo-500', 'bg-indigo-50');
-            if (e.dataTransfer.files.length) {
-                fileInput.files = e.dataTransfer.files;
-                if (form) form.submit();
-            }
-        });
-        fileInput.addEventListener('change', () => {
-            if (fileInput.files.length) {
-                if (form) form.submit();
-            }
-        });
-    }
+    });
 });
 </script>
 @endpush
@@ -224,23 +222,13 @@ document.addEventListener('DOMContentLoaded', function() {
             <!-- Documents Section -->
             <div class="bg-white rounded-lg shadow">
                 <div class="p-6">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Documents</h3>
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">Documents</h3>
+                        <a href="{{ route('expenses.edit', $expense) }}" class="text-sm text-indigo-600 hover:text-indigo-800">
+                            Upload in Edit View →
+                        </a>
+                    </div>
                     
-                    <!-- Upload Form -->
-                    <form id="documentUploadForm" action="{{ route('documents.store') }}" method="POST" enctype="multipart/form-data" class="mb-4">
-                        @csrf
-                        <input type="hidden" name="documentable_type" value="Expense">
-                        <input type="hidden" name="documentable_id" value="{{ $expense->id }}">
-                        <div id="documentUploadArea" class="document-upload-area cursor-pointer">
-                            <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                            <p class="mt-1 text-sm text-gray-600">Drop files here or click to upload</p>
-                            <p class="mt-1 text-xs text-gray-500">PDF, JPG, PNG, DOC up to 20MB</p>
-                        </div>
-                        <input type="file" name="file" id="documentFile" class="hidden" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar">
-                    </form>
-
                     <!-- Document List -->
                     @if($expense->documents->count() > 0)
                         <div class="border rounded-lg divide-y">
@@ -257,10 +245,10 @@ document.addEventListener('DOMContentLoaded', function() {
                                     </div>
                                     <div class="flex items-center gap-2">
                                         <a href="{{ route('documents.download', $doc) }}" class="text-indigo-600 hover:text-indigo-900 text-sm">Download</a>
-                                        <form action="{{ route('documents.destroy', $doc) }}" method="POST" class="inline">
+                                        <form action="{{ route('documents.destroy', $doc) }}" method="POST" class="inline delete-document-form">
                                             @csrf
                                             @method('DELETE')
-                                            <button type="submit" class="text-red-600 hover:text-red-900 text-sm" onclick="return confirm('Delete this document?')">Delete</button>
+                                            <button type="submit" class="text-red-600 hover:text-red-900 text-sm">Delete</button>
                                         </form>
                                     </div>
                                 </div>

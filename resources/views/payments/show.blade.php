@@ -119,23 +119,12 @@
 
             <!-- Documents -->
             <div class="bg-white rounded-lg shadow p-6">
-                <h2 class="text-lg font-semibold text-gray-800 mb-4">Documents</h2>
-
-                <form action="{{ route('documents.store') }}" method="POST" enctype="multipart/form-data" class="mb-4">
-                    @csrf
-                    <input type="hidden" name="documentable_type" value="Payment">
-                    <input type="hidden" name="documentable_id" value="{{ $payment->id }}">
-                    <div id="documentUploadArea"
-                        class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-indigo-500 transition">
-                        <svg class="mx-auto h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                        </svg>
-                        <p class="mt-1 text-sm text-gray-600">Drop files or click to upload</p>
-                    </div>
-                    <input type="file" name="file" id="documentFile" class="hidden"
-                        accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar">
-                </form>
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold text-gray-800">Documents</h2>
+                    <a href="{{ route('payments.edit', $payment) }}" class="text-sm text-indigo-600 hover:text-indigo-800">
+                        Upload in Edit View →
+                    </a>
+                </div>
 
                 @if ($payment->documents->count() > 0)
                     <div class="border rounded-lg divide-y">
@@ -280,61 +269,7 @@
     @push('scripts')
         <script>
             document.addEventListener('DOMContentLoaded', function() {
-                const uploadArea = document.getElementById('documentUploadArea');
-                const fileInput = document.getElementById('documentFile');
-                const uploadForm = uploadArea ? uploadArea.closest('form') : null;
                 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-
-                if (uploadArea && fileInput) {
-                    uploadArea.addEventListener('click', () => fileInput.click());
-                    uploadArea.addEventListener('dragover', (e) => {
-                        e.preventDefault();
-                        uploadArea.classList.add('border-indigo-500', 'bg-indigo-50');
-                    });
-                    uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('border-indigo-500',
-                        'bg-indigo-50'));
-                    uploadArea.addEventListener('drop', (e) => {
-                        e.preventDefault();
-                        uploadArea.classList.remove('border-indigo-500', 'bg-indigo-50');
-                        if (e.dataTransfer.files.length) {
-                            fileInput.files = e.dataTransfer.files;
-                            uploadFile(fileInput.files[0]);
-                        }
-                    });
-                    fileInput.addEventListener('change', () => {
-                        if (fileInput.files.length) {
-                            uploadFile(fileInput.files[0]);
-                        }
-                    });
-                }
-
-                function uploadFile(file) {
-                    if (!file) return;
-                    
-                    const formData = new FormData();
-                    formData.append('file', file);
-                    formData.append('documentable_type', 'Payment');
-                    formData.append('documentable_id', '{{ $payment->id }}');
-
-                    fetch('{{ route('documents.store') }}', {
-                        method: 'POST',
-                        headers: {
-                            'X-CSRF-TOKEN': csrfToken,
-                            'Accept': 'application/json',
-                        },
-                        body: formData
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.id) {
-                            window.location.reload();
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Upload failed:', error);
-                        alert('Upload failed. Please try again.');
-                    });
-                }
 
                 // Handle delete forms via AJAX
                 document.querySelectorAll('.delete-document-form').forEach(form => {

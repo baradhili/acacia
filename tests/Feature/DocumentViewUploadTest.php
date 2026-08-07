@@ -30,7 +30,7 @@ class DocumentViewUploadTest extends TestCase
         Storage::fake('public');
     }
 
-    public function test_invoice_view_displays_document_upload_form(): void
+    public function test_invoice_edit_view_displays_document_upload_form(): void
     {
         $client = Client::factory()->create();
         $invoice = Invoice::create([
@@ -44,7 +44,7 @@ class DocumentViewUploadTest extends TestCase
             'total' => 110,
         ]);
 
-        $response = $this->actingAs($this->user)->get(route('invoices.show', $invoice));
+        $response = $this->actingAs($this->user)->get(route('invoices.edit', $invoice));
 
         $response->assertStatus(200);
         $response->assertSee('documentUploadArea');
@@ -197,7 +197,7 @@ class DocumentViewUploadTest extends TestCase
         $response->assertDownload('Download Me.pdf');
     }
 
-    public function test_invoice_show_page_uses_push_scripts(): void
+    public function test_invoice_edit_page_has_document_upload_scripts(): void
     {
         $client = Client::factory()->create();
         $invoice = Invoice::create([
@@ -211,7 +211,7 @@ class DocumentViewUploadTest extends TestCase
             'total' => 110,
         ]);
 
-        $response = $this->actingAs($this->user)->get(route('invoices.show', $invoice));
+        $response = $this->actingAs($this->user)->get(route('invoices.edit', $invoice));
 
         $response->assertStatus(200);
         // Verify the page has proper script handling
