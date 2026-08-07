@@ -561,9 +561,9 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 - [ ] Scheduled monthly client statements
 - [ ] Audit log for all create/edit/delete actions on financial records
 - [ ] Period locking (close prior FY)
-- [ ] Documentation site (github docs)
-- [ ] Production deployment guide (Forge/Sail/Docker)
-- [ ] Backup & restore runbook
+- [x] Documentation site (github docs)
+- [x] Production deployment guide (Forge/Sail/Docker)
+- [x] Backup & restore runbook
 - [ ] End-to-end test suite (cypress/dusk optional)
 - [ ] Performance benchmark: 10k invoices, 100k time entries
 - [ ] Security review: mass-assignment, IDOR, XSS
