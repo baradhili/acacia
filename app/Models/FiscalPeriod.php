@@ -124,11 +124,11 @@ class FiscalPeriod extends Model
     }
 
     /**
-     * Scope for periods before a specific date
+     * Scope for periods on or before a specific date
      */
     public function scopeBeforeDate($query, Carbon $date)
     {
-        return $query->where('end_date', '<', $date);
+        return $query->whereDate('end_date', '<=', $date);
     }
 
     /**
