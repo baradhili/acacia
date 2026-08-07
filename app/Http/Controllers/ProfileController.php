@@ -38,6 +38,59 @@ class ProfileController extends Controller
     }
 
     /**
+     * Upload or update profile photo.
+     */
+    public function updatePhoto(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'profile_photo' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
+        ]);
+
+        $user = $request->user();
+
+        // Delete old photo if exists
+        if ($user->profile_photo) {
+            $oldPath = public_path('storage/' . $user->profile_photo);
+            if (file_exists($oldPath)) {
+                unlink($oldPath);
+            }
+        }
+
+        // Store new photo
+        $file = $request->file('profile_photo');
+        $path = $file->store('profile-photos', 'public');
+
+        // Ensure symlink exists
+        $link = public_path('storage');
+        $target = storage_path('app/public');
+        if (!file_exists($link) && !is_link($link)) {
+            symlink($target, $link);
+        }
+
+        $user->update(['profile_photo' => $path]);
+
+        return Redirect::route('profile.edit')->with('status', 'photo-updated');
+    }
+
+    /**
+     * Delete profile photo.
+     */
+    public function deletePhoto(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+
+        if ($user->profile_photo) {
+            $path = public_path('storage/' . $user->profile_photo);
+            if (file_exists($path)) {
+                unlink($path);
+            }
+            $user->update(['profile_photo' => null]);
+        }
+
+        return Redirect::route('profile.edit')->with('status', 'photo-deleted');
+    }
+
+    /**
      * Delete the user's account.
      */
     public function destroy(Request $request): RedirectResponse
