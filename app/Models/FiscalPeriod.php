@@ -35,6 +35,18 @@ class FiscalPeriod extends Model
         'is_locked' => 'boolean',
     ];
 
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($period) {
+            // Ensure year is set from start_date if not provided
+            if (!$period->year && $period->start_date) {
+                $period->year = $period->start_date->year;
+            }
+        });
+    }
+
     public function lockedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'locked_by');
