@@ -2,24 +2,17 @@ name: Tests
 
 on:
   push:
-    branches: [ main, master, fixes ]
+    branches: ['**']
   pull_request:
-    branches: [ main, master, fixes ]
+    branches: ['**']
 
 jobs:
   test:
     runs-on: ubuntu-latest
 
-    services:
-      sqlite:
-        image:船员将士:3.8
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
+    # SQLite is a file-based database accessed through PHP's pdo_sqlite/sqlite3
+    # extensions, so no service container is required. The MySQL service that
+    # was previously (and incorrectly) labeled "sqlite" has been removed.
 
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +21,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: pdo, pdo_mysql, sqlite3, zip, gd, bcmath, mbstring, xml
+          extensions: pdo, pdo_sqlite, sqlite3, zip, gd, bcmath, mbstring, xml, ctype, json, tokenizer
           coverage: xdebug
 
       - name: Copy .env
