@@ -545,22 +545,22 @@ The roadmap is broken into phases with granular, checkable tasks. Use these as G
 
 ### Phase 6 — Advanced Reconciliation, Automation & Dashboard
 
-- [ ] Auto-create missing cash receipt from unmatched Wise credit
-- [ ] - [ ] Auto-create missing purchase from unmatched Wise debit
-- [ ] Manual override: link unmatched Bank txn to existing IFRS txn
-- [ ] "Ignore" action for non-business Bank transactions
-- [ ] Reconciliation history log
-- [ ] Dashboard widget: cash flow (30-day)
-- [ ] Dashboard widget: AR aging summary
-- [ ] Dashboard widget: recent invoices & payments
-- [ ] Dashboard widget: outstanding PO budgets
-- [ ] Dashboard widget: unbilled time entries
-- [ ] Dashboard widget: Bank balance + unreconciled count
-- [ ] Dashboard widget: monthly P&L trend (chart)
-- [ ] Email notifications: invoice viewed, payment received, overdue reminder
-- [ ] Scheduled monthly client statements
-- [ ] Audit log for all create/edit/delete actions on financial records
-- [ ] Period locking (close prior FY)
+- [x] Auto-create missing cash receipt from unmatched Wise credit
+- [x] Auto-create missing purchase from unmatched Wise debit
+- [x] Manual override: link unmatched Bank txn to existing IFRS txn
+- [x] "Ignore" action for non-business Bank transactions
+- [x] Reconciliation history log
+- [x] Dashboard widget: cash flow (30-day)
+- [x] Dashboard widget: AR aging summary
+- [x] Dashboard widget: recent invoices & payments
+- [x] Dashboard widget: outstanding PO budgets
+- [x] Dashboard widget: unbilled time entries
+- [x] Dashboard widget: Bank balance + unreconciled count
+- [x] Dashboard widget: monthly P&L trend (chart)
+- [x] Email notifications: invoice viewed, payment received, overdue reminder
+- [x] Scheduled monthly client statements
+- [x] Audit log for all create/edit/delete actions on financial records
+- [x] Period locking (close prior FY)
 - [x] Documentation site (github docs)
 - [x] Production deployment guide (Forge/Sail/Docker)
 - [x] Backup & restore runbook
