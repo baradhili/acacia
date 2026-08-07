@@ -131,19 +131,27 @@ class AuditServiceTest extends TestCase
 
     public function test_ignores_updated_at_field(): void
     {
-        $client = $this->createClient();
+        $client = $this->createClient(['name' => 'Original Name']);
         
-        // Force update the updated_at
-        AuditLog::truncate();
+        // Clear previous audit logs
+        AuditLog::where('auditable_id', $client->id)->delete();
         
-        $client->updated_at = now();
-        $client->saveQuietly();
+        // Update both name and updated_at - only name should be audited
+        $client->update([
+            'name' => 'New Name',
+            'updated_at' => now(),
+        ]);
 
-        $log = AuditLog::where('auditable_id', $client->id)->first();
+        $log = AuditLog::where('auditable_id', $client->id)
+            ->where('action', AuditLog::ACTION_UPDATED)
+            ->first();
         
-        if ($log && $log->changed_fields) {
-            $this->assertNotContains('updated_at', $log->changed_fields);
-        }
+        // Assert log exists
+        $this->assertNotNull($log, 'AuditLog should exist for name update');
+        
+        // Assert that updated_at is NOT in changed_fields, only name
+        $this->assertContains('name', $log->changed_fields ?? []);
+        $this->assertNotContains('updated_at', $log->changed_fields ?? []);
     }
 
     public function test_audit_log_model_scopes(): void
