@@ -37,7 +37,7 @@ class PnLTrendWidget extends AbstractWidget
                 Invoice::STATUS_VIEWED,
                 Invoice::STATUS_PARTIALLY_PAID,
                 Invoice::STATUS_OVERDUE,
-            ])->sum('amount_due');
+            ])->get()->sum(fn($inv) => $inv->amount_due);
 
             $netIncome = $revenue - $expenses;
 
