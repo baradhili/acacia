@@ -81,7 +81,7 @@ return new class extends Migration
             });
             
             Schema::table('expenses', function (Blueprint $table) {
-                $table->dropForeign(['supplier_id']);
+                
                 $table->foreign('supplier_id')
                     ->references('id')
                     ->on('suppliers')
