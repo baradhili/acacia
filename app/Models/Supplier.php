@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Traits\HasCustomFields;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Supplier extends Model
 {
@@ -44,4 +45,9 @@ class Supplier extends Model
         'same_as_billing' => 'boolean',
         'custom_fields' => 'array',
     ];
+
+    public function documents(): MorphMany
+    {
+        return $this->morphMany(Document::class, 'documentable');
+    }
 }
