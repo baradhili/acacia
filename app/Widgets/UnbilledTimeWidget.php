@@ -12,7 +12,8 @@ class UnbilledTimeWidget extends AbstractWidget
     public function run()
     {
         $entries = TimeEntry::with('project.client')
-            ->where('invoiced', false)
+            ->where('billable', true)
+            ->where('status', 'approved')
             ->whereNull('deleted_at')
             ->get()
             ->map(function ($entry) {
