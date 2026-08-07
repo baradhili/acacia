@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ClientController;
+use App\Http\Controllers\ChartOfAccountsController;
 use App\Http\Controllers\CreditNoteController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentController;
@@ -152,6 +153,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/reconciliation', [ReconciliationController::class, 'index'])->name('reconciliation.index');
     Route::get('/reconciliation/import', [ReconciliationController::class, 'import'])->name('reconciliation.import');
     Route::post('/reconciliation/import', [ReconciliationController::class, 'processImport'])->name('reconciliation.process-import');
+
+    // Chart of Accounts
+    Route::get('/chart-of-accounts', [ChartOfAccountsController::class, 'index'])->name('chart-of-accounts.index');
 });
 
 require __DIR__.'/auth.php';
