@@ -140,7 +140,7 @@ class ClientStatementService
         }
 
         // Sort by date
-        usort($items, fn($a, $b) => $a['date']->compareTo($b['date']));
+        usort($items, fn($a, $b) => $a['date']->timestamp <=> $b['date']->timestamp);
 
         return $items;
     }

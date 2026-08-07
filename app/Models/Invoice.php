@@ -186,6 +186,11 @@ class Invoice extends Model
     {
         $items = $this->items;
 
+        // Only recalculate if there are items to sum
+        if ($items->isEmpty()) {
+            return;
+        }
+
         // InvoiceItem.total includes tax (calculated in calculateTotals)
         // So we use sum of totals directly, not adding tax again
         $subtotal = $items->sum('total');

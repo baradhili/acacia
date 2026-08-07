@@ -243,7 +243,7 @@ class DashboardService
     public function getOutstandingPOBudgetsWidget(): array
     {
         $purchaseOrders = PurchaseOrder::with('project.client')
-            ->where('status', PurchaseOrder::STATUS_APPROVED)
+            ->whereIn('status', [PurchaseOrder::STATUS_OPEN, PurchaseOrder::STATUS_PARTIALLY_USED])
             ->get()
             ->map(function ($po) {
                 $spent = $po->getSpentAmount();

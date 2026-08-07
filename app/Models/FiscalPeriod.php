@@ -53,7 +53,7 @@ class FiscalPeriod extends Model
      */
     public function isLocked(): bool
     {
-        return $this->is_locked;
+        return (bool) $this->is_locked;
     }
 
     /**

@@ -151,8 +151,8 @@ class AuditServiceTest extends TestCase
         $client = $this->createClient();
         $client->update(['name' => 'Name 1']);
 
-        $this->assertGreaterThanOrEqual(1, AuditLog::created()->count());
-        $this->assertGreaterThanOrEqual(1, AuditLog::updated()->count());
+        $this->assertGreaterThanOrEqual(1, AuditLog::query()->created()->count());
+        $this->assertGreaterThanOrEqual(1, AuditLog::query()->updated()->count());
         
         $forModel = AuditLog::forModel(Client::class, $client->id)->count();
         $this->assertGreaterThanOrEqual(2, $forModel);

@@ -152,7 +152,7 @@ class PeriodLockServiceTest extends TestCase
         FiscalPeriod::createAnnualPeriodForYear(2025);
         FiscalPeriod::createAnnualPeriodForYear(2026);
 
-        $result = $this->service->lockPeriodsBeforeDate(Carbon::parse('2025-12-31'), 'Year-end close');
+        $result = $this->service->lockPeriodsBeforeDate(Carbon::parse('2026-01-01'), 'Year-end close');
 
         $this->assertEquals(2, $result['locked']); // 2024 and 2025
     }

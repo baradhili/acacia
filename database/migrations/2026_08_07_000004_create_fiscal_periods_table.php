@@ -21,7 +21,7 @@ return new class extends Migration
             $table->text('lock_reason')->nullable();
             $table->timestamps();
 
-            $table->unique(['year', 'period_type']);
+            $table->unique(['year', 'period_type', 'start_date']);
             $table->index(['start_date', 'end_date']);
             $table->index(['is_locked']);
         });

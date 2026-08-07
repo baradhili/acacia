@@ -10,6 +10,8 @@ class ReconciliationHistory extends Model
 {
     use HasFactory;
 
+    protected $table = 'reconciliation_history';
+
     const ACTION_AUTO_MATCH = 'auto_match';
     const ACTION_MANUAL_MATCH = 'manual_match';
     const ACTION_AUTO_CREATE_RECEIPT = 'auto_create_receipt';
