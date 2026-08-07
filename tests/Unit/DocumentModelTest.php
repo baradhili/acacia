@@ -2,12 +2,13 @@
 
 namespace Tests\Unit;
 
-use App\Models\Supplier;
+use App\Models\Client;
 use App\Models\Document;
 use App\Models\Expense;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PurchaseOrder;
+use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
@@ -118,9 +119,9 @@ class DocumentModelTest extends TestCase
 
     public function test_invoice_can_have_many_documents(): void
     {
-        $supplier = Supplier::factory()->create();
+        $client = Client::factory()->create();
         $invoice = Invoice::create([
-            'client_id' => $supplier->id,
+            'client_id' => $client->id,
             'invoice_number' => 'INV-2024-TEST',
             'status' => 'draft',
             'issue_date' => now(),
@@ -141,9 +142,9 @@ class DocumentModelTest extends TestCase
 
     public function test_payment_can_have_many_documents(): void
     {
-        $supplier = Supplier::factory()->create();
+        $client = Client::factory()->create();
         $payment = Payment::create([
-            'client_id' => $supplier->id,
+            'client_id' => $client->id,
             'payment_number' => 'PAY-2024-TEST',
             'amount' => 500,
             'payment_date' => now(),
@@ -162,9 +163,9 @@ class DocumentModelTest extends TestCase
 
     public function test_purchase_order_can_have_many_documents(): void
     {
-        $supplier = Supplier::factory()->create();
+        $client = Client::factory()->create();
         $po = PurchaseOrder::create([
-            'client_id' => $supplier->id,
+            'client_id' => $client->id,
             'po_number' => 'PO-2024-TEST',
             'title' => 'Test PO',
             'status' => 'draft',
@@ -184,9 +185,10 @@ class DocumentModelTest extends TestCase
     public function test_documents_can_attach_to_different_model_types(): void
     {
         $supplier = Supplier::factory()->create();
+        $client = Client::factory()->create();
         $expense = Expense::factory()->draft()->create(['supplier_id' => $supplier->id]);
         $invoice = Invoice::create([
-            'client_id' => $supplier->id,
+            'client_id' => $client->id,
             'invoice_number' => 'INV-2024-DIFF',
             'status' => 'draft',
             'issue_date' => now(),
