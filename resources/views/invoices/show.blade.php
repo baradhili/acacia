@@ -253,10 +253,10 @@
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <a href="{{ route('documents.download', $doc) }}" class="text-indigo-600 hover:text-indigo-900 text-sm">Download</a>
-                                    <form action="{{ route('documents.destroy', $doc) }}" method="POST" class="inline">
+                                    <form action="{{ route('documents.destroy', $doc) }}" method="POST" class="inline delete-document-form">
                                         @csrf
                                         @method('DELETE')
-                                        <button type="submit" class="text-red-600 hover:text-red-900 text-sm" onclick="return confirm('Delete?')">Delete</button>
+                                        <button type="submit" class="text-red-600 hover:text-red-900 text-sm">Delete</button>
                                     </form>
                                 </div>
                             </div>
@@ -370,22 +370,80 @@
 document.addEventListener('DOMContentLoaded', function() {
     const uploadArea = document.getElementById('documentUploadArea');
     const fileInput = document.getElementById('documentFile');
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+
     if (uploadArea && fileInput) {
         uploadArea.addEventListener('click', () => fileInput.click());
-        uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('border-indigo-500', 'bg-indigo-50'); });
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('border-indigo-500', 'bg-indigo-50');
+        });
         uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('border-indigo-500', 'bg-indigo-50'));
         uploadArea.addEventListener('drop', (e) => {
             e.preventDefault();
             uploadArea.classList.remove('border-indigo-500', 'bg-indigo-50');
             if (e.dataTransfer.files.length) {
-                fileInput.files = e.dataTransfer.files;
-                fileInput.closest('form').submit();
+                uploadFile(e.dataTransfer.files[0]);
             }
         });
         fileInput.addEventListener('change', () => {
-            if (fileInput.files.length) fileInput.closest('form').submit();
+            if (fileInput.files.length) {
+                uploadFile(fileInput.files[0]);
+            }
         });
     }
+
+    function uploadFile(file) {
+        if (!file) return;
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('documentable_type', 'Invoice');
+        formData.append('documentable_id', '{{ $invoice->id }}');
+
+        fetch('{{ route('documents.store') }}', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': csrfToken,
+                'Accept': 'application/json',
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.id) {
+                window.location.reload();
+            }
+        })
+        .catch(error => {
+            console.error('Upload failed:', error);
+            alert('Upload failed. Please try again.');
+        });
+    }
+
+    // Handle delete forms via AJAX
+    document.querySelectorAll('.delete-document-form').forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (!confirm('Delete this document?')) return;
+            
+            fetch(this.action, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                window.location.reload();
+            })
+            .catch(error => {
+                console.error('Delete failed:', error);
+                alert('Delete failed. Please try again.');
+            });
+        });
+    });
 });
 </script>
 @endpush
