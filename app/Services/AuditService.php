@@ -2,9 +2,8 @@
 
 namespace App\Services;
 
-use App\Models\AuditLog;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Request;
+use Illuminate\Support\Facades\Log;
 
 class AuditService
 {
@@ -21,12 +20,16 @@ class AuditService
         \App\Models\BankTransaction::class,
     ];
 
+    public const ACTION_CREATED = 'created';
+    public const ACTION_UPDATED = 'updated';
+    public const ACTION_DELETED = 'deleted';
+
     /**
      * Log a model creation
      */
     public function logCreated(Model $model): void
     {
-        $this->log($model, AuditLog::ACTION_CREATED, [
+        $this->log($model, self::ACTION_CREATED, [
             'new_values' => $this->getValues($model),
         ]);
     }
@@ -37,12 +40,12 @@ class AuditService
     public function logUpdated(Model $model, array $oldValues): void
     {
         $changedFields = $this->getChangedFields($model, $oldValues);
-        
+
         if (empty($changedFields)) {
             return; // No changes
         }
 
-        $this->log($model, AuditLog::ACTION_UPDATED, [
+        $this->log($model, self::ACTION_UPDATED, [
             'old_values' => $this->filterIgnoredFields($oldValues),
             'new_values' => $this->filterIgnoredFields($model->getAttributes()),
             'changed_fields' => $changedFields,
@@ -54,30 +57,39 @@ class AuditService
      */
     public function logDeleted(Model $model): void
     {
-        $this->log($model, AuditLog::ACTION_DELETED, [
+        $this->log($model, self::ACTION_DELETED, [
             'old_values' => $this->getValues($model),
         ]);
     }
 
     /**
-     * Create the audit log entry
+     * Write audit entry to syslog
      */
     protected function log(Model $model, string $action, array $data): void
     {
         $request = request();
-        
-        AuditLog::create([
-            'auditable_type' => get_class($model),
-            'auditable_id' => $model->getKey(),
+
+        $auditEntry = [
+            'timestamp' => now()->toIso8601String(),
+            'event' => 'audit',
             'action' => $action,
-            'user_id' => auth()->id(),
-            'user_name' => auth()->user()->name ?? null,
-            'ip_address' => $request?->ip(),
-            'user_agent' => $request?->userAgent(),
-            'old_values' => $data['old_values'] ?? null,
-            'new_values' => $data['new_values'] ?? null,
-            'changed_fields' => $data['changed_fields'] ?? null,
-        ]);
+            'model' => [
+                'type' => get_class($model),
+                'id' => $model->getKey(),
+            ],
+            'user' => [
+                'id' => auth()->id(),
+                'name' => auth()->user()->name ?? null,
+            ],
+            'request' => [
+                'ip_address' => $request?->ip(),
+                'user_agent' => $request?->userAgent(),
+            ],
+            'changes' => $data,
+        ];
+
+        // Write to syslog as JSON
+        Log::channel('syslog')->info('AUDIT', $auditEntry);
     }
 
     /**
@@ -119,7 +131,7 @@ class AuditService
         if (is_array($old) || is_array($new)) {
             return json_encode($old) !== json_encode($new);
         }
-        
+
         return $old !== $new;
     }
 
@@ -129,58 +141,6 @@ class AuditService
     protected function filterIgnoredFields(array $values): array
     {
         return array_diff_key($values, array_flip($this->ignoredFields));
-    }
-
-    /**
-     * Get audit history for a model
-     */
-    public function getHistory(string $modelType, int $modelId): \Illuminate\Database\Eloquent\Collection
-    {
-        return AuditLog::forModel($modelType, $modelId)
-            ->orderBy('created_at', 'desc')
-            ->get();
-    }
-
-    /**
-     * Get audit statistics
-     */
-    public function getStats(?string $startDate = null, ?string $endDate = null): array
-    {
-        $query = AuditLog::query();
-
-        if ($startDate) {
-            $query->where('created_at', '>=', $startDate);
-        }
-        if ($endDate) {
-            $query->where('created_at', '<=', $endDate);
-        }
-
-        $byAction = (clone $query)
-            ->selectRaw('action, COUNT(*) as count')
-            ->groupBy('action')
-            ->pluck('count', 'action')
-            ->toArray();
-
-        $byModel = (clone $query)
-            ->selectRaw('auditable_type, COUNT(*) as count')
-            ->groupBy('auditable_type')
-            ->pluck('count', 'auditable_type')
-            ->toArray();
-
-        $byUser = (clone $query)
-            ->whereNotNull('user_id')
-            ->selectRaw('user_id, user_name, COUNT(*) as count')
-            ->groupBy('user_id', 'user_name')
-            ->get()
-            ->mapWithKeys(fn($item) => [$item->user_name ?? 'Unknown' => $item->count])
-            ->toArray();
-
-        return [
-            'total' => $query->count(),
-            'by_action' => $byAction,
-            'by_model' => $byModel,
-            'by_user' => $byUser,
-        ];
     }
 
     /**
