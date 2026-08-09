@@ -64,7 +64,7 @@
             </div>
             <div class="mt-6 flex justify-end gap-3">
                 <a href="{{ route('clients.index') }}" class="px-4 py-2 text-gray-700 hover:text-gray-900">Cancel</a>
-                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">Update Client</button>
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">Save Changes</button>
             </div>
         </form>
     </div>

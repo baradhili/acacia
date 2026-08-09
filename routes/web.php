@@ -157,6 +157,7 @@ Route::middleware('auth')->group(function () {
     // Wise Reconciliation
     Route::get('/reconciliation', [ReconciliationController::class, 'index'])->name('reconciliation.index');
     Route::get('/reconciliation/import', [ReconciliationController::class, 'import'])->name('reconciliation.import');
+    Route::get('/reconciliation/wise/import', [ReconciliationController::class, 'import'])->name('reconciliation.wise.import');
     Route::post('/reconciliation/import', [ReconciliationController::class, 'processImport'])->name('reconciliation.process-import');
     Route::post('/reconciliation/auto-match', [ReconciliationController::class, 'autoMatch'])->name('reconciliation.auto-match');
 

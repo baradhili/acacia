@@ -26,7 +26,7 @@
             <div class="flex items-center justify-between">
                 <div>
                     <p class="text-sm text-gray-500">Pending Transactions</p>
-                    <p class="text-2xl font-bold text-gray-800">0</p>
+                    <p class="text-2xl font-bold text-gray-800">{{ $pendingTransactions->count() }}</p>
                 </div>
                 <div class="p-3 bg-blue-100 rounded-full">
                     <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -114,6 +114,43 @@
                 </svg>
                 Import Wise CSV
             </a>
+        </div>
+    </div>
+
+    <!-- Transactions List -->
+    <div class="mt-6 bg-white rounded-lg shadow">
+        <div class="p-6 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-800">Bank Transactions</h2>
+        </div>
+        <div class="p-6">
+            <table class="min-w-full divide-y divide-gray-200" id="bank-transactions-table">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reference</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    @forelse($pendingTransactions as $transaction)
+                        <tr id="transaction-{{ $transaction->id }}">
+                            <td class="px-6 py-4 whitespace-nowrap text-gray-500">{{ optional($transaction->transaction_date)->format('Y-m-d') }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-gray-800">{{ $transaction->description }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-gray-500">{{ $transaction->reference ?? '-' }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right font-medium {{ $transaction->amount >= 0 ? 'text-green-600' : 'text-red-600' }}">{{ number_format((float) $transaction->amount, 2) }} {{ $transaction->currency }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ $transaction->status === \App\Models\BankTransaction::STATUS_MATCHED ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800' }}">{{ $transaction->status }}</span>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="5" class="px-6 py-8 text-center text-gray-500">No transactions yet. Import a Wise CSV to get started.</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
         </div>
     </div>
 

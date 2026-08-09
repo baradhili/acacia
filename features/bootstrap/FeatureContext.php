@@ -5,10 +5,12 @@ use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Expense;
+use App\Models\BankTransaction;
+use App\Models\CreditNote;
 use App\Models\Document;
+use App\Models\Estimate;
 use App\Models\Project;
 use App\Models\TimeEntry;
-use App\Models\BankTransaction;
 use Behat\Behat\Context\Context;
 use Behat\Behat\Hook\Scope\BeforeScenarioScope;
 use Behat\Behat\Hook\Scope\AfterScenarioScope;
@@ -124,17 +126,75 @@ class FeatureContext extends BehatContext
     // ============== Navigation Steps ==============
 
     /**
-     * @Given I am on the :path page
+     * @Given /^I am on the (.+) page$/
      */
     public function iAmOnThePage($path)
     {
         $pageMap = [
             'registration' => '/register',
+            'register' => '/register',
             'login' => '/login',
             'dashboard' => '/dashboard',
+            'clients' => '/clients',
+            'new client' => '/clients/create',
+            'invoices' => '/invoices',
+            'new invoice' => '/invoices/create',
+            'recurring invoices' => '/invoices/recurring',
+            'new recurring invoice' => '/invoices/recurring/create',
+            'expenses' => '/expenses',
+            'new expense' => '/expenses/create',
+            'payments' => '/payments',
+            'payment summary' => '/payments/summary',
+            'journal entries' => '/accounting/journal',
+            'new journal entry' => '/accounting/journal/create',
+            'projects' => '/projects',
+            'new project' => '/projects/create',
+            'project' => '/projects',
+            'time entries' => '/projects/time-entries',
+            'time entry' => '/projects/time-entries',
+            'reconciliation' => '/reconciliation',
+            'wise import' => '/reconciliation/wise/import',
+            'profile' => '/profile',
+            'my profile' => '/profile',
+            'admin settings' => '/admin',
+            'pending approvals' => '/approvals/pending',
+            'time by client report' => '/reports/time-by-client',
+            'time by staff report' => '/reports/time-by-staff',
+            'project profitability report' => '/reports/project-profitability',
+            'ifrs balance sheet' => '/reports/ifrs/balance-sheet',
+            'ifrs income statement' => '/reports/ifrs/income-statement',
+            'ifrs cash flow statement' => '/reports/ifrs/cash-flow',
         ];
-        $url = $pageMap[$path] ?? ('/' . ltrim($path, '/'));
-        $this->visit($url);
+
+        $key = strtolower(trim($path));
+
+        if (array_key_exists($key, $pageMap)) {
+            $this->visit($pageMap[$key]);
+            return;
+        }
+
+        // Details pages (e.g. "invoice details", "expense details") -> /{plural}/{last_created_id}
+        if (preg_match('/^(.+)\s+details$/', $key, $m)) {
+            $base = $m[1];
+            $id = $this->getFromSession('last_created_id');
+            $plural = [
+                'invoice' => 'invoices',
+                'expense' => 'expenses',
+                'estimate' => 'estimates',
+                'credit note' => 'credit-notes',
+                'recurring invoice' => 'invoices/recurring',
+                'client' => 'clients',
+                'project' => 'projects',
+                'payment' => 'payments',
+                'time entry' => 'time-entries',
+            ];
+            $segment = $plural[$base] ?? str_replace(' ', '-', $base) . 's';
+            $this->visit('/' . $segment . '/' . $id);
+            return;
+        }
+
+        // Fallback: convert spaces to dashes.
+        $this->visit('/' . ltrim(str_replace(' ', '-', $key), '/'));
     }
 
     /**
@@ -224,14 +284,6 @@ class FeatureContext extends BehatContext
         $this->visit('/verify-email/' . $this->user->id . '/invalid-token-12345');
     }
 
-    /**
-     * @Given I am on the clients page
-     */
-    public function iAmOnTheClientsPage()
-    {
-        $this->visit('/clients');
-    }
-
     // ============== Authentication Steps ==============
 
     /**
@@ -309,6 +361,14 @@ class FeatureContext extends BehatContext
     protected function ensureRoleExists($roleName)
     {
         \Spatie\Permission\Models\Role::firstOrCreate(['name' => $roleName]);
+    }
+
+    /**
+     * Find a client by name, creating one if it does not exist.
+     */
+    protected function findOrCreateClient($name)
+    {
+        return Client::firstOrCreate(['name' => $name]);
     }
 
     /**
@@ -491,6 +551,7 @@ class FeatureContext extends BehatContext
     public function iPress($button)
     {
         if (!empty($this->lastFilledFields)) {
+            $escaper = new \Behat\Mink\Selector\Xpath\Escaper();
             $page = $this->getSession()->getPage();
             foreach ($this->lastFilledFields as $fieldName) {
                 $field = $page->findField($fieldName);
@@ -682,7 +743,16 @@ class FeatureContext extends BehatContext
     {
         $client = Client::where('name', $name)->first();
         $row = $this->findClientRow($client->id);
-        $row->clickLink($link);
+        try {
+            $row->clickLink($link);
+        } catch (\Behat\Mink\Exception\ElementNotFoundException $e) {
+            $button = $row->findButton($link);
+            if ($button) {
+                $button->press();
+            } else {
+                throw $e;
+            }
+        }
     }
 
     /**
@@ -985,7 +1055,7 @@ class FeatureContext extends BehatContext
      */
     public function anInvoiceExistsForClient($clientName)
     {
-        $client = Client::where('name', $clientName)->first();
+        $client = $this->findOrCreateClient($clientName);
         $invoice = Invoice::factory()->create(['client_id' => $client->id]);
         $this->addToSession('last_created_id', $invoice->id);
     }
@@ -995,7 +1065,7 @@ class FeatureContext extends BehatContext
      */
     public function anInvoiceExistsForClientWithAmount($clientName, $amount)
     {
-        $client = Client::where('name', $clientName)->first();
+        $client = $this->findOrCreateClient($clientName);
         $invoice = Invoice::factory()->create([
             'client_id' => $client->id,
             'total' => $amount,
@@ -1047,7 +1117,7 @@ class FeatureContext extends BehatContext
      */
     public function anEstimateExists()
     {
-        $estimate = Invoice::factory()->create(['type' => 'estimate']);
+        $estimate = Estimate::factory()->create();
         $this->addToSession('last_created_id', $estimate->id);
     }
 
@@ -1056,7 +1126,7 @@ class FeatureContext extends BehatContext
      */
     public function anApprovedEstimateExists()
     {
-        $estimate = Invoice::factory()->create(['type' => 'estimate', 'status' => 'accepted']);
+        $estimate = Estimate::factory()->create(['status' => Estimate::STATUS_ACCEPTED]);
         $this->addToSession('last_created_id', $estimate->id);
     }
 
@@ -1065,7 +1135,7 @@ class FeatureContext extends BehatContext
      */
     public function aSentEstimateExists()
     {
-        $estimate = Invoice::factory()->create(['type' => 'estimate', 'status' => 'sent']);
+        $estimate = Estimate::factory()->create(['status' => Estimate::STATUS_SENT]);
         $this->addToSession('last_created_id', $estimate->id);
     }
 
@@ -1101,11 +1171,11 @@ class FeatureContext extends BehatContext
      */
     public function aCreditNoteExistsForClientWithAmount($clientName, $amount)
     {
-        $client = Client::where('name', $clientName)->first();
-        $creditNote = Invoice::factory()->create([
+        $client = $this->findOrCreateClient($clientName);
+        $creditNote = CreditNote::factory()->create([
             'client_id' => $client->id,
-            'type' => 'credit_note',
             'total' => $amount,
+            'remaining_amount' => $amount,
         ]);
         $this->addToSession('credit_note_id', $creditNote->id);
     }
@@ -1115,7 +1185,7 @@ class FeatureContext extends BehatContext
      */
     public function aDraftCreditNoteExists()
     {
-        $creditNote = Invoice::factory()->create(['type' => 'credit_note', 'status' => 'draft']);
+        $creditNote = CreditNote::factory()->create();
         $this->addToSession('last_created_id', $creditNote->id);
     }
 
@@ -1200,7 +1270,7 @@ class FeatureContext extends BehatContext
      */
     public function paymentsExistForClient($clientName)
     {
-        $client = Client::where('name', $clientName)->first();
+        $client = $this->findOrCreateClient($clientName);
         Payment::factory()->count(3)->create(['client_id' => $client->id]);
     }
 
@@ -1685,9 +1755,13 @@ class FeatureContext extends BehatContext
      */
     public function iConfirmTheDeletion()
     {
-        // The delete form submits immediately in the JS-less Mink driver
-        // (the inline confirm() dialog does not block), so the deletion
-        // already happened when "Delete" was clicked. Nothing to do here.
+        // In a JS-less driver the inline confirm() is skipped, so the Delete button
+        // may already have submitted in the previous step. Only press if still present.
+        try {
+            $this->pressButton('Delete');
+        } catch (\Behat\Mink\Exception\ElementNotFoundException $e) {
+            // Already deleted/redirected - nothing to confirm.
+        }
     }
 
     /**

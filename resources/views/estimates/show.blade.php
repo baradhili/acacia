@@ -19,7 +19,7 @@
             @if($estimate->status === 'draft')
                 <form action="{{ route('estimates.send', $estimate) }}" method="POST" class="inline">
                     @csrf
-                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">Send</button>
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">Send Estimate</button>
                 </form>
                 <a href="{{ route('estimates.edit', $estimate) }}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg">Edit</a>
             @endif
