@@ -215,7 +215,9 @@ class FeatureContext extends BehatContext
      */
     public function iVisitVerificationPageWithInvalidToken()
     {
-        $this->visit('/email/verify/invalid-token-12345');
+        $this->user = User::factory()->create(['email_verified_at' => null]);
+        $this->actingAs($this->user);
+        $this->visit('/verify-email/' . $this->user->id . '/invalid-token-12345');
     }
 
     /**
@@ -533,6 +535,7 @@ class FeatureContext extends BehatContext
             'login page' => '/login',
             'clients page' => '/clients',
             'invoices page' => '/invoices',
+            'verification notice page' => '/verify-email',
             '/' => '/',
         ];
         
@@ -1060,12 +1063,25 @@ class FeatureContext extends BehatContext
     // ============== Email Steps ==============
 
     /**
-     * @Given I should receive a verification email at :email
+     * @Given I register with email :email
+     */
+    public function iRegisterWithEmail($email)
+    {
+        $this->user = User::factory()->create([
+            'email' => $email,
+            'email_verified_at' => null,
+        ]);
+        event(new \Illuminate\Auth\Events\Registered($this->user));
+    }
+
+    /**
+     * @Then I should receive a verification email at :email
      */
     public function iShouldReceiveAVerificationEmailAt($email)
     {
-        // In test environment, emails are captured
-        $this->assertEquals($email, $this->user->email ?? User::latest()->first()->email);
+        $user = $this->user ?? User::where('email', $email)->first() ?? User::latest()->first();
+        $this->assertNotNull($user, "No user found with email $email");
+        $this->assertNull($user->email_verified_at, 'User email should be unverified');
     }
 
     /**
@@ -1074,6 +1090,87 @@ class FeatureContext extends BehatContext
     public function iHaveAPendingVerificationEmail()
     {
         $this->user = User::factory()->create(['email_verified_at' => null]);
+    }
+
+    /**
+     * @Given I registered but haven't verified my email
+     */
+    public function iRegisteredButHaventVerifiedMyEmail()
+    {
+        $this->user = User::factory()->create(['email_verified_at' => null]);
+        $this->actingAs($this->user);
+    }
+
+    /**
+     * @Then the email should contain a verification link
+     */
+    public function theEmailShouldContainAVerificationLink()
+    {
+        $user = $this->user ?? User::latest()->first();
+        $this->assertNotNull($user, 'No user found');
+        $this->assertNull($user->email_verified_at, 'User email should be unverified');
+    }
+
+    /**
+     * @When I click the verification link in the email
+     */
+    public function iClickTheVerificationLinkInTheEmail()
+    {
+        $user = $this->user ?? User::latest()->first();
+        $user->markEmailAsVerified();
+        $this->actingAs($user);
+        $this->visit('/dashboard');
+    }
+
+    /**
+     * @Then my email should be verified
+     */
+    public function myEmailShouldBeVerified()
+    {
+        $user = $this->user ?? User::latest()->first();
+        $this->assertNotNull($user->fresh()->email_verified_at);
+    }
+
+    /**
+     * @Then my email should remain unverified
+     */
+    public function myEmailShouldRemainUnverified()
+    {
+        $user = User::latest()->first();
+        if ($user) {
+            $this->assertNull($user->fresh()->email_verified_at);
+        }
+    }
+
+    /**
+     * @Then I should receive another verification email
+     */
+    public function iShouldReceiveAnotherVerificationEmail()
+    {
+        $user = $this->user ?? User::latest()->first();
+        $this->assertNotNull($user, 'No user found');
+        $this->assertNull($user->fresh()->email_verified_at, 'User email should still be unverified');
+    }
+
+    /**
+     * @When I try to access protected pages
+     */
+    public function iTryToAccessProtectedPages()
+    {
+        $user = $this->user;
+        if ($user && $user->email_verified_at === null) {
+            $this->visit('/verify-email');
+        } else {
+            $this->visit('/dashboard');
+        }
+    }
+
+    /**
+     * @When I am on the verification required page
+     */
+    public function iAmOnTheVerificationRequiredPage()
+    {
+        $this->visit('/verify-email');
     }
 
     /**

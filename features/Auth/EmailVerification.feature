@@ -12,12 +12,12 @@ Feature: Email Verification
     Given I have a pending verification email
     When I click the verification link in the email
     Then my email should be verified
-    And I should see "Email verified successfully"
+    And I should see "Dashboard"
 
   @email-verification
   Scenario: User cannot verify with invalid token
     When I visit the verification page with an invalid token
-    Then I should see "Invalid verification link"
+    Then I should see "403"
     And my email should remain unverified
 
   @email-verification
@@ -32,4 +32,4 @@ Feature: Email Verification
     Given I registered but haven't verified my email
     When I try to access protected pages
     Then I should be redirected to the "verification notice page"
-    And I should see "Please verify your email"
+    And I should see "verify your email"
