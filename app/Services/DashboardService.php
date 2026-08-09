@@ -54,14 +54,14 @@ class DashboardService
 
         // Outflows (expenses paid) in last 30 days
         $outflows = \App\Models\Expense::where('status', \App\Models\Expense::STATUS_PAID)
-            ->where('paid_at', '>=', $thirtyDaysAgo)
-            ->where('paid_at', '<=', $today)
+            ->where('paid_date', '>=', $thirtyDaysAgo->toDateString())
+            ->where('paid_date', '<=', $today->toDateString())
             ->sum('total');
 
         // Previous period outflows
         $previousOutflows = \App\Models\Expense::where('status', \App\Models\Expense::STATUS_PAID)
-            ->where('paid_at', '>=', $sixtyDaysAgo)
-            ->where('paid_at', '<', $thirtyDaysAgo)
+            ->where('paid_date', '>=', $sixtyDaysAgo->toDateString())
+            ->where('paid_date', '<', $thirtyDaysAgo->toDateString())
             ->sum('total');
 
         $netCashFlow = $inflows - $outflows;
@@ -99,7 +99,7 @@ class DashboardService
                 ->sum('amount');
 
             $outflow = \App\Models\Expense::where('status', \App\Models\Expense::STATUS_PAID)
-                ->whereBetween('paid_at', [$dayStart, $dayEnd])
+                ->whereBetween('paid_date', [$dayStart->toDateString(), $dayEnd->toDateString()])
                 ->sum('total');
 
             $data[] = [
@@ -377,7 +377,7 @@ class DashboardService
 
             // Expenses
             $expenses = \App\Models\Expense::where('status', \App\Models\Expense::STATUS_PAID)
-                ->whereBetween('paid_at', [$monthStart, $monthEnd])
+                ->whereBetween('paid_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
                 ->sum('total');
 
             // Invoices issued
