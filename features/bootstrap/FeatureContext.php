@@ -498,7 +498,8 @@ class FeatureContext extends BehatContext
                     if ($form) {
                         $btn = $form->findButton($button);
                         if (!$btn) {
-                            $btn = $form->find('xpath', sprintf('//button[normalize-space()=%s] | //input[@type="submit" and @value=%s]', \Behat\Mink\Selector\Xpath\Escaper::escapeLiteral($button), \Behat\Mink\Selector\Xpath\Escaper::escapeLiteral($button)));
+                            $literal = \Behat\Mink\Selector\Xpath\Escaper::escapeLiteral($button);
+                            $btn = $form->find('xpath', sprintf('//button[contains(normalize-space(), %s)] | //input[@type="submit" and contains(@value, %s)]', $literal, $literal));
                         }
                         if ($btn) {
                             $btn->press();
@@ -602,6 +603,26 @@ class FeatureContext extends BehatContext
         }
 
         return null;
+    }
+
+    /**
+     * Attach a file to a form field by its label/id/name/title/alt.
+     *
+     * Replaces the MinkContext::attachFileToField() helper, which is not
+     * available because FeatureContext does not extend MinkContext.
+     */
+    private function attachFileToFieldNode(string $field, string $path): void
+    {
+        $node = $this->getSession()->getPage()->findField($field);
+        if ($node === null) {
+            throw new \Behat\Mink\Exception\ElementNotFoundException(
+                $this->getSession()->getDriver(),
+                'form field',
+                'id|name|label|value|placeholder',
+                $field
+            );
+        }
+        $node->attachFile($path);
     }
 
     // ============== Assertion Steps ==============
@@ -1429,7 +1450,7 @@ class FeatureContext extends BehatContext
         }
         file_put_contents($path, 'test content');
         
-        $this->attachFileToField('file', $path);
+        $this->attachFileToFieldNode('file', $path);
     }
 
     /**
@@ -1465,7 +1486,8 @@ class FeatureContext extends BehatContext
         }
         file_put_contents($path, "Date,Amount,Currency,Reference\n2024-01-15,100.00,EUR,INV-001");
         
-        $this->attachFileToField('csv_file', $path);
+        $this->attachFileToFieldNode('wise_csv', $path);
+        $this->lastFilledFields = ['wise_csv'];
     }
 
     // ============== Payment Steps ==============
@@ -1576,7 +1598,7 @@ class FeatureContext extends BehatContext
      */
     public function iAmOnTheWiseImportPage()
     {
-        $this->visit('/reconciliation/wise/import');
+        $this->visit('/reconciliation/import');
     }
 
     /**

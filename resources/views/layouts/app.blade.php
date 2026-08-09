@@ -24,6 +24,7 @@
             @include('layouts.topbar')
 
             <main class="flex-1 p-6 overflow-y-auto">
+                <x-flash-messages />
                 @yield('header')
                 @yield('content')
             </main>
