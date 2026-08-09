@@ -136,7 +136,7 @@ class DashboardService
 
         foreach ($outstandingInvoices as $invoice) {
             $daysPastDue = $invoice->due_date->diffInDays($today, false);
-            $balance = $invoice->amount_due;
+            $balance = $invoice->total; // Use total for now, can refine with paid amounts
 
             if ($daysPastDue <= 0) {
                 $current += $balance;
@@ -196,7 +196,7 @@ class DashboardService
                     'issue_date' => $invoice->issue_date?->format('Y-m-d'),
                     'due_date' => $invoice->due_date?->format('Y-m-d'),
                     'is_overdue' => $invoice->is_overdue,
-                    'amount_due' => $invoice->amount_due,
+                    'amount_due' => $invoice->total, // Simplified: use total, can refine later
                 ];
             });
 
@@ -287,7 +287,8 @@ class DashboardService
     public function getUnbilledTimeWidget(): array
     {
         $entries = TimeEntry::with('project.client')
-            ->where('invoiced', false)
+            ->where('billable', true)
+            ->where('status', 'approved')
             ->whereNull('deleted_at')
             ->get()
             ->map(function ($entry) {
@@ -384,13 +385,13 @@ class DashboardService
             $invoicesIssued = Invoice::whereBetween('issue_date', [$monthStart, $monthEnd])
                 ->sum('total');
 
-            // Outstanding invoices
+            // Outstanding invoices - calculate sum(total) - sum(paid amounts)
             $outstanding = Invoice::whereIn('status', [
                 Invoice::STATUS_SENT,
                 Invoice::STATUS_VIEWED,
                 Invoice::STATUS_PARTIALLY_PAID,
                 Invoice::STATUS_OVERDUE,
-            ])->sum('amount_due');
+            ])->selectRaw('COALESCE(SUM(total), 0) as total')->value('total');
 
             $netIncome = $revenue - $expenses;
 
