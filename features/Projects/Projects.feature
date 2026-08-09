@@ -34,7 +34,7 @@ Feature: Projects
   Scenario: User can submit time entry for approval
     Given a draft time entry exists
     And I am logged in
-    When I click "Submit for Approval"
+    When I click "Submit for Approval" on the time entry
     Then the time entry status should be "Submitted"
 
   @projects

@@ -7,6 +7,7 @@ use App\Models\Payment;
 use App\Models\Expense;
 use App\Models\Document;
 use App\Models\Project;
+use App\Models\TimeEntry;
 use Behat\Behat\Context\Context;
 use Behat\Behat\Hook\Scope\BeforeScenarioScope;
 use Behat\Behat\Hook\Scope\AfterScenarioScope;
@@ -532,8 +533,28 @@ class FeatureContext extends BehatContext
         try {
             $this->clickLink($button);
         } catch (\Behat\Mink\Exception\ElementNotFoundException $e) {
-            $this->pressButton($button);
+            $buttonElement = $this->findButtonByText($button);
+            if ($buttonElement === null) {
+                throw $e;
+            }
+            $buttonElement->press();
         }
+    }
+
+    /**
+     * @When I click :button on the time entry
+     */
+    public function iClickOnTheTimeEntry($button)
+    {
+        $entry = TimeEntry::latest('id')->first();
+        $this->visit('/time-entries/' . $entry->id);
+        $link = $this->findButtonByText($button);
+        if ($link !== null) {
+            $link->press();
+
+            return;
+        }
+        $this->clickLink($button);
     }
 
     /**
@@ -1031,8 +1052,8 @@ class FeatureContext extends BehatContext
      */
     public function aSubmittedTimeEntryExists()
     {
-        // Depends on your time entry implementation
-        $this->addToSession('time_entry_status', 'submitted');
+        $entry = TimeEntry::factory()->submitted()->create();
+        $this->addToSession('time_entry_id', $entry->id);
     }
 
     /**
@@ -1040,7 +1061,8 @@ class FeatureContext extends BehatContext
      */
     public function aDraftTimeEntryExists()
     {
-        $this->addToSession('time_entry_status', 'draft');
+        $entry = TimeEntry::factory()->draft()->create();
+        $this->addToSession('time_entry_id', $entry->id);
     }
 
     /**
