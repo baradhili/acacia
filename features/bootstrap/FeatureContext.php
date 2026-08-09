@@ -8,6 +8,7 @@ use App\Models\Expense;
 use App\Models\Document;
 use App\Models\Project;
 use App\Models\TimeEntry;
+use App\Models\BankTransaction;
 use Behat\Behat\Context\Context;
 use Behat\Behat\Hook\Scope\BeforeScenarioScope;
 use Behat\Behat\Hook\Scope\AfterScenarioScope;
@@ -1148,7 +1149,32 @@ class FeatureContext extends BehatContext
      */
     public function thereAreUnmatchedTransactionsAndInvoices()
     {
-        // Depends on your reconciliation implementation
+        // One matchable pair: a sent invoice and a pending Wise credit whose
+        // reference equals the invoice number and amount matches the total.
+        $invoice = Invoice::factory()->create([
+            'status' => Invoice::STATUS_SENT,
+            'total' => 250.00,
+            'invoice_number' => 'INV-AUTOMATCH-1',
+        ]);
+
+        BankTransaction::factory()->create([
+            'source' => BankTransaction::SOURCE_WISE,
+            'type' => BankTransaction::TYPE_CREDIT,
+            'amount' => 250.00,
+            'currency' => 'AUD',
+            'reference' => 'INV-AUTOMATCH-1',
+            'status' => BankTransaction::STATUS_PENDING,
+        ]);
+
+        // One unmatchable pending transaction (no matching invoice).
+        BankTransaction::factory()->create([
+            'source' => BankTransaction::SOURCE_WISE,
+            'type' => BankTransaction::TYPE_CREDIT,
+            'amount' => 999.99,
+            'currency' => 'AUD',
+            'reference' => 'NO-MATCH',
+            'status' => BankTransaction::STATUS_PENDING,
+        ]);
     }
 
     /**

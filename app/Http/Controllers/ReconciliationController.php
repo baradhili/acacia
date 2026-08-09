@@ -9,7 +9,41 @@ class ReconciliationController extends Controller
 {
     public function index()
     {
-        return view('reconciliation.index');
+        $pendingTransactions = BankTransaction::pending()
+            ->orderBy('transaction_date', 'desc')
+            ->get();
+
+        return view('reconciliation.index', compact('pendingTransactions'));
+    }
+
+    /**
+     * Pair pending BankTransactions to awaiting-payment invoices by reference
+     * (BankTransaction.reference == Invoice.invoice_number) and amount.
+     */
+    public function autoMatch()
+    {
+        $matched = 0;
+        $pending = BankTransaction::pending()->where('type', BankTransaction::TYPE_CREDIT)->get();
+
+        foreach ($pending as $transaction) {
+            if (empty($transaction->reference)) {
+                continue;
+            }
+
+            $invoice = \App\Models\Invoice::where('invoice_number', $transaction->reference)
+                ->whereIn('status', [\App\Models\Invoice::STATUS_SENT, \App\Models\Invoice::STATUS_VIEWED, \App\Models\Invoice::STATUS_OVERDUE])
+                ->first();
+
+            if (!$invoice || (float) $invoice->total !== (float) abs($transaction->amount)) {
+                continue;
+            }
+
+            $transaction->markAsMatched($invoice->id, 'invoice');
+            $matched++;
+        }
+
+        return redirect()->route('reconciliation.index')
+            ->with('success', sprintf('Auto-Match complete: %d transaction(s) paired.', $matched));
     }
 
     public function import()
