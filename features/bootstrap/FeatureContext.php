@@ -550,6 +550,14 @@ class FeatureContext extends BehatContext
     {
         $entry = TimeEntry::latest('id')->first();
         $this->visit('/time-entries/' . $entry->id);
+
+        // The reject flow is two-step (enter reason, then "Submit Rejection"),
+        // so clicking "Reject" only navigates to the show page where the
+        // rejection form is already rendered.
+        if (strcasecmp($button, 'Reject') === 0) {
+            return;
+        }
+
         $link = $this->findButtonByText($button);
         if ($link !== null) {
             $link->press();
@@ -557,6 +565,106 @@ class FeatureContext extends BehatContext
             return;
         }
         $this->clickLink($button);
+    }
+
+    /**
+     * @Then the time entry status should be :status
+     */
+    public function theTimeEntryStatusShouldBe($status)
+    {
+        $entry = TimeEntry::latest('id')->first();
+        if ($entry === null) {
+            throw new \RuntimeException('No time entry found to assert status.');
+        }
+        if (strcasecmp($entry->status, $status) !== 0) {
+            throw new \RuntimeException(sprintf(
+                'Expected time entry status "%s", got "%s".',
+                $status,
+                $entry->status
+            ));
+        }
+    }
+
+    /**
+     * @Then approval timestamp should be recorded
+     */
+    public function approvalTimestampShouldBeRecorded()
+    {
+        $entry = TimeEntry::latest('id')->first();
+        if ($entry === null || $entry->approved_at === null) {
+            throw new \RuntimeException('Approval timestamp was not recorded on the time entry.');
+        }
+    }
+
+    /**
+     * @When I enter rejection reason :reason
+     */
+    public function iEnterRejectionReason($reason)
+    {
+        $page = $this->getSession()->getPage();
+        $field = $page->findField('reason');
+        if ($field === null) {
+            throw new \Behat\Mink\Exception\ElementNotFoundException(
+                $this->getSession()->getDriver(),
+                'field',
+                'named',
+                'reason'
+            );
+        }
+        $field->setValue($reason);
+        $this->lastFilledFields = ['reason'];
+    }
+
+    /**
+     * @Then rejection reason should be visible
+     */
+    public function rejectionReasonShouldBeVisible()
+    {
+        $entry = TimeEntry::latest('id')->first();
+        if ($entry === null || empty($entry->rejection_reason)) {
+            throw new \RuntimeException('No rejection reason recorded on the time entry.');
+        }
+        $this->assertPageContainsText($entry->rejection_reason);
+    }
+
+    /**
+     * @Then matching transactions should be paired automatically
+     */
+    public function matchingTransactionsShouldBePairedAutomatically()
+    {
+        $matched = BankTransaction::matched()->count();
+        if ($matched < 1) {
+            throw new \RuntimeException(
+                'Expected at least one matched bank transaction, found '.$matched.'.'
+            );
+        }
+        $this->assertPageContainsText('Auto-Match complete');
+    }
+
+    /**
+     * @Then unmatched items should remain in the list
+     */
+    public function unmatchedItemsShouldRemainInTheList()
+    {
+        $pending = BankTransaction::pending()->count();
+        if ($pending < 1) {
+            throw new \RuntimeException(
+                'Expected unmatched pending transactions to remain, found '.$pending.'.'
+            );
+        }
+        $this->assertPageContainsText('NO-MATCH');
+    }
+
+    /**
+     * @Then transactions should appear in the list
+     */
+    public function transactionsShouldAppearInTheList()
+    {
+        $count = BankTransaction::count();
+        if ($count < 1) {
+            throw new \RuntimeException('Expected imported transactions to appear in the list.');
+        }
+        $this->assertSession()->elementExists('css', 'table tbody tr');
     }
 
     /**
