@@ -15,9 +15,8 @@ class RunAllTests extends Command
         $this->info('Running Laravel-ERP Test Suite');
         $this->info('================================');
 
-        // Run PHPUnit Unit Tests
-        $this->info("\n📦 Running PHPUnit Unit Tests...");
 
+        $this->info("\n Running PHPUnit Unit Tests...");
         $phpunit = new Process([PHP_BINARY, 'vendor/bin/phpunit']);
         $phpunit->setTimeout(300);
         $phpunit->run();
@@ -27,9 +26,22 @@ class RunAllTests extends Command
             $this->line($phpunit->getOutput());
             return self::FAILURE;
         }
-
         $this->info('PHPUnit Tests passed ✓');
         $this->line($phpunit->getOutput());
+
+
+        $this->info("\n Running Behat Feature Tests...");
+        $behat = new Process([PHP_BINARY, 'vendor/bin/behat']);
+        $behat->setTimeout(300);
+        $behat->run();
+
+        if (!$behat->isSuccessful()) {
+            $this->error('Behat tests failed!');
+            $this->line($behat->getOutput());
+            return self::FAILURE;
+        }
+        $this->info('Behat Tests passed ✓');
+        $this->line($behat->getOutput());
 
         $this->info("\n================================");
         $this->info('✅ All tests passed!');
