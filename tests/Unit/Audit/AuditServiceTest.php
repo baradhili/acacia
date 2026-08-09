@@ -2,18 +2,14 @@
 
 namespace Tests\Unit;
 
-use App\Models\AuditLog;
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Services\AuditService;
-use Carbon\Carbon;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 class AuditServiceTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected AuditService $service;
 
     protected function setUp(): void
@@ -30,92 +26,87 @@ class AuditServiceTest extends TestCase
         ], $attributes));
     }
 
-    public function test_logs_client_creation(): void
+    public function test_logs_client_creation_to_syslog(): void
     {
-        $client = $this->createClient();
+        Log::shouldReceive('channel')
+            ->with('syslog')
+            ->once()
+            ->andReturnSelf();
+        
+        Log::shouldReceive('info')
+            ->once()
+            ->withArgs(function ($message, $context) {
+                return $message === 'AUDIT'
+                    && $context['action'] === AuditService::ACTION_CREATED
+                    && $context['model']['type'] === Client::class
+                    && isset($context['changes']['new_values']);
+            });
 
-        $this->assertDatabaseHas('audit_logs', [
-            'auditable_type' => Client::class,
-            'auditable_id' => $client->id,
-            'action' => AuditLog::ACTION_CREATED,
-        ]);
+        $this->createClient();
     }
 
-    public function test_logs_client_update(): void
+    public function test_logs_client_update_to_syslog(): void
     {
         $client = $this->createClient();
+
+        Log::shouldReceive('channel')
+            ->with('syslog')
+            ->once()
+            ->andReturnSelf();
+        
+        Log::shouldReceive('info')
+            ->once()
+            ->withArgs(function ($message, $context) use ($client) {
+                return $message === 'AUDIT'
+                    && $context['action'] === AuditService::ACTION_UPDATED
+                    && $context['model']['type'] === Client::class
+                    && $context['model']['id'] === $client->id
+                    && in_array('name', $context['changes']['changed_fields'] ?? []);
+            });
 
         $client->update(['name' => 'Updated Name']);
-
-        $this->assertDatabaseHas('audit_logs', [
-            'auditable_type' => Client::class,
-            'auditable_id' => $client->id,
-            'action' => AuditLog::ACTION_UPDATED,
-        ]);
-
-        $log = AuditLog::where('auditable_id', $client->id)
-            ->where('action', AuditLog::ACTION_UPDATED)
-            ->first();
-
-        $this->assertNotNull($log->changed_fields);
-        $this->assertContains('name', $log->changed_fields);
     }
 
-    public function test_logs_client_deletion(): void
+    public function test_logs_client_deletion_to_syslog(): void
     {
         $client = $this->createClient();
         $clientId = $client->id;
 
-        $client->delete();
+        Log::shouldReceive('channel')
+            ->with('syslog')
+            ->once()
+            ->andReturnSelf();
+        
+        Log::shouldReceive('info')
+            ->once()
+            ->withArgs(function ($message, $context) use ($clientId) {
+                return $message === 'AUDIT'
+                    && $context['action'] === AuditService::ACTION_DELETED
+                    && $context['model']['id'] === $clientId;
+            });
 
-        $this->assertDatabaseHas('audit_logs', [
-            'auditable_type' => Client::class,
-            'auditable_id' => $clientId,
-            'action' => AuditLog::ACTION_DELETED,
-        ]);
+        $client->delete();
     }
 
-    public function test_stores_old_and_new_values(): void
+    public function test_audit_entry_contains_old_and_new_values(): void
     {
         $client = $this->createClient(['name' => 'Original Name']);
 
-        $client->update(['name' => 'New Name']);
-
-        $log = AuditLog::where('auditable_id', $client->id)
-            ->where('action', AuditLog::ACTION_UPDATED)
-            ->first();
-
-        $this->assertIsArray($log->old_values);
-        $this->assertIsArray($log->new_values);
-        $this->assertEquals('Original Name', $log->old_values['name']);
-        $this->assertEquals('New Name', $log->new_values['name']);
-    }
-
-    public function test_get_history_for_model(): void
-    {
-        $client = $this->createClient();
-        $client->update(['name' => 'Name 1']);
-        $client->update(['name' => 'Name 2']);
-
-        $history = $this->service->getHistory(Client::class, $client->id);
-
-        $this->assertGreaterThanOrEqual(2, $history->count());
-    }
-
-    public function test_get_stats_returns_counts(): void
-    {
-        $client1 = $this->createClient();
-        $client2 = $this->createClient();
+        Log::shouldReceive('channel')
+            ->with('syslog')
+            ->once()
+            ->andReturnSelf();
         
-        $client1->update(['name' => 'Updated']);
-        $client2->update(['name' => 'Updated']);
+        Log::shouldReceive('info')
+            ->once()
+            ->withArgs(function ($message, $context) {
+                return isset($context['changes']['old_values']['name'])
+                    && $context['changes']['old_values']['name'] === 'Original Name'
+                    && isset($context['changes']['new_values']['name'])
+                    && $context['changes']['new_values']['name'] === 'New Name';
+            });
 
-        $stats = $this->service->getStats();
-
-        $this->assertArrayHasKey('total', $stats);
-        $this->assertArrayHasKey('by_action', $stats);
-        $this->assertArrayHasKey('by_model', $stats);
-        $this->assertGreaterThanOrEqual(4, $stats['total']); // 2 creates + 2 updates
+        $client->update(['name' => 'New Name']);
     }
 
     public function test_should_audit_returns_true_for_configured_models(): void
@@ -132,62 +123,88 @@ class AuditServiceTest extends TestCase
     public function test_ignores_updated_at_field(): void
     {
         $client = $this->createClient(['name' => 'Original Name']);
+
+        Log::shouldReceive('channel')
+            ->with('syslog')
+            ->once()
+            ->andReturnSelf();
         
-        // Clear previous audit logs
-        AuditLog::where('auditable_id', $client->id)->delete();
-        
-        // Update both name and updated_at - only name should be audited
+        Log::shouldReceive('info')
+            ->once()
+            ->withArgs(function ($message, $context) {
+                // updated_at should NOT be in changed_fields
+                $changedFields = $context['changes']['changed_fields'] ?? [];
+                return in_array('name', $changedFields)
+                    && !in_array('updated_at', $changedFields);
+            });
+
         $client->update([
             'name' => 'New Name',
             'updated_at' => now(),
         ]);
-
-        $log = AuditLog::where('auditable_id', $client->id)
-            ->where('action', AuditLog::ACTION_UPDATED)
-            ->first();
-        
-        // Assert log exists
-        $this->assertNotNull($log, 'AuditLog should exist for name update');
-        
-        // Assert that updated_at is NOT in changed_fields, only name
-        $this->assertContains('name', $log->changed_fields ?? []);
-        $this->assertNotContains('updated_at', $log->changed_fields ?? []);
     }
 
-    public function test_audit_log_model_scopes(): void
+    public function test_audit_entry_captures_user_info(): void
     {
-        $client = $this->createClient();
-        $client->update(['name' => 'Name 1']);
+        $user = \App\Models\User::factory()->create();
+        $this->actingAs($user);
 
-        $this->assertGreaterThanOrEqual(1, AuditLog::query()->created()->count());
-        $this->assertGreaterThanOrEqual(1, AuditLog::query()->updated()->count());
+        Log::shouldReceive('channel')
+            ->with('syslog')
+            ->once()
+            ->andReturnSelf();
         
-        $forModel = AuditLog::forModel(Client::class, $client->id)->count();
-        $this->assertGreaterThanOrEqual(2, $forModel);
+        Log::shouldReceive('info')
+            ->once()
+            ->withArgs(function ($message, $context) use ($user) {
+                return $context['user']['id'] === $user->id
+                    && $context['user']['name'] === $user->name;
+            });
+
+        $this->createClient();
     }
 
-    public function test_audit_log_user_relationship(): void
+    public function test_audit_entry_contains_timestamp(): void
     {
-        $client = $this->createClient();
-
-        $log = AuditLog::where('auditable_id', $client->id)->first();
+        Log::shouldReceive('channel')
+            ->with('syslog')
+            ->once()
+            ->andReturnSelf();
         
-        // User should be null in testing context unless authenticated
-        $this->assertNotNull($log);
+        Log::shouldReceive('info')
+            ->once()
+            ->withArgs(function ($message, $context) {
+                return isset($context['timestamp'])
+                    && strtotime($context['timestamp']) !== false;
+            });
+
+        $this->createClient();
     }
 
-    public function test_audit_log_captures_ip_and_user_agent(): void
+    public function test_audit_entry_contains_request_info(): void
     {
         $this->actingAs(\App\Models\User::factory()->create());
+
+        Log::shouldReceive('channel')
+            ->with('syslog')
+            ->once()
+            ->andReturnSelf();
         
-        $client = $this->createClient();
+        Log::shouldReceive('info')
+            ->once()
+            ->withArgs(function ($message, $context) {
+                return isset($context['request'])
+                    && array_key_exists('ip_address', $context['request'])
+                    && array_key_exists('user_agent', $context['request']);
+            });
 
-        $log = AuditLog::where('auditable_id', $client->id)
-            ->where('action', AuditLog::ACTION_CREATED)
-            ->first();
+        $this->createClient();
+    }
 
-        $this->assertNotNull($log);
-        // IP might be null in testing, but the field exists
-        $this->assertArrayHasKey('ip_address', $log->getAttributes());
+    public function test_action_constants_are_defined(): void
+    {
+        $this->assertEquals('created', AuditService::ACTION_CREATED);
+        $this->assertEquals('updated', AuditService::ACTION_UPDATED);
+        $this->assertEquals('deleted', AuditService::ACTION_DELETED);
     }
 }
