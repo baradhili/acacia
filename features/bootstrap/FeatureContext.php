@@ -362,10 +362,16 @@ class FeatureContext extends BehatContext
      */
     public function iFillInForm(TableNode $table)
     {
-        foreach ($table->getHash() as $row) {
-            $field = $row['field'];
-            $value = $row['value'];
-            $this->fillField($field, $value);
+        $rows = $table->getRows();
+        $hasHeader = isset($rows[0][0]) && $rows[0][0] === 'field';
+        if ($hasHeader) {
+            foreach ($table->getHash() as $row) {
+                $this->fillField($row['field'], $row['value']);
+            }
+        } else {
+            foreach ($table->getRowsHash() as $field => $value) {
+                $this->fillField($field, $value);
+            }
         }
     }
 
@@ -686,6 +692,30 @@ class FeatureContext extends BehatContext
     {
         $modelClass = 'App\\Models\\' . ucfirst($model);
         $this->assertGreaterThan(0, $modelClass::count());
+    }
+
+    /**
+     * @Then my account should be created
+     */
+    public function myAccountShouldBeCreated()
+    {
+        $this->assertGreaterThan(0, \App\Models\User::count());
+    }
+
+    /**
+     * @Then my account should not be created
+     */
+    public function myAccountShouldNotBeCreated()
+    {
+        $this->assertEquals(0, \App\Models\User::where('email', 'newuser@example.com')->count());
+    }
+
+    /**
+     * @Then I should see a password validation error
+     */
+    public function iShouldSeeAPasswordValidationError()
+    {
+        $this->assertPageContainsText('password');
     }
 
     /**

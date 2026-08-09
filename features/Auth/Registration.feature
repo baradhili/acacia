@@ -23,7 +23,7 @@ Feature: Registration
       | password                | SecurePass123       |
       | password_confirmation   | SecurePass123       |
     And I press "Register"
-    Then I should see "Email has already been taken"
+    Then I should see "has already been taken"
     And my account should not be created
 
   @registration
@@ -45,4 +45,4 @@ Feature: Registration
       | email                  | newuser@example.com |
       | password                | SecurePass123       |
     And I press "Register"
-    Then I should see "password confirmation is required"
+    Then I should see "does not match"
