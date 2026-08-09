@@ -12,8 +12,8 @@ Generated from `php artisan test` (PHPUnit + Behat).
 - [x] **Fix PHPUnit unit test deprecations (38)**
       PHPUnit unit suite passes but emits 38 deprecations under PHP 8.4. All 38 originate in the `ekmungai/eloquent-ifrs` vendor package (implicit nullable params). Added a PHPUnit baseline (`.phpunit.deprecations.baseline`) referenced via `<source baseline>` in `phpunit.xml` so the known vendor deprecations are acknowledged while new ones in our code still surface. Unit suite now reports `OK (96 tests, 220 assertions)`.
 
-- [ ] **Create missing `Database\Factories\InvoiceFactory`**
-      Dominant behat failure (23 scenarios): `Fatal error: Class "Database\Factories\InvoiceFactory" not found`. Affects Clients, CreditNotes, Documents, Invoices (Advanced/Estimates/Invoices), Payments (Advanced/Payments), Reconciliation. Create `database/factories/InvoiceFactory.php` matching the Invoice model.
+- [x] **Create missing `Database\Factories\InvoiceFactory`**
+      Created `database/factories/InvoiceFactory.php` matching the Invoice model (fillable fields, casts, status constants). Provides `draft`/`sent`/`paid`/`overdue` state helpers and defaults `client_id`/`created_by` via nested factories. Verified the `Class "Database\Factories\InvoiceFactory" not found` failures are resolved across Documents/CreditNotes features; remaining failures there are UI element-not-found / undefined-step issues (covered by other tasks).
 
 - [ ] **Create missing `Database\Factories\PaymentFactory`**
       2 behat scenarios in `features/Payments/Payments.feature` (:21, :29) fail with `Fatal error: Class "Database\Factories\PaymentFactory" not found`. Create `database/factories/PaymentFactory.php` matching the Payment model.
