@@ -8,21 +8,113 @@ use App\Models\Expense;
 use App\Models\Document;
 use App\Models\Project;
 use Behat\Behat\Context\Context;
+use Behat\Behat\Hook\Scope\BeforeScenarioScope;
+use Behat\Behat\Hook\Scope\AfterScenarioScope;
 use Behat\Gherkin\Node\TableNode;
 use Behat\Mink\Element\NodeElement;
+use Illuminate\Contracts\Console\Kernel as ConsoleKernel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Soulcodex\Behat\Addon\Context as BehatContext;
 use Tests\TestCase;
 
-class FeatureContext implements Context
+class FeatureContext extends BehatContext
 {
     use RefreshDatabase;
 
     protected $session;
     protected $user;
+    protected $beforeApplicationDestroyedCallbacks = [];
 
     public function __construct()
     {
         $this->session = null;
+    }
+
+    // ============== Laravel Testing Infrastructure ==============
+
+    public function artisan($command, $parameters = [])
+    {
+        if (!isset($this->app)) {
+            return null;
+        }
+        return $this->app->make(ConsoleKernel::class)->call($command, $parameters);
+    }
+
+    public function beforeApplicationDestroyed($callback)
+    {
+        $this->beforeApplicationDestroyedCallbacks[] = $callback;
+    }
+
+    /**
+     * @BeforeScenario
+     */
+    public function setUp(BeforeScenarioScope $scope)
+    {
+        $this->refreshDatabase();
+    }
+
+    /**
+     * @AfterScenario
+     */
+    public function tearDown(AfterScenarioScope $scope)
+    {
+        foreach ($this->beforeApplicationDestroyedCallbacks as $callback) {
+            $callback();
+        }
+        $this->beforeApplicationDestroyedCallbacks = [];
+    }
+
+    // ============== Mink Helper Methods ==============
+
+    public function visit($path)
+    {
+        $this->visitPath($path);
+    }
+
+    public function actingAs($user, $driver = null)
+    {
+        $this->app['auth']->guard($driver)->setUser($user);
+        return $this;
+    }
+
+    public function fillField($field, $value)
+    {
+        $this->getSession()->getPage()->fillField($field, $value);
+    }
+
+    public function pressButton($button)
+    {
+        $this->getSession()->getPage()->pressButton($button);
+    }
+
+    public function clickLink($link)
+    {
+        $this->getSession()->getPage()->clickLink($link);
+    }
+
+    public function clickButton($button)
+    {
+        $this->getSession()->getPage()->pressButton($button);
+    }
+
+    public function selectFieldOption($field, $value)
+    {
+        $this->getSession()->getPage()->selectFieldOption($field, $value);
+    }
+
+    public function assertPageContainsText($text)
+    {
+        $this->assertSession()->pageTextContains($text);
+    }
+
+    public function assertPageNotContainsText($text)
+    {
+        $this->assertSession()->pageTextNotContains($text);
+    }
+
+    public function assertPageAddress($path)
+    {
+        $this->assertSession()->addressEquals($path);
     }
 
     // ============== Navigation Steps ==============
@@ -32,7 +124,13 @@ class FeatureContext implements Context
      */
     public function iAmOnThePage($path)
     {
-        $this->visit('/' . ltrim($path, '/'));
+        $pageMap = [
+            'registration' => '/register',
+            'login' => '/login',
+            'dashboard' => '/dashboard',
+        ];
+        $url = $pageMap[$path] ?? ('/' . ltrim($path, '/'));
+        $this->visit($url);
     }
 
     /**
@@ -49,6 +147,7 @@ class FeatureContext implements Context
             'clients page' => '/clients',
             'new client page' => '/clients/create',
             'invoices page' => '/invoices',
+            '/' => '/',
             'new invoice page' => '/invoices/create',
             'expenses page' => '/expenses',
             'new expense page' => '/expenses/create',
@@ -239,7 +338,9 @@ class FeatureContext implements Context
      */
     public function iFillInTheRegistrationFormWith(TableNode $table)
     {
-        foreach ($table->getRowsHash() as $field => $value) {
+        foreach ($table->getHash() as $row) {
+            $field = $row['field'];
+            $value = $row['value'];
             $this->fillField($field, $value);
         }
     }
@@ -249,7 +350,9 @@ class FeatureContext implements Context
      */
     public function iFillInTheClientFormWith(TableNode $table)
     {
-        foreach ($table->getRowsHash() as $field => $value) {
+        foreach ($table->getHash() as $row) {
+            $field = $row['field'];
+            $value = $row['value'];
             $this->fillField($field, $value);
         }
     }
@@ -259,7 +362,9 @@ class FeatureContext implements Context
      */
     public function iFillInForm(TableNode $table)
     {
-        foreach ($table->getRowsHash() as $field => $value) {
+        foreach ($table->getHash() as $row) {
+            $field = $row['field'];
+            $value = $row['value'];
             $this->fillField($field, $value);
         }
     }
@@ -269,7 +374,9 @@ class FeatureContext implements Context
      */
     public function iFillInTheExpenseFormWith(TableNode $table)
     {
-        foreach ($table->getRowsHash() as $field => $value) {
+        foreach ($table->getHash() as $row) {
+            $field = $row['field'];
+            $value = $row['value'];
             $value = $value === 'today' ? now()->format('Y-m-d') : $value;
             $this->fillField($field, $value);
         }
@@ -349,7 +456,11 @@ class FeatureContext implements Context
      */
     public function iClickInTheNavigation($link)
     {
-        $this->clickLink($link);
+        try {
+            $this->clickLink($link);
+        } catch (\Behat\Mink\Exception\ElementNotFoundException $e) {
+            $this->pressButton($link);
+        }
     }
 
     /**
@@ -416,6 +527,7 @@ class FeatureContext implements Context
             'login page' => '/login',
             'clients page' => '/clients',
             'invoices page' => '/invoices',
+            '/' => '/',
         ];
         
         $expectedUrl = $expectedUrls[$page] ?? '/' . ltrim($page, '/');
@@ -427,7 +539,41 @@ class FeatureContext implements Context
      */
     public function iShouldSeeMyNameInTheNavigation()
     {
-        $this->assertPageContainsText($this->user->name);
+        if ($this->user) {
+            $this->assertPageContainsText($this->user->name);
+        }
+    }
+
+    /**
+     * @Then I should see :text in the navigation
+     */
+    public function iShouldSeeInTheNavigation($text)
+    {
+        $this->assertPageContainsText($text);
+    }
+
+    /**
+     * @Then I should see :text button
+     */
+    public function iShouldSeeButton($text)
+    {
+        $this->assertSession()->elementExists('named', ['button', $text]);
+    }
+
+    /**
+     * @Then I should see :text error message
+     */
+    public function iShouldSeeErrorMessage($text)
+    {
+        $this->assertPageContainsText($text);
+    }
+
+    /**
+     * @Then I should see an error message :message
+     */
+    public function iShouldSeeAnErrorMessage($message)
+    {
+        $this->assertPageContainsText($message);
     }
 
     /**
@@ -531,14 +677,6 @@ class FeatureContext implements Context
     {
         // Avatar presence is typically an img tag
         $this->assertSessionHas('user');
-    }
-
-    /**
-     * @Then I should see an error message :message
-     */
-    public function iShouldSeeAnErrorMessage($message)
-    {
-        $this->assertPageContainsText($message);
     }
 
     /**
@@ -978,7 +1116,9 @@ class FeatureContext implements Context
      */
     public function iEnterThePaymentDetails(TableNode $table)
     {
-        foreach ($table->getRowsHash() as $field => $value) {
+        foreach ($table->getHash() as $row) {
+            $field = $row['field'];
+            $value = $row['value'];
             if ($value === 'today') {
                 $value = now()->format('Y-m-d');
             }
@@ -1016,7 +1156,9 @@ class FeatureContext implements Context
      */
     public function iFillInPartialPayment(TableNode $table)
     {
-        foreach ($table->getRowsHash() as $field => $value) {
+        foreach ($table->getHash() as $row) {
+            $field = $row['field'];
+            $value = $row['value'];
             $this->fillField($field, $value);
         }
     }

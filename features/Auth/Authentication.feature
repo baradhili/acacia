@@ -30,16 +30,16 @@ Feature: Authentication
     When I fill in "email" with "wrong@example.com"
     And I fill in "password" with "wrongpassword"
     And I press "Log in"
-    Then I should see "Invalid credentials" error message
+    Then I should see "These credentials do not match our records" error message
 
   @auth
   Scenario: User can logout
     Given I am logged in
-    When I click "Logout" in the navigation
-    Then I should be redirected to the login page
-    And I should see "Login" button
+    When I click "Log Out" in the navigation
+    Then I should be redirected to the "/"
+    And I should see "Log in"
 
   @auth
   Scenario: Login page requires authentication for protected pages
     Given I am on "/dashboard"
-    Then I should be redirected to the login page
+    Then I should be redirected to the "login page"

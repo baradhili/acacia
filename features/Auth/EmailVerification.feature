@@ -31,5 +31,5 @@ Feature: Email Verification
   Scenario: Unverified user sees verification notice
     Given I registered but haven't verified my email
     When I try to access protected pages
-    Then I should be redirected to the verification notice page
+    Then I should be redirected to the "verification notice page"
     And I should see "Please verify your email"
