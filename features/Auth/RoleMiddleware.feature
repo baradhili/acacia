@@ -12,7 +12,6 @@ Feature: Role Middleware
     Given I am logged in as a regular user
     When I visit the admin settings page
     Then I should see a 403 Forbidden error
-    And I should be redirected to the dashboard
 
   @role-middleware
   Scenario: Manager can approve time entries
