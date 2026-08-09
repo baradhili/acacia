@@ -15,8 +15,8 @@ Generated from `php artisan test` (PHPUnit + Behat).
 - [x] **Create missing `Database\Factories\InvoiceFactory`**
       Created `database/factories/InvoiceFactory.php` matching the Invoice model (fillable fields, casts, status constants). Provides `draft`/`sent`/`paid`/`overdue` state helpers and defaults `client_id`/`created_by` via nested factories. Verified the `Class "Database\Factories\InvoiceFactory" not found` failures are resolved across Documents/CreditNotes features; remaining failures there are UI element-not-found / undefined-step issues (covered by other tasks).
 
-- [ ] **Create missing `Database\Factories\PaymentFactory`**
-      2 behat scenarios in `features/Payments/Payments.feature` (:21, :29) fail with `Fatal error: Class "Database\Factories\PaymentFactory" not found`. Create `database/factories/PaymentFactory.php` matching the Payment model.
+- [x] **Create missing `Database\Factories\PaymentFactory`**
+      Created `database/factories/PaymentFactory.php` matching the Payment model (fillable, casts, method/status constants). Provides `pending`/`completed`/`void` state helpers; defaults `client_id`/`received_by` via nested factories. Verified the `Class "Database\Factories\PaymentFactory" not found` failures are resolved. Remaining Payments.feature failures are undefined-step / missing-prerequisite issues (covered by task 8).
 
 - [ ] **Fix `features/Expenses/Expenses.feature:38` — "Delete" link not found**
       Fails: `Link with id|title|alt|text "Delete" not found (Behat\Mink\Exception\ElementNotFoundException)`. View/step expects a Delete link that is not rendered.
