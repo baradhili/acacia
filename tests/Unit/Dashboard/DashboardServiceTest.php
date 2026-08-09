@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Unit;
+namespace Tests\Unit\Dashboard;
 
 use App\Models\Client;
 use App\Models\Expense;

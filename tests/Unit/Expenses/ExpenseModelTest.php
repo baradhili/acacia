@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Unit;
+namespace Tests\Unit\Expenses;
 
 use App\Models\Supplier;
 use App\Models\Document;
