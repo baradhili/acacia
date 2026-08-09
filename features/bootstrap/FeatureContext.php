@@ -668,14 +668,6 @@ class FeatureContext implements Context
     }
 
     /**
-     * @Given a client :name exists
-     */
-    public function aClientWithNameExists($name)
-    {
-        Client::factory()->create(['name' => $name]);
-    }
-
-    /**
      * @Given an expense exists
      */
     public function anExpenseExists()

@@ -9,3 +9,4 @@ default:
       sessions:
         default:
           laravel: ~
+    Soulcodex\Behat\ServiceContainer\BehatExtension: ~
