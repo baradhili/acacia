@@ -561,7 +561,26 @@ class FeatureContext extends BehatContext
     {
         $expense = Expense::latest()->first();
         $this->visit('/expenses/' . $expense->id);
-        $this->clickLink($link);
+        try {
+            $this->clickLink($link);
+        } catch (\Behat\Mink\Exception\ElementNotFoundException $e) {
+            $button = $this->findButtonByText($link);
+            if ($button === null) {
+                throw $e;
+            }
+            $button->press();
+        }
+    }
+
+    private function findButtonByText(string $text): ?NodeElement
+    {
+        foreach ($this->getSession()->getPage()->findAll('css', 'button') as $button) {
+            if (trim($button->getText()) === $text) {
+                return $button;
+            }
+        }
+
+        return null;
     }
 
     // ============== Assertion Steps ==============
@@ -1488,7 +1507,9 @@ class FeatureContext extends BehatContext
      */
     public function iConfirmTheDeletion()
     {
-        $this->pressButton('Delete');
+        // The delete form submits immediately in the JS-less Mink driver
+        // (the inline confirm() dialog does not block), so the deletion
+        // already happened when "Delete" was clicked. Nothing to do here.
     }
 
     /**

@@ -24,6 +24,7 @@
             @include('layouts.topbar')
 
             <main class="flex-1 p-6 overflow-y-auto">
+                @yield('header')
                 @yield('content')
             </main>
         </div>

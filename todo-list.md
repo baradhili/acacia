@@ -18,8 +18,8 @@ Generated from `php artisan test` (PHPUnit + Behat).
 - [x] **Create missing `Database\Factories\PaymentFactory`**
       Created `database/factories/PaymentFactory.php` matching the Payment model (fillable, casts, method/status constants). Provides `pending`/`completed`/`void` state helpers; defaults `client_id`/`received_by` via nested factories. Verified the `Class "Database\Factories\PaymentFactory" not found` failures are resolved. Remaining Payments.feature failures are undefined-step / missing-prerequisite issues (covered by task 8).
 
-- [ ] **Fix `features/Expenses/Expenses.feature:38` — "Delete" link not found**
-      Fails: `Link with id|title|alt|text "Delete" not found (Behat\Mink\Exception\ElementNotFoundException)`. View/step expects a Delete link that is not rendered.
+- [x] **Fix `features/Expenses/Expenses.feature:38` — "Delete" link not found**
+      Root cause: `layouts/app.blade.php` never yielded the `header` section, so the entire `@section('header')` block in `expenses/show.blade.php` (containing Edit/Delete/Submit/Mark-as-Paid buttons) was silently discarded. Added `@yield('header')` to the layout above `@yield('content')`. Also: defaulted `ExpenseFactory` to `draft` status (so `canBeDeleted()` is true), taught `iClickForTheExpense` to fall back to finding a `<button>` by visible text (Mink `pressButton` matches by name/id/value, not inner text), and made `iConfirmTheDeletion` a no-op since the delete form submits immediately in the JS-less driver. Verified: Expenses.feature:38 now passes all defined steps (1 undefined assertion remains for task 8).
 
 - [ ] **Fix `features/Projects/Projects.feature:34` — "Submit for Approval" button not found**
       Fails: `Button with id|name|title|alt|value "Submit for Approval" not found (ElementNotFoundException)`. The button is not present on the rendered page.

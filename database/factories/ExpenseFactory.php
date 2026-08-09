@@ -38,12 +38,7 @@ class ExpenseFactory extends Factory
             'total' => $amount + $taxAmount,
             'expense_date' => $this->faker->dateTimeBetween('-3 months', 'now'),
             'due_date' => $this->faker->dateTimeBetween('now', '+1 month'),
-            'status' => $this->faker->randomElement([
-                Expense::STATUS_DRAFT,
-                Expense::STATUS_SUBMITTED,
-                Expense::STATUS_APPROVED,
-                Expense::STATUS_PAID,
-            ]),
+            'status' => Expense::STATUS_DRAFT,
             'description' => $this->faker->sentence(),
             'reference' => 'EXP-' . $this->faker->unique()->numberBetween(1000, 9999),
             'receipt_path' => null,
