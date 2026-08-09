@@ -9,8 +9,8 @@ Generated from `php artisan test` (PHPUnit + Behat).
 
 ## Tasks
 
-- [ ] **Fix PHPUnit unit test deprecations (38)**
-      PHPUnit unit suite passes but emits 38 deprecations under PHP 8.4. Investigate and resolve deprecation warnings so the unit suite is clean.
+- [x] **Fix PHPUnit unit test deprecations (38)**
+      PHPUnit unit suite passes but emits 38 deprecations under PHP 8.4. All 38 originate in the `ekmungai/eloquent-ifrs` vendor package (implicit nullable params). Added a PHPUnit baseline (`.phpunit.deprecations.baseline`) referenced via `<source baseline>` in `phpunit.xml` so the known vendor deprecations are acknowledged while new ones in our code still surface. Unit suite now reports `OK (96 tests, 220 assertions)`.
 
 - [ ] **Create missing `Database\Factories\InvoiceFactory`**
       Dominant behat failure (23 scenarios): `Fatal error: Class "Database\Factories\InvoiceFactory" not found`. Affects Clients, CreditNotes, Documents, Invoices (Advanced/Estimates/Invoices), Payments (Advanced/Payments), Reconciliation. Create `database/factories/InvoiceFactory.php` matching the Invoice model.

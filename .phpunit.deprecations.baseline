@@ -1,0 +1,107 @@
+<?xml version="1.0"?>
+<files version="1">
+ <file path="vendor/ekmungai/eloquent-ifrs/src/Models/Account.php">
+  <line number="147" hash="5530d8e2bb4f5c4be000e051c6a7e27c43756785">
+   <issue><![CDATA[IFRS\Models\Account::openingBalances(): Implicitly marking parameter $entity as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+  </line>
+  <line number="180" hash="b17db34619bb81c80a7e08d8ca342462c6204a84">
+   <issue><![CDATA[IFRS\Models\Account::sectionBalances(): Implicitly marking parameter $entity as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+  </line>
+  <line number="309" hash="e01fee46f55c65413b201a87060d1f6a4e097365">
+   <issue><![CDATA[IFRS\Models\Account::closingBalance(): Implicitly marking parameter $currencyId as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+   <issue><![CDATA[IFRS\Models\Account::closingBalance(): Implicitly marking parameter $endDate as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+  </line>
+  <line number="332" hash="1fc5c48db1b49dfc8a2412e2806a40d2081a2d07">
+   <issue><![CDATA[IFRS\Models\Account::openingBalance(): Implicitly marking parameter $currencyId as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+   <issue><![CDATA[IFRS\Models\Account::openingBalance(): Implicitly marking parameter $year as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+  </line>
+  <line number="378" hash="216eeb73a60a2d37dce2ba77f619cd4fc8cf9dd2">
+   <issue><![CDATA[IFRS\Models\Account::currentBalance(): Implicitly marking parameter $currencyId as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+   <issue><![CDATA[IFRS\Models\Account::currentBalance(): Implicitly marking parameter $endDate as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+   <issue><![CDATA[IFRS\Models\Account::currentBalance(): Implicitly marking parameter $startDate as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+  </line>
+  <line number="393" hash="f8cba4c8660ac69899120b979512f5bdcf374911">
+   <issue><![CDATA[IFRS\Models\Account::isClosed(): Implicitly marking parameter $year as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+  </line>
+  <line number="426" hash="9e7feee5a78e9258fd33e0413cd4a184efd734e6">
+   <issue><![CDATA[IFRS\Models\Account::closingTransactions(): Implicitly marking parameter $year as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+  </line>
+  <line number="464" hash="506e8f446505f36f3679e2559b23164bc6c7c076">
+   <issue><![CDATA[IFRS\Models\Account::getTransactions(): Implicitly marking parameter $endDate as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+   <issue><![CDATA[IFRS\Models\Account::getTransactions(): Implicitly marking parameter $startDate as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+  </line>
+  <line number="482" hash="468974a6980fad8b42e2087c01952f9609f6588f">
+   <issue><![CDATA[IFRS\Models\Account::transactionsQuery(): Implicitly marking parameter $currencyId as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+  </line>
+ </file>
+ <file path="vendor/ekmungai/eloquent-ifrs/src/Models/ReportingPeriod.php">
+  <line number="93" hash="3d262e993e385120f627a3b6e8b77cdc5a6c2666">
+   <issue><![CDATA[IFRS\Models\ReportingPeriod::getPeriod(): Implicitly marking parameter $entity as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+  </line>
+  <line number="116" hash="e5173a0345324939c85f5cd10eb9c9ed4516a785">
+   <issue><![CDATA[IFRS\Models\ReportingPeriod::year(): Implicitly marking parameter $entity as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+  </line>
+  <line number="227" hash="e7fcc3ad1bc1e5f7dc04b98a10011400a5ca58d0">
+   <issue><![CDATA[IFRS\Models\ReportingPeriod::prepareBalancesTranslation(): Implicitly marking parameter $accountId as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+  </line>
+  <line number="316" hash="12c522a38badfe0025846d704d501fc4e89c5b5d">
+   <issue><![CDATA[IFRS\Models\ReportingPeriod::periodEnd(): Implicitly marking parameter $entity as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+  </line>
+  <line number="328" hash="8fa3fb14e03095259f0045f0e51b6ddfa6e3af96">
+   <issue><![CDATA[IFRS\Models\ReportingPeriod::periodStart(): Implicitly marking parameter $entity as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+  </line>
+ </file>
+ <file path="vendor/ekmungai/eloquent-ifrs/src/Models/Transaction.php">
+  <line number="153" hash="7fef974d3c2dd563594a44f5943f243d5b11c665">
+   <issue><![CDATA[IFRS\Models\Transaction::lineItemExists(): Implicitly marking parameter $id as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+  </line>
+  <line number="169" hash="165a9c937e767d86421582afc8a9d1772d1d9599">
+   <issue><![CDATA[IFRS\Models\Transaction::assignedTransactionExists(): Implicitly marking parameter $id as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+  </line>
+  <line number="659" hash="1cadec1381391d7698b40e0048e75e29dfa2c4cd">
+   <issue><![CDATA[IFRS\Models\Transaction::processAssigned(): Implicitly marking parameter $forexAccountId as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+  </line>
+  <line number="775" hash="9425b300a2ea045c58621a39f24011b4e72a7ae2">
+   <issue><![CDATA[IFRS\Models\Transaction::transactionNo(): Implicitly marking parameter $entity as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+   <issue><![CDATA[IFRS\Models\Transaction::transactionNo(): Implicitly marking parameter $transaction_date as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+  </line>
+ </file>
+ <file path="vendor/ekmungai/eloquent-ifrs/src/Reports/BalanceSheet.php">
+  <line number="59" hash="5390719020d60f380c9b767c7ebdb8a376399e01">
+   <issue><![CDATA[IFRS\Reports\BalanceSheet::__construct(): Implicitly marking parameter $endDate as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+   <issue><![CDATA[IFRS\Reports\BalanceSheet::__construct(): Implicitly marking parameter $entity as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+  </line>
+ </file>
+ <file path="vendor/ekmungai/eloquent-ifrs/src/Reports/CashFlowStatement.php">
+  <line number="79" hash="b3978bd665d085091a3fc95e91e4c56159c7ee75">
+   <issue><![CDATA[IFRS\Reports\CashFlowStatement::__construct(): Implicitly marking parameter $endDate as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+   <issue><![CDATA[IFRS\Reports\CashFlowStatement::__construct(): Implicitly marking parameter $entity as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+   <issue><![CDATA[IFRS\Reports\CashFlowStatement::__construct(): Implicitly marking parameter $startDate as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+  </line>
+ </file>
+ <file path="vendor/ekmungai/eloquent-ifrs/src/Reports/FinancialStatement.php">
+  <line number="71" hash="174f29055e08673534193f2adfc896e20a303908">
+   <issue><![CDATA[IFRS\Reports\FinancialStatement::__construct(): Implicitly marking parameter $entity as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+   <issue><![CDATA[IFRS\Reports\FinancialStatement::__construct(): Implicitly marking parameter $period as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+  </line>
+ </file>
+ <file path="vendor/ekmungai/eloquent-ifrs/src/Reports/IncomeStatement.php">
+  <line number="63" hash="b3978bd665d085091a3fc95e91e4c56159c7ee75">
+   <issue><![CDATA[IFRS\Reports\IncomeStatement::__construct(): Implicitly marking parameter $endDate as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+   <issue><![CDATA[IFRS\Reports\IncomeStatement::__construct(): Implicitly marking parameter $entity as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+   <issue><![CDATA[IFRS\Reports\IncomeStatement::__construct(): Implicitly marking parameter $startDate as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+  </line>
+  <line number="117" hash="a26e759c115b91f782928c982eb75bba6d8b5b2b">
+   <issue><![CDATA[IFRS\Reports\IncomeStatement::getResults(): Implicitly marking parameter $entity as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+  </line>
+  <line number="150" hash="94091c46236b9dcac5589cb90982cf12c5483534">
+   <issue><![CDATA[IFRS\Reports\IncomeStatement::getBalance(): Implicitly marking parameter $entity as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+  </line>
+ </file>
+ <file path="vendor/ekmungai/eloquent-ifrs/src/Reports/TrialBalance.php">
+  <line number="34" hash="d35f15988bc1b289d2295a753fcf0fe651e5a848">
+   <issue><![CDATA[IFRS\Reports\TrialBalance::__construct(): Implicitly marking parameter $entity as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+   <issue><![CDATA[IFRS\Reports\TrialBalance::__construct(): Implicitly marking parameter $year as nullable is deprecated, the explicit nullable type must be used instead]]></issue>
+  </line>
+ </file>
+</files>

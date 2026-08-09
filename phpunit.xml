@@ -9,7 +9,7 @@
             <directory>tests/Unit</directory>
         </testsuite>
     </testsuites>
-    <source>
+    <source baseline=".phpunit.deprecations.baseline">
         <include>
             <directory>app</directory>
         </include>
