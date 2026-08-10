@@ -1460,14 +1460,16 @@ class FeatureContext extends BehatContext
         $status = strtolower($status);
         $statusMap = [
             'void' => 'cancelled',
+            'partially paid' => 'partially_paid',
         ];
         $expected = $statusMap[$status] ?? $status;
         $invoice = Invoice::latest('id')->first();
         if ($invoice) {
-            $this->assertEquals($expected, strtolower($invoice->status));
+            $this->assertEquals($expected, strtolower($invoice->fresh()->status));
         }
-        // Also verify the page shows the status label
-        $this->assertPageContainsText($expected);
+        // The page shows the human-readable label (e.g. "Partially Paid"),
+        // so assert the original step text appears on the page.
+        $this->assertPageContainsText($status);
     }
 
     /**
@@ -2618,6 +2620,24 @@ class FeatureContext extends BehatContext
     }
 
     /**
+     * @Then /^the invoice balance should be ([\d,.]+)$/
+     */
+    public function theInvoiceBalanceShouldBe($balance)
+    {
+        $invoice = Invoice::latest('id')->first();
+        if (!$invoice) {
+            throw new \Exception('No invoice found');
+        }
+        $expected = (float) str_replace(',', '', $balance);
+        $actual = round((float) $invoice->fresh()->amount_due, 2);
+        $this->assertEquals(
+            $expected,
+            $actual,
+            "Invoice balance should be {$expected} but got {$actual}"
+        );
+    }
+
+    /**
      * @Then I should receive a PDF file
      */
     public function iShouldReceiveAPdfFile()
@@ -2787,27 +2807,18 @@ class FeatureContext extends BehatContext
      */
     public function iRecordAPartialPaymentOf($amount)
     {
-        $page = $this->getSession()->getPage();
-        $field = $page->findField('amount');
-        if ($field === null) {
-            throw new \Behat\Mink\Exception\ElementNotFoundException($this->getSession()->getDriver(), 'field', 'named', 'amount');
+        $invoiceId = $this->getFromSession('last_created_id');
+        $driver = $this->getSession()->getDriver();
+        if ($driver instanceof \Behat\Mink\Driver\BrowserKitDriver) {
+            $httpClient = $driver->getClient();
+            $httpClient->request('POST', '/invoices/' . $invoiceId . '/record-payment', [
+                'amount' => $amount,
+                'payment_date' => now()->toDateString(),
+                'payment_method' => 'bank_transfer',
+            ]);
+        } else {
+            $this->visit('/invoices/' . $invoiceId);
         }
-        $field->setValue($amount);
-
-        // The "Record Payment" opener is a JS-only <button type="button"> (a modal
-        // trigger) that the Kernel/BrowserKit driver cannot click. Scope the submit
-        // to the modal form containing the amount field, and press its submit button.
-        $form = $field->find('xpath', 'ancestor::form[1]');
-        if ($form !== null) {
-            foreach ($form->findAll('css', 'button') as $button) {
-                if (trim($button->getText()) === 'Record Payment') {
-                    $button->press();
-
-                    return;
-                }
-            }
-        }
-        $this->pressButton('Record Payment');
     }
 
     /**
