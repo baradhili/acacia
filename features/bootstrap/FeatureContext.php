@@ -499,6 +499,25 @@ class FeatureContext extends BehatContext
     }
 
     /**
+     * Select an account by name in a debit/credit line and fill the amount.
+     */
+    protected function selectAndFillAccountLine(string $accountName, string $amount, string $type): void
+    {
+        $account = \IFRS\Models\Account::withoutGlobalScopes()
+            ->where('name', $accountName)
+            ->first();
+
+        $accountField = $type . '_account';
+        $amountField = $type . '_amount';
+
+        if ($account) {
+            $this->selectFieldOption($accountField, $account->id);
+        }
+        $this->fillField($amountField, $amount);
+        $this->lastFilledFields[] = $amountField;
+    }
+
+    /**
      * @When I add an invoice line with:
      */
     public function iAddAnInvoiceLineWith(TableNode $table)
@@ -506,6 +525,19 @@ class FeatureContext extends BehatContext
         // Implementation depends on JS-based dynamic rows
         // For now, we'll just record the intent
         $this->addToSession('invoice_line', $table->getRowsHash());
+    }
+
+    /**
+     * @When I fill in the journal entry form with:
+     */
+    public function iFillInTheJournalEntryFormWith(TableNode $table)
+    {
+        $this->lastFilledFields = [];
+        foreach ($table->getRowsHash() as $field => $value) {
+            $value = $value === 'today' ? now()->format('Y-m-d') : $value;
+            $this->fillField($field, $value);
+            $this->lastFilledFields[] = $field;
+        }
     }
 
     /**
@@ -521,7 +553,21 @@ class FeatureContext extends BehatContext
      */
     public function iAddADebitLine(TableNode $table)
     {
-        $this->addToSession('debit_line', $table->getRowsHash());
+        $rows = $table->getRows();
+        if (count($rows) >= 2) {
+            $this->selectAndFillAccountLine($rows[1][0], $rows[1][1], 'debit');
+        }
+    }
+
+    /**
+     * @When I add a credit line:
+     */
+    public function iAddACreditLine(TableNode $table)
+    {
+        $rows = $table->getRows();
+        if (count($rows) >= 2) {
+            $this->selectAndFillAccountLine($rows[1][0], $rows[1][1], 'credit');
+        }
     }
 
     /**
@@ -529,7 +575,8 @@ class FeatureContext extends BehatContext
      */
     public function iAddADebitLineWithAmount($amount)
     {
-        $this->addToSession('debit_line', ['amount' => $amount]);
+        $this->fillField('debit_amount', $amount);
+        $this->lastFilledFields[] = 'debit_amount';
     }
 
     /**
@@ -537,7 +584,16 @@ class FeatureContext extends BehatContext
      */
     public function iAddACreditLineWithAmount($amount)
     {
-        $this->addToSession('credit_line', ['amount' => $amount]);
+        $this->fillField('credit_amount', $amount);
+        $this->lastFilledFields[] = 'credit_amount';
+    }
+
+    /**
+     * @Then /^the entry should balance \(debits equal credits\)$/
+     */
+    public function theEntryShouldBalance()
+    {
+        $this->assertPageContainsText('Journal entry created successfully');
     }
 
     /**
