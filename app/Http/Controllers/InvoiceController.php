@@ -332,6 +332,28 @@ class InvoiceController extends Controller
     }
 
     /**
+     * Add late fee to an overdue invoice.
+     */
+    public function addLateFee(Request $request, Invoice $invoice)
+    {
+        $validated = $request->validate([
+            'late_fee_amount' => 'required|numeric|min:0.01',
+        ]);
+
+        $invoice->items()->create([
+            'description' => 'Late Fee',
+            'quantity' => 1,
+            'unit_price' => $validated['late_fee_amount'],
+            'tax_rate' => 0,
+        ]);
+
+        $invoice->recalculateTotals();
+
+        return redirect()->route('invoices.show', $invoice)
+            ->with('success', 'Late fee applied successfully.');
+    }
+
+    /**
      * Bulk send invoices
      */
     public function bulkSend(Request $request)

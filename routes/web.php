@@ -91,6 +91,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/invoices/{invoice}/cancel', [InvoiceController::class, 'cancel'])->name('invoices.cancel');
     Route::post('/invoices/{invoice}/void', [InvoiceController::class, 'void'])->name('invoices.void');
     Route::post('/invoices/{invoice}/duplicate', [InvoiceController::class, 'duplicate'])->name('invoices.duplicate');
+    Route::post('/invoices/{invoice}/late-fee', [InvoiceController::class, 'addLateFee'])->name('invoices.addLateFee');
     Route::post('/invoices/bulk-send', [InvoiceController::class, 'bulkSend'])->name('invoices.bulkSend');
     Route::post('/invoices/{invoice}/record-payment', [InvoiceController::class, 'recordPayment'])->name('invoices.recordPayment');
     Route::get('/invoices/{invoice}/pdf', [InvoiceController::class, 'pdf'])->name('invoices.pdf');

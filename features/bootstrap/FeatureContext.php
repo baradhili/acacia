@@ -2833,6 +2833,38 @@ class FeatureContext extends BehatContext
         }
     }
 
+    /**
+     * @When I enter late fee amount :amount
+     */
+    public function iEnterLateFeeAmount($amount)
+    {
+        $this->fillField('late_fee_amount', $amount);
+        $this->lastFilledFields[] = 'late_fee_amount';
+    }
+
+    /**
+     * @Then the invoice total should increase by :amount
+     */
+    public function theInvoiceTotalShouldIncreaseBy($amount)
+    {
+        $invoice = Invoice::latest('id')->first();
+        if (!$invoice) {
+            throw new \Exception('No invoice found');
+        }
+        $invoice->fresh();
+        $lateFeeItem = $invoice->items()->where('description', 'Late Fee')->first();
+        if (!$lateFeeItem) {
+            throw new \Exception('No late fee line item found on invoice');
+        }
+        $expected = (float) str_replace(',', '', $amount);
+        $actual = round((float) $lateFeeItem->unit_price, 2);
+        $this->assertEquals(
+            $expected,
+            $actual,
+            "Late fee should be {$expected} but got {$actual}"
+        );
+    }
+
     // ============== Confirmation Steps ==============
 
     /**

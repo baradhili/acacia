@@ -54,6 +54,12 @@
                     </button>
                 </form>
             @endif
+            @if($invoice->is_overdue)
+                <button type="button" onclick="document.getElementById('lateFeeModal').classList.remove('hidden')"
+                    class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg">
+                    Add Late Fee
+                </button>
+            @endif
         </div>
     </div>
 
@@ -379,7 +385,30 @@
                 </div>
             </form>
         </div>
+
+<div id="lateFeeModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 w-full max-w-md">
+        <h3 class="text-lg font-semibold mb-4">Add Late Fee to Invoice #{{ $invoice->invoice_number }}</h3>
+        <form action="{{ route('invoices.addLateFee', $invoice) }}" method="POST">
+            @csrf
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Late Fee Amount *</label>
+                <input type="number" name="late_fee_amount" step="0.01" min="0.01" required
+                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full"
+                    placeholder="0.00">
+            </div>
+            <div class="flex justify-end gap-2 mt-6">
+                <button type="button" onclick="document.getElementById('lateFeeModal').classList.add('hidden')"
+                    class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg">
+                    Cancel
+                </button>
+                <button type="submit" class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg">
+                    Apply
+                </button>
+            </div>
+        </form>
     </div>
+</div>
 
 @push('scripts')
 <script>
