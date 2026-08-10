@@ -1725,7 +1725,26 @@ class FeatureContext extends BehatContext
      */
     public function iRecordAPartialPaymentOf($amount)
     {
-        $this->fillField('amount', $amount);
+        $page = $this->getSession()->getPage();
+        $field = $page->findField('amount');
+        if ($field === null) {
+            throw new \Behat\Mink\Exception\ElementNotFoundException($this->getSession()->getDriver(), 'field', 'named', 'amount');
+        }
+        $field->setValue($amount);
+
+        // The "Record Payment" opener is a JS-only <button type="button"> (a modal
+        // trigger) that the Kernel/BrowserKit driver cannot click. Scope the submit
+        // to the modal form containing the amount field, and press its submit button.
+        $form = $field->find('xpath', 'ancestor::form[1]');
+        if ($form !== null) {
+            foreach ($form->findAll('css', 'button') as $button) {
+                if (trim($button->getText()) === 'Record Payment') {
+                    $button->press();
+
+                    return;
+                }
+            }
+        }
         $this->pressButton('Record Payment');
     }
 
