@@ -228,11 +228,28 @@
             <div class="bg-white rounded-lg shadow p-6">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-lg font-semibold text-gray-800">Documents</h2>
-                    <a href="{{ route('invoices.edit', $invoice) }}" class="text-sm text-indigo-600 hover:text-indigo-800">
-                        Upload in Edit View →
-                    </a>
+                    <a href="#attach-document" name="Attach Document" class="text-sm text-indigo-600 hover:text-indigo-800">Attach Document</a>
                 </div>
-                
+
+                <!-- Upload Form -->
+                <div id="attach-document" class="border rounded-lg p-4 mb-4 bg-gray-50">
+                    <form action="{{ route('documents.store') }}" method="POST" enctype="multipart/form-data" class="space-y-3">
+                        @csrf
+                        <input type="hidden" name="documentable_type" value="App\Models\Invoice">
+                        <input type="hidden" name="documentable_id" value="{{ $invoice->id }}">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">File</label>
+                            <input type="file" name="file" required class="w-full text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">Document Name</label>
+                            <input type="text" name="name" placeholder="Enter document name"
+                                class="rounded-md border-gray-300 shadow-sm w-full text-sm">
+                        </div>
+                        <button type="submit" name="Upload" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm">Upload</button>
+                    </form>
+                </div>
+
                 <!-- Document List -->
                 @if($invoice->documents->count() > 0)
                     <div class="border rounded-lg divide-y">
@@ -244,7 +261,14 @@
                                     </svg>
                                     <span class="text-sm font-medium text-gray-900">{{ $doc->name }}</span>
                                 </div>
-                                <a href="{{ route('documents.download', $doc) }}" class="text-indigo-600 hover:text-indigo-900 text-sm">Download</a>
+                                <div class="flex gap-3">
+                                    <a href="{{ route('documents.download', $doc) }}" class="text-indigo-600 hover:text-indigo-900 text-sm">Download</a>
+                                    <form action="{{ route('documents.destroy', $doc) }}" method="POST" class="inline">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="text-red-600 hover:text-red-900 text-sm">Delete</button>
+                                    </form>
+                                </div>
                             </div>
                         @endforeach
                     </div>

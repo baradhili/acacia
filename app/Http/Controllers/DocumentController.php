@@ -35,13 +35,18 @@ class DocumentController extends Controller
      */
     public function store(Request $request)
     {
+        $isWeb = $request->expectsJson() === false;
+
         $validator = Validator::make($request->all(), [
             'documentable_type' => 'required|string',
             'documentable_id' => 'required|integer',
-            'file' => 'required|file|max:20480|mimes:pdf,jpg,jpeg,png,gif,doc,docx,xls,xlsx,txt,zip,rar',
+            'name' => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
+            if ($isWeb) {
+                return back()->withErrors($validator)->withInput();
+            }
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
@@ -60,13 +65,16 @@ class DocumentController extends Controller
         $document = Document::create([
             'documentable_type' => $documentableType,
             'documentable_id' => $request->documentable_id,
-            'name' => $file->getClientOriginalName(),
+            'name' => $request->name ?: $file->getClientOriginalName(),
             'file_path' => $path,
             'mime_type' => $file->getMimeType(),
             'size' => $file->getSize(),
             'uploaded_by' => Auth::id(),
         ]);
 
+        if ($isWeb) {
+            return back()->with('success', 'Document uploaded successfully.');
+        }
         return response()->json($document, 201);
     }
 
@@ -105,6 +113,9 @@ class DocumentController extends Controller
 
         $document->delete();
 
+        if (!request()->expectsJson()) {
+            return back()->with('success', 'Document deleted successfully.');
+        }
         return response()->json(['message' => 'Document deleted successfully']);
     }
 
