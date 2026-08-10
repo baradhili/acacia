@@ -153,7 +153,8 @@ class FeatureContext extends BehatContext
             'time entries' => '/projects/time-entries',
             'time entry' => '/projects/time-entries',
             'reconciliation' => '/reconciliation',
-            'wise import' => '/reconciliation/wise/import',
+            'wise import' => '/reconciliation/import',
+            'verification required' => '/verify-email',
             'profile' => '/profile',
             'my profile' => '/profile',
             'admin settings' => '/admin',
@@ -1493,14 +1494,6 @@ class FeatureContext extends BehatContext
     }
 
     /**
-     * @When I am on the verification required page
-     */
-    public function iAmOnTheVerificationRequiredPage()
-    {
-        $this->visit('/verify-email');
-    }
-
-    /**
      * @Then a reset email should be sent to the user
      */
     public function aResetEmailShouldBeSentToTheUser()
@@ -1799,14 +1792,6 @@ class FeatureContext extends BehatContext
     protected function findClientRow($clientId)
     {
         return $this->getSession()->getPage()->findById('client-' . $clientId);
-    }
-
-    /**
-     * @Given I am on the Wise import page
-     */
-    public function iAmOnTheWiseImportPage()
-    {
-        $this->visit('/reconciliation/import');
     }
 
     /**
