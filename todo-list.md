@@ -1,77 +1,254 @@
 # Test Failure Todo List
 
-Generated from `php artisan test` (PHPUnit + Behat).
+Generated from `php artisan test` (PHPUnit + Behat) under PHP 8.4.24.
 
 ## Summary
 
-- PHPUnit Unit suite: 96 tests, 220 assertions passed (38 deprecations, no failures)
-- Behat suite: 108 scenarios (31 passed, 27 failed, 50 undefined) | 603 steps (228 passed, 27 failed, 210 undefined, 138 skipped)
+- PHPUnit Unit suite: 96 tests, 220 assertions passed (38 deprecations ignored by baseline, no failures)
+- Behat suite: 108 scenarios (37 passed, 27 failed, 44 undefined) | 603 steps (350 passed, 27 failed, 154 undefined, 72 skipped)
 
 ## Tasks
 
-- [x] **Fix PHPUnit unit test deprecations (38)**
-      PHPUnit unit suite passes but emits 38 deprecations under PHP 8.4. All 38 originate in the `ekmungai/eloquent-ifrs` vendor package (implicit nullable params). Added a PHPUnit baseline (`.phpunit.deprecations.baseline`) referenced via `<source baseline>` in `phpunit.xml` so the known vendor deprecations are acknowledged while new ones in our code still surface. Unit suite now reports `OK (96 tests, 220 assertions)`.
+- [ ] **Fix PHPUnit unit test deprecations (38)**
+      PHPUnit unit suite passes but emits 38 deprecations under PHP 8.4. All 38 originate in the `ekmungai/eloquent-ifrs` vendor package (implicit nullable params). A PHPUnit baseline (`.phpunit.deprecations.baseline`) is referenced via `<source baseline>` in `phpunit.xml` so the known vendor deprecations are acknowledged while new ones in our code still surface. Unit suite reports `OK (96 tests, 220 assertions)`. No action needed unless the baseline should be regenerated.
 
-- [x] **Create missing `Database\Factories\InvoiceFactory`**
-      Created `database/factories/InvoiceFactory.php` matching the Invoice model (fillable fields, casts, status constants). Provides `draft`/`sent`/`paid`/`overdue` state helpers and defaults `client_id`/`created_by` via nested factories. Verified the `Class "Database\Factories\InvoiceFactory" not found` failures are resolved across Documents/CreditNotes features; remaining failures there are UI element-not-found / undefined-step issues (covered by other tasks).
+- [ ] **Fix `features/Accounting/Accounting.feature:5` — "Date" text not found on journal entries page**
+      Scenario "User can view journal entry list" fails with `Behat\Mink\Exception\ResponseTextException`: the text "Date" was not found anywhere on the current page. The journal entries index view likely lacks a table (or table headers). The undefined step "I should see column headers: Date, Description, Account, Debit, Credit" also needs a definition. Requires implementing the journal entries index view with the expected column headers and the `iShouldSeeTheJournalEntriesTable` / column-headers assertion steps.
 
-- [x] **Create missing `Database\Factories\PaymentFactory`**
-      Created `database/factories/PaymentFactory.php` matching the Payment model (fillable, casts, method/status constants). Provides `pending`/`completed`/`void` state helpers; defaults `client_id`/`received_by` via nested factories. Verified the `Class "Database\Factories\PaymentFactory" not found` failures are resolved. Remaining Payments.feature failures are undefined-step / missing-prerequisite issues (covered by task 8).
+- [ ] **Fix `features/Accounting/Accounting.feature:29` — "Save" button not found on journal entry form**
+      Scenario "Journal entry must balance" fails with `Behat\Mink\Exception\ElementNotFoundException`: button with id|name|title|alt|value "Save" not found. The new journal entry page form lacks a "Save" submit button. Also requires the undefined steps for debit/credit line entry and the "Debits must equal credits" error message to be implemented. Add a "Save" button to the journal entry create form and implement the balancing validation.
 
-- [x] **Fix `features/Expenses/Expenses.feature:38` — "Delete" link not found**
-      Root cause: `layouts/app.blade.php` never yielded the `header` section, so the entire `@section('header')` block in `expenses/show.blade.php` (containing Edit/Delete/Submit/Mark-as-Paid buttons) was silently discarded. Added `@yield('header')` to the layout above `@yield('content')`. Also: defaulted `ExpenseFactory` to `draft` status (so `canBeDeleted()` is true), taught `iClickForTheExpense` to fall back to finding a `<button>` by visible text (Mink `pressButton` matches by name/id/value, not inner text), and made `iConfirmTheDeletion` a no-op since the delete form submits immediately in the JS-less driver. Verified: Expenses.feature:38 now passes all defined steps (1 undefined assertion remains for task 8).
+- [ ] **Fix `features/Auth/EmailVerification.feature:24` — ambiguous step match for verification page**
+      Scenario "User can resend verification email" fails: the step "I am on the verification required page" ambiguously matches both the regex `iAmOnThePage` (`/^I am on the (.+) page$/`) and the explicit `iAmOnTheVerificationRequiredPage`. Disambiguate the step definitions (e.g. tighten the regex so it does not capture "verification required", or remove the explicit step and route it through the generic one).
 
-- [x] **Fix `features/Projects/Projects.feature:34` — "Submit for Approval" button not found**
-      Root cause: the scenario created no real TimeEntry model (the given-step only stashed a session var), never navigated to the time-entry show page (it stayed on `/dashboard`), and `iClick` used Mink `pressButton` which matches by name/id/value (the button only has inner text). Fixed by: creating `database/factories/TimeEntryFactory.php` (draft/submitted/approved/rejected states), making `aDraftTimeEntryExists`/`aSubmittedTimeEntryExists` create real models, adding an `iClickOnTheTimeEntry` step that visits the show page and presses the button by visible text, switching the scenario to that step, and making the generic `iClick` fall back to button-by-text too. Verified: Projects.feature:34 now passes all defined steps (1 undefined assertion remains for task 8); full Projects feature has 0 failures.
+- [ ] **Fix `features/CreditNotes/CreditNotes.feature:5, :18, :27` — undefined credit note step definitions**
+      Scenarios "User can create a credit note" (:5), "User can send a credit note" (:18), and "User can apply credit note to invoice" (:27) fail with undefined steps: `the credit note should have status "Draft"`, `Then the status should be "Sent"`, `And I select the credit note`, `Then the invoice balance should be reduced by 100.00`, `And the credit note should be marked as "Applied"`, `Given a credit note exists`, `And I add a credit line:`. Implement these step definitions in `FeatureContext` and ensure the corresponding credit note controller/views exist.
 
-- [x] **Fix `features/Reconciliation/Reconciliation.feature:22` — `attachFileToField` undefined method**
-      Root cause: `FeatureContext` does not extend `MinkContext`, so `$this->attachFileToField()` (a MinkContext helper) resolved to a non-existent `PHPUnit\Framework\Assert::attachFileToField()` fatal. Replaced both call sites (`iSelectAFile`, `iUploadAWiseStatementCsvFile`) with a new `attachFileToFieldNode()` helper that uses `$page->findField($field)->attachFile($path)`. Additional fixes needed to make the Wise CSV scenario pass end-to-end: (1) `iAmOnTheWiseImportPage` visited the wrong URL `/reconciliation/wise/import` (404) — corrected to `/reconciliation/import`; (2) the upload step attached to field `csv_file` but the form input is named `wise_csv` — corrected and set `lastFilledFields` so `iPress` scopes the button search to the form; (3) `iPress`'s form-scoped button lookup used an exact `normalize-space()=` match, so "Import" never matched the "Import Transactions" button — relaxed to `contains()`; (4) the controller's `processImport` was a Phase-6 stub — implemented a real Wise CSV parser that creates `BankTransaction` rows; (5) BrowserKit test-driver uploads fail Laravel's auto `isValid()` check (`is_uploaded_file()` is false) which injects "failed to upload" during `validate()`, so `processImport` now inspects the `UploadedFile` directly instead of calling `validate()`; (6) added a reusable `<x-flash-messages />` component (success/error/info) and yielded it in `layouts/app.blade.php` so flash messages actually render (they were silently discarded before). Verified: Reconciliation.feature:22 passes all defined steps (1 undefined assertion remains for task 8); only the Auto-Match scenario still fails (task 7).
+- [ ] **Fix `features/Documents/Documents.feature:5, :25, :32` — undefined document step definitions**
+      Scenarios "User can upload a document to an invoice" (:5), "User can download a document" (:25), and "User can delete a document" (:32) fail with undefined steps: `Then I should receive a PDF file`, `And I enter document name "Invoice Receipt"`, `And the document should appear in the attachments list`, `When I attach document "receipt.pdf" with name "Expense Receipt"`, `Then the document should be linked to the expense`, `Then I should receive the original file`, `Then the document should be removed from attachments`. Implement these steps and the document upload/download/delete controller & views.
 
-- [x] **Fix `features/Reconciliation/Reconciliation.feature:31` — "Auto-Match" button not found**
-      Root cause: the reconciliation index view rendered no "Auto-Match" button (auto-match was a Phase-6 placeholder), there was no auto-match route/controller, and the `thereAreUnmatchedTransactionsAndInvoices` given-step was a no-op. Fixed by: (1) implementing `ReconciliationController::autoMatch()` which pairs pending credit `BankTransaction`s to awaiting-payment `Invoice`s where `reference == invoice_number` and `amount == total`, marking them via `markAsMatched()`; (2) adding the `reconciliation.auto-match` POST route; (3) updating `index()` to pass `$pendingTransactions` and adding a pending-transactions table + Auto-Match submit button (found by text via `iClick`'s fallback) to `reconciliation/index.blade.php`; (4) implementing `thereAreUnmatchedTransactionsAndInvoices` to create one matchable invoice+transaction pair (same reference/amount) and one unmatchable pending transaction. Verified: Reconciliation.feature:31 now passes all defined steps (2 undefined assertions remain for task 8); full Reconciliation feature has 0 failures.
+- [ ] **Fix `features/Expenses/Expenses.feature:5` — undefined step "the expense should appear in the list"**
+      Scenario "User can create a new expense" fails because the assertion `And the expense should appear in the list` is undefined. Define the step to verify the newly created expense renders in the expense list view.
 
-- [x] **Define undefined behat step definitions (time entry status, approval timestamp, reconciliation matching)**
-      Scoped to the assertion steps the task list explicitly named, completing the scenarios fixed in tasks 4–7. Implemented in `FeatureContext`: `theTimeEntryStatusShouldBe(:status)` (case-insensitive DB status check), `approvalTimestampShouldBeRecorded()` (asserts `approved_at` not null), `iEnterRejectionReason(:reason)` (fills the `reason` field and sets `lastFilledFields` so `iPress` scopes the submit to the reject form), `rejectionReasonShouldBeVisible()` (DB + page-text check), and Reconciliation assertions `matchingTransactionsShouldBePairedAutomatically()`, `unmatchedItemsShouldRemainInTheList()`, `transactionsShouldAppearInTheList()` (DB counts + page element/text checks). Supporting view fix: renamed the time-entry reject submit button to "Submit Rejection" to match the two-step reject scenario, and made `iClickOnTheTimeEntry("Reject")` navigate-only (the rejection form is already visible on the show page). Verified: all 3 Projects time-entry approval scenarios pass fully (submit 4/4, approve 5/5, reject 7/7); Reconciliation import + auto-match scenarios pass end-to-end; full suite went from 31 to 36 passing scenarios, 62 to 57 undefined, 0 new failures.
+- [ ] **Fix `features/Expenses/Expenses.feature:47` — undefined steps for mark expense as paid**
+      Scenario "User can mark expense as paid" fails with undefined steps: `Given an expense exists with status "Pending"`, `And I enter the payment date`, `Then the expense status should be "Paid"`. Define these steps and ensure the expense show page has a "Mark as Paid" action and payment date input, with the status transition implemented.
 
----
+- [ ] **Fix `features/Invoices/Invoices.feature:5` — undefined invoice creation steps**
+      Scenario "User can create a new invoice" fails with undefined steps: `When I select "Test Client" as the client`, `And I add an invoice line with:`, `And the invoice should have status "Draft"`. Define these steps and ensure the invoice create form supports client selection and line-item entry, with draft status on creation.
 
-## Phase 2 — remaining 15 failing Behat scenarios
+- [ ] **Fix `features/Invoices/Invoices.feature:48` — undefined invoice PDF steps**
+      Scenario "User can view invoice PDF" fails with undefined steps: `And the filename should contain "Invoice"`, `Then I should receive a PDF file`. Define these steps and ensure the invoice show page has a PDF download action that produces a file whose name contains "Invoice".
 
-After tasks 1–8, the full Behat suite stands at **36 passed / 15 failed / 57 undefined**. The 15 failures were investigated and trace to **4 root causes**, each scoped as a task below. Each task: implement, verify the affected scenarios pass, commit, push, update this file.
+- [ ] **Fix `features/Invoices/AdvancedInvoices.feature:25, :34` — undefined duplicate/void invoice steps**
+      Scenarios "User can duplicate an invoice" (:25) and "User can void an invoice" (:34) fail with undefined steps: `Then a new draft invoice should be created`, `And it should have the same line items`, `Then the invoice status should be "Void"`, `And the invoice should be marked inactive`. Define these steps and implement duplicate/void controller actions.
 
-### Current failures (before phase 2)
+- [ ] **Fix `features/Invoices/Estimates.feature:5` — undefined estimate creation steps**
+      Scenario "User can create an estimate" fails with undefined steps: `Given I am creating a new invoice`, `When I add line items:`, `Then the subtotal should be 350.00`, `And with 10% tax, total should be 385.00`, `And the total should be 8000.00`, `Then a new invoice should be created`, `And it should contain the estimate line items`, `And the client clicks "Accept" on the estimate`, `Then the estimate status should be "Accepted"`. Define these steps and implement the estimate create/convert/accept flows.
 
-| Feature | Scenario line | Root cause | Task |
+- [ ] **Fix `features/Invoices/RecurringInvoices.feature:19, :28, :37, :47` — undefined recurring invoice steps**
+      Scenarios "User can pause a recurring invoice" (:19), "User can resume a paused recurring invoice" (:28), "User can edit a recurring invoice template" (:37), and "User can delete a recurring invoice" (:47) fail with undefined steps: `When I create an invoice with recurrence:`, `Then a recurring invoice profile should be created`, `And invoices should be generated automatically`, `And the next invoice should be scheduled for 2024-02-01`, `Then the recurring schedule should be paused`, `And no new invoices should be generated`, `Then the recurring schedule should resume`, `And invoices should be generated again`, `And I change the amount to 600.00`, `Then future generated invoices should have the new amount`, `Then the recurring invoice should be removed`, `And future invoices should not be generated`, `Given a client exists with name "Test Client"`, `When I go to create a recurring invoice`, `And I add line item "Monthly retainer" with amount 500.00`. Define these steps and implement the recurring invoice scheduling/pause/resume/edit/delete controller logic.
+
+- [ ] **Fix `features/Payments/Payments.feature:38` — undefined partial payment steps**
+      Scenario "Partial payment reduces invoice balance" fails with undefined steps: `Given an invoice exists with balance 50.00`, `Then the invoice balance should be 500.00`, `And the invoice status should be "Partially Paid"`. Define these steps and ensure partial payments update the invoice balance and transition status to "Partially Paid".
+
+- [ ] **Fix `features/Payments/AdvancedPayments.feature:19` — undefined late fee steps**
+      Scenario "User can apply late fees" fails with undefined steps: `And I enter late fee amount 25.00`, `Then the invoice total should increase by 25.00`. Define these steps and implement late-fee application that increases the invoice total.
+
+- [ ] **Fix `features/Projects/Projects.feature:19` — undefined time entry form steps**
+      Scenario "User can create a time entry" fails with undefined steps: `And I fill in the time entry form with:`, `Then the hours should be recorded`. Define these steps and ensure the time entry create form accepts project/hours/description and persists the entry.
+
+- [ ] **Fix `features/Reconciliation/Reconciliation.feature:22` — undefined Wise CSV import assertion**
+      Scenario "User can import Wise CSV" fails with the undefined step `And transactions should appear in the list`. Define the assertion step to verify imported BankTransaction rows render in the reconciliation list view.
+
+- [ ] **Fix `features/Reports/IfrsReports.feature:33` — "Export to Excel" link not found**
+      Scenario "User can export IFRS report to Excel" fails with `Behat\Mink\Exception\ElementNotFoundException`: link "Export to Excel" not found on the IFRS balance sheet page. Add an "Export to Excel" link to the IFRS report view and implement the Excel export controller action.
+
+- [ ] **Fix `features/Reports/Reports.feature:30` — "Export to PDF" link not found**
+      Scenario "User can export report to PDF" fails with `Behat\Mink\Exception\ElementNotFoundException`: link "Export to PDF" not found on the time-by-client report page. Add an "Export to PDF" link to the reports view and implement the PDF export controller action.
+
+- [ ] **Fix `features/Reports/Reports.feature:38` — "from_date" form field not found**
+      Scenario "User can filter report by date range" fails with `Behat\Mink\Exception\ElementNotFoundException`: form field "from_date" not found on the time-by-client report page. Add `from_date`/`to_date` filter inputs and an "Apply Filter" button to the report view, and implement date-range filtering in the controller.
+
+## Failed scenarios
+
+| Feature | Scenario line | Scenario | Error |
 |---|---|---|---|
-| Clients/Clients.feature | :5 | ambiguous step "I am on the clients page" | TASK-9 |
-| Clients/Clients.feature | :24 | ambiguous step "I am on the clients page" | TASK-9 |
-| Clients/Clients.feature | :34 | ambiguous step "I am on the clients page" | TASK-9 |
-| Invoices/Invoices.feature | :18 | "invoice exists for client X" assumes client already created | TASK-10 |
-| Payments/Payments.feature | :5 | "invoice exists for client X" assumes client already created | TASK-10 |
-| Payments/Payments.feature | :21 | "payments exist for client X" assumes client already created | TASK-10 |
-| Payments/Payments.feature | :29 | "payments exist for client X" assumes client already created | TASK-10 |
-| Payments/Payments.feature | :38 | "invoice exists for client X" assumes client already created | TASK-10 |
-| CreditNotes/CreditNotes.feature | :18 | creates credit notes as `Invoice` with a `type` column (no such column) | TASK-11 |
-| CreditNotes/CreditNotes.feature | :27 | creates credit notes as `Invoice` with a `type` column (no such column) | TASK-11 |
-| Invoices/Estimates.feature | :21 | creates estimates as `Invoice` with a `type` column (no such column) | TASK-11 |
-| Invoices/Estimates.feature | :29 | creates estimates as `Invoice` with a `type` column (no such column) | TASK-11 |
-| Invoices/Estimates.feature | :38 | creates estimates as `Invoice` with a `type` column (no such column) | TASK-11 |
-| Invoices/Invoices.feature | :48 | "Download PDF" link not found (scenario never navigates to invoice details page) | TASK-12 |
-| Documents/Documents.feature | :25 | "Download" link not found (scenario never navigates to invoice details page) | TASK-12 |
+| Accounting/Accounting.feature | :5 | User can view journal entry list | "Date" text not found on page |
+| Accounting/Accounting.feature | :29 | Journal entry must balance | "Save" button not found |
+| Auth/EmailVerification.feature | :24 | User can resend verification email | Ambiguous step match |
+| CreditNotes/CreditNotes.feature | :5 | User can create a credit note | Undefined steps |
+| CreditNotes/CreditNotes.feature | :18 | User can send a credit note | Undefined steps |
+| CreditNotes/CreditNotes.feature | :27 | User can apply credit note to invoice | Undefined steps |
+| Documents/Documents.feature | :5 | User can upload a document to an invoice | Undefined steps |
+| Documents/Documents.feature | :25 | User can download a document | Undefined steps |
+| Documents/Documents.feature | :32 | User can delete a document | Undefined steps |
+| Expenses/Expenses.feature | :5 | User can create a new expense | Undefined step |
+| Expenses/Expenses.feature | :47 | User can mark expense as paid | Undefined steps |
+| Invoices/Invoices.feature | :5 | User can create a new invoice | Undefined steps |
+| Invoices/Invoices.feature | :48 | User can view invoice PDF | Undefined steps |
+| Invoices/AdvancedInvoices.feature | :25 | User can duplicate an invoice | Undefined steps |
+| Invoices/AdvancedInvoices.feature | :34 | User can void an invoice | Undefined steps |
+| Invoices/Estimates.feature | :5 | User can create an estimate | Undefined steps |
+| Invoices/RecurringInvoices.feature | :19 | User can pause a recurring invoice | Undefined steps |
+| Invoices/RecurringInvoices.feature | :28 | User can resume a paused recurring invoice | Undefined steps |
+| Invoices/RecurringInvoices.feature | :37 | User can edit a recurring invoice template | Undefined steps |
+| Invoices/RecurringInvoices.feature | :47 | User can delete a recurring invoice | Undefined steps |
+| Payments/Payments.feature | :38 | Partial payment reduces invoice balance | Undefined steps |
+| Payments/AdvancedPayments.feature | :19 | User can apply late fees | Undefined steps |
+| Projects/Projects.feature | :19 | User can create a time entry | Undefined steps |
+| Reconciliation/Reconciliation.feature | :22 | User can import Wise CSV | Undefined assertion step |
+| Reports/IfrsReports.feature | :33 | User can export IFRS report to Excel | "Export to Excel" link not found |
+| Reports/Reports.feature | :30 | User can export report to PDF | "Export to PDF" link not found |
+| Reports/Reports.feature | :38 | User can filter report by date range | "from_date" field not found |
 
-### Tasks
+## Undefined Behat steps (snippets to define)
 
-- [x] **TASK-9: Resolve ambiguous page-navigation steps colliding with the generic `I am on the :path page` step**
-      Root cause: the generic `@Given /^I am on the (.+) page$/` (`iAmOnThePage`) collides with any specific `@Given I am on the X page` method, causing Behat to abort with an ambiguous-match error. The parallel remote session re-introduced two such redundant methods that had already been removed: `iAmOnTheWiseImportPage` (regressing the Reconciliation:22 scenario fixed in TASK-6) and `iAmOnTheVerificationRequiredPage` (Auth/EmailVerification:24). Fix: removed both redundant methods and routed their URLs through the generic step's `$pageMap` (`'wise import' => '/reconciliation/import'`, added `'verification required' => '/verify-email'`). The Clients scenarios were already fixed by the remote session (which removed `iAmOnTheClientsPage`). Verified: Reconciliation:22 passes 6/6 (regression fixed), Auth/EmailVerification:24 passes 4/4; full suite 37 -> 39 passed, 27 -> 25 failed; unit suite green.
+The full list of undefined steps reported by Behat (154 total):
 
-- [x] **TASK-10: Make "…for client X" given-steps auto-create the client + fix Payments:38 modal-submit driver error**
-      The null `->id` bug (`Attempt to read property "id" on null`) was already fixed by the parallel remote session, which changed the `anInvoiceExistsForClient*` / `paymentsExistForClient` steps to create the client when absent. That moved Invoices:18 and Payments :5/:21/:29 out of "failed" (into "undefined" for their not-yet-defined assertion steps). The only remaining Payments failure was :38 (Partial payment reduces invoice balance), whose `iRecordAPartialPaymentOf(:amount)` step called `pressButton('Record Payment')`, which matched the JS-only `<button type="button">` modal opener (line 170 of invoices/show.blade.php) and threw `KernelDriver supports clicking on links and submit or reset buttons only. But "button" provided`. Fix: rewrote the step to fill the `amount` field, walk up to its containing modal `<form>`, and press that form's submit `<button>` (the real "Record Payment" on line 344) by matching button text, bypassing the JS opener the BrowserKit/Kernel driver cannot click. Verified: Payments:38 now passes its given+action steps (4 passed, 2 undefined) and is no longer a failure; full suite 25 -> 24 failed, 39 passed; unit suite green.
-
-- [ ] **TASK-11: Create CreditNoteFactory + EstimateFactory; stop injecting a `type` column into invoices**
-      The `CreditNote` and `Estimate` models exist with their own tables (`credit_notes`, `estimates`) and `HasFactory`, but have **no factories**. The FeatureContext steps (`anEstimateExists`, `anApprovedEstimateExists`, `aSentEstimateExists`, `aCreditNoteExists`, `aDraftCreditNoteExists`) work around this by creating `Invoice::factory()->create(['type' => 'estimate'|'credit_note'])`, but the `invoices` table has no `type` column → `SQLSTATE: table invoices has no column named type` (5 failures: CreditNotes :18/:27, Estimates :21/:29/:38). Fix: add `database/factories/CreditNoteFactory.php` and `database/factories/EstimateFactory.php` matching their models' fillable/casts/status constants; update the FeatureContext steps to use the correct models. Verify those 5 scenarios pass their defined steps.
-
-- [ ] **TASK-12: Fix missing "Download"/"Download PDF" navigation in document/PDF scenarios**
-      The invoice show view already renders a "Download PDF" link and per-document "Download" links, but the Invoices:48 and Documents:25 scenarios click "Download PDF"/"Download" without first navigating to the invoice details page, so the link isn't on the current page → `Link … not found`. Fix: make `iClick("Download PDF")` (for invoices) and `iClickOnTheDocument("Download")` navigate to the relevant invoice's show page before clicking. Verify Invoices:48 and Documents:25 pass their defined steps.
-
-### Final goal
-All 4 tasks complete → 15 failures → 0 failures (for the scenarios whose remaining steps are defined; scenarios with still-undefined steps move to "undefined", not "failed").
+- And I should see column headers: Date, Description, Account, Debit, Credit
+- When I fill in the journal entry form with:
+- And I add a credit line:
+- And the entry should balance (debits equal credits)
+- And I should see column headers: Name, Email, Phone, Actions
+- And the credit note should have status "Draft"
+- Then the status should be "Sent"
+- And I select the credit note
+- Then the invoice balance should be reduced by 100.00
+- And the credit note should be marked as "Applied"
+- Given a credit note exists
+- Then I should receive a PDF file
+- And I enter document name "Invoice Receipt"
+- And the document should appear in the attachments list
+- When I attach document "receipt.pdf" with name "Expense Receipt"
+- Then the document should be linked to the expense
+- Then I should receive the original file
+- Then the document should be removed from attachments
+- And the expense should appear in the list
+- Then I should see the expense description
+- And I should see the amount
+- And I should see the expense date
+- And I change the amount to "200.00"
+- Then I should see the updated amount
+- Then the expense should be removed from the list
+- Then the expense status should be "Paid"
+- And I should see links to: Dashboard, Clients, Invoices, Expenses, Projects, Reports
+- Then I should be on the dashboard page
+- Then I should be on the clients page
+- Then I should be on the invoices page
+- When I click on my profile name
+- Then I should see dropdown with: Profile, Settings, Logout
+- And I am on the client details page for "Test Client"
+- Then I should see breadcrumbs: Home > Clients > Test Client
+- Given a client exists
+- When I create an invoice with recurrence:
+- Then a recurring invoice profile should be created
+- And invoices should be generated automatically
+- When I select invoices 1, 2, 3
+- Then all selected invoices should be marked as sent
+- Then a new draft invoice should be created
+- And it should have the same line items
+- Then the invoice status should be "Void"
+- And the invoice should be marked inactive
+- Given I am creating a new invoice
+- When I add line items:
+- Then the subtotal should be 350.00
+- And with 10% tax, total should be 385.00
+- And the total should be 8000.00
+- Then a new invoice should be created
+- And it should contain the estimate line items
+- And the client clicks "Accept" on the estimate
+- Then the estimate status should be "Accepted"
+- Then I should see the client name
+- And I should see the line items
+- And I should see the total amount
+- Then the invoice status should be "Sent"
+- Given a sent invoice exists for client "Test Client"
+- Then the invoice status should be "Paid"
+- And the filename should contain "Invoice"
+- Given a client exists with name "Test Client"
+- When I go to create a recurring invoice
+- And I add line item "Monthly retainer" with amount 500.00
+- And the next invoice should be scheduled for 2024-02-01
+- Then the recurring schedule should be paused
+- And no new invoices should be generated
+- Then the recurring schedule should resume
+- And invoices should be generated again
+- And I change the amount to 600.00
+- Then future generated invoices should have the new amount
+- Then the recurring invoice should be removed
+- And future invoices should not be generated
+- Given an invoice exists with amount 1500.00
+- And I select the invoice
+- And the invoice should be marked as paid
+- And two payment records should be created
+- And I enter late fee amount 25.00
+- Then the invoice total should increase by 25.00
+- Given an invoice exists with balance 50.00
+- And I enter the write off amount 50.00
+- And I select reason "Bad Debt"
+- Then the invoice balance should be 0.00
+- And the invoice should be marked as "Written Off"
+- Given payments exist across multiple months
+- Then I should see total payments by month
+- And I should see breakdown by payment method
+- And the payment should appear in the list
+- Then I should see all payments
+- And each payment should show date, amount, and method
+- Then I should see only payments within the date range
+- Then the invoice balance should be 500.00
+- And the invoice status should be "Partially Paid"
+- When I fill in project details:
+- And I add phase "Discovery" with budget 2000.00
+- And I add phase "Design" with budget 3000.00
+- And I add phase "Development" with budget 5000.00
+- Then the project should be created with 3 phases
+- And the total budget should equal the project budget
+- When I create a time entry:
+- Then the hours should be tracked against the Design phase
+- And I can see phase budget utilization
+- And the "Design" phase has all time approved
+- And I am logged in as project manager
+- When I click "Complete Phase" on Design
+- Then the Design phase should be marked as complete
+- And the next phase can begin
+- Given a project with budget 10000.00 exists
+- And time entries totaling 5000.00 have been approved
+- And expenses totaling 1000.00 have been added
+- When I view the project
+- Then I should see budget utilization at 60%
+- And I should see remaining budget of 4000.00
+- Given a project exists with budget 5000.00
+- When I create a purchase order:
+- Then the purchase order should be linked to the project
+- And project committed budget should increase by 1000.00
+- When I fill in the project form with:
+- And the project should appear in the project list
+- And I fill in the time entry form with:
+- And the hours should be recorded
+- Then I should see bank transactions list
+- And I should see matched and unmatched items
+- When I drag the transaction to match with the invoice
+- Then the transaction should be marked as matched
+- And the invoice should show as paid
+- And a transaction is matched to an invoice
+- Then a cash receipt should be created
+- Then I should see assets categorized as current and non-current
+- And I should see liabilities categorized as current and non-current
+- And assets should equal liabilities plus equity
+- Then I should see revenue breakdown
+- And I should see expense breakdown
+- And I should see net profit or loss
+- Then I should see operating activities
+- And I should see investing activities
+- And I should see financing activities
+- And I should see net change in cash
+- Then I should receive an Excel file
+- And it should contain formatted financial data
+- Then I should see total hours per client
+- And I should see breakdown by project
+- Then I should see total hours per staff member
+- Then I should see revenue per project
+- And I should see costs per project
+- And I should see profit margin per project
+- And it should contain the report data
+- Then I should see only entries within the date range
