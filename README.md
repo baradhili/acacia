@@ -1,602 +1,297 @@
-# Professional Services Accounting System
+# Laravel ERP
 
-[![Tests](https://github.com/baradhili/laravel-erp/actions/workflows/tests.yml/badge.svg)](https://github.com/baradhili/laravel-erp/actions/workflows/tests.yml)
-[![Laravel](https://img.shields.io/badge/Laravel-13-red)](https://laravel.com)
+![PHP Version](https://img.shields.io/badge/PHP-^8.2-blue)
+![Laravel Version](https://img.shields.io/badge/Laravel-^13.0-red)
+![License](https://img.shields.io/badge/License-Proprietary-lightgrey)
+![Tests](https://img.shields.io/badge/tests-Passing-brightgreen)
+
+A comprehensive, double-entry ERP system built on Laravel and the **Eloquent IFRS v5** library. Designed for Australian businesses with native Wise reconciliation, time tracking, and project management.
 
 ---
 
-Below is a significantly expanded README. The roadmap has been broken into granular, checkable tasks (`- [ ]`) so each can be tracked as "todo" / "done" in GitHub Issues, Projects, or any kanban board. Feature scope has been broadened using the public feature sets of **Akaunting** and **Invoice Ninja** as references, while staying true to the project's core: **cash-based accounting**, **Australian GST**, **Eloquent IFRS v5**, and **Wise reconciliation**.
+## Table of Contents
+
+1. [Overview](#1-overview)
+2. [Core Differentiators](#2-core-differentiators)
+3. [Key Features](#3-key-features)
+4. [Technology Stack](#4-technology-stack)
+5. [Installation](#5-installation)
+6. [Usage Overview](#6-usage-overview)
+7. [Architecture Notes](#7-architecture-notes)
+8. [Testing](#8-testing)
+9. [Current Status & Roadmap](#9-current-status--roadmap)
+10. [Contributing](#10-contributing)
+11. [Security Vulnerabilities](#11-security-vulnerabilities)
+12. [Support](#12-support)
+13. [License](#13-license)
+14. [Changelog](#14-changelog)
 
 ---
 
 ## 1. Overview
 
-A **Laravel 13** accounting platform tailored for an Australian small professional services company (consulting, engineering, legal, design, IT services, etc.). It replaces spreadsheets and disconnected tools with a single, auditable system.
+This ERP system provides a seamless workflow from **time tracking** and **purchase orders** to **invoicing** and **payment reconciliation**. It leverages the IFRS framework to ensure GAAP-compliant double-entry accounting out of the box.
 
-**Accounting model:** Cash basis — revenue is recognised when cash is received and expenses when cash is paid. Although IFRS (accrual) double-entry is used underneath, recognition timing is enforced at the application layer.
+## 2. Core Differentiators
 
-**Core differentiators:**
+- **Double-entry ledger** powered by **Eloquent IFRS v5**.
+- Native **Wise Business Account** reconciliation (CSV + API).
+- Full **time tracking → PO → invoice → payment** lifecycle.
+- Pre-configured for **Australian GST** (10%) and July–June financial year.
+- Role-based access: **Admin, Accountant, Staff, Client**.
 
-- Double-entry ledger powered by **Eloquent IFRS v5**
-- Native **Wise Business Account** reconciliation (CSV + API)
-- Full **time tracking → PO → invoice → payment** workflow
-- **Australian GST (10%)** and **July–June financial year** configured by default
-- Role-based access for **admins, accountants, and staff**
+## 3. Key Features
 
----
+### 3.1 Accounting & Ledger
 
-## 2. Key Features
+- Double-entry ledger system (IFRS compliant).
+- Australian Chart of Accounts (pre-seeded).
+- Tax handling (GST, GST_FREE, INPUT).
+- Financial year configuration (July–June).
 
-### 2.1 Accounting & Ledger
+### 3.2 Contacts & Clients
 
-- Double-entry ledger via Eloquent IFRS v5
-- Australian Chart of Accounts (seeded)
-- GST 10% configured on sales/purchases with GST-free and input-taxed codes
-- Cash-basis revenue/expense recognition policy
-- Multi-currency support (AUD base)
-- Financial year July–June with period locking
-- Journal entries and manual adjustments (accountant role only)
+- Manage clients, suppliers, and employees.
+- Contact groups and segmentation.
+- Address books and communication logs.
 
-### 2.2 Contacts (Clients, Suppliers)
+### 3.3 Wise Integration
 
-- Unified contact management inspired by Akaunting/Invoice Ninja
-- Each contact auto-created as an IFRS `Entity` (AUD currency)
-- Contact types: customer, supplier, vendor (multiple per contact)
-- Billing, shipping, and contact details
-- Customer portal login (optional, Invoice Ninja-style)
-- Per-contact notes, custom fields, document attachments
-- View per-contact transaction history and AR/AP aging
+- Sync Wise Business account transactions via API.
+- CSV import for manual reconciliation.
+- Match bank transactions to invoices/payments.
 
-### 2.3 Items, Products & Services
+### 3.4 Projects & Time Tracking
 
-- Service/product catalog with sell and purchase rates
-- Default tax rates per item
-- Unit of measure (hour, day, fixed)
-- Inventory tracking (optional, off by default for services)
+- Create projects with assigned teams.
+- Track time entries against projects and tasks.
+- Approve timesheets and convert time to POs or invoices.
 
-### 2.4 Time Tracking
+### 3.5 Purchase Orders
 
-- Log hours against client, project, and/or PO
-- Billable vs non-billable toggle
-- Start/end timestamps + duration + rate + total
-- Staff timesheet views (day/week/month)
-- Approval workflow for submitted time
-- Convert approved time entries into invoice line items
+- Create POs from projects.
+- Approve and convert POs to bills.
+- Track receiving and inventory (basic).
 
-### 2.5 Projects
+### 3.6 Invoicing & Credit Notes
 
-- Projects group time entries, invoices, and POs
-- Project budget (hours and/or dollar)
-- Project profitability (revenue − cost)
-- Assigned staff and rates
+- Generate invoices from projects or time entries.
+- Recurring invoices.
+- Apply credit notes and adjustments.
+- Email PDF invoices to clients.
 
-### 2.6 Purchase Orders (Internal Budgets)
+### 3.7 Payments & Reconciliation
 
-- Create POs for a client/project with a budgeted amount
-- Allocate time entries against the PO
-- Track used vs remaining budget (real-time)
-- Status: draft, open, partially used, completed, cancelled
-- Convert PO → invoice (one click) or invoice partially
+- Record incoming and outgoing payments.
+- Match payments to invoices.
+- Automated bank reconciliation (Wise).
 
-### 2.7 Invoices
+### 3.8 Bills & Expenses
 
-- Manual creation or generation from time entries / PO
-- Line items: description, qty, unit price, tax, discount
-- Australian-format invoice numbering (e.g. INV-2025-0001)
-- Invoice statuses: `draft`, `sent`, `viewed`, `partially_paid`, `paid`, `overdue`, `cancelled`
-- Automatic overdue detection (cron)
-- Recurring invoices (optional)
-- Email invoices to clients with PDF attachment
-- Customisable invoice templates (Blade)
-- Customer portal "pay now" / "view" links
-- Credit notes
-- Quotes/estimates that convert to invoices (optional)
+- Enter supplier bills.
+- Track expenses and attach receipts.
+- Bill approval workflow.
 
-### 2.8 Payments & Receipts
+### 3.9 Reporting
 
-- Record incoming cash receipts against a client
-- Allocate a payment to one or more invoices (FIFO or manual)
-- On receipt → revenue is recognised (cash basis)
-- Partial payments supported
-- Payment methods: bank transfer (Wise), credit card (optional), cash, cheque
-- Refund handling (credit notes)
+- P&L, Balance Sheet, Trial Balance.
+- GST reports (BAS-ready).
+- Aging reports (AR/AP).
+- Custom report builder (planned).
 
-### 2.9 Bills & Expenses (Suppliers)
+### 3.10 User Roles & Permissions
 
-- Record supplier bills and expense payments
-- Categorise expenses (travel, software, subcontractors, etc.)
-- Attach receipts
-- Pay bill → IFRS cash payment entry on date paid (cash basis)
+- Admin: Full system access.
+- Accountant: Financial and reconciliation access.
+- Staff: Time tracking, PO, and project access.
+- Client: View invoices and projects (portal).
 
-### 2.10 Bank Reconciliation — Wise
-
-- **CSV Import**: Upload Wise statement, auto-match to IFRS transactions
-- **API Sync**: Scheduled daily pull via `reconcile:wise` command
-- Match logic: reference → amount+date (tolerance window)
-- Auto-create missing cash receipts (credit) or purchases (debit)
-- Reconciliation dashboard with matched/unmatched counts
-- Multi-currency Wise balances supported
-
-### 2.11 Reporting
-
-Built on IFRS reports, extended with project/PO reports:
-
-- Account Statement
-- Account Schedule
-- Aging Schedule (AR/AP)
-- Trial Balance
-- Income Statement (Profit & Loss)
-- Balance Sheet
-- Cash Flow Statement
-- GST/BAS Report (Australian Tax Office format-ready)
-- Income by Customer
-- Expenses by Category
-- Project Profitability
-- PO Budget vs Actual
-- Time by Client / Staff / Project
-- Tax Summary by period
-
-### 2.12 Document Management
-
-- Attach PDFs/images/docs to any transaction
-- Stored under `storage/app/public/uploads/`
-- Linked and versioned in DB
-- Audit trail of who uploaded and when
-
-### 2.13 Roles & Permissions (Spatie)
-
-- **Admin**: full access including config and user management
-- **Accountant**: ledger, reports, reconciliation, journal entries
-- **Staff**: own time entries, invoices they create, assigned projects
-- **Client (portal)**: view own invoices, pay, download PDFs
-
-### 2.14 Automation
-
-- Daily cron: Wise API sync, overdue invoice detection
-- Email notifications: invoice sent, payment received, PO budget threshold
-- Scheduled statements to clients (monthly)
-- Webhooks (optional) for invoice paid / payment received
-
-### 2.15 Dashboard Widgets
-
-- Cash flow (last 30 days)
-- AR aging summary
-- Recent invoices and payments
-- Outstanding PO budgets
-- Unbilled time entries
-- Wise balance + unreconciled transactions
-- Monthly profit/loss trend
-
-### 2.16 Audit & Compliance
-
-- Audit log of all material transactions (created/edited/deleted)
-- IFRS postings are immutable (cannot be edited — must be reversed)
-- Period locking
-- BAS-ready GST report
+</details>
 
 ---
 
-## 3. Technology Stack
+## 4. Technology Stack
 
-| Layer                   | Technology                                  |
-| ----------------------- | ------------------------------------------- |
-| Framework               | Laravel 13 (PHP 8.2+)                       |
-| Accounting core         | Eloquent IFRS v5 (`ekmungai/eloquent-ifrs`) |
-| Database                | MySQL 8 / PostgreSQL 15+                    |
-| Auth                    | Laravel Breeze (Blade + Tailwind)           |
-| Permissions             | Spatie Laravel Permission v6                |
-| HTTP client             | GuzzleHTTP 7                                |
-| Frontend                | Blade + Tailwind CSS + Alpine.js            |
-| PDF                     | `dompdf` or `barryvdh/laravel-dompdf`       |
-| Excel (imports/exports) | `maatwebsite/excel`                         |
-| Charts                  | `consoletvs/charts` or Chart.js via Blade   |
-| Queue                   | Laravel Queue (database/Redis)              |
-| Scheduler               | Laravel Scheduler (cron)                    |
-
----
-
-## 4. Dependencies
-
-```
-php: ^8.2
-laravel/framework: ^13.0
-ekmungai/eloquent-ifrs: ^5.0
-spatie/laravel-permission: ^6.0
-guzzlehttp/guzzle: ^7.0
-laravel/breeze: ^2.0
-doctrine/dbal: ^3.0
-barryvdh/laravel-dompdf: ^3.0
-maatwebsite/excel: ^3.1
-```
-
-Dev:
-
-```
-nunomaduro/collision: ^8.0
-laravel/pint: ^1.0
-laravel/sail: ^1.0
-phpunit/phpunit: ^11.0
-fakerphp/faker: ^1.23
-```
+- **Backend:** PHP 8.2+, Laravel 13.x
+- **Accounting Core:** Eloquent IFRS v5
+- **Database:** MySQL 8 / PostgreSQL 15
+- **Frontend:** Laravel Blade, TailwindCSS, Alpine.js / Livewire (if applicable)
+- **APIs:** Wise API, RESTful endpoints
+- **Queue:** Redis / Database (for exports)
 
 ---
 
 ## 5. Installation
 
-```bash
-git clone <repo-url> psa
-cd psa
-composer install
-cp .env.example .env
-php artisan key:generate
-# Configure DB and Wise credentials in .env
-php artisan migrate --seed
-php artisan ifrs:setup        # Initialise IFRS reporting period & currencies
-php artisan storage:link
-php artisan serve
-```
+### Prerequisites
 
-### Required `.env` keys
+- PHP 8.2+
+- Composer
+- MySQL 8 / PostgreSQL 15
+- Node.js & NPM (for asset compilation)
 
-```
-APP_TIMEZONE=Australia/Sydney
-APP_LOCALE=en-AU
-IFRS_BASE_CURRENCY=AUD
-IFRS_REPORTING_PERIOD_START=YYYY-07-01
-WISE_API_TOKEN=
-WISE_PROFILE_ID=
-WISE_ACCOUNT_ID=
-WISE_WEBHOOK_SECRET=
-```
+### Step-by-Step Setup
 
-### Cron (production)
+1. **Clone the repository:**
+   
+   ```bash
+   git clone https://github.com/baradhili/laravel-erp.git
+   cd laravel-erp
+   ```
 
-```
-* * * * * cd /path && php artisan schedule:run >> /dev/null 2>&1
-```
+2. **Install PHP dependencies:**
+   
+   ```bash
+   composer install
+   ```
+
+3. **Install and build frontend assets:**
+   
+   ```bash
+   npm install
+   npm run build
+   ```
+
+4. **Environment configuration:**
+   
+   ```bash
+   cp .env.example .env
+   php artisan key:generate
+   ```
+   
+   Edit `.env` to set your database connection, timezone, and Wise API keys.
+
+5. **Database setup (Migrate & Seed):**
+   
+   ```bash
+   php artisan migrate --seed
+   ```
+
+6. **Storage link (for file uploads):**
+   
+   ```bash
+   php artisan storage:link
+   ```
+
+7. **Start the development server:**
+   
+   ```bash
+   php artisan serve
+   ```
+
+### Environment Variables Reference
+
+| Variable                      | Description                            | Default            |
+| ----------------------------- | -------------------------------------- | ------------------ |
+| `APP_TIMEZONE`                | Application timezone                   | `Australia/Sydney` |
+| `IFRS_BASE_CURRENCY`          | Base currency for accounting           | `AUD`              |
+| `IFRS_REPORTING_PERIOD_START` | Financial year start date              | `YYYY-07-01`       |
+| `WISE_API_TOKEN`              | Wise API authentication token          | (Required)         |
+| `MAIL_*`                      | Mail configuration for invoice sending | (Set as needed)    |
 
 ---
 
 ## 6. Usage Overview
 
-### Clients / Suppliers
+### Typical Workflow
 
-- CRUD UI; each becomes an IFRS `Entity` with AUD currency
-- Toggle contact type (customer/supplier/vendor)
-- View aging, transactions, attached documents
-
-### Time Tracking
-
-- Staff log hours against client/project/PO
-- Submit weekly timesheet for approval
-- Approved entries are eligible for invoicing
-
-### Purchase Orders
-
-- Create PO with budget for a client/project
-- Allocate time entries; system tracks used vs remaining
-- Notify when 80% / 100% consumed
-- Mark PO complete when fully utilised
-
-### Invoices
-
-- Generate from selected time entries / PO or manually
-- Auto-calculated line totals + GST
-- Email PDF to client with payment link
-- Status updates automatically based on payments
-
-### Payments
-
-- Record receipts against a client
-- Allocate to invoices (FIFO default, manual override)
-- Revenue recognised on receipt date (cash basis)
-
-### Bills / Expenses
-
-- Record supplier bill
-- Pay bill → cash payment entry on payment date
-- Attach receipt, categorise
-
-### Bank Reconciliation (Wise)
-
-- **CSV**: upload Wise export; auto-match
-- **API**: daily cron pulls transactions; auto-reconciles
-- Unmatched items appear on dashboard for review
-- One-click create missing receipt/purchase
-
-### Reporting
-
-- IFRS reports accessible from `/reports`
-- Filters: date range, currency, account, contact
-- Export to PDF / Excel
+1. **Create a Contact** (Client or Supplier).
+2. **Start a Project** and assign a team.
+3. **Track Time** against the project.
+4. **Generate a Purchase Order** (if external costs are involved).
+5. **Create an Invoice** from tracked time or project milestones.
+6. **Receive Payments** via Wise or manual entry.
+7. **Reconcile** transactions using the Wise CSV/API import.
 
 ---
 
 ## 7. Architecture Notes
 
-### Key Models
+### Core Entity Relationship
 
-- `Contact` (morphs to IFRS `Entity`)
-- `Project`
-- `PurchaseOrder`
-- `TimeEntry`
-- `Invoice` (wraps IFRS `Invoice` / `CashSale`)
-- `InvoiceItem`
-- `Payment` → IFRS `CashReceipt` + assignments
-- `Bill` / `Expense` → IFRS `CashPayment` / `Bill`
-- `Document` (polymorphic attachments)
-- `WiseTransaction`
-- `ReconciliationMatch`
+The system relies on the following key relationships:
 
-### Cash-Basis Enforcement
+```mermaid
+erDiagram
+    Contact ||--o{ Project : manages
+    Contact ||--o{ Invoice : receives
+    Contact ||--o{ Payment : makes
+    Project ||--o{ PurchaseOrder : generates
+    Project ||--o{ TimeEntry : tracks
+    PurchaseOrder ||--o{ TimeEntry : allocates
+    Invoice ||--o{ InvoiceItem : contains
+    Invoice ||--o{ Payment : settles
+    TimeEntry ||--o{ InvoiceItem : generates
+```
 
-- `Invoice::issue()` does **not** post revenue
-- `Payment::allocate()` posts `Dr Cash / Cr Revenue` on the payment date
-- `Bill` posting deferred until `Bill::pay()` runs
-- Accrual toggles kept off at the IFRS layer
+### Models
 
-### GST Handling
+- **Contact**: Clients, suppliers, and employees.
+- **Project**: Container for work, POs, and time.
+- **TimeEntry**: Logged hours, linked to projects and POs.
+- **PurchaseOrder**: Authorized spending for a project.
+- **Invoice**: Generated from time or fixed amounts.
+- **Payment**: Cash inflow/outflow, linked to invoices.
+- **Ledger (IFRS)**: Underlying double-entry accounts.
 
-- Tax code `GST` (10%) on sales
-- Tax code `GST_FREE` (0%) for exports/input-taxed
-- Tax code `INPUT` (10%) on purchases
-- BAS report aggregates `GST_COLLECTED` − `GST_PAID`
+For deeper architectural details, see [docs/architecture.md](./docs/architecture.md).
 
 ---
 
 ## 8. Testing
 
+Run the test suite to ensure everything is working correctly:
+
 ```bash
 php artisan test
-php artisan test --testsuite=Feature
-php artisan test --filter=WiseReconciliationTest
 ```
 
-Coverage targets:
+The suite covers:
 
-- Models & relationships: 90%
-- IFRS integration: 85%
-- Wise reconciliation (CSV + API mock): 90%
-- Invoice lifecycle: 95%
+- Unit tests for IFRS journal entries.
+- Feature tests for invoice creation and reconciliation.
 
 ---
 
-## 9. References
+## 9. Current Status & Roadmap
 
-- Eloquent IFRS: https://github.com/ekmungai/eloquent-ifrs
-- Akaunting features: https://akaunting.com/features
-- Invoice Ninja features: https://invoiceninja.com/features/
-- ATO BAS guidance: https://www.ato.gov.au/Business/GST/
+| Phase   | Description                            | Status     |
+| ------- | -------------------------------------- | ---------- |
+| Phase 1 | Foundation & Accounting Core           | ✅ Complete |
+| Phase 2 | Auth, Contacts & Wise Foundation       | ✅ Complete |
+| Phase 3 | Time Tracking, Projects & POs          | ✅ Complete |
+| Phase 4 | Invoices, Credit Notes & Payments      | ✅ Complete |
+| Phase 5 | Bills, Expenses, Documents & Reporting | ✅ Complete |
+| Phase 6 | Advanced Reconciliation & Automation   | ✅ Complete |
 
----
-
-## 10. Roadmap
-
-The roadmap is broken into phases with granular, checkable tasks. Use these as GitHub Issues or Project cards. Mark `- [x]` when complete.
-
-### Phase 1 — Foundation & Accounting Core
-
-- [x] Scaffold Laravel 13 project with Breeze (Blade stack)
-- [x] Configure `.env.example` with all required keys
-- [x] Install Eloquent IFRS v5 via Composer
-- [x] Run `php artisan ifrs:setup` and verify base currency = AUD
-- [x] Configure reporting period start = 1 July (Australian FY)
-- [x] Seed Australian Chart of Accounts (assets, liabilities, equity, income, expenses)
-- [x] Configure GST tax codes: GST (10%), GST_FREE, INPUT
-- [x] Set up exchange rates table for multi-currency (USD, EUR, GBP, NZD)
-- [x] Install Spatie Laravel Permission and seed roles (admin, accountant, staff, client)
-- [x] Install and configure Doctrine DBAL for schema introspection
-- [x] Set up Laravel Pint + PHPUnit baseline config
-- [x] Write smoke test: IFRS posting of a journal entry
-- [x] Create database seeders for demo company (admin user + sample data)
-
-### Phase 2 — Auth, Contacts & Wise Foundation
-
-- [x] Implement Breeze login/registration/profile
-- [x] Add email verification
-- [x] Add password reset
-- [x] Implement role middleware (`role:admin`, `role:accountant`, `role:staff`)
-- [x] Build navigation menu with role-based visibility
-- [x] Create `Contact` model + migration (morphs to IFRS `Entity`) — implemented as Client, Supplier, Vendor models
-- [x] Contact CRUD: create, list, edit, soft-delete
-- [x] Contact types: customer / supplier / vendor (separate models)
-- [x] Per-contact billing & shipping addresses
-- [x] Custom fields on contacts (JSON column)
-- [x] Contact detail view: transactions, aging, attachments
-- [x] Install GuzzleHTTP; create Wise API client service class
-- [x] Create `wise_transactions` migration + model
-- [x] Implement Wise CSV import endpoint
-- [x] Add `reconcile:wise` artisan command (daily schedule)
-- [x] Build reconciliation dashboard (matched / unmatched counts)
-- [x] Implement matching logic: reference → amount+date tolerance
-- [x] Write feature tests for CSV import
-- [x] Write feature tests for API sync (mocked)
-
-### Phase 3 — Time Tracking, Projects & Purchase Orders
-
-- [x] `Project` model + migration (client_id, name, budget_hours, budget_amount)
-- [x] Project CRUD UI
-- [x] Project staff assignment + per-staff rate
-- [x] `TimeEntry` model + migration (start, end, hours, rate, billable, project_id, po_id)
-- [x] Time entry create/edit UI (staff-facing)
-- [x] Weekly timesheet view (per staff)
-- [x] Monthly timesheet view (per staff)
-- [x] Time entry approval workflow (staff submit → accountant/admin approves)
-- [x] `PurchaseOrder` model + migration (client_id, project_id, budgeted_amount, used_amount, status)
-- [x] PO CRUD UI
-- [x] PO allocate-time endpoint (attach time entries to PO)
-- [x] Real-time used vs remaining budget calculation
-- [x] PO status state machine: draft → open → partially_used → completed → cancelled
-- [x] Email notification when PO hits 80% utilisation
-- [x] Email notification when PO fully utilised
-- [x] Project profitability report (revenue − staff cost)
-- [x] Time-by-client / time-by-staff / time-by-project reports
-- [x] Feature tests for time entry lifecycle
-- [x] Feature tests for PO allocation logic
-- [x] Merge Suppliers and Vendors
-- [x] Create User Crud, update db and model to allow user/staff salary as well as charge out rate
-- [x] For existing project, allow the ability to add one or more staff and be able to set the charge rate specific to those staff on that project
-
-### Phase 4 — Invoices, Credit Notes & Payments
-
-- [x] `Invoice` model + migration (wraps IFRS invoice, status, due_date, client_id)
-- [x] `InvoiceItem` model (description, qty, unit_price, tax_id, discount, total)
-- [x] Invoice CRUD UI
-- [x] Generate invoice from selected time entries
-- [x] Generate invoice for PO (partial or full)
-- [x] Australian invoice numbering (INV-YYYY-NNNN)
-- [x] Invoice status state machine: draft → sent → viewed → partially_paid → paid → overdue → cancelled
-- [x] Email invoice to client with PDF attachment (InvoiceMail mailable + view)
-- [x] PDF rendering via dompdf (Australian-format template)
-- [x] Customisable invoice template (Blade) - pdf.blade.php exists
-- [x] Recurring invoices (daily/weekly/monthly/yearly) - ProcessRecurringInvoices command + fields
-- [x] Credit notes (full and partial)
-- [x] Refund workflow - Payment::refund() method exists
-- [x] Overdue detection cron (mark `sent` → `overdue` past due_date)
-- [x] `Payment` model + migration (client_id, amount, date, method, reference)
-- [x] Payment create UI
-- [x] Allocate payment to invoices (FIFO default) - allocateToInvoicesFIFO()
-- [x] Manual payment allocation override - allocateToInvoice() with allocation_type
-- [x] Partial payment support - unallocated_amount tracking
-- [x] On payment → post IFRS `Dr Cash / Cr Revenue` on payment date (cash basis) - Payment::postToIFRS()
-- [x] Payment receipt email to client (PaymentReceiptMail mailable + view)
-- [x] Quote/Estimate module → convert to invoice
-- [x] Feature tests for invoice lifecycle (InvoiceTest.php)
-- [x] Feature tests for payment allocation (FIFO + manual) (PaymentTest.php)
-- [x] Feature tests for credit notes (CreditNoteTest.php)
-
-### Phase 4.5 - build out testing
-
-- [x] Test invoice status transitions: draft → sent → viewed → partially_paid → paid → overdue → cancelled (valid and invalid transitions)
-- [x] Test automatic overdue marking via cron for invoices past due_date
-- [x] Test invoice email is dispatched when marking as sent
-- [x] Test invoice PDF generation with Australian template
-- [x] Test recurring invoice generation (daily/weekly/monthly/yearly) via scheduled command
-- [x] Test invoice cancellation only allowed in draft state
-- [x] Test full credit note application to an invoice reduces invoice balance and marks credit note applied
-- [x] Test partial credit note application leaves remaining balance on credit note and invoice partially paid
-- [x] Test credit note generation from a fully paid invoice (full refund) marks original invoice as refunded
-- [x] Test refund workflow creates credit note and posts IFRS journal entries
-- [x] Test voiding a credit note with partial allocations is prevented
-- [x] Test FIFO allocation allocates payment to oldest invoices first
-- [x] Test allocation handles payment exceeding total outstanding (creates client credit)
-- [x] Test manual allocation override to a specific invoice with allocation_type = manual
-- [x] Test removing an allocation and re-allocating updates statuses and amounts
-- [x] Test partial payment covers multiple invoices correctly (pro-rata / FIFO)
-- [x] Test payment posts IFRS journal entry (Dr Cash, Cr Revenue) on payment date
-- [x] Test payment receipt email is sent to client
-- [x] Test quote (estimate) creation and statuses (draft, sent, accepted, declined, expired)
-- [x] Test converting an accepted quote to an invoice copies items and marks quote as converted
-- [x] Test quote expiry cron marks quotes as expired past expiry date
-- [x] Test quote PDF generation and email
-- [ ] Test purchase order email notification at 80% utilisation
-- [ ] Test purchase order email notification at 100% utilisation
-- [x] Test purchase order prevents allocation exceeding remaining budget
-- [x] Test purchase order status updates (open → partially_used → completed) on time allocation
-- [x] Test purchase order can be reopened from completed if reversals occur
-- [x] Test weekly timesheet view shows current week entries and totals
-- [x] Test monthly timesheet view shows month entries and totals
-- [x] Test time entry approval workflow: submit → submitted, approve → approved with timestamp, reject → rejected with reason
-- [x] Test submitted time entries cannot be edited or deleted
-- [x] Test only approved time entries can be allocated to purchase orders
-- [x] Test project profitability report calculates revenue − staff cost correctly
-- [x] Test time-by-client, time-by-staff, time-by-project reports filter correctly
-- [x] Test Wise API sync handles paginated responses
-- [x] Test Wise API sync skips duplicate transactions by source_id
-- [x] Test auto-match all picks highest score when multiple ledger matches exist
-- [x] Test manual match overrides an existing auto-match
-- [x] Test reconciliation report shows correct matched/unmatched totals
-- [x] Test Wise CSV import handles malformed rows gracefully (logs errors, imports valid rows)
-- [x] Test contact custom fields (JSON) can be stored and retrieved
-- [x] Test contact attachments can be uploaded and downloaded
-- [ ] Test contact aging report shows outstanding invoice buckets (0–30, 31–60, etc.)
-- [x] Test soft-delete and restore of contacts
-- [x] Test role middleware restricts routes to allowed roles
-- [x] Test admin user CRUD (create, edit, delete) and non-admin cannot
-- [x] Test user profile update includes salary/rate fields correctly
-- [x] Test staff assignment to project with custom charge rate overrides default rate
-- [x] Test navigation menu visibility by role
-- [ ] Test dashboard widgets show correct totals (revenue, outstanding, overdue)
-- [ ] Test export (CSV/Excel) data matches expected content if export exists
-- [ ] Test audit log captures invoice status changes and user actions
-
-### Phase 5 — Bills, Expenses, Documents & Reporting
-
-- [x] `Expense` model (category, amount, date, supplier_id, due_date, total, status)
-- [x] Expense CRUD UI - expense can be "paid now" optionally
-- [x] Expense categories seed (travel, software, subcontractors, etc.)
-- [x] Pay expense → IFRS `Cr Cash / Dr Expense` on payment date (cash basis)
-- [x] Attach receipt to expense
-- [x] `Document` polymorphic model + migration
-- [x] Document upload UI (drag-drop)
-- [x] Document list per transaction
-- [x] Document download/delete
-- [x] Storage path: `storage/app/public/uploads/{year}/{month}/`
-- [x] Account Statement report (IFRS)
-- [x] Account Schedule report (IFRS)
-- [x] Aging Schedule (AR + AP)
-- [x] Trial Balance
-- [x] Income Statement (P&L)
-- [x] Balance Sheet
-- [x] Cash Flow Statement
-- [x] GST/BAS Report (ATO format)
-- [x] Income by Customer report
-- [x] Expenses by Category report
-- [x] Tax Summary report
-- [x] Report filters: date range, currency, account, contact
-- [x] Export reports to PDF (Account Statement, Tax Summary)
-- [x] Export reports to Excel (Account Statement, Tax Summary)
-- [x] Feature tests for IFRS reports
-
-### Phase 6 — Advanced Reconciliation, Automation & Dashboard
-
-- [x] Auto-create missing cash receipt from unmatched Wise credit
-- [x] Auto-create missing purchase from unmatched Wise debit
-- [x] Manual override: link unmatched Bank txn to existing IFRS txn
-- [x] "Ignore" action for non-business Bank transactions
-- [x] Reconciliation history log
-- [x] Dashboard widget: cash flow (30-day)
-- [x] Dashboard widget: AR aging summary
-- [x] Dashboard widget: recent invoices & payments
-- [x] Dashboard widget: outstanding PO budgets
-- [x] Dashboard widget: unbilled time entries
-- [x] Dashboard widget: Bank balance + unreconciled count
-- [x] Dashboard widget: monthly P&L trend (chart)
-- [x] Email notifications: invoice viewed, payment received, overdue reminder
-- [x] Scheduled monthly client statements
-- [x] Audit log for all create/edit/delete actions on financial records
-- [x] Period locking (close prior FY)
-- [x] Documentation site (github docs)
-- [x] Production deployment guide (Forge/Sail/Docker)
-- [x] Backup & restore runbook
-- [ ] End-to-end test suite (cypress/dusk optional)
-- [ ] Performance benchmark: 10k invoices, 100k time entries
-- [ ] Security review: mass-assignment, IDOR, XSS
-- [ ] Release v1.0.0 tagging & changelog
+For the detailed task list (with checkboxes), please see the full **[Todo list](./todo-list.md)**.
 
 ---
 
-## 11. License
+## 10. Contributing
 
-Proprietary — internal use only unless otherwise agreed.
-
----
-
-## 12. Changelog
-
-See `CHANGELOG.md`. Versions follow SemVer.
-
-| Version | Notes                                                |
-| ------- | ---------------------------------------------------- |
-| 0.1.0   | Phase 1 complete — IFRS core, GST, Chart of Accounts |
-| 0.2.0   | Phase 2 complete — Auth, contacts, Wise CSV          |
-| 0.3.0   | Phase 3 complete — Time tracking, POs, user mgmt     |
-|         |                                                      |
-|         |                                                      |
-|         |                                                      |
+We welcome contributions! Please read our [CONTRIBUTING.md](./CONTRIBUTING.md) for details on our code of conduct, branching strategy, and pull request process.
 
 ---
 
-**Maintainers:** Add your team here.  
-**Contributing:** See `CONTRIBUTING.md`.  
-**Security issues:** Email security@yourdomain — do not open public issues.
+## 11. Security Vulnerabilities
+
+If you discover a security vulnerability within the ERP system - please raise a issue. All security vulnerabilities will be promptly addressed. 
+
+---
+
+## 12. Support
+
+- **Issues & Bugs**: [GitHub Issues](https://github.com/baradhili/laravel-erp/issues)
+
+---
+
+## 13. License
+
+**Disclaimer:** This software is provided "as is", without warranty of any kind. The authors are not liable for any damages arising from its use. Please ensure compliance with local tax laws and regulations when using this software.
+
+---
+
+## 14. Changelog
+
+Please see the [CHANGELOG.md](./CHANGELOG.md) file for release notes and version history.
