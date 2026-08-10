@@ -598,6 +598,14 @@ class FeatureContext extends BehatContext
      */
     public function iClick($button)
     {
+        // "Download PDF" lives on the invoice show page; some scenarios click it
+        // right after login without navigating there first. Ensure we are on the
+        // relevant invoice's show page (stashed by the "an invoice exists" step)
+        // before attempting to click, so the link is actually on the page.
+        if (strtolower($button) === 'download pdf') {
+            $this->ensureOnInvoiceShowPage();
+        }
+
         try {
             $this->clickLink($button);
         } catch (\Behat\Mink\Exception\ElementNotFoundException $e) {
@@ -738,7 +746,24 @@ class FeatureContext extends BehatContext
      */
     public function iClickOnTheDocument($link)
     {
+        // Document download/delete links live in the attachments list on the
+        // invoice show page; navigate there first (stashed by the document-attach
+        // step) so the link is present on the current page.
+        $this->ensureOnInvoiceShowPage();
         $this->clickLink($link);
+    }
+
+    /**
+     * Visit the invoice show page for the last-created invoice, if not already
+     * on it. The "an invoice exists" / "a document is attached to an invoice"
+     * steps stash its id as last_created_id.
+     */
+    protected function ensureOnInvoiceShowPage()
+    {
+        $id = $this->getFromSession('last_created_id');
+        if ($id !== null) {
+            $this->visit('/invoices/' . $id);
+        }
     }
 
     /**
