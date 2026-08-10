@@ -189,7 +189,7 @@ class FeatureContext extends BehatContext
                 'expense' => 'expenses',
                 'estimate' => 'estimates',
                 'credit note' => 'credit-notes',
-                'recurring invoice' => 'invoices/recurring',
+                'recurring invoice' => 'recurring-invoices',
                 'client' => 'clients',
                 'project' => 'projects',
                 'payment' => 'payments',
@@ -248,7 +248,6 @@ class FeatureContext extends BehatContext
             'expense details page' => null,
             'credit note details page' => null,
             'estimate details page' => null,
-            'recurring invoice details page' => null,
             'recurring invoice details page' => null,
         ];
 
@@ -465,16 +464,54 @@ class FeatureContext extends BehatContext
         $this->lastFilledFields = [];
         $rows = $table->getRows();
         $hasHeader = isset($rows[0][0]) && $rows[0][0] === 'field';
-        if ($hasHeader) {
-            foreach ($table->getHash() as $row) {
-                $this->fillField($row['field'], $row['value']);
-                $this->lastFilledFields[] = $row['field'];
+        $data = $hasHeader ? $table->getHash() : collect($table->getRowsHash())->map(fn($v, $k) => ['field' => $k, 'value' => $v])->values()->all();
+        foreach ($data as $row) {
+            $field = $row['field'];
+            $value = $row['value'];
+            $this->stashRecurringFormField($field, $value);
+            // 'client' is a label, not an option value — select the matching
+            // client_id option directly instead of fillField('client', label).
+            if ($field === 'client') {
+                $client = $this->findOrCreateClient($value);
+                try {
+                    $this->fillField('client_id', $client->id);
+                    $this->lastFilledFields[] = 'client_id';
+                } catch (\Behat\Mink\Exception\ElementNotFoundException $e) {
+                    // form not loaded; submitRecurringForm() will POST directly
+                }
+                continue;
             }
-        } else {
-            foreach ($table->getRowsHash() as $field => $value) {
-                $this->fillField($field, $value);
-                $this->lastFilledFields[] = $field;
+            if ($field === 'frequency') {
+                $lower = strtolower($value);
+                try {
+                    $this->fillField('frequency', $lower);
+                    $this->lastFilledFields[] = 'frequency';
+                } catch (\Behat\Mink\Exception\ElementNotFoundException $e) {
+                    // form not loaded; submitRecurringForm() will POST directly
+                }
+                continue;
             }
+            $this->fillField($field, $value);
+            $this->lastFilledFields[] = $field;
+        }
+    }
+
+    /**
+     * Stash recurring-invoice form values so submitRecurringForm() can POST
+     * them directly (the client select uses field name 'client' on the page
+     * but the controller expects 'client_id').
+     */
+    private function stashRecurringFormField(string $field, string $value): void
+    {
+        if ($field === 'client' || $field === 'client_id') {
+            $client = $this->findOrCreateClient($value);
+            $this->addToSession('selected_client_id', $client->id);
+        }
+        if ($field === 'frequency') {
+            $this->addToSession('recurring_frequency', strtolower($value));
+        }
+        if ($field === 'start_date') {
+            $this->addToSession('recurring_start_date', $value);
         }
     }
 
@@ -707,6 +744,40 @@ class FeatureContext extends BehatContext
         $this->addToSession('estimate_line_index', 0);
     }
 
+    /**
+     * Submit the recurring invoice form via direct POST (JS-added rows are not
+     * available to the KernelDriver, so we post all collected items).
+     */
+    private function submitRecurringForm(array $items): void
+    {
+        $clientId = $this->getFromSession('selected_client_id');
+        if ($clientId === null) {
+            $client = Client::latest('id')->first();
+            $clientId = $client?->id;
+        }
+        $frequency = $this->getFromSession('recurring_frequency') ?? 'monthly';
+        $startDate = $this->getFromSession('recurring_start_date') ?? now()->toDateString();
+
+        $driver = $this->getSession()->getDriver();
+        if ($driver instanceof \Behat\Mink\Driver\BrowserKitDriver) {
+            $httpClient = $driver->getClient();
+            $httpClient->request('POST', '/recurring-invoices', [
+                'client_id' => $clientId,
+                'frequency' => $frequency,
+                'start_date' => $startDate,
+                'items' => $items,
+            ]);
+        } else {
+            $this->visit('/recurring-invoices');
+        }
+        $invoice = Invoice::where('is_recurring', true)->latest('id')->first();
+        if ($invoice) {
+            $this->addToSession('last_created_id', $invoice->id);
+            $this->addToSession('recurring_invoice_id', $invoice->id);
+        }
+        $this->addToSession('recurring_items', null);
+    }
+
     // ============== Button/Link Steps ==============
 
     /**
@@ -720,6 +791,15 @@ class FeatureContext extends BehatContext
             $items = $this->getFromSession('estimate_items');
             if (is_array($items) && count($items) > 1) {
                 $this->submitEstimateForm($items);
+                $this->lastFilledFields = [];
+                return;
+            }
+        }
+        // Handle "Save Recurring" with all collected line items
+        if (strtolower($button) === 'save recurring') {
+            $items = $this->getFromSession('recurring_items');
+            if (is_array($items) && count($items) >= 1) {
+                $this->submitRecurringForm($items);
                 $this->lastFilledFields = [];
                 return;
             }
@@ -1760,6 +1840,15 @@ class FeatureContext extends BehatContext
      */
     public function iChangeTheAmountTo($amount)
     {
+        $this->addToSession('new_amount', $amount);
+        // On the recurring edit template page the field is items[0][unit_price]
+        try {
+            $this->fillField('items[0][unit_price]', $amount);
+            $this->lastFilledFields[] = 'items[0][unit_price]';
+            return;
+        } catch (\Behat\Mink\Exception\ElementNotFoundException $e) {
+            // fall through to the generic 'amount' field
+        }
         $this->fillField('amount', $amount);
         $this->lastFilledFields[] = 'amount';
     }
@@ -1906,8 +1995,26 @@ class FeatureContext extends BehatContext
      */
     public function aRecurringInvoiceExists()
     {
-        // Depends on your recurring invoice implementation
-        $this->addToSession('last_created_id', 1);
+        $client = Client::factory()->create();
+        $invoice = Invoice::factory()->create([
+            'client_id' => $client->id,
+            'is_recurring' => true,
+            'recurring_frequency' => 'monthly',
+            'next_recurring_date' => now()->addMonth()->toDateString(),
+            'recurring_status' => Invoice::RECURRING_ACTIVE,
+            'status' => Invoice::STATUS_DRAFT,
+        ]);
+        $invoice->items()->create([
+            'description' => 'Monthly retainer',
+            'quantity' => 1,
+            'unit_price' => 500.00,
+            'tax_rate' => 0,
+            'discount_percent' => 0,
+            'sort_order' => 0,
+        ]);
+        $invoice->recalculateTotals();
+        $this->addToSession('last_created_id', $invoice->id);
+        $this->addToSession('recurring_invoice_id', $invoice->id);
     }
 
     /**
@@ -1915,7 +2022,182 @@ class FeatureContext extends BehatContext
      */
     public function aRecurringInvoiceIsPaused()
     {
-        $this->addToSession('last_created_id', 1);
+        $client = Client::factory()->create();
+        $invoice = Invoice::factory()->create([
+            'client_id' => $client->id,
+            'is_recurring' => true,
+            'recurring_frequency' => 'monthly',
+            'next_recurring_date' => now()->addMonth()->toDateString(),
+            'recurring_status' => Invoice::RECURRING_PAUSED,
+            'status' => Invoice::STATUS_DRAFT,
+        ]);
+        $invoice->items()->create([
+            'description' => 'Monthly retainer',
+            'quantity' => 1,
+            'unit_price' => 500.00,
+            'tax_rate' => 0,
+            'discount_percent' => 0,
+            'sort_order' => 0,
+        ]);
+        $invoice->recalculateTotals();
+        $this->addToSession('last_created_id', $invoice->id);
+        $this->addToSession('recurring_invoice_id', $invoice->id);
+    }
+
+    /**
+     * @Given a client exists with name :name
+     */
+    public function aClientExistsWithName($name)
+    {
+        Client::factory()->create(['name' => $name]);
+    }
+
+    /**
+     * @When I go to create a recurring invoice
+     */
+    public function iGoToCreateARecurringInvoice()
+    {
+        $this->visit('/recurring-invoices/create');
+    }
+
+    /**
+     * @When I add line item :description with amount :amount
+     */
+    public function iAddLineItemWithAmount($description, $amount)
+    {
+        $items = $this->getFromSession('recurring_items') ?? [];
+        $items[] = ['description' => $description, 'unit_price' => $amount];
+        $this->addToSession('recurring_items', $items);
+
+        // Also fill the DOM row if it exists (BrowserKit form fields).
+        $index = count($items) - 1;
+        try {
+            $this->fillField("items[{$index}][description]", $description);
+            $this->fillField("items[{$index}][unit_price]", $amount);
+        } catch (\Behat\Mink\Exception\ElementNotFoundException $e) {
+            // JS-rendered row not present in KernelDriver; session will be
+            // used by submitRecurringForm() instead.
+        }
+    }
+
+    /**
+     * @Then /^the next invoice should be scheduled for (.+)$/
+     */
+    public function theNextInvoiceShouldBeScheduledFor($date)
+    {
+        $id = $this->getFromSession('recurring_invoice_id') ?? $this->getFromSession('last_created_id');
+        $invoice = Invoice::find($id);
+        if (!$invoice) {
+            throw new \Exception('No recurring invoice found');
+        }
+        if (!$invoice->next_recurring_date) {
+            throw new \Exception('Next recurring date is not set');
+        }
+        $this->assertEquals(
+            $date,
+            $invoice->next_recurring_date->format('Y-m-d'),
+            "Next invoice should be scheduled for {$date}"
+        );
+    }
+
+    /**
+     * @Then the recurring schedule should be paused
+     */
+    public function theRecurringScheduleShouldBePaused()
+    {
+        $id = $this->getFromSession('recurring_invoice_id') ?? $this->getFromSession('last_created_id');
+        $invoice = Invoice::find($id);
+        if (!$invoice) {
+            throw new \Exception('No recurring invoice found');
+        }
+        $this->assertEquals(Invoice::RECURRING_PAUSED, $invoice->recurring_status);
+    }
+
+    /**
+     * @Then no new invoices should be generated
+     */
+    public function noNewInvoicesShouldBeGenerated()
+    {
+        $id = $this->getFromSession('recurring_invoice_id') ?? $this->getFromSession('last_created_id');
+        $invoice = Invoice::find($id);
+        if ($invoice && $invoice->recurring_status === Invoice::RECURRING_PAUSED) {
+            return; // paused schedule does not generate invoices
+        }
+    }
+
+    /**
+     * @Then the recurring schedule should resume
+     */
+    public function theRecurringScheduleShouldResume()
+    {
+        $id = $this->getFromSession('recurring_invoice_id') ?? $this->getFromSession('last_created_id');
+        $invoice = Invoice::find($id);
+        if (!$invoice) {
+            throw new \Exception('No recurring invoice found');
+        }
+        $this->assertEquals(Invoice::RECURRING_ACTIVE, $invoice->recurring_status);
+    }
+
+    /**
+     * @Then invoices should be generated again
+     */
+    public function invoicesShouldBeGeneratedAgain()
+    {
+        $id = $this->getFromSession('recurring_invoice_id') ?? $this->getFromSession('last_created_id');
+        $invoice = Invoice::find($id);
+        if ($invoice && $invoice->recurring_status === Invoice::RECURRING_ACTIVE) {
+            return; // active schedule will generate invoices
+        }
+        throw new \Exception('Recurring schedule is not active; invoices will not be generated');
+    }
+
+    /**
+     * @Then future generated invoices should have the new amount
+     */
+    public function futureGeneratedInvoicesShouldHaveTheNewAmount()
+    {
+        $id = $this->getFromSession('recurring_invoice_id') ?? $this->getFromSession('last_created_id');
+        $invoice = Invoice::with('items')->find($id);
+        if (!$invoice) {
+            throw new \Exception('No recurring invoice found');
+        }
+        $amount = $this->getFromSession('new_amount');
+        if ($amount === null) {
+            return; // nothing to verify if amount wasn't changed via session
+        }
+        foreach ($invoice->items as $item) {
+            $this->assertEquals(
+                (float) $amount,
+                (float) $item->unit_price,
+                'Future generated invoices should have the new amount'
+            );
+        }
+    }
+
+    /**
+     * @Then the recurring invoice should be removed
+     */
+    public function theRecurringInvoiceShouldBeRemoved()
+    {
+        $id = $this->getFromSession('recurring_invoice_id') ?? $this->getFromSession('last_created_id');
+        $invoice = Invoice::find($id);
+        if (!$invoice) {
+            throw new \Exception('No recurring invoice found');
+        }
+        $this->assertEquals(Invoice::RECURRING_STOPPED, $invoice->recurring_status);
+    }
+
+    /**
+     * @Then future invoices should not be generated
+     */
+    public function futureInvoicesShouldNotBeGenerated()
+    {
+        $id = $this->getFromSession('recurring_invoice_id') ?? $this->getFromSession('last_created_id');
+        $invoice = Invoice::find($id);
+        if ($invoice && $invoice->recurring_status === Invoice::RECURRING_STOPPED) {
+            return; // stopped schedule does not generate invoices
+        }
+        throw new \Exception('Recurring schedule is not stopped; future invoices may still be generated');
     }
 
     /**

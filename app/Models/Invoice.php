@@ -35,6 +35,7 @@ class Invoice extends Model
         'is_recurring',
         'recurring_frequency',
         'next_recurring_date',
+        'recurring_status',
         'parent_invoice_id',
         'sent_at',
         'viewed_at',
@@ -68,6 +69,11 @@ class Invoice extends Model
     const RECURRING_WEEKLY = 'weekly';
     const RECURRING_MONTHLY = 'monthly';
     const RECURRING_YEARLY = 'yearly';
+
+    // Recurring schedule statuses
+    const RECURRING_ACTIVE = 'active';
+    const RECURRING_PAUSED = 'paused';
+    const RECURRING_STOPPED = 'stopped';
 
     // Valid state transitions
     protected static array $transitions = [
