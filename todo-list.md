@@ -9,8 +9,8 @@ Generated from `php artisan test` (PHPUnit + Behat) under PHP 8.4.24.
 
 ## Tasks
 
-- [ ] **Fix PHPUnit unit test deprecations (38)**
-      PHPUnit unit suite passes but emits 38 deprecations under PHP 8.4. All 38 originate in the `ekmungai/eloquent-ifrs` vendor package (implicit nullable params). A PHPUnit baseline (`.phpunit.deprecations.baseline`) is referenced via `<source baseline>` in `phpunit.xml` so the known vendor deprecations are acknowledged while new ones in our code still surface. Unit suite reports `OK (96 tests, 220 assertions)`. No action needed unless the baseline should be regenerated.
+- [x] **Fix PHPUnit unit test deprecations (38)** — DONE (no action needed)
+      The 38 deprecations all originate in the `ekmungai/eloquent-ifrs` vendor package (implicit nullable params) and are already suppressed by the `.phpunit.deprecations.baseline` file referenced via `<source baseline>` in `phpunit.xml`. The PHPUnit unit suite reports `OK (96 tests, 220 assertions)` with `38 issues were ignored by baseline.` No code changes required.
 
 - [ ] **Fix `features/Accounting/Accounting.feature:5` — "Date" text not found on journal entries page**
       Scenario "User can view journal entry list" fails with `Behat\Mink\Exception\ResponseTextException`: the text "Date" was not found anywhere on the current page. The journal entries index view likely lacks a table (or table headers). The undefined step "I should see column headers: Date, Description, Account, Debit, Credit" also needs a definition. Requires implementing the journal entries index view with the expected column headers and the `iShouldSeeTheJournalEntriesTable` / column-headers assertion steps.
