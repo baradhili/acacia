@@ -143,7 +143,7 @@
                 Cancel
             </a>
             <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg">
-                Create Estimate
+                Save Estimate
             </button>
         </div>
     </form>

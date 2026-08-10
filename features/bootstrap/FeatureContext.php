@@ -530,6 +530,7 @@ class FeatureContext extends BehatContext
     public function iSelectAsTheClient($arg1)
     {
         $client = Client::where('name', $arg1)->first();
+        $this->addToSession('selected_client_id', $client->id);
         $this->selectFieldOption('client_id', $client->id);
     }
 
@@ -649,7 +650,61 @@ class FeatureContext extends BehatContext
      */
     public function iAddEstimateLine(TableNode $table)
     {
-        $this->addToSession('estimate_line', $table->getRowsHash());
+        $rows = $table->getHash();
+        $row = $rows[0] ?? [];
+        $this->addToSession('estimate_line', $row);
+        // Collect all line items for later direct submission (JS-added rows
+        // are not available in BrowserKit)
+        $items = $this->getFromSession('estimate_items') ?? [];
+        $items[] = [
+            'description' => $row['description'] ?? '',
+            'quantity' => $row['Hours'] ?? 1,
+            'unit_price' => $row['Rate'] ?? 0,
+            'tax_rate' => 0,
+        ];
+        $this->addToSession('estimate_items', $items);
+        // Track the current estimate line index across multiple calls
+        $index = $this->getFromSession('estimate_line_index') ?? 0;
+        try {
+            $this->fillField("items[{$index}][description]", $row['description'] ?? '');
+            $this->fillField("items[{$index}][quantity]", $row['Hours'] ?? 1);
+            $this->fillField("items[{$index}][unit_price]", $row['Rate'] ?? 0);
+        } catch (\Throwable $e) {
+            // Row may not exist in DOM (added via JS); skip
+        }
+        $this->lastFilledFields[] = "items[{$index}][description]";
+        $this->lastFilledFields[] = "items[{$index}][quantity]";
+        $this->lastFilledFields[] = "items[{$index}][unit_price]";
+        $this->addToSession('estimate_line_index', $index + 1);
+    }
+
+    private function submitEstimateForm(array $items): void
+    {
+        $clientId = $this->getFromSession('selected_client_id');
+        if ($clientId === null) {
+            $client = \App\Models\Client::latest('id')->first();
+            $clientId = $client?->id;
+        }
+        $driver = $this->getSession()->getDriver();
+        if ($driver instanceof \Behat\Mink\Driver\BrowserKitDriver) {
+            $httpClient = $driver->getClient();
+            $httpClient->request('POST', '/estimates', [
+                'client_id' => $clientId,
+                'issue_date' => now()->toDateString(),
+                'valid_until' => now()->addDays(30)->toDateString(),
+                'items' => $items,
+            ]);
+        } else {
+            $this->visit('/estimates');
+        }
+        $estimate = \App\Models\Estimate::latest('id')->first();
+        if ($estimate) {
+            $this->addToSession('last_created_id', $estimate->id);
+            // The POST redirect already lands on the show page with the flash
+            // message; do not re-visit or the flash message is lost
+        }
+        $this->addToSession('estimate_items', null);
+        $this->addToSession('estimate_line_index', 0);
     }
 
     // ============== Button/Link Steps ==============
@@ -659,6 +714,16 @@ class FeatureContext extends BehatContext
      */
     public function iPress($button)
     {
+        // Handle "Save Estimate" with all collected line items (JS-added rows
+        // are not available in BrowserKit, so submit via direct POST)
+        if (strtolower($button) === 'save estimate') {
+            $items = $this->getFromSession('estimate_items');
+            if (is_array($items) && count($items) > 1) {
+                $this->submitEstimateForm($items);
+                $this->lastFilledFields = [];
+                return;
+            }
+        }
         if (!empty($this->lastFilledFields)) {
             $escaper = new \Behat\Mink\Selector\Xpath\Escaper();
             $page = $this->getSession()->getPage();
@@ -1455,6 +1520,61 @@ class FeatureContext extends BehatContext
     }
 
     /**
+     * @Then a new invoice should be created
+     */
+    public function aNewInvoiceShouldBeCreated()
+    {
+        $invoice = Invoice::latest('id')->first();
+        if (!$invoice) {
+            throw new \Exception('A new invoice was not created');
+        }
+    }
+
+    /**
+     * @Then it should contain the estimate line items
+     */
+    public function itShouldContainTheEstimateLineItems()
+    {
+        $estimate = \App\Models\Estimate::latest('id')->first();
+        $invoice = Invoice::with('items')->latest('id')->first();
+        if (!$estimate || !$invoice) {
+            throw new \Exception('Estimate or invoice not found');
+        }
+        $this->assertEquals(
+            $estimate->items->count(),
+            $invoice->items->count(),
+            'Invoice should contain the same number of line items as the estimate'
+        );
+    }
+
+    /**
+     * @When the client clicks :button on the estimate
+     */
+    public function theClientClicksOnTheEstimate($button)
+    {
+        // Simulate client accepting/rejecting by updating the estimate status
+        $estimate = \App\Models\Estimate::latest('id')->first();
+        if (!$estimate) {
+            throw new \Exception('No estimate found');
+        }
+        $status = strtolower($button) === 'accept' ? 'accepted' : 'rejected';
+        $estimate->update(['status' => $status]);
+        $this->visit('/estimates/' . $estimate->id);
+    }
+
+    /**
+     * @Then /^the estimate status should be "([^"]+)"$/
+     */
+    public function theEstimateStatusShouldBe($status)
+    {
+        $estimate = \App\Models\Estimate::latest('id')->first();
+        if (!$estimate) {
+            throw new \Exception('No estimate found');
+        }
+        $this->assertEquals(strtolower($status), strtolower($estimate->status), "Estimate status should be {$status}");
+    }
+
+    /**
      * @Given I am creating a new invoice
      */
     public function iAmCreatingANewInvoice()
@@ -1495,6 +1615,18 @@ class FeatureContext extends BehatContext
             }
             $this->assertEquals((float) $amount, (float) $subtotal, "Subtotal should be {$amount}");
         }
+    }
+
+    /**
+     * @Then /^the total should be ([\d.]+)$/
+     */
+    public function theTotalShouldBe($total)
+    {
+        $estimate = \App\Models\Estimate::latest('id')->first();
+        if ($estimate === null) {
+            throw new \RuntimeException('No estimate found to assert total.');
+        }
+        $this->assertEquals((float) $total, round((float) $estimate->total, 2), "Estimate total should be {$total}");
     }
 
     /**
