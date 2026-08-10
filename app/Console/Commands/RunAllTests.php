@@ -15,10 +15,15 @@ class RunAllTests extends Command
         $this->info('Running Laravel-ERP Test Suite');
         $this->info('================================');
 
-
+        // --- PHPUnit ---
         $this->info("\n Running PHPUnit Unit Tests...");
-        $phpunit = new Process([PHP_BINARY, 'vendor/bin/phpunit']);
-        $phpunit->setTimeout(300);
+        $phpunit = new Process(
+            [PHP_BINARY, 'vendor/bin/phpunit'],
+            base_path(), // Explicit CWD
+            null,        // Inherit environment
+            null,        // Input
+            300          // Timeout
+        );
         $phpunit->run();
 
         if (!$phpunit->isSuccessful()) {
@@ -29,10 +34,26 @@ class RunAllTests extends Command
         $this->info('PHPUnit Tests passed ✓');
         $this->line($phpunit->getOutput());
 
-
+        // --- Behat ---
         $this->info("\n Running Behat Feature Tests...");
-        $behat = new Process([PHP_BINARY, 'vendor/bin/behat']);
-        $behat->setTimeout(300);
+
+        $command = [
+            PHP_BINARY,
+            'vendor/bin/behat',
+            '--no-interaction', // Prevents any terminal prompts
+            // '--profile=testing', // Uncomment and set your Behat profile if needed
+        ];
+
+        $behat = new Process(
+            $command,
+            base_path(),   // <-- Ensures behat.yml and /features are found
+            null,          // Inherit environment (or pass $_ENV explicitly)
+            null,          // Input
+            300            // Timeout
+        );
+
+        $behat->setTty(false); 
+
         $behat->run();
 
         if (!$behat->isSuccessful()) {
