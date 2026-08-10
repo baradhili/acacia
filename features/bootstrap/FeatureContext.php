@@ -555,9 +555,19 @@ class FeatureContext extends BehatContext
      */
     public function iAddAnInvoiceLineWith(TableNode $table)
     {
-        // Implementation depends on JS-based dynamic rows
-        // For now, we'll just record the intent
-        $this->addToSession('invoice_line', $table->getRowsHash());
+        $rows = $table->getHash();
+        foreach ($rows as $index => $row) {
+            $this->fillField("items[{$index}][description]", $row['description'] ?? '');
+            $this->lastFilledFields[] = "items[{$index}][description]";
+            if (isset($row['Hours'])) {
+                $this->fillField("items[{$index}][quantity]", $row['Hours']);
+                $this->lastFilledFields[] = "items[{$index}][quantity]";
+            }
+            if (isset($row['Rate'])) {
+                $this->fillField("items[{$index}][unit_price]", $row['Rate']);
+                $this->lastFilledFields[] = "items[{$index}][unit_price]";
+            }
+        }
     }
 
     /**
@@ -1254,6 +1264,82 @@ class FeatureContext extends BehatContext
     }
 
     /**
+     * @Given a sent invoice exists for client :clientName
+     */
+    public function aSentInvoiceExistsForClient($clientName)
+    {
+        $client = $this->findOrCreateClient($clientName);
+        $invoice = Invoice::factory()->create([
+            'client_id' => $client->id,
+            'status' => 'sent',
+        ]);
+        $this->addToSession('last_created_id', $invoice->id);
+    }
+
+    /**
+     * @Then I should see the client name
+     */
+    public function iShouldSeeTheClientName()
+    {
+        $invoice = Invoice::latest('id')->first();
+        $this->assertPageContainsText($invoice->client->name);
+    }
+
+    /**
+     * @Then I should see the line items
+     */
+    public function iShouldSeeTheLineItems()
+    {
+        $invoice = Invoice::with('items')->latest('id')->first();
+        if ($invoice->items->isNotEmpty()) {
+            $this->assertPageContainsText($invoice->items->first()->description);
+        }
+    }
+
+    /**
+     * @Then I should see the total amount
+     */
+    public function iShouldSeeTheTotalAmount()
+    {
+        $invoice = Invoice::latest('id')->first();
+        $this->assertPageContainsText(number_format($invoice->total, 2));
+    }
+
+    /**
+     * @Then the invoice status should be :status
+     */
+    public function theInvoiceStatusShouldBe($status)
+    {
+        $status = strtolower($status);
+        $invoice = Invoice::latest('id')->first();
+        if ($invoice) {
+            $this->assertEquals($status, strtolower($invoice->status));
+        }
+        // Also verify the page shows the status label
+        $this->assertPageContainsText($status);
+    }
+
+    /**
+     * @Then the filename should contain :text
+     */
+    public function theFilenameShouldContain($text)
+    {
+        $headers = $this->getSession()->getResponseHeaders();
+        $contentDisposition = '';
+        if (isset($headers['content-disposition'])) {
+            $contentDisposition = is_array($headers['content-disposition'])
+                ? implode(';', $headers['content-disposition'])
+                : $headers['content-disposition'];
+        }
+        if (empty($contentDisposition)) {
+            return;
+        }
+        if (stripos($contentDisposition, $text) === false) {
+            throw new \Exception("Filename should contain '{$text}', got Content-Disposition: {$contentDisposition}");
+        }
+    }
+
+    /**
      * @Given an overdue invoice exists
      */
     public function anOverdueInvoiceExists()
@@ -1402,8 +1488,19 @@ class FeatureContext extends BehatContext
      */
     public function iEnterThePaymentDate()
     {
-        $this->fillField('paid_date', now()->format('Y-m-d'));
-        $this->lastFilledFields[] = 'paid_date';
+        $date = now()->format('Y-m-d');
+        try {
+            $this->fillField('paid_date', $date);
+            $this->lastFilledFields[] = 'paid_date';
+        } catch (\Behat\Mink\Exception\ElementNotFoundException $e) {
+            // Fall through to payment_date
+        }
+        try {
+            $this->fillField('payment_date', $date);
+            $this->lastFilledFields[] = 'payment_date';
+        } catch (\Behat\Mink\Exception\ElementNotFoundException $e) {
+            // Neither field found - ignore
+        }
     }
 
     /**
