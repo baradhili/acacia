@@ -945,7 +945,7 @@ class FeatureContext extends BehatContext
     }
 
     /**
-     * @Then I should see column headers: :headers
+     * @Then /^I should see column headers: (.+)$/
      */
     public function iShouldSeeColumnHeaders($headers)
     {

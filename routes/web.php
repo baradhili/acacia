@@ -8,6 +8,7 @@ use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\EstimateController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\JournalEntryController;
 use App\Http\Controllers\LogoController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ProfileController;
@@ -163,6 +164,11 @@ Route::middleware('auth')->group(function () {
 
     // Chart of Accounts
     Route::get('/chart-of-accounts', [ChartOfAccountsController::class, 'index'])->name('chart-of-accounts.index');
+
+    // Journal Entries
+    Route::get('/accounting/journal', [JournalEntryController::class, 'index'])->name('journal-entries.index');
+    Route::get('/accounting/journal/create', [JournalEntryController::class, 'create'])->name('journal-entries.create');
+    Route::post('/accounting/journal', [JournalEntryController::class, 'store'])->name('journal-entries.store');
 });
 
 require __DIR__.'/auth.php';
