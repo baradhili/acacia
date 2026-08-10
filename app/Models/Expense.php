@@ -165,13 +165,13 @@ class Expense extends Model
      * Mark expense as paid and create IFRS journal entry
      * Dr Expense / Cr Cash (on payment date for cash basis)
      */
-    public function markAsPaid(string $paymentMethod = null, int $userId = null): bool
+    public function markAsPaid(string $paymentMethod = null, int $userId = null, string $paidDate = null): bool
     {
         if (!$this->canBePaid()) {
             return false;
         }
         
-        $paidDate = now();
+        $paidDate = $paidDate ? \Carbon\Carbon::parse($paidDate) : now();
         $ifrsTransactionId = null;
 
                     // Create IFRS journal entry on payment date (cash basis)

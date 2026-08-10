@@ -318,11 +318,13 @@ class ExpenseController extends Controller
 
         $validated = $request->validate([
             'payment_method' => 'required|string|in:bank_transfer,credit_card,cash,cheque,other',
+            'paid_date' => 'required|date',
         ]);
 
         $expense->markAsPaid(
             $validated['payment_method'],
-            Auth::id()
+            Auth::id(),
+            $validated['paid_date']
         );
 
         return redirect()

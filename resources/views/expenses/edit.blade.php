@@ -207,7 +207,7 @@
                             Cancel
                         </a>
                         <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
-                            Update Expense
+                            Save
                         </button>
                     </div>
                 </form>

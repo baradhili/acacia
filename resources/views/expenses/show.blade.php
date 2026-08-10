@@ -112,13 +112,19 @@
                         <option value="other">Other</option>
                     </select>
                 </div>
+                <div class="mb-4">
+                    <label for="paid_date" class="block text-sm font-medium text-gray-700">Payment Date *</label>
+                    <input type="date" name="paid_date" id="paid_date" required
+                        value="{{ old('paid_date', now()->format('Y-m-d')) }}"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                </div>
                 <div class="flex justify-end gap-4">
                     <button type="button" onclick="document.getElementById('payModal').classList.add('hidden')"
                         class="px-4 py-2 text-gray-700 hover:text-gray-900">
                         Cancel
                     </button>
                     <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
-                        Confirm Payment
+                        Save
                     </button>
                 </div>
             </form>
