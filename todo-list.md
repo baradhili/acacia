@@ -252,3 +252,21 @@ The full list of undefined steps reported by Behat (154 total):
 - And I should see profit margin per project
 - And it should contain the report data
 - Then I should see only entries within the date range
+
+## Phase 2 task progress
+
+- [x] **TASK-9: Resolve ambiguous page-navigation steps colliding with the generic `I am on the :path page` step**
+      Removed the redundant specific `iAmOnTheWiseImportPage` / `iAmOnTheVerificationRequiredPage` methods (re-introduced by a parallel session) and routed their URLs through the generic step's `$pageMap` (`'wise import' => '/reconciliation/import'`, `'verification required' => '/verify-email'`). Fixes Reconciliation:22 (regression of TASK-6) and Auth/EmailVerification:24. Suite 37 -> 39 passed.
+
+- [x] **TASK-10: Make "…for client X" given-steps auto-create the client + fix Payments:38 modal-submit driver error**
+      The null `->id` bug was already fixed by the parallel remote session (steps now create the client when absent), moving Invoices:18 and Payments :5/:21/:29 out of failed. The remaining Payments:38 failure came from `iRecordAPartialPaymentOf` calling `pressButton('Record Payment')`, which matched the JS-only `<button type="button">` modal opener and threw `KernelDriver supports clicking on links and submit or reset buttons only. But "button" provided`. Rewrote the step to fill the `amount` field, walk up to its containing modal `<form>`, and press that form's submit `<button>` by matching button text. Payments:38 passes given+action steps now; suite 25 -> 24 failed.
+
+- [x] **TASK-11: Create CreditNoteFactory + EstimateFactory; stop injecting a `type` column into invoices**
+      Original root cause (`type` column on `invoices`) fully resolved by the parallel remote session, which added `CreditNoteFactory` + `EstimateFactory` and rewired the FeatureContext steps to the correct models/tables (Estimates :21/:29/:38 out of failed). Remaining gap I fixed: `iAmOnThePage("new credit note" / "new estimate")` fell through to a `/new-credit-note` (404) fallback, so the create forms never loaded and `client_id` was not found. Added pageMap entries `'new credit note' => '/credit-notes/create'` and `'new estimate' => '/estimates/create'` (plus `credit notes`/`estimates` index entries); create forms now load and the client select works. (A speculative `iPress` contains-text fallback was tried and reverted — it regressed 4 unrelated scenarios.)
+      **Out of scope (genuine unbuilt-feature gaps):** CreditNotes :5/:18/:27 and Estimates :5 still fail because (a) the create forms build line items via a JS `addItemBtn` (`<button type="button">`) the JS-less KernelDriver cannot run; (b) CreditNotes:18 needs a "Send Credit Note" route+controller+view (no `credit-notes.send` route); (c) CreditNotes:27 needs an "Apply Credit" link on the invoice show view. Left for a follow-up.
+
+- [ ] **TASK-12: Fix missing "Download"/"Download PDF" navigation in document/PDF scenarios**
+      The invoice show view already renders a "Download PDF" link and per-document "Download" links, but the Invoices:48 and Documents:25 scenarios click "Download PDF"/"Download" without first navigating to the invoice details page, so the link isn't on the current page → `Link … not found`. Fix: make `iClick("Download PDF")` (for invoices) and `iClickOnTheDocument("Download")` navigate to the relevant invoice's show page before clicking. Verify Invoices:48 and Documents:25 pass their defined steps.
+
+### Final goal
+All tasks complete → remaining failures (for scenarios whose steps are defined) cleared to zero; scenarios with still-undefined steps move to "undefined", not "failed".
