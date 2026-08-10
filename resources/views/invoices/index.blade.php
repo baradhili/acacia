@@ -4,9 +4,17 @@
 
     <div class="mb-6 flex justify-between items-center">
         <h1 class="text-2xl font-bold text-gray-800">Invoices</h1>
-        <a href="{{ route('invoices.create') }}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg">
-            + New Invoice
-        </a>
+        <div class="flex gap-2">
+            <form action="{{ route('invoices.bulkSend') }}" method="POST" class="inline">
+                @csrf
+                <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg">
+                    Bulk Send
+                </button>
+            </form>
+            <a href="{{ route('invoices.create') }}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg">
+                + New Invoice
+            </a>
+        </div>
     </div>
 
     <!-- Filters -->

@@ -285,6 +285,77 @@ class InvoiceController extends Controller
     }
 
     /**
+     * Void an invoice (alias for cancel)
+     */
+    public function void(Invoice $invoice)
+    {
+        if (!$invoice->canBeCancelled()) {
+            return back()->with('error', 'This invoice cannot be voided.');
+        }
+
+        $invoice->cancel();
+
+        return back()->with('success', 'Invoice voided.');
+    }
+
+    /**
+     * Duplicate an invoice
+     */
+    public function duplicate(Invoice $invoice)
+    {
+        $newInvoice = Invoice::create([
+            'client_id' => $invoice->client_id,
+            'project_id' => $invoice->project_id,
+            'created_by' => Auth::id(),
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'notes' => $invoice->notes,
+            'terms' => $invoice->terms,
+            'status' => Invoice::STATUS_DRAFT,
+        ]);
+
+        foreach ($invoice->items as $item) {
+            $newInvoice->items()->create([
+                'description' => $item->description,
+                'quantity' => $item->quantity,
+                'unit_price' => $item->unit_price,
+                'tax_rate' => $item->tax_rate,
+                'discount_percent' => $item->discount_percent,
+                'sort_order' => $item->sort_order,
+            ]);
+        }
+
+        $newInvoice->recalculateTotals();
+
+        return redirect()->route('invoices.show', $newInvoice)
+            ->with('success', 'Invoice duplicated successfully.');
+    }
+
+    /**
+     * Bulk send invoices
+     */
+    public function bulkSend(Request $request)
+    {
+        $invoiceIds = $request->input('invoice_ids', []);
+        if (empty($invoiceIds)) {
+            // If no IDs provided, send all draft invoices
+            Invoice::where('status', Invoice::STATUS_DRAFT)->get()->each(function ($invoice) {
+                if ($invoice->canTransitionTo(Invoice::STATUS_SENT)) {
+                    $invoice->markAsSent();
+                }
+            });
+        } else {
+            Invoice::whereIn('id', $invoiceIds)->get()->each(function ($invoice) {
+                if ($invoice->canTransitionTo(Invoice::STATUS_SENT)) {
+                    $invoice->markAsSent();
+                }
+            });
+        }
+
+        return back()->with('success', 'Invoices sent successfully.');
+    }
+
+    /**
      * Generate invoice from selected time entries
      */
     public function createFromTimeEntries(Request $request)

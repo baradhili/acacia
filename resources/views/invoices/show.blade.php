@@ -39,12 +39,18 @@
                     Create Credit Note
                 </a>
             @endif
+            <form action="{{ route('invoices.duplicate', $invoice) }}" method="POST" class="inline">
+                @csrf
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+                    Duplicate
+                </button>
+            </form>
             @if($invoice->canBeCancelled())
-                <form action="{{ route('invoices.cancel', $invoice) }}" method="POST" class="inline"
-                    onsubmit="return confirm('Are you sure you want to cancel this invoice?');">
+                <form action="{{ route('invoices.void', $invoice) }}" method="POST" class="inline"
+                    onsubmit="return confirm('Are you sure you want to void this invoice?');">
                     @csrf
                     <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg">
-                        Cancel
+                        Void Invoice
                     </button>
                 </form>
             @endif
