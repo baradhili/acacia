@@ -152,8 +152,8 @@ class FeatureContext extends BehatContext
             'projects' => '/projects',
             'new project' => '/projects/create',
             'project' => '/projects',
-            'time entries' => '/projects/time-entries',
-            'time entry' => '/projects/time-entries',
+            'time entries' => '/time-entries',
+            'time entry' => '/time-entries',
             'reconciliation' => '/reconciliation',
             'wise import' => '/reconciliation/import',
             'verification required' => '/verify-email',
@@ -227,7 +227,7 @@ class FeatureContext extends BehatContext
             'new journal entry page' => '/accounting/journal/create',
             'project page' => '/projects',
             'new project page' => '/projects/create',
-            'time entries page' => '/projects/time-entries',
+            'time entries page' => '/time-entries',
             'recurring invoices page' => '/invoices/recurring',
             'new recurring invoice page' => '/invoices/recurring/create',
             'Wise import page' => '/reconciliation/wise/import',
@@ -2218,6 +2218,40 @@ class FeatureContext extends BehatContext
     {
         $entry = TimeEntry::factory()->draft()->create();
         $this->addToSession('time_entry_id', $entry->id);
+    }
+
+    /**
+     * @When I fill in the time entry form with:
+     */
+    public function iFillInTheTimeEntryFormWith(TableNode $table)
+    {
+        foreach ($table->getHash() as $row) {
+            $field = $row['field'];
+            $value = $row['value'];
+            if ($field === 'project') {
+                $project = Project::where('name', $value)->first();
+                if ($project) {
+                    $this->fillField('project_id', $project->id);
+                    $this->lastFilledFields[] = 'project_id';
+                }
+            } else {
+                $this->fillField($field, $value);
+                $this->lastFilledFields[] = $field;
+            }
+        }
+    }
+
+    /**
+     * @Then the hours should be recorded
+     */
+    public function theHoursShouldBeRecorded()
+    {
+        $entry = TimeEntry::latest('id')->first();
+        if (!$entry) {
+            throw new \Exception('No time entry found');
+        }
+        $this->assertNotNull($entry->hours, 'Time entry hours should not be null');
+        $this->assertGreaterThan(0, (float) $entry->hours, 'Time entry hours should be greater than 0');
     }
 
     /**

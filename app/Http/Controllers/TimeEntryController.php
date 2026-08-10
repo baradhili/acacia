@@ -35,7 +35,7 @@ class TimeEntryController extends Controller
         $validated = $request->validate([
             'project_id' => 'nullable|exists:projects,id',
             'purchase_order_id' => 'nullable|exists:purchase_orders,id',
-            'start_time' => 'required|date',
+            'start_time' => 'nullable|date',
             'end_time' => 'nullable|date|after:start_time',
             'hours' => 'nullable|numeric|min:0',
             'rate' => 'nullable|numeric|min:0',
@@ -45,6 +45,11 @@ class TimeEntryController extends Controller
 
         $validated['user_id'] = Auth::id();
         $validated['billable'] = $validated['billable'] ?? true;
+
+        // Default start_time to now if not provided (manual hours entry)
+        if (empty($validated['start_time'])) {
+            $validated['start_time'] = now()->toDateTimeString();
+        }
 
         // Calculate hours if end_time provided
         if (!empty($validated['end_time'])) {
