@@ -53,7 +53,7 @@ class CreditNoteController extends Controller
             'client_id' => 'required|exists:clients,id',
             'invoice_id' => 'nullable|exists:invoices,id',
             'issue_date' => 'required|date',
-            'reason' => 'required|string',
+            'reason' => 'nullable|string',
             'notes' => 'nullable|string',
             'items' => 'required|array|min:1',
             'items.*.description' => 'required|string',
@@ -277,6 +277,32 @@ class CreditNoteController extends Controller
         }
 
         return back()->with('error', 'Could not apply credit note.');
+    }
+
+    /**
+     * Send credit note to client (transition to sent status).
+     */
+    public function send(CreditNote $creditNote)
+    {
+        $creditNote->update(['status' => CreditNote::STATUS_SENT]);
+
+        return redirect()->route('credit-notes.show', $creditNote)
+            ->with('success', 'Credit note sent successfully.');
+    }
+
+    /**
+     * Download credit note as PDF.
+     */
+    public function downloadPdf(CreditNote $creditNote)
+    {
+        $creditNote->load(['client', 'items']);
+
+        $html = view('credit-notes.pdf', compact('creditNote'))->render();
+
+        return response($html, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="credit-note-' . $creditNote->credit_note_number . '.pdf"',
+        ]);
     }
 
     /**

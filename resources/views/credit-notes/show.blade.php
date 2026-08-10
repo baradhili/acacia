@@ -9,12 +9,20 @@
                 <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
                     @if($creditNote->status === 'applied') bg-green-100 text-green-800
                     @elseif($creditNote->status === 'void') bg-gray-100 text-gray-500
+                    @elseif($creditNote->status === 'sent') bg-purple-100 text-purple-800
                     @else bg-blue-100 text-blue-800 @endif">
                     {{ ucfirst($creditNote->status) }}
                 </span>
             </p>
         </div>
         <div class="flex gap-2">
+            @if(in_array($creditNote->status, [App\Models\CreditNote::STATUS_DRAFT, App\Models\CreditNote::STATUS_ISSUED]) && $creditNote->remaining_amount > 0)
+                <form action="{{ route('credit-notes.send', $creditNote) }}" method="POST" class="inline">
+                    @csrf
+                    <button type="submit" name="Send Credit Note" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">Send Credit Note</button>
+                </form>
+            @endif
+            <a href="{{ route('credit-notes.pdf', $creditNote) }}" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg">Download PDF</a>
             @if($creditNote->status === 'issued' && $creditNote->remaining_amount > 0)
                 <form action="{{ route('credit-notes.void', $creditNote) }}" method="POST" class="inline">
                     @csrf

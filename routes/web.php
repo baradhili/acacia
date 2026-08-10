@@ -91,6 +91,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/invoices/{invoice}/record-payment', [InvoiceController::class, 'recordPayment'])->name('invoices.recordPayment');
     Route::get('/invoices/{invoice}/pdf', [InvoiceController::class, 'pdf'])->name('invoices.pdf');
     Route::get('/invoices/{invoice}/download-pdf', [InvoiceController::class, 'downloadPdf'])->name('invoices.downloadPdf');
+    Route::get('/invoices/{invoice}/apply-credit', [InvoiceController::class, 'applyCredit'])->name('invoices.apply-credit');
     Route::get('/create-invoice-from-time-entries', [InvoiceController::class, 'createFromTimeEntries'])->name('invoices.create-from-time-entries');
     Route::post('/create-invoice-from-time-entries', [InvoiceController::class, 'createFromTimeEntries'])->name('invoices.create-from-time-entries.store');
 
@@ -104,6 +105,8 @@ Route::middleware('auth')->group(function () {
     // Credit Notes
     Route::resource('credit-notes', CreditNoteController::class);
     Route::post('/credit-notes/{creditNote}/void', [CreditNoteController::class, 'void'])->name('credit-notes.void');
+    Route::post('/credit-notes/{creditNote}/send', [CreditNoteController::class, 'send'])->name('credit-notes.send');
+    Route::get('/credit-notes/{creditNote}/pdf', [CreditNoteController::class, 'downloadPdf'])->name('credit-notes.pdf');
     Route::get('/credit-notes/create-from-invoice/{invoice}', [CreditNoteController::class, 'createFromInvoice'])->name('credit-notes.create-from-invoice');
     Route::post('/credit-notes/{creditNote}/apply-to-invoice', [CreditNoteController::class, 'applyToInvoice'])->name('credit-notes.applyToInvoice');
 

@@ -412,4 +412,21 @@ class InvoiceController extends Controller
         
         return $pdf->download('invoice-' . $invoice->invoice_number . '.pdf');
     }
+
+    /**
+     * Show the apply credit note form for an invoice.
+     */
+    public function applyCredit(Invoice $invoice)
+    {
+        $creditNotes = \App\Models\CreditNote::where('client_id', $invoice->client_id)
+            ->where('remaining_amount', '>', 0)
+            ->orderByDesc('id')
+            ->pluck('credit_note_number', 'id');
+
+        if ($creditNotes->isEmpty()) {
+            $creditNotes = \App\Models\CreditNote::orderByDesc('id')->pluck('credit_note_number', 'id');
+        }
+
+        return view('invoices.apply-credit', compact('invoice', 'creditNotes'));
+    }
 }

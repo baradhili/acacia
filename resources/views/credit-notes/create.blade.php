@@ -100,7 +100,7 @@
 
         <div class="flex justify-end gap-4">
             <a href="{{ route('credit-notes.index') }}" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-2 rounded-lg">Cancel</a>
-            <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg">Create Credit Note</button>
+            <button type="submit" name="Save" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg">Save</button>
         </div>
     </form>
 

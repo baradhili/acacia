@@ -32,6 +32,9 @@
                 Download PDF
             </a>
             @if($invoice->status !== 'cancelled' && $invoice->status !== 'draft')
+                <a href="{{ route('invoices.apply-credit', $invoice) }}" class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg">
+                    Apply Credit
+                </a>
                 <a href="{{ route('credit-notes.create-from-invoice', $invoice) }}" class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg">
                     Create Credit Note
                 </a>

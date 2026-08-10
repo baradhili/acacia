@@ -32,7 +32,7 @@ class CreditNoteFactory extends Factory
 
     public function draft(): static
     {
-        return $this->state(fn (array $attributes) => ['status' => CreditNote::STATUS_ISSUED]);
+        return $this->state(fn (array $attributes) => ['status' => CreditNote::STATUS_DRAFT]);
     }
 
     public function issued(): static

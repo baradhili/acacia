@@ -36,7 +36,9 @@ class CreditNote extends Model
     ];
 
     // Status constants
+    const STATUS_DRAFT = 'draft';
     const STATUS_ISSUED = 'issued';
+    const STATUS_SENT = 'sent';
     const STATUS_APPLIED = 'applied';
     const STATUS_VOID = 'void';
 
@@ -52,7 +54,7 @@ class CreditNote extends Model
                 $creditNote->issue_date = now()->toDateString();
             }
             if (empty($creditNote->status)) {
-                $creditNote->status = self::STATUS_ISSUED;
+                $creditNote->status = self::STATUS_DRAFT;
             }
         });
     }
