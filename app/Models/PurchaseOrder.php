@@ -100,6 +100,14 @@ class PurchaseOrder extends Model
     }
 
     /**
+     * The invoices that consume this purchase order's budget.
+     */
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class);
+    }
+
+    /**
      * Get the documents attached to this purchase order
      */
     public function documents(): MorphMany
@@ -160,17 +168,16 @@ class PurchaseOrder extends Model
     }
 
     /**
-     * Recalculate used amount from time entries
+     * Recalculate used amount from invoices issued against this PO.
+     *
+     * Draft invoices (not yet issued) and cancelled invoices (voided)
+     * are excluded; everything else counts as consumed budget.
      */
     public function recalculateUsedAmount(): void
     {
-        $timeEntries = $this->timeEntries()
-            ->where('status', TimeEntry::STATUS_APPROVED)
-            ->get();
-
-        $total = $timeEntries->sum(function ($entry) {
-            return $entry->hours * $entry->effective_rate;
-        });
+        $total = $this->invoices()
+            ->whereNotIn('status', [Invoice::STATUS_DRAFT, Invoice::STATUS_CANCELLED])
+            ->sum('total');
 
         $this->update(['used_amount' => $total]);
         $this->updateStatus();

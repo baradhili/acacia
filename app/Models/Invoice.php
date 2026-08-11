@@ -207,6 +207,21 @@ class Invoice extends Model
                 'total' => $total,
             ]);
         });
+
+        // Keep the linked PO's consumed amount in sync when totals change.
+        // This runs silently (updateQuietly above) so the InvoiceObserver
+        // would otherwise miss total-only changes from line-item edits.
+        $this->refreshPurchaseOrderUsedAmount();
+    }
+
+    /**
+     * Recalculate the linked purchase order's used amount, if any.
+     */
+    protected function refreshPurchaseOrderUsedAmount(): void
+    {
+        if ($this->purchase_order_id && $this->purchaseOrder) {
+            $this->purchaseOrder->recalculateUsedAmount();
+        }
     }
 
     /**

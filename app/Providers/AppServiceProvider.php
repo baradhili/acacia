@@ -11,6 +11,7 @@ use App\Models\Project;
 use App\Models\PurchaseOrder;
 use App\Models\TimeEntry;
 use App\Observers\AuditObserver;
+use App\Observers\InvoiceObserver;
 use App\Observers\TimeEntryObserver;
 use Illuminate\Support\ServiceProvider;
 
@@ -30,6 +31,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         TimeEntry::observe(TimeEntryObserver::class);
+        Invoice::observe(InvoiceObserver::class);
         
         // Register audit observer for all financial models
         Invoice::observe(AuditObserver::class);
