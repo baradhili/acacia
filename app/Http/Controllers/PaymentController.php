@@ -60,7 +60,7 @@ class PaymentController extends Controller
             'payment_method' => 'required|string',
             'reference' => 'nullable|string',
             'notes' => 'nullable|string',
-            'allocate_type' => 'required|in:fifo,manual,no',
+            'allocate_type' => 'required|in:manual,no',
             'invoice_allocations' => 'required_if:allocate_type,manual|array',
             'invoice_allocations.*.invoice_id' => 'required_with:invoice_allocations|exists:invoices,id',
             'invoice_allocations.*.amount' => 'required_with:invoice_allocations|numeric|min:0',
@@ -79,9 +79,7 @@ class PaymentController extends Controller
             ]);
 
             // Allocate payment
-            if ($validated['allocate_type'] === 'fifo') {
-                $payment->allocateToInvoicesFIFO();
-            } elseif ($validated['allocate_type'] === 'manual' && !empty($validated['invoice_allocations'])) {
+            if ($validated['allocate_type'] === 'manual' && !empty($validated['invoice_allocations'])) {
                 foreach ($validated['invoice_allocations'] as $allocation) {
                     $invoice = Invoice::find($allocation['invoice_id']);
                     if ($invoice && $allocation['amount'] > 0) {
@@ -264,28 +262,5 @@ class PaymentController extends Controller
         }
 
         return back()->with('error', 'Could not remove allocation.');
-    }
-
-    /**
-     * Re-allocate using FIFO
-     */
-    public function reallocateFifo(Payment $payment)
-    {
-        // Capture affected invoices, then clear allocations BEFORE
-        // recomputing status so invoices reflect the now-empty allocations.
-        $invoiceIds = $payment->allocations()->pluck('invoice_id');
-        $payment->allocations()->delete();
-
-        foreach ($invoiceIds as $invoiceId) {
-            $invoice = Invoice::find($invoiceId);
-            if ($invoice) {
-                $invoice->updateStatusFromPayments();
-            }
-        }
-
-        // Re-allocate using FIFO (this re-applies statuses as it goes)
-        $payment->allocateToInvoicesFIFO();
-
-        return back()->with('success', 'Payment re-allocated using FIFO.');
     }
 }

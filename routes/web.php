@@ -98,7 +98,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/payments/client-invoices/{client}', [PaymentController::class, 'getClientInvoices'])->name('payments.client-invoices');
     Route::post('/payments/{payment}/allocate', [PaymentController::class, 'allocate'])->name('payments.allocate');
     Route::post('/payments/{payment}/remove-allocation/{invoice}', [PaymentController::class, 'removeAllocation'])->name('payments.removeAllocation');
-    Route::post('/payments/{payment}/reallocate-fifo', [PaymentController::class, 'reallocateFifo'])->name('payments.reallocateFifo');
 
     // Credit Notes
     Route::resource('credit-notes', CreditNoteController::class);

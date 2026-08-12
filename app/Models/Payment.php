@@ -160,53 +160,9 @@ class Payment extends Model
     }
 
     /**
-     * Allocate payment to invoices using FIFO (oldest first)
-     */
-    public function allocateToInvoicesFIFO(): void
-    {
-        $remainingAmount = $this->unallocated_amount;
-        
-        if ($remainingAmount <= 0) {
-            return;
-        }
-
-        // Get outstanding invoices for this client, ordered by due date (oldest first)
-        $invoices = Invoice::where('client_id', $this->client_id)
-            ->whereIn('status', [Invoice::STATUS_SENT, Invoice::STATUS_VIEWED, Invoice::STATUS_PARTIALLY_PAID, Invoice::STATUS_OVERDUE])
-            ->orderBy('due_date')
-            ->get();
-
-        foreach ($invoices as $invoice) {
-            if ($remainingAmount <= 0) {
-                break;
-            }
-
-            $invoiceAmountDue = $invoice->amount_due;
-            
-            if ($invoiceAmountDue <= 0) {
-                continue;
-            }
-
-            $allocationAmount = min($remainingAmount, $invoiceAmountDue);
-            
-            PaymentAllocation::create([
-                'payment_id' => $this->id,
-                'invoice_id' => $invoice->id,
-                'amount' => $allocationAmount,
-                'allocation_type' => 'fifo',
-            ]);
-
-            $remainingAmount -= $allocationAmount;
-
-            // Update invoice status
-            $invoice->updateStatusFromPayments();
-        }
-    }
-
-    /**
      * Allocate payment to specific invoice
      */
-    public function allocateToInvoice(Invoice $invoice, float $amount, string $allocationType = 'manual'): PaymentAllocation
+    public function allocateToInvoice(Invoice $invoice, float $amount): PaymentAllocation
     {
         // Ensure we don't allocate more than available
         $amount = min($amount, $this->unallocated_amount);
@@ -224,7 +180,6 @@ class Payment extends Model
             ],
             [
                 'amount' => $amount,
-                'allocation_type' => $allocationType,
             ]
         );
 

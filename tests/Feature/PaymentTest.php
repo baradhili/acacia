@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Models\Client;
 use App\Models\Invoice;
-use App\Models\InvoiceItem;
 use App\Models\Payment;
 use App\Models\PaymentAllocation;
 use App\Models\User;
@@ -60,7 +59,7 @@ class PaymentTest extends TestCase
             'amount' => 110,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
-            'allocate_type' => 'fifo',
+            'allocate_type' => 'no',
         ]);
 
         $response->assertSessionHas('success');
@@ -80,42 +79,6 @@ class PaymentTest extends TestCase
         ]);
 
         $this->assertMatchesRegularExpression('/^PAY-' . date('Y') . '-\d{4}$/', $payment->payment_number);
-    }
-
-    public function test_payment_allocates_to_invoice_using_fifo(): void
-    {
-        // Create another invoice
-        $invoice2 = Invoice::create([
-            'client_id' => $this->client->id,
-            'issue_date' => now()->subDays(5)->toDateString(),
-            'due_date' => now()->subDays(3)->toDateString(),
-            'status' => Invoice::STATUS_SENT,
-        ]);
-
-        $invoice2->items()->create([
-            'description' => 'Test Service 2',
-            'quantity' => 1,
-            'unit_price' => 50,
-            'tax_rate' => 10,
-        ]);
-
-        // Create payment of $100
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
-            'amount' => 100,
-            'payment_date' => now()->toDateString(),
-            'payment_method' => 'bank_transfer',
-        ]);
-
-        // Allocate using FIFO
-        $payment->allocateToInvoicesFIFO();
-
-        // Should allocate to oldest invoice first (invoice2)
-        $this->assertDatabaseHas('payment_allocations', [
-            'payment_id' => $payment->id,
-            'invoice_id' => $invoice2->id,
-            'allocation_type' => 'fifo',
-        ]);
     }
 
     public function test_partial_payment_allocates_correctly(): void
@@ -192,13 +155,12 @@ class PaymentTest extends TestCase
             'payment_method' => 'bank_transfer',
         ]);
 
-        // Manually allocate to invoice2 (ignoring FIFO)
-        $payment->allocateToInvoice($invoice2, 55, 'manual');
+        // Manually allocate to invoice2
+        $payment->allocateToInvoice($invoice2, 55);
 
         $this->assertDatabaseHas('payment_allocations', [
             'payment_id' => $payment->id,
             'invoice_id' => $invoice2->id,
-            'allocation_type' => 'manual',
         ]);
     }
 
@@ -225,63 +187,6 @@ class PaymentTest extends TestCase
     // ============================================================
     // Phase 4.5 - Payment IFRS and Email Tests
     // ============================================================
-
-    public function test_fifo_allocation_allocates_to_oldest_invoices_first(): void
-    {
-        // Create two invoices with different dates (older first)
-        $olderInvoice = Invoice::create([
-            'client_id' => $this->client->id,
-            'issue_date' => now()->subDays(10)->toDateString(),
-            'due_date' => now()->subDays(5)->toDateString(),
-            'status' => Invoice::STATUS_SENT,
-        ]);
-
-        $olderInvoice->items()->create([
-            'description' => 'Older Service',
-            'quantity' => 1,
-            'unit_price' => 50,
-            'tax_rate' => 10,
-        ]);
-
-        $newerInvoice = Invoice::create([
-            'client_id' => $this->client->id,
-            'issue_date' => now()->subDays(5)->toDateString(),
-            'due_date' => now()->toDateString(),
-            'status' => Invoice::STATUS_SENT,
-        ]);
-
-        $newerInvoice->items()->create([
-            'description' => 'Newer Service',
-            'quantity' => 1,
-            'unit_price' => 50,
-            'tax_rate' => 10,
-        ]);
-
-        // Create payment of $60 (should cover older invoice $55, then partial newer)
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
-            'amount' => 60,
-            'payment_date' => now()->toDateString(),
-            'payment_method' => 'bank_transfer',
-        ]);
-
-        // Use FIFO allocation
-        $payment->allocateToInvoicesFIFO();
-
-        // Verify allocations
-        $allocations = PaymentAllocation::where('payment_id', $payment->id)
-            ->orderBy('created_at')
-            ->get();
-
-        $this->assertCount(2, $allocations);
-        
-        // First allocation should be to older invoice
-        $this->assertEquals($olderInvoice->id, $allocations->first()->invoice_id);
-        $this->assertEquals('fifo', $allocations->first()->allocation_type);
-        
-        // Second allocation should be to newer invoice
-        $this->assertEquals($newerInvoice->id, $allocations->last()->invoice_id);
-    }
 
     public function test_allocation_handles_payment_exceeding_total_outstanding(): void
     {
@@ -410,7 +315,8 @@ class PaymentTest extends TestCase
             'payment_method' => 'bank_transfer',
         ]);
 
-        $payment->allocateToInvoicesFIFO();
+        $payment->allocateToInvoice($invoice1, 110);
+        $payment->allocateToInvoice($invoice2, 110);
 
         $invoice1->refresh();
         $invoice2->refresh();
@@ -432,33 +338,6 @@ class PaymentTest extends TestCase
         ]);
 
         $this->assertMatchesRegularExpression('/^PAY-\d{4}-\d{4}$/', $payment->payment_number);
-    }
-
-    public function test_payment_allocation_types_are_valid(): void
-    {
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
-            'amount' => 110,
-            'payment_date' => now()->toDateString(),
-            'payment_method' => 'bank_transfer',
-        ]);
-
-        // FIFO allocation
-        $payment->allocateToInvoice($this->invoice, 55, 'fifo');
-        $allocation = PaymentAllocation::where('payment_id', $payment->id)->first();
-        $this->assertEquals('fifo', $allocation->allocation_type);
-
-        // Manual allocation
-        $payment2 = Payment::create([
-            'client_id' => $this->client->id,
-            'amount' => 55,
-            'payment_date' => now()->toDateString(),
-            'payment_method' => 'bank_transfer',
-        ]);
-
-        $payment2->allocateToInvoice($this->invoice, 55, 'manual');
-        $allocation2 = PaymentAllocation::where('payment_id', $payment2->id)->first();
-        $this->assertEquals('manual', $allocation2->allocation_type);
     }
 
     public function test_payment_can_be_voided(): void
