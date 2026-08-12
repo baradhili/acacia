@@ -191,12 +191,17 @@ class Invoice extends Model
             return;
         }
 
-        // InvoiceItem.total includes tax (calculated in calculateTotals)
-        // So we use sum of totals directly, not adding tax again
-        $subtotal = $items->sum('total');
+        // InvoiceItem.total is tax-inclusive (calculated in calculateTotals),
+        // so derive subtotal as the pre-tax line amount (quantity * unit_price,
+        // less discount) and rebuild total as subtotal + tax. Storing the
+        // pre-tax value here keeps `subtotal + tax_amount == total` and makes
+        // SUM(subtotal) reports reflect true pre-GST revenue.
+        $subtotal = $items->sum(function ($item) {
+            return ($item->quantity * $item->unit_price) - $item->discount_amount;
+        });
         $taxAmount = $items->sum('tax_amount');
         $discountAmount = $items->sum('discount_amount');
-        $total = $subtotal;
+        $total = $subtotal + $taxAmount;
 
         // Use withoutEvents to prevent the saved event from triggering recalculateTotals again
         static::withoutEvents(function () use ($subtotal, $taxAmount, $discountAmount, $total) {
