@@ -9,10 +9,10 @@ Status legend: ☐ open · ✅ done
 **Fix:** `78bb956` — subtotal now derived as pre-tax line amount (`qty × price − discount`); `total = subtotal + tax_amount`.
 **Effect:** `Subtotal + GST = Total` now adds up on show/PDF views; `ReportController::sum('subtotal')` reports true pre-GST revenue.
 
-### 2. ☐ `generateInvoiceNumber()` / `generatePaymentNumber()` are not concurrency-safe
-**Files:** `app/Models/Invoice.php:110-125`, `app/Models/Payment.php:67-82`
-Two simultaneous requests read the same last row and +1, producing **duplicate invoice/payment numbers** (the `unique()` constraint then 500s one caller). Also fragile if records are deleted (`orderBy('id','desc')` + regex can disagree).
-**Fix:** `lockForUpdate()` on the lookup query, a `invoice_sequences`/`payment_sequences` table with row-level locking, or a DB sequence.
+### 2. ✅ `generateInvoiceNumber()` / `generatePaymentNumber()` are not concurrency-safe
+**Files:** `app/Models/Invoice.php`, `app/Models/Payment.php`
+Two simultaneous requests read the same last row and +1, producing duplicate invoice/payment numbers; the `unique()` constraint prevented duplicate data but 500'd the loser of the race.
+**Fix:** `450b8c5` — added `createWithUniqueNumber()` to both models: a 5-attempt loop that catches the unique-constraint `QueryException` (SQLSTATE 23000 / MySQL 1062, driver-agnostic via Laravel's wrapper) and retries. Each retry re-enters the `creating` hook and regenerates from the now-higher max, so it lands on the next number. Generator logic and the `creating` hook are unchanged. All six production create sites (`InvoiceController::store`/`recordPayment`, `PaymentController::store`, `ReconciliationService`, `ProcessRecurringInvoices`, `Estimate::convertToInvoice`, `CreditNote::applyToInvoice`) routed through the helper; grep confirms zero bare `::create(` sites remain in `app/`. Chose the retry-on-violation approach (per discussion) over a heavier sequence table — the unique constraint is already the source of truth, and the path is low-frequency. Tests force a real collision and assert the helper lands on a distinct number.
 
 ### 3. ☐ `markAsViewed()` can violate the state machine and corrupt status
 **File:** `app/Models/Invoice.php:321-335`
@@ -126,7 +126,7 @@ Uses nonexistent `LineItem::DEBIT`/`::CREDIT` constants, non-fillable `'type'`/`
 | 5 | Critical | Void/delete/reallocate mis-ordering | ✅ |
 | 6 | Critical | Payment recordable against draft/cancelled | ✅ |
 | 7 | High | IFRS posting double-counts / ignores GST | ✅ |
-| 2 | Critical | Invoice/payment number races | ☐ |
+| 2 | Critical | Invoice/payment number races | ✅ |
 | 22, 23 | High | Same IFRS `LineItem::DEBIT/CREDIT` family of bugs (Expense + Reports) | ☐ (found during #7) |
 | 11 | High | Unallocated/FIFO payment plumbing | ✅ (FIFO removed) |
 | 4, 9, 19 | High | Silent data loss / status corruption | ☐ |
@@ -144,4 +144,5 @@ Uses nonexistent `LineItem::DEBIT`/`::CREDIT` constants, non-fillable `'type'`/`
 | `ef3ec69` | #11 | `refactor(payment): remove FIFO allocation` |
 | `c7a5ae3` | #6 | `fix(invoice): reject payments against draft/cancelled/paid invoices` |
 | `0aac670` | #7 | `fix(ifrs): post correct ledger entries and GST on cash receipts` |
+| `450b8c5` | #2 | `fix(invoice,payment): make number generation concurrency-safe via unique-violation retry` |
 
