@@ -145,7 +145,11 @@ Uses nonexistent `LineItem::DEBIT`/`::CREDIT` constants, non-fillable `'type'`/`
 
 ### 24 ☐ Update IFRSSeeder.php so it creates the base entity and associates it with the admin user
 
-### 25 ☐ Replace "php artisan test" with a command that runs unit tests and uses behat to run feature tests
+### 25 ☐ Replace existing "Expenses" UI and linked files.
+
+Existing Expenses is confusing. change to "Bills" and make it similar to "Invoices/Payments" - except Bills are invoices _from_ a supplier. There should also be an option to record Bills that were paid immediately - such as things like parking, entertainment, online purchases etc. Make sure Expense categories align to Journals
+
+### 26 ☐ Replace "php artisan test" with a command that runs unit tests and uses behat to run feature tests
 
 ## Suggested Priority
 
