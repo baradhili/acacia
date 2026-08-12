@@ -1,9 +1,6 @@
 <div class="bg-white rounded-lg shadow">
     <div class="widget-handle px-6 py-4 border-b border-gray-200 bg-gray-50 cursor-grab">
         <div class="flex items-center gap-2">
-            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
-            </svg>
             <h2 class="text-lg font-semibold text-gray-800">Cash Flow (30 Days)</h2>
         </div>
     </div>
