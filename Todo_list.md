@@ -75,9 +75,9 @@ Changing `client_id` on a payment leaves existing allocations pointing at invoic
 **File:** `app/Models/Invoice.php:285-304`
 One `update` for status, then another for `paid_at` — two DB writes and two model events. Collapse into one `update(['status' => ..., 'paid_at' => ...])`. Also: the partial-paid→paid auto-promotion on line 299 is unreachable (you can't `transitionTo('partially_paid')` and simultaneously have `amount_due <= 0`).
 
-### 15. ☐ `markAsSent` / `markAsViewed` bypass the state machine
-**File:** `app/Models/Invoice.php:309-335`
-Raw `update()` instead of `transitionTo()` — see item 3.
+### 15. ☐ `markAsSent` bypasses the state machine
+**File:** `app/Models/Invoice.php` (`markAsSent`)
+Raw `update()` instead of `transitionTo()`. The `markAsViewed` half of this item is now moot (removed in #3 / `f671cb3`); `markAsSent` still uses raw `update()` and ignores the `$transitions` guard. Either route it through `transitionTo()` or drop the transition table.
 
 ### 16. ☐ `getIsOverdueAttribute` compares a Carbon date to a date string
 **File:** `app/Models/Invoice.php:257-263`
@@ -128,6 +128,7 @@ Uses nonexistent `LineItem::DEBIT`/`::CREDIT` constants, non-fillable `'type'`/`
 | 6 | Critical | Payment recordable against draft/cancelled | ✅ |
 | 7 | High | IFRS posting double-counts / ignores GST | ✅ |
 | 2 | Critical | Invoice/payment number races | ✅ |
+| 3 | Critical | `markAsViewed` state-machine bypass (resolved by removing 'viewed' status) | ✅ |
 | 22, 23 | High | Same IFRS `LineItem::DEBIT/CREDIT` family of bugs (Expense + Reports) | ☐ (found during #7) |
 | 11 | High | Unallocated/FIFO payment plumbing | ✅ (FIFO removed) |
 | 4, 9, 19 | High | Silent data loss / status corruption | ☐ |
@@ -146,4 +147,5 @@ Uses nonexistent `LineItem::DEBIT`/`::CREDIT` constants, non-fillable `'type'`/`
 | `c7a5ae3` | #6 | `fix(invoice): reject payments against draft/cancelled/paid invoices` |
 | `0aac670` | #7 | `fix(ifrs): post correct ledger entries and GST on cash receipts` |
 | `450b8c5` | #2 | `fix(invoice,payment): make number generation concurrency-safe via unique-violation retry` |
+| `f671cb3` | #3 | `refactor(invoice): remove the 'viewed' status and dead client-portal scaffold` |
 
