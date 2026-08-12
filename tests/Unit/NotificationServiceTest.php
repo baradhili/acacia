@@ -6,7 +6,6 @@ use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\User;
-use App\Notifications\InvoiceViewedNotification;
 use App\Notifications\OverdueReminderNotification;
 use App\Notifications\PaymentReceivedNotification;
 use App\Services\InvoiceNotificationService;
@@ -65,20 +64,6 @@ class NotificationServiceTest extends TestCase
         ], $attributes));
     }
 
-    public function test_invoice_viewed_notification_array_format(): void
-    {
-        $invoice = $this->createInvoice();
-
-        $notification = new InvoiceViewedNotification($invoice);
-        $array = $notification->toArray(new User);
-
-        $this->assertArrayHasKey('invoice_id', $array);
-        $this->assertArrayHasKey('invoice_number', $array);
-        $this->assertArrayHasKey('amount', $array);
-        $this->assertArrayHasKey('viewed_at', $array);
-        $this->assertEquals($invoice->id, $array['invoice_id']);
-    }
-
     public function test_payment_received_notification_array_format(): void
     {
         $payment = $this->createPayment();
@@ -107,16 +92,6 @@ class NotificationServiceTest extends TestCase
         $this->assertArrayHasKey('amount_due', $array);
         $this->assertArrayHasKey('days_overdue', $array);
         $this->assertEquals(7, $array['days_overdue']);
-    }
-
-    public function test_invoice_viewed_notification_via_mail(): void
-    {
-        $invoice = $this->createInvoice();
-
-        $notification = new InvoiceViewedNotification($invoice);
-        $channels = $notification->via(new User);
-
-        $this->assertContains('mail', $channels);
     }
 
     public function test_payment_received_notification_via_mail(): void
@@ -165,15 +140,6 @@ class NotificationServiceTest extends TestCase
         $payment = $this->createPayment();
 
         $notification = new PaymentReceivedNotification($payment);
-        
-        $this->assertInstanceOf(\Illuminate\Contracts\Queue\ShouldQueue::class, $notification);
-    }
-
-    public function test_invoice_viewed_notification_is_queuable(): void
-    {
-        $invoice = $this->createInvoice();
-
-        $notification = new InvoiceViewedNotification($invoice);
         
         $this->assertInstanceOf(\Illuminate\Contracts\Queue\ShouldQueue::class, $notification);
     }

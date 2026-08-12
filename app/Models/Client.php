@@ -108,14 +108,12 @@ class Client extends Model
         return $this->invoices()
             ->whereIn('status', [
                 Invoice::STATUS_SENT,
-                Invoice::STATUS_VIEWED,
                 Invoice::STATUS_PARTIALLY_PAID,
                 Invoice::STATUS_OVERDUE,
             ])
             ->sum('total') - $this->invoices()
             ->whereIn('status', [
                 Invoice::STATUS_SENT,
-                Invoice::STATUS_VIEWED,
                 Invoice::STATUS_PARTIALLY_PAID,
                 Invoice::STATUS_OVERDUE,
             ])

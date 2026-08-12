@@ -267,12 +267,6 @@ class InvoiceController extends Controller
         return back()->with('success', 'Invoice marked as sent.');
     }
 
-    public function markViewed(Invoice $invoice)
-    {
-        $invoice->markAsViewed();
-        return back()->with('success', 'Invoice marked as viewed.');
-    }
-
     public function cancel(Invoice $invoice)
     {
         if (!$invoice->canBeCancelled()) {

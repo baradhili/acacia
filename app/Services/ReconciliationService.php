@@ -1038,7 +1038,7 @@ class ReconciliationService
                     $amount + self::AMOUNT_TOLERANCE,
                 ])
                 ->whereBetween('invoice_date', [$dateFrom, $dateTo])
-                ->whereIn('status', [Invoice::STATUS_SENT, Invoice::STATUS_VIEWED, Invoice::STATUS_PARTIALLY_PAID])
+                ->whereIn('status', [Invoice::STATUS_SENT, Invoice::STATUS_PARTIALLY_PAID])
                 ->limit($limit)
                 ->get()
                 ->map(function ($invoice) {

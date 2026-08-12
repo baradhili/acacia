@@ -57,7 +57,6 @@ class Invoice extends Model
     // Status constants
     const STATUS_DRAFT = 'draft';
     const STATUS_SENT = 'sent';
-    const STATUS_VIEWED = 'viewed';
     const STATUS_PARTIALLY_PAID = 'partially_paid';
     const STATUS_PAID = 'paid';
     const STATUS_OVERDUE = 'overdue';
@@ -72,8 +71,7 @@ class Invoice extends Model
     // Valid state transitions
     protected static array $transitions = [
         'draft' => ['sent', 'cancelled'],
-        'sent' => ['viewed', 'partially_paid', 'paid', 'overdue', 'cancelled'],
-        'viewed' => ['partially_paid', 'paid', 'overdue', 'cancelled'],
+        'sent' => ['partially_paid', 'paid', 'overdue', 'cancelled'],
         'partially_paid' => ['paid', 'overdue'],
         'paid' => [],  // Paid invoices cannot be cancelled
         'overdue' => ['partially_paid', 'paid'],
@@ -359,25 +357,6 @@ class Invoice extends Model
     }
 
     /**
-     * Mark invoice as viewed
-     */
-    public function markAsViewed(): bool
-    {
-        if ($this->status === self::STATUS_SENT) {
-            $this->update([
-                'status' => self::STATUS_VIEWED,
-                'viewed_at' => now(),
-            ]);
-        } elseif ($this->status === self::STATUS_DRAFT) {
-            $this->update([
-                'status' => self::STATUS_VIEWED,
-                'viewed_at' => now(),
-            ]);
-        }
-        return true;
-    }
-
-    /**
      * Mark invoice as overdue
      */
     public function markAsOverdue(): bool
@@ -418,13 +397,12 @@ class Invoice extends Model
     }
 
     /**
-     * Scope for outstanding invoices (sent, viewed, partially_paid, overdue)
+     * Scope for outstanding invoices (sent, partially_paid, overdue)
      */
     public function scopeOutstanding($query)
     {
         return $query->whereIn('status', [
             self::STATUS_SENT,
-            self::STATUS_VIEWED,
             self::STATUS_PARTIALLY_PAID,
             self::STATUS_OVERDUE,
         ]);
@@ -437,7 +415,7 @@ class Invoice extends Model
     {
         return $query->where('status', self::STATUS_OVERDUE)
             ->orWhere(function ($q) {
-                $q->whereIn('status', [self::STATUS_SENT, self::STATUS_VIEWED, self::STATUS_PARTIALLY_PAID])
+                $q->whereIn('status', [self::STATUS_SENT, self::STATUS_PARTIALLY_PAID])
                   ->where('due_date', '<', now()->toDateString());
             });
     }

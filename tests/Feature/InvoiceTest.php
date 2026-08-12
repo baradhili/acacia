@@ -108,10 +108,6 @@ class InvoiceTest extends TestCase
         // Draft -> Sent
         $invoice->markAsSent();
         $this->assertEquals(Invoice::STATUS_SENT, $invoice->status);
-
-        // Sent -> Viewed
-        $invoice->markAsViewed();
-        $this->assertEquals(Invoice::STATUS_VIEWED, $invoice->status);
     }
 
     public function test_invoice_cannot_transition_to_invalid_status(): void
@@ -186,7 +182,7 @@ class InvoiceTest extends TestCase
     // Phase 4.5 - Additional Invoice Tests
     // ============================================================
 
-    public function test_invoice_status_transitions_draft_to_sent_to_viewed_to_partially_paid_to_paid(): void
+    public function test_invoice_status_transitions_draft_to_sent_to_partially_paid_to_paid(): void
     {
         $invoice = Invoice::create([
             'client_id' => $this->client->id,
@@ -201,10 +197,34 @@ class InvoiceTest extends TestCase
         $this->assertEquals(Invoice::STATUS_SENT, $invoice->status);
         $this->assertNotNull($invoice->sent_at);
 
-        // Sent -> Viewed
-        $invoice->markAsViewed();
-        $this->assertEquals(Invoice::STATUS_VIEWED, $invoice->status);
-        $this->assertNotNull($invoice->viewed_at);
+        // Sent -> Partially Paid -> Paid (via payments)
+        $invoice->items()->create([
+            'description' => 'Service',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+        $invoice->refresh();
+
+        $payment = \App\Models\Payment::create([
+            'client_id' => $this->client->id,
+            'amount' => 55,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+        $payment->allocateToInvoice($invoice, 55);
+        $invoice->refresh();
+        $this->assertEquals(Invoice::STATUS_PARTIALLY_PAID, $invoice->status);
+
+        $payment2 = \App\Models\Payment::create([
+            'client_id' => $this->client->id,
+            'amount' => 55,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+        $payment2->allocateToInvoice($invoice, 55);
+        $invoice->refresh();
+        $this->assertEquals(Invoice::STATUS_PAID, $invoice->status);
     }
 
     public function test_invoice_status_transitions_to_overdue(): void
@@ -389,11 +409,10 @@ class InvoiceTest extends TestCase
         $draftTransitions = $draftInvoice->getValidTransitions();
         $this->assertContains('sent', $draftTransitions);
         
-        // Test that sent can transition to viewed, partially_paid, paid, overdue, cancelled
+        // Test that sent can transition to partially_paid, paid, overdue, cancelled
         $sentInvoice = new Invoice();
         $sentInvoice->status = Invoice::STATUS_SENT;
         $sentTransitions = $sentInvoice->getValidTransitions();
-        $this->assertContains('viewed', $sentTransitions);
         $this->assertContains('partially_paid', $sentTransitions);
         $this->assertContains('paid', $sentTransitions);
         $this->assertContains('overdue', $sentTransitions);
@@ -430,7 +449,6 @@ class InvoiceTest extends TestCase
     {
         $this->assertEquals('draft', Invoice::STATUS_DRAFT);
         $this->assertEquals('sent', Invoice::STATUS_SENT);
-        $this->assertEquals('viewed', Invoice::STATUS_VIEWED);
         $this->assertEquals('partially_paid', Invoice::STATUS_PARTIALLY_PAID);
         $this->assertEquals('paid', Invoice::STATUS_PAID);
         $this->assertEquals('overdue', Invoice::STATUS_OVERDUE);
@@ -453,7 +471,6 @@ class InvoiceTest extends TestCase
 
         $invoice->update(['status' => Invoice::STATUS_SENT]);
         $validTransitions = $invoice->getValidTransitions();
-        $this->assertContains('viewed', $validTransitions);
         $this->assertContains('partially_paid', $validTransitions);
         $this->assertContains('paid', $validTransitions);
         $this->assertContains('overdue', $validTransitions);

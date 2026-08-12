@@ -123,7 +123,6 @@ class DashboardService
 
         $outstandingInvoices = Invoice::whereIn('status', [
             Invoice::STATUS_SENT,
-            Invoice::STATUS_VIEWED,
             Invoice::STATUS_PARTIALLY_PAID,
             Invoice::STATUS_OVERDUE,
         ])->get();
@@ -388,7 +387,6 @@ class DashboardService
             // Outstanding invoices
             $outstanding = Invoice::whereIn('status', [
                 Invoice::STATUS_SENT,
-                Invoice::STATUS_VIEWED,
                 Invoice::STATUS_PARTIALLY_PAID,
                 Invoice::STATUS_OVERDUE,
             ])->sum('amount_due');

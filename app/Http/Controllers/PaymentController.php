@@ -203,7 +203,6 @@ class PaymentController extends Controller
         $invoices = Invoice::where('client_id', $client->id)
             ->whereIn('status', [
                 Invoice::STATUS_SENT,
-                Invoice::STATUS_VIEWED,
                 Invoice::STATUS_PARTIALLY_PAID,
                 Invoice::STATUS_OVERDUE,
             ])

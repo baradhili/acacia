@@ -85,7 +85,6 @@ Route::middleware('auth')->group(function () {
     // Invoices
     Route::resource('invoices', InvoiceController::class);
     Route::post('/invoices/{invoice}/send', [InvoiceController::class, 'send'])->name('invoices.send');
-    Route::post('/invoices/{invoice}/mark-viewed', [InvoiceController::class, 'markViewed'])->name('invoices.mark-viewed');
     Route::post('/invoices/{invoice}/cancel', [InvoiceController::class, 'cancel'])->name('invoices.cancel');
     Route::post('/invoices/{invoice}/record-payment', [InvoiceController::class, 'recordPayment'])->name('invoices.recordPayment');
     Route::get('/invoices/{invoice}/pdf', [InvoiceController::class, 'pdf'])->name('invoices.pdf');
