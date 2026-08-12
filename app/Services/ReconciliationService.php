@@ -20,10 +20,6 @@ class ReconciliationService
     private const AMOUNT_TOLERANCE = 0.01; // $0.01 tolerance for amount matching
     private const DATE_TOLERANCE_DAYS = 3; // 3 days tolerance for date matching
 
-    // Default account codes
-    private const DEFAULT_BANK_ACCOUNT_CODE = 320; // Operating Account
-    private const DEFAULT_REVENUE_ACCOUNT_CODE = 4100; // Consulting Revenue
-
     /**
      * Log a reconciliation action to history
      */
@@ -410,71 +406,16 @@ class ReconciliationService
     }
 
     /**
-     * Post a payment to IFRS (Dr Cash / Cr Revenue)
-     * 
+     * Post a payment to IFRS. Delegates to Payment::postToIFRS() so the
+     * ledger-entry logic (double-entry, GST, entity resolution) lives in one
+     * place and the two implementations can't drift out of sync.
+     *
      * @param Payment $payment
      * @return bool Success status
      */
     protected function postPaymentToIFRS(Payment $payment): bool
     {
-        try {
-            $bankAccount = \IFRS\Models\Account::where('code', self::DEFAULT_BANK_ACCOUNT_CODE)->first();
-            $revenueAccount = \IFRS\Models\Account::where('code', self::DEFAULT_REVENUE_ACCOUNT_CODE)->first();
-
-            if (!$bankAccount || !$revenueAccount) {
-                Log::error('IFRS accounts not found for payment posting', [
-                    'bank_code' => self::DEFAULT_BANK_ACCOUNT_CODE,
-                    'revenue_code' => self::DEFAULT_REVENUE_ACCOUNT_CODE,
-                ]);
-                return false;
-            }
-
-            // Create journal entry
-            // Dr Bank (Debit - increase asset)
-            // Cr Revenue (Credit - increase income)
-            $journalEntry = new \IFRS\Transactions\JournalEntry([
-                'date' => $payment->payment_date,
-                'narration' => "Cash receipt: {$payment->payment_number} from {$payment->client->name}",
-                'reference' => $payment->payment_number,
-            ]);
-
-            $journalEntry->addLineItem(
-                \IFRS\Models\LineItem::create([
-                    'account_id' => $bankAccount->id,
-                    'amount' => $payment->amount,
-                    'type' => \IFRS\Models\LineItem::DEBIT,
-                    'tax_rate' => 0,
-                ])
-            );
-
-            $journalEntry->addLineItem(
-                \IFRS\Models\LineItem::create([
-                    'account_id' => $revenueAccount->id,
-                    'amount' => $payment->amount,
-                    'type' => \IFRS\Models\LineItem::CREDIT,
-                    'tax_rate' => 0,
-                ])
-            );
-
-            $journalEntry->save();
-
-            // Store the IFRS receipt ID
-            $payment->update(['ifrs_receipt_id' => $journalEntry->id]);
-
-            Log::info("Payment posted to IFRS", [
-                'payment_id' => $payment->id,
-                'ifrs_receipt_id' => $journalEntry->id,
-            ]);
-
-            return true;
-
-        } catch (\Exception $e) {
-            Log::error('Failed to post payment to IFRS', [
-                'payment_id' => $payment->id,
-                'error' => $e->getMessage(),
-            ]);
-            return false;
-        }
+        return $payment->postToIFRS() !== null;
     }
 
     /**

@@ -3,7 +3,9 @@
 namespace App\Models;
 
 use IFRS\Models\Account;
+use IFRS\Models\Entity;
 use IFRS\Models\LineItem;
+use IFRS\Models\Vat;
 use IFRS\Transactions\JournalEntry;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -49,6 +51,7 @@ class Payment extends Model
     // IFRS Account codes for payment posting
     const IFRS_BANK_ACCOUNT_CODE = 320; // Operating Account
     const IFRS_REVENUE_ACCOUNT_CODE = 4100; // Consulting Revenue
+    const IFRS_GST_VAT_CODE = 'G'; // Seeded "GST 10%" Vat, linked to account 2200 (GST Payable)
 
     protected static function boot()
     {
@@ -253,21 +256,28 @@ class Payment extends Model
     }
 
     /**
-     * Post payment to IFRS (Dr Cash / Cr Revenue on payment date)
-     * 
-     * For each allocation, posts:
-     * - Dr Bank (Asset) - the payment amount
-     * - Cr Revenue (Income) - the allocated amount
+     * Post payment to IFRS using the cash-basis double-entry pattern:
+     *
+     *   Dr Bank     (account 320, main account)        — tax-inclusive amount
+     *   Cr Revenue  (account 4100, vat_inclusive line) — net amount
+     *   Cr GST Payable (account 2200, auto via addVat) — GST component
+     *
+     * The revenue LineItem is marked vat_inclusive with the seeded "GST 10%"
+     * Vat (code G); the IFRS package backs the GST out and credits account
+     * 2200 automatically, so the ledger reflects true ATO cash-basis receipts.
+     *
+     * Returns the IFRS transaction id, or null on failure (accounts missing,
+     * no entity/reporting period, or any Throwable during posting).
      */
     public function postToIFRS(): ?int
     {
         if ($this->ifrs_receipt_id) {
             Log::info("Payment {$this->id} already posted to IFRS", ['ifrs_receipt_id' => $this->ifrs_receipt_id]);
-            return $this->ifrs_receipt_id;
+            return (int) $this->ifrs_receipt_id;
         }
 
         try {
-            // Find the bank and revenue accounts
+            // Find the bank and revenue accounts.
             $bankAccount = Account::where('code', self::IFRS_BANK_ACCOUNT_CODE)->first();
             $revenueAccount = Account::where('code', self::IFRS_REVENUE_ACCOUNT_CODE)->first();
 
@@ -279,54 +289,87 @@ class Payment extends Model
                 return null;
             }
 
-            // Create journal entry for the payment
-            // Dr Bank (Debit - increase asset)
-            // Cr Revenue (Credit - increase income)
+            // IFRS transactions need an entity (for the reporting period and
+            // currency). Prefer the authed user's entity, then fall back to
+            // the first entity. Pass entity_id explicitly so posting works in
+            // queued jobs where no user is authed.
+            $entity = $this->resolveIFRSEntity();
+            if (!$entity) {
+                Log::error('No IFRS entity available for payment posting', ['payment_id' => $this->id]);
+                return null;
+            }
+
+            // Main account = Bank, credited = false → Dr Bank (asset increases).
             $journalEntry = new JournalEntry([
-                'date' => $this->payment_date,
-                'narration' => "Payment received: {$this->payment_number} from {$this->client->name}",
+                'transaction_date' => $this->payment_date,
+                'account_id' => $bankAccount->id,
+                'credited' => false,
+                'entity_id' => $entity->id,
+                'narration' => "Payment received: {$this->payment_number} from {$this->client?->name}",
                 'reference' => $this->payment_number,
             ]);
 
-            // Debit bank (increase asset)
-            $journalEntry->addLineItem(
-                LineItem::create([
-                    'account_id' => $bankAccount->id,
-                    'amount' => $this->amount,
-                    'type' => LineItem::DEBIT,
-                    'tax_rate' => 0,
-                ])
-            );
+            // Revenue line is the tax-inclusive amount with the GST 10% Vat
+            // applied. vat_inclusive=true makes the package credit Revenue the
+            // net amount and auto-credit account 2200 (GST Payable) for the GST
+            // component. addLineItem() flips credited to true → Cr Revenue.
+            $revenueLine = new LineItem([
+                'account_id' => $revenueAccount->id,
+                'amount' => (float) $this->amount,
+                'vat_inclusive' => true,
+                'entity_id' => $entity->id,
+            ]);
 
-            // Credit revenue
-            $journalEntry->addLineItem(
-                LineItem::create([
-                    'account_id' => $revenueAccount->id,
-                    'amount' => $this->amount,
-                    'type' => LineItem::CREDIT,
-                    'tax_rate' => 0,
-                ])
-            );
+            $gstVat = Vat::where('code', self::IFRS_GST_VAT_CODE)
+                ->where('entity_id', $entity->id)
+                ->first();
+            if ($gstVat) {
+                $revenueLine->addVat($gstVat);
+            }
 
+            $journalEntry->addLineItem($revenueLine);
             $journalEntry->save();
 
-            // Store the IFRS receipt ID
+            // Store the IFRS transaction id.
             $this->update(['ifrs_receipt_id' => $journalEntry->id]);
 
             Log::info("Payment {$this->id} posted to IFRS", [
                 'ifrs_receipt_id' => $journalEntry->id,
                 'amount' => $this->amount,
+                'gst_posted' => (bool) $gstVat,
             ]);
 
             return $journalEntry->id;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            // Throwable (not Exception) so a fatal Error (e.g. undefined
+            // constant) is captured and logged rather than breaking the
+            // reconciliation flow that calls this.
             Log::error('Failed to post payment to IFRS', [
                 'payment_id' => $this->id,
                 'error' => $e->getMessage(),
+                'exception' => get_class($e),
             ]);
             return null;
         }
+    }
+
+    /**
+     * Resolve the IFRS entity to post against: the authed user's entity if
+     * available, otherwise the first entity. Returns null if none exist.
+     */
+    protected function resolveIFRSEntity(): ?Entity
+    {
+        try {
+            $user = \Illuminate\Support\Facades\Auth::user();
+            if ($user && isset($user->entity) && $user->entity) {
+                return $user->entity;
+            }
+        } catch (\Throwable $e) {
+            // Auth not available (e.g. queued job) — fall through to query.
+        }
+
+        return Entity::orderBy('id')->first();
     }
 
     /**

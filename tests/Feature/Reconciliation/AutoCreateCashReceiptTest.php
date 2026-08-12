@@ -9,7 +9,13 @@ use App\Models\Payment;
 use App\Models\ReconciliationHistory;
 use App\Services\ReconciliationService;
 use Carbon\Carbon;
+use IFRS\Models\Account;
+use IFRS\Models\Currency;
+use IFRS\Models\Entity;
+use IFRS\Models\ReportingPeriod;
+use IFRS\Models\Vat;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class AutoCreateCashReceiptTest extends TestCase
@@ -22,6 +28,73 @@ class AutoCreateCashReceiptTest extends TestCase
     {
         parent::setUp();
         $this->service = new ReconciliationService();
+    }
+
+    /**
+     * Seed the minimum IFRS prerequisites required for posting a transaction:
+     * currency, entity (with that currency + a reporting period), the three
+     * accounts the posting code touches (320 bank, 4100 revenue, 2200 GST
+     * Payable), and the GST 10% Vat wired to the GST Payable account.
+     *
+     * Without this, postToIFRS() no-ops on the missing-account guard and the
+     * test would assert nothing about the ledger.
+     */
+    protected function seedIfrs(): Entity
+    {
+        $entity = Entity::create([
+            'name' => 'Test Entity',
+            'locale' => 'en_AU',
+            'multi_currency' => false,
+            'year_start' => 1,
+        ]);
+
+        $currency = Currency::create([
+            'name' => 'Australian Dollar',
+            'currency_code' => 'AUD',
+            'entity_id' => $entity->id,
+        ]);
+        $entity->update(['currency_id' => $currency->id]);
+        $entity->refresh();
+
+        // Reporting period for the current year (required by Transaction save).
+        ReportingPeriod::create([
+            'period_count' => 1,
+            'calendar_year' => (int) date('Y'),
+            'status' => ReportingPeriod::OPEN,
+            'entity_id' => $entity->id,
+        ]);
+
+        $bank = Account::create([
+            'name' => 'Operating Account',
+            'account_type' => Account::BANK,
+            'code' => 320,
+            'currency_id' => $currency->id,
+            'entity_id' => $entity->id,
+        ]);
+        $revenue = Account::create([
+            'name' => 'Consulting Revenue',
+            'account_type' => Account::OPERATING_REVENUE,
+            'code' => 4100,
+            'currency_id' => $currency->id,
+            'entity_id' => $entity->id,
+        ]);
+        $gstPayable = Account::create([
+            'name' => 'GST Payable',
+            'account_type' => Account::CURRENT_LIABILITY,
+            'code' => 2200,
+            'currency_id' => $currency->id,
+            'entity_id' => $entity->id,
+        ]);
+
+        Vat::create([
+            'name' => 'GST 10%',
+            'code' => 'G',
+            'rate' => 10,
+            'account_id' => $gstPayable->id,
+            'entity_id' => $entity->id,
+        ]);
+
+        return $entity;
     }
 
     protected function createClient(array $attributes = []): Client
@@ -104,6 +177,8 @@ class AutoCreateCashReceiptTest extends TestCase
 
     public function test_posts_payment_to_ifrs_when_enabled(): void
     {
+        $this->seedIfrs();
+
         $client = $this->createClient();
 
         $bankTxn = $this->createBankTransaction([
@@ -118,7 +193,52 @@ class AutoCreateCashReceiptTest extends TestCase
         );
 
         $this->assertNotNull($payment);
-        $this->assertNotNull($payment->ifrs_receipt_id);
+        $this->assertNotNull($payment->ifrs_receipt_id, 'Payment should be linked to an IFRS transaction.');
+
+        // The IFRS transaction should carry the payment date and the bank
+        // account as its main account.
+        $txn = DB::table('ifrs_transactions')->where('id', $payment->ifrs_receipt_id)->first();
+        $this->assertNotNull($txn);
+        $this->assertEquals(
+            Carbon::parse('2025-07-15')->toDateString(),
+            Carbon::parse($txn->transaction_date)->toDateString(),
+            'Ledger transaction_date must be the payment date, not today.'
+        );
+
+        // Ledger must balance: total debits == total credits == payment amount.
+        $total = (float) $payment->amount;
+        $debits = (float) DB::table('ifrs_ledgers')
+            ->where('transaction_id', $txn->id)
+            ->where('entry_type', 'DEBIT')
+            ->sum('amount');
+        $credits = (float) DB::table('ifrs_ledgers')
+            ->where('transaction_id', $txn->id)
+            ->where('entry_type', 'CREDIT')
+            ->sum('amount');
+        $this->assertEquals($total, $debits, 'Bank should be debited the full tax-inclusive amount.');
+        $this->assertEquals($total, $credits, 'Total credits should equal total debits.');
+
+        // Revenue (4100) credited the net amount, GST Payable (2200) credited
+        // the GST component. Net + GST must equal the tax-inclusive total.
+        $gstPayable = DB::table('ifrs_accounts')->where('code', 2200)->first();
+        $revenueAcc = DB::table('ifrs_accounts')->where('code', 4100)->first();
+
+        $gstCredited = (float) DB::table('ifrs_ledgers')
+            ->where('transaction_id', $txn->id)
+            ->where('entry_type', 'CREDIT')
+            ->where('post_account', $gstPayable->id)
+            ->sum('amount');
+        $revenueCredited = (float) DB::table('ifrs_ledgers')
+            ->where('transaction_id', $txn->id)
+            ->where('entry_type', 'CREDIT')
+            ->where('post_account', $revenueAcc->id)
+            ->sum('amount');
+
+        $expectedGst = round($total * 10 / 110, 4);
+        $expectedRevenue = round($total * 100 / 110, 4);
+        $this->assertEqualsWithDelta($expectedGst, $gstCredited, 0.01, 'GST Payable should be credited the 10/110 component.');
+        $this->assertEqualsWithDelta($expectedRevenue, $revenueCredited, 0.01, 'Revenue should be credited the net (100/110) amount.');
+        $this->assertEqualsWithDelta($total, $gstCredited + $revenueCredited, 0.01, 'Net revenue + GST must equal the tax-inclusive total.');
     }
 
     public function test_does_not_post_to_ifrs_when_disabled(): void
