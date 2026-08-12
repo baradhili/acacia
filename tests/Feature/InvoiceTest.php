@@ -589,4 +589,126 @@ class InvoiceTest extends TestCase
         $invoice->update(['status' => Invoice::STATUS_PAID]);
         $this->assertFalse($invoice->hasOutstandingBalance());
     }
+
+    public function test_record_payment_requires_outstanding_invoice(): void
+    {
+        // Draft invoice — payment must be rejected.
+        $draft = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+        ]);
+        $draft->items()->create([
+            'description' => 'Draft Service',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+        $draft->refresh();
+        $this->assertEquals(Invoice::STATUS_DRAFT, $draft->status);
+
+        $response = $this->actingAs($this->user)->post(route('invoices.recordPayment', $draft), [
+            'amount' => 50,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+
+        $response->assertSessionHas('error');
+        $this->assertDatabaseMissing('payments', ['client_id' => $this->client->id]);
+    }
+
+    public function test_record_payment_rejects_cancelled_invoice(): void
+    {
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_SENT,
+        ]);
+        $invoice->items()->create([
+            'description' => 'Service',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+        $invoice->refresh();
+        $invoice->cancel();
+        $invoice->refresh();
+        $this->assertEquals(Invoice::STATUS_CANCELLED, $invoice->status);
+
+        $response = $this->actingAs($this->user)->post(route('invoices.recordPayment', $invoice), [
+            'amount' => 50,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+
+        $response->assertSessionHas('error');
+        $this->assertDatabaseMissing('payments', ['client_id' => $this->client->id]);
+    }
+
+    public function test_record_payment_rejects_paid_invoice(): void
+    {
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_SENT,
+        ]);
+        $invoice->items()->create([
+            'description' => 'Service',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+        $invoice->refresh();
+        // Fully pay the invoice first.
+        $payment = \App\Models\Payment::create([
+            'client_id' => $this->client->id,
+            'amount' => $invoice->total,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+        $payment->allocateToInvoice($invoice, $invoice->total);
+        $invoice->refresh();
+        $this->assertEquals(Invoice::STATUS_PAID, $invoice->status);
+
+        $response = $this->actingAs($this->user)->post(route('invoices.recordPayment', $invoice), [
+            'amount' => 10,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+
+        $response->assertSessionHas('error');
+        // Only the original payment should exist — the second attempt rejected.
+        $this->assertEquals(1, \App\Models\Payment::where('client_id', $this->client->id)->count());
+    }
+
+    public function test_record_payment_accepts_sent_invoice(): void
+    {
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_SENT,
+        ]);
+        $invoice->items()->create([
+            'description' => 'Service',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+        $invoice->refresh();
+
+        $response = $this->actingAs($this->user)->post(route('invoices.recordPayment', $invoice), [
+            'amount' => 50,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+
+        $response->assertSessionHas('success');
+        $this->assertDatabaseHas('payments', [
+            'client_id' => $this->client->id,
+            'amount' => 50,
+        ]);
+    }
 }

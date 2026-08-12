@@ -356,8 +356,15 @@ class InvoiceController extends Controller
      */
     public function recordPayment(Request $request, Invoice $invoice)
     {
+        // Only outstanding invoices (sent/viewed/partially_paid/overdue) can
+        // receive a payment — not drafts or cancelled invoices.
+        if (in_array($invoice->status, [Invoice::STATUS_DRAFT, Invoice::STATUS_CANCELLED, Invoice::STATUS_PAID])) {
+            return back()->with('error', 'Payments can only be recorded against outstanding invoices.');
+        }
+
+        $amountDue = (float) $invoice->amount_due;
         $validated = $request->validate([
-            'amount' => 'required|numeric|min:0.01|max:' . $invoice->amount_due,
+            'amount' => 'required|numeric|min:0.01|max:' . $amountDue,
             'payment_date' => 'required|date',
             'payment_method' => 'required|string',
             'reference' => 'nullable|string',
