@@ -32,9 +32,14 @@ Per `$transitions`, `draft → viewed` is **not** valid (draft can only go to se
 No status check — a payment could be recorded against a `draft` or `cancelled` invoice. Also the `max:` validation interpolated a float string (fragile).
 **Fix:** `c7a5ae3` — explicit guard rejecting `draft`/`cancelled`/`paid`; `amount_due` cast to `(float)` before interpolation.
 
-### 7. ☐ `Payment::postToIFRS()` double-counts revenue and ignores GST
-**File:** `app/Models/Payment.php:307-375`
-Journal entry debits bank and credits the **full payment amount** to revenue — but a payment may be partially unallocated or spread across invoices. GST posted with `tax_rate: 0` on both legs, so GST collected is never reflected. Uses `JournalEntry` (generic) rather than an IFRS `Receipt`/`ClientPayment` transaction, hence `ifrs_receipt_id` stores a journal-entry id — confusing. Larger accounting-design issue; scope with whoever owns the books before touching.
+### 7. ✅ `Payment::postToIFRS()` double-counts revenue and ignores GST
+**Files:** `app/Models/Payment.php`, `app/Services/ReconciliationService.php`
+Investigation against `ekmungai/eloquent-ifrs` v6.0.0 source revealed the defects were worse than the original review: both the dead `Payment::postToIFRS()` and the live `ReconciliationService::postPaymentToIFRS()` referenced nonexistent `LineItem::DEBIT`/`::CREDIT` constants (fatal `Error` not caught by `catch (\Exception)`), passed non-fillable keys (`type`, `tax_rate`, `date`) that Eloquent silently dropped, never posted GST (no `addVat`), and built the JournalEntry with no main account so double-entry couldn't balance.
+**Fix:** `0aac670` — `Payment::postToIFRS()` is now the single source of truth: JournalEntry with main account = bank (`credited=false` → Dr Bank), a single `vat_inclusive` revenue line with `addVat(GST 10% code G)` so the package auto-credits account 2200 for the GST component, `transaction_date` = payment date, and defensive entity resolution (authed user's entity, else first entity) for queued jobs. Catch broadened to `Throwable`. Service delegates to the model; duplicate constants removed. Migration `2026_08_12_110000` fixes `ifrs_receipt_id`/`ifrs_invoice_id` column types (`string` → `unsignedBigInteger`). Test strengthened to seed the IFRS stack and assert the ledger balances + GST split.
+
+> **Sibling bugs found during this fix (not part of #7, tracked below):**
+> - **7a.** `app/Models/Expense.php:194-208` — `Expense::postToIFRS()` has the **same** `LineItem::DEBIT`/`::CREDIT` + `'type'` + `'tax_rate'=>0` fatal-error family of bugs. Same fix pattern applies. See item 22.
+> - **7b.** `app/Http/Controllers/ReportController.php:625-626` — uses `IFRS\Models\LineItem::DEBIT`/`::CREDIT` for balance reporting (summing debits/credits). Same nonexistent constants — any report hitting this path fatal-errors. See item 23.
 
 ## High-Severity Logic Issues
 
@@ -53,7 +58,7 @@ The scope catches `sent`/`viewed`/`partially_paid` past their due date, but does
 ### 11. ✅ Payments could be created without being allocated, then never posted to IFRS (FIFO removal)
 **Files:** `app/Models/Payment.php`, `app/Http/Controllers/PaymentController.php`, views, routes, migration
 `PaymentController::store` supported `allocate_type: 'no'` (unallocated payment) and FIFO allocation; nothing ever reconciled unallocated payments, and `postToIFRS` was never called from any controller (dead path).
-**Fix:** `ef3ec69` — removed FIFO allocation entirely (manual-only now). Unallocated-payment reconciliation and the dead `postToIFRS` call site remain open (folded into item 7's IFRS design work).
+**Fix:** `ef3ec69` — removed FIFO allocation entirely (manual-only now). The `postToIFRS` method itself is now correct (see item 7, fixed in `0aac670`), but it is still **not called** from `PaymentController::store` / `InvoiceController::recordPayment` (manual payment entry never posts to the ledger — only the bank-reconciliation path does). Wiring it in is a follow-up.
 
 ### 12. ☐ `PaymentController::update` allows changing `amount` below allocated total
 **File:** `app/Http/Controllers/PaymentController.php:132-170`
@@ -103,6 +108,16 @@ Returns a view with computed totals but doesn't persist anything. The route is w
 - `time_entry_ids` validated in `store` but never linked to created items (no `time_entry_id` passed to `items()->create`) — see item 19.
 - `Invoice` uses `const STATUS_*` (good) but `Payment` interleaves `use HasFactory` between constant blocks (`Payment.php:16-21`) — cosmetic.
 
+## Newly discovered during the #7 IFRS fix (same `LineItem::DEBIT/CREDIT` family of bugs)
+
+### 22. ☐ `Expense::postToIFRS()` has the same fatal IFRS posting defects
+**File:** `app/Models/Expense.php:194-208`
+Uses nonexistent `LineItem::DEBIT`/`::CREDIT` constants, non-fillable `'type'`/`'tax_rate'` keys, `'tax_rate' => 0` (no GST), and almost certainly the wrong `'date'` key and no main account — same defects fixed in `Payment::postToIFRS()` (item 7, `0aac670`). Any expense marked "paid" that triggers this path will fatal-error. Apply the same fix pattern: main account, `transaction_date`, `vat_inclusive` + `addVat`, `Throwable` catch.
+
+### 23. ☐ `ReportController` uses nonexistent `LineItem::DEBIT`/`::CREDIT` for balance reporting
+**File:** `app/Http/Controllers/ReportController.php:625-626`
+`$allItems->where("type", IFRS\Models\LineItem::DEBIT)` / `::CREDIT` — the constants don't exist on `LineItem`, so any report rendering that reaches this code fatal-errors with `Undefined constant`. Also references `$item->tax_rate` on IFRS line items which have no such field (line 681, 836, 982). Needs reworking against the actual IFRS ledger/balance API (`Account::closingBalance()`, ledger `entry_type`). Verify with a report test before trusting.
+
 ## Suggested Priority
 
 | # | Severity | Area | Status |
@@ -110,8 +125,9 @@ Returns a view with computed totals but doesn't persist anything. The route is w
 | 1 | Critical | `subtotal` stored tax-inclusive | ✅ |
 | 5 | Critical | Void/delete/reallocate mis-ordering | ✅ |
 | 6 | Critical | Payment recordable against draft/cancelled | ✅ |
+| 7 | High | IFRS posting double-counts / ignores GST | ✅ |
 | 2 | Critical | Invoice/payment number races | ☐ |
-| 7 | High | IFRS posting double-counts / ignores GST / never called | ☐ |
+| 22, 23 | High | Same IFRS `LineItem::DEBIT/CREDIT` family of bugs (Expense + Reports) | ☐ (found during #7) |
 | 11 | High | Unallocated/FIFO payment plumbing | ✅ (FIFO removed) |
 | 4, 9, 19 | High | Silent data loss / status corruption | ☐ |
 | 12, 13 | High | Payment edit guards | ☐ |
@@ -127,3 +143,5 @@ Returns a view with computed totals but doesn't persist anything. The route is w
 | `2031cd3` | #5 | `fix(payment): recompute invoice status after allocations are deleted` |
 | `ef3ec69` | #11 | `refactor(payment): remove FIFO allocation` |
 | `c7a5ae3` | #6 | `fix(invoice): reject payments against draft/cancelled/paid invoices` |
+| `0aac670` | #7 | `fix(ifrs): post correct ledger entries and GST on cash receipts` |
+
