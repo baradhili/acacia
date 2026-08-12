@@ -391,11 +391,18 @@ class Payment extends Model
             return false;
         }
 
-        // Remove all allocations
-        foreach ($this->allocations as $allocation) {
-            $allocation->invoice->updateStatusFromPayments();
-        }
+        // Capture affected invoices, then delete allocations BEFORE
+        // recomputing status — otherwise updateStatusFromPayments() still
+        // sees the allocations and treats the invoice as paid.
+        $invoiceIds = $this->allocations()->pluck('invoice_id');
         $this->allocations()->delete();
+
+        foreach ($invoiceIds as $invoiceId) {
+            $invoice = Invoice::find($invoiceId);
+            if ($invoice) {
+                $invoice->updateStatusFromPayments();
+            }
+        }
 
         // Update status to void
         $this->update(['status' => self::STATUS_VOID]);

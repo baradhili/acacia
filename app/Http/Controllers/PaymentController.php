@@ -173,11 +173,17 @@ class PaymentController extends Controller
     {
         DB::beginTransaction();
         try {
-            // Update invoice statuses
-            $payment->updateAllocatedInvoicesStatus();
-
-            // Delete allocations
+            // Capture invoices, delete allocations, THEN recompute status
+            // so updateStatusFromPayments() sees the allocations as gone.
+            $invoiceIds = $payment->allocations()->pluck('invoice_id');
             $payment->allocations()->delete();
+
+            foreach ($invoiceIds as $invoiceId) {
+                $invoice = Invoice::find($invoiceId);
+                if ($invoice) {
+                    $invoice->updateStatusFromPayments();
+                }
+            }
 
             $payment->delete();
 
@@ -265,13 +271,19 @@ class PaymentController extends Controller
      */
     public function reallocateFifo(Payment $payment)
     {
-        // Clear existing allocations
+        // Capture affected invoices, then clear allocations BEFORE
+        // recomputing status so invoices reflect the now-empty allocations.
+        $invoiceIds = $payment->allocations()->pluck('invoice_id');
         $payment->allocations()->delete();
-        
-        // Reset invoice statuses
-        $payment->updateAllocatedInvoicesStatus();
 
-        // Re-allocate using FIFO
+        foreach ($invoiceIds as $invoiceId) {
+            $invoice = Invoice::find($invoiceId);
+            if ($invoice) {
+                $invoice->updateStatusFromPayments();
+            }
+        }
+
+        // Re-allocate using FIFO (this re-applies statuses as it goes)
         $payment->allocateToInvoicesFIFO();
 
         return back()->with('success', 'Payment re-allocated using FIFO.');
