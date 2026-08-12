@@ -711,4 +711,39 @@ class InvoiceTest extends TestCase
             'amount' => 50,
         ]);
     }
+
+    public function test_create_with_unique_number_retries_on_duplicate(): void
+    {
+        // Determine the number the generator would assign next, then occupy it
+        // so that createWithUniqueNumber()'s first insert hits the unique
+        // constraint and must retry. This is the race-condition scenario:
+        // two requests compute the same next number; the loser must regenerate.
+        $collidingNumber = Invoice::generateInvoiceNumber();
+        Invoice::create([
+            'client_id' => $this->client->id,
+            'invoice_number' => $collidingNumber,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_DRAFT,
+        ]);
+
+        // createWithUniqueNumber should swallow the unique violation and land
+        // on the next available number rather than throwing.
+        $invoice = Invoice::createWithUniqueNumber([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+        ]);
+
+        $this->assertNotNull($invoice->id);
+        $this->assertNotEquals($collidingNumber, $invoice->invoice_number);
+        $this->assertMatchesRegularExpression('/^INV-\d{4}-\d{4}$/', $invoice->invoice_number);
+
+        // Both rows exist and have distinct numbers.
+        $this->assertEquals(2, Invoice::where('client_id', $this->client->id)->count());
+        $this->assertEquals(
+            2,
+            Invoice::where('client_id', $this->client->id)->distinct()->count('invoice_number')
+        );
+    }
 }

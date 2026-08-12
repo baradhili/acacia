@@ -103,7 +103,7 @@ class InvoiceController extends Controller
 
         DB::beginTransaction();
         try {
-            $invoice = Invoice::create([
+            $invoice = Invoice::createWithUniqueNumber([
                 'client_id' => $validated['client_id'],
                 'project_id' => $validated['project_id'] ?? null,
                 'purchase_order_id' => $validated['purchase_order_id'] ?? null,
@@ -374,7 +374,7 @@ class InvoiceController extends Controller
         DB::beginTransaction();
         try {
             // Create payment
-            $payment = Payment::create([
+            $payment = Payment::createWithUniqueNumber([
                 'client_id' => $invoice->client_id,
                 'received_by' => Auth::id(),
                 'amount' => $validated['amount'],

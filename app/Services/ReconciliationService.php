@@ -344,7 +344,7 @@ class ReconciliationService
 
         try {
             // Create the payment (cash receipt)
-            $payment = Payment::create([
+            $payment = Payment::createWithUniqueNumber([
                 'payment_number' => Payment::generatePaymentNumber(),
                 'client_id' => $clientId,
                 'received_by' => $receivedByUserId,

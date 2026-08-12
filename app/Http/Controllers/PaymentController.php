@@ -68,7 +68,7 @@ class PaymentController extends Controller
 
         DB::beginTransaction();
         try {
-            $payment = Payment::create([
+            $payment = Payment::createWithUniqueNumber([
                 'client_id' => $validated['client_id'],
                 'received_by' => Auth::id(),
                 'amount' => $validated['amount'],

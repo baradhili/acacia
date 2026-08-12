@@ -144,7 +144,7 @@ class CreditNote extends Model
         }
 
         // Create a payment with negative amount (credit against the invoice)
-        $refund = Payment::create([
+        $refund = Payment::createWithUniqueNumber([
             'client_id' => $this->client_id,
             'amount' => -$amountToApply, // Negative to indicate credit
             'payment_date' => now()->toDateString(),

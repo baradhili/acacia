@@ -124,6 +124,44 @@ class Invoice extends Model
         return sprintf('INV-%s-%04d', $year, $nextNumber);
     }
 
+    /**
+     * Create an invoice, retrying if two concurrent requests race on
+     * generateInvoiceNumber() and produce a duplicate invoice_number.
+     *
+     * The unique() constraint on invoice_number is the real source of truth —
+     * the loser of a race gets a QueryException (SQLSTATE 23000). Each retry
+     * re-enters the creating hook, which regenerates from the now-higher max,
+     * so the next attempt picks the following number.
+     */
+    public static function createWithUniqueNumber(array $attributes): self
+    {
+        $attempts = 5;
+        for ($i = 1; $i <= $attempts; $i++) {
+            try {
+                return self::create($attributes);
+            } catch (\Illuminate\Database\QueryException $e) {
+                if (!self::isUniqueViolation($e) || $i === $attempts) {
+                    throw $e;
+                }
+            }
+        }
+        // Unreachable — the loop either returns or rethrows.
+        throw new \RuntimeException('Unable to create invoice with a unique number.');
+    }
+
+    /**
+     * Is the given QueryException a unique-constraint violation? Covers both
+     * MySQL (SQLSTATE 23000 / driver code 1062) and SQLite (SQLSTATE 23000 /
+     * driver codes 19, 2067) via the shared SQLSTATE.
+     */
+    protected static function isUniqueViolation(\Illuminate\Database\QueryException $e): bool
+    {
+        $errorInfo = $e->errorInfo ?? [];
+        // errorInfo[0] is the SQLSTATE; errorInfo[1] is the driver-specific code.
+        return ($errorInfo[0] ?? null) === '23000'
+            || ($errorInfo[1] ?? null) === 1062;
+    }
+
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);

@@ -395,4 +395,38 @@ class PaymentTest extends TestCase
         $this->assertEquals($this->client->id, $payment->client->id);
         $this->assertEquals($this->client->name, $payment->client->name);
     }
+
+    public function test_create_with_unique_number_retries_on_duplicate(): void
+    {
+        // Occupy the number the generator would assign next so the first
+        // insert inside createWithUniqueNumber() hits the unique constraint.
+        // This mirrors the race where two concurrent requests compute the same
+        // next number; the loser must regenerate and succeed.
+        $collidingNumber = Payment::generatePaymentNumber();
+        Payment::create([
+            'client_id' => $this->client->id,
+            'payment_number' => $collidingNumber,
+            'amount' => 1,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+
+        $payment = Payment::createWithUniqueNumber([
+            'client_id' => $this->client->id,
+            'amount' => 100,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+
+        $this->assertNotNull($payment->id);
+        $this->assertNotEquals($collidingNumber, $payment->payment_number);
+        $this->assertMatchesRegularExpression('/^PAY-\d{4}-\d{4}$/', $payment->payment_number);
+
+        // Both rows exist with distinct numbers.
+        $this->assertEquals(2, Payment::where('client_id', $this->client->id)->count());
+        $this->assertEquals(
+            2,
+            Payment::where('client_id', $this->client->id)->distinct()->count('payment_number')
+        );
+    }
 }
