@@ -600,13 +600,17 @@ class ReportController extends Controller
         if ($accountId) {
             $account = Account::find($accountId);
 
-            // Get all journal entries with line items for this account in date range
+            // Get all journal entries with line items for this account in date range.
+            // NOTE: the IFRS Transaction date column is `transaction_date`
+            // (not `date`), and debit/credit is determined by the line item's
+            // `credited` boolean (false = debit, true = credit) — there is no
+            // `type` column and `LineItem::DEBIT`/`::CREDIT` do not exist.
             $lineItems = IFRS\Models\LineItem::where("account_id", $accountId)
                 ->whereHas("transaction", function ($query) use ($startDate, $endDate) {
-                    $query->whereBetween("date", [$startDate, $endDate]);
+                    $query->whereBetween("transaction_date", [$startDate, $endDate]);
                 })
                 ->with(["transaction", "transaction.lineItems"])
-                ->orderBy("transaction.date")
+                ->orderBy("transaction.transaction_date")
                 ->get();
 
             // Group by transaction
@@ -622,14 +626,15 @@ class ReportController extends Controller
                 // Get all line items for this transaction
                 $allItems = $transaction->lineItems ?? collect();
 
-                $debitTotal = $allItems->where("type", IFRS\Models\LineItem::DEBIT)->sum("amount");
-                $creditTotal = $allItems->where("type", IFRS\Models\LineItem::CREDIT)->sum("amount");
+                // credited=false -> debit, credited=true -> credit
+                $debitTotal = $allItems->where("credited", false)->sum("amount");
+                $creditTotal = $allItems->where("credited", true)->sum("amount");
 
                 $totalDebit += $debitTotal;
                 $totalCredit += $creditTotal;
 
                 $scheduleLines->push([
-                    "date" => $transaction->date,
+                    "date" => $transaction->transaction_date,
                     "transaction_id" => $transactionId,
                     "transaction_type" => class_basename($transaction),
                     "narration" => $transaction->narration ?? "",
