@@ -133,15 +133,18 @@ Returns a view with computed totals but doesn't persist anything. The route is w
 
 ## Newly discovered during the #7 IFRS fix (same `LineItem::DEBIT/CREDIT` family of bugs)
 
-### 22. ☐ `Expense::postToIFRS()` has the same fatal IFRS posting defects
+### 22. ✅ `Expense::markAsPaid()` had the same fatal IFRS posting defects
 
-**File:** `app/Models/Expense.php:194-208`
-Uses nonexistent `LineItem::DEBIT`/`::CREDIT` constants, non-fillable `'type'`/`'tax_rate'` keys, `'tax_rate' => 0` (no GST), and almost certainly the wrong `'date'` key and no main account — same defects fixed in `Payment::postToIFRS()` (item 7, `0aac670`). Any expense marked "paid" that triggers this path will fatal-error. Apply the same fix pattern: main account, `transaction_date`, `vat_inclusive` + `addVat`, `Throwable` catch.
+**Files:** `app/Models/Expense.php`
+Shared the exact defects fixed in #7 (`Payment::postToIFRS`, `0aac670`): nonexistent `LineItem::DEBIT`/`::CREDIT` constants (fatal `Error` not caught by `catch (\Exception)`), non-fillable `'type'`/`'tax_rate'` keys silently dropped, wrong `'date'` key (should be `transaction_date`), and no main account so double-entry couldn't balance.
+**Fix:** `861824f` — rewritten to mirror the Payment fix: JournalEntry main account = expense (`credited=false` → Dr Expense), bank as the credited line item (→ Cr Bank), `transaction_date`, defensive `resolveIFRSEntity()` helper, catch broadened to `Throwable`.
+**Note:** GST on purchases is **not** split out here. The seeded `GST 10%` Vat (code `G`) is linked to GST Payable (2200, a liability) — that's the *sales-side* account. Reusing it on an expense would credit the wrong account (reducing GST Payable when it should debit GST Receivable/430 as an asset). Posting GST Receivable on purchases remains a **follow-up** — it needs a second seeded Vat wired to account 430.
 
-### 23. ☐ `ReportController` uses nonexistent `LineItem::DEBIT`/`::CREDIT` for balance reporting
+### 23. ✅ `ReportController::accountSchedule()` used nonexistent `LineItem::DEBIT`/`::CREDIT`
 
-**File:** `app/Http/Controllers/ReportController.php:625-626`
-`$allItems->where("type", IFRS\Models\LineItem::DEBIT)` / `::CREDIT` — the constants don't exist on `LineItem`, so any report rendering that reaches this code fatal-errors with `Undefined constant`. Also references `$item->tax_rate` on IFRS line items which have no such field (line 681, 836, 982). Needs reworking against the actual IFRS ledger/balance API (`Account::closingBalance()`, ledger `entry_type`). Verify with a report test before trusting.
+**File:** `app/Http/Controllers/ReportController.php` (`accountSchedule`)
+`$allItems->where("type", IFRS\Models\LineItem::DEBIT)` / `::CREDIT` — the constants don't exist on `LineItem` (only `Balance::DEBIT/CREDIT` do), so any account-schedule report rendering that reached this code fatal-errored with `Undefined constant`. The `LineItem` has no `type` column at all. Also queried `transaction.date`/`whereBetween("date")`, but the Transaction column is `transaction_date`.
+**Fix:** `861824f` — debit/credit totals now derived from the line item's `credited` boolean (`false` = debit, `true` = credit), verified against the `ifrs_line_items` migration. All `date` references switched to `transaction_date`. Grep confirms zero `LineItem::DEBIT`/`::CREDIT` references remain in `app/` outside explanatory comments. (The `$item->tax_rate` references at lines 681/836/982 are on `InvoiceItem`/`Expense` — our own models, which do have `tax_rate` — so those were not bugs and are untouched.)
 
 ### 24 ☐ Update IFRSSeeder.php so it creates the base entity and associates it with the admin user
 
@@ -161,7 +164,7 @@ Existing Expenses is confusing. change to "Bills" and make it similar to "Invoic
 | 7        | High     | IFRS posting double-counts / ignores GST                                   | ✅                   |
 | 2        | Critical | Invoice/payment number races                                               | ✅                   |
 | 3        | Critical | `markAsViewed` state-machine bypass (resolved by removing 'viewed' status) | ✅                   |
-| 22, 23   | High     | Same IFRS `LineItem::DEBIT/CREDIT` family of bugs (Expense + Reports)      | ☐ (found during #7) |
+| 22, 23   | High     | Same IFRS `LineItem::DEBIT/CREDIT` family of bugs (Expense + Reports)      | ✅ (found during #7) |
 | 11       | High     | Unallocated/FIFO payment plumbing                                          | ✅ (FIFO removed)    |
 | 4, 9, 19 | High     | Silent data loss / status corruption                                       | ☐                   |
 | 12, 13   | High     | Payment edit guards                                                        | ☐                   |
@@ -180,3 +183,4 @@ Existing Expenses is confusing. change to "Bills" and make it similar to "Invoic
 | `0aac670` | #7   | `fix(ifrs): post correct ledger entries and GST on cash receipts`                          |
 | `450b8c5` | #2   | `fix(invoice,payment): make number generation concurrency-safe via unique-violation retry` |
 | `f671cb3` | #3   | `refactor(invoice): remove the 'viewed' status and dead client-portal scaffold`            |
+| `861824f` | #22, #23 | `fix(ifrs): correct Expense ledger posting and account-schedule reporting` |
