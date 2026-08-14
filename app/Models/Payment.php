@@ -201,17 +201,24 @@ class Payment extends Model
     }
 
     /**
-     * Allocate payment to specific invoice
+     * Allocate payment to specific invoice.
+     *
+     * @throws \InvalidArgumentException if $amount is <= 0 or exceeds the
+     *         payment's unallocated balance. Callers run inside transactions
+     *         so the throw rolls back any partial work cleanly.
      */
     public function allocateToInvoice(Invoice $invoice, float $amount): PaymentAllocation
     {
-        // Ensure we don't allocate more than available
-        $amount = min($amount, $this->unallocated_amount);
-
         if ($amount <= 0) {
-            return PaymentAllocation::where('payment_id', $this->id)
-                ->where('invoice_id', $invoice->id)
-                ->first() ?? new PaymentAllocation();
+            throw new \InvalidArgumentException('Allocation amount must be greater than zero.');
+        }
+
+        $unallocated = $this->unallocated_amount;
+        if ($amount > $unallocated) {
+            throw new \InvalidArgumentException(
+                "Cannot allocate {$amount} to invoice {$invoice->id}: "
+                . "only {$unallocated} unallocated on payment {$this->id}."
+            );
         }
 
         $allocation = PaymentAllocation::firstOrCreate(

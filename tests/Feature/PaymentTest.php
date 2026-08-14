@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\Payment;
-use App\Models\PaymentAllocation;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -122,12 +121,10 @@ class PaymentTest extends TestCase
             'payment_method' => 'bank_transfer',
         ]);
 
-        // Try to allocate more than payment amount
+        // Allocating more than the payment amount must throw rather than
+        // silently clamping to the available balance.
+        $this->expectException(\InvalidArgumentException::class);
         $payment->allocateToInvoice($this->invoice, 100);
-
-        // Should only allocate 50 (the payment amount)
-        $allocation = PaymentAllocation::where('payment_id', $payment->id)->first();
-        $this->assertEquals(50, $allocation->amount);
     }
 
     public function test_manual_allocation_override(): void
