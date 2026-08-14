@@ -109,10 +109,11 @@ Raw `update()` instead of `transitionTo()`, ignoring the `$transitions` guard. T
 Mixed `lt(Carbon)` vs `lt(string)` (`due_date->lt(now()->toDateString())`), relying on Carbon's coercion.
 **Fix:** `b4e69c3` — switched to `due_date->isBefore(now()->startOfDay())` — Carbon-to-Carbon at day granularity, consistent with `scopeOverdue` (which uses `due_date < today`). Same semantics (an invoice due today is not overdue), just explicit and consistent.
 
-### 17. ☐ `Invoice::payments()` HasManyThrough may double-count
+### 17. ✅ `Invoice::payments()` HasManyThrough double-counted split payments
 
-**File:** `app/Models/Invoice.php:152-155`
-`->with('payments')` and `->with('allocations')` (as `InvoiceController::show` does) loads the same payment data twice via different paths. Almost always want `allocations` (carries the amount applied to *this* invoice). Consider dropping `payments()` or renaming.
+**Files:** `app/Models/Invoice.php`, `app/Http/Controllers/InvoiceController.php`, `app/Http/Controllers/ReportController.php`, `resources/views/invoices/show.blade.php`
+The original report flagged the relation as a redundant double-load; the real bug was worse — `payments()` returned full `Payment.amount`, not the amount allocated to *this* invoice, so any payment split across invoices was double-counted in both the show view (`$payment->amount` per payment) and the sales-by-customer report (`$inv->payments->sum('amount')` for `total_paid`).
+**Fix:** `0bbeced` — show view now iterates `$invoice->allocations` and shows `$allocation->amount` (the correct per-invoice portion) via `$allocation->payment` for number/date; dropped the redundant `payments` eager-load. Report switched to `$inv->allocations->sum('amount')`. Removed the now-unused `payments()` relation and its `HasManyThrough` import. `allocations()` is now the single source of truth for payment application.
 
 ### 18. ☐ `InvoiceObserver` + `refreshPurchaseOrderUsedAmount` duplicate work
 
@@ -204,3 +205,4 @@ Existing Expenses is confusing. change to "Bills" and make it similar to "Invoic
 | `b84508f` | #14  | `refactor(invoice): collapse transitionTo into one update; drop unreachable auto-promotion` |
 | `6aefc99` | #15  | `fix(invoice): route markAsSent through the state machine` |
 | `b4e69c3` | #16  | `refactor(invoice): compare Carbon-to-Carbon in is_overdue` |
+| `0bbeced` | #17  | `fix(invoice): use allocations (not payments) for per-invoice amounts; drop payments() relation` |
