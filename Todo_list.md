@@ -53,10 +53,11 @@ Investigation against `ekmungai/eloquent-ifrs` v6.0.0 source revealed the defect
 
 ## High-Severity Logic Issues
 
-### 8. ☐ `InvoiceItem::saved` → `recalculateTotals` → `static::saved` recursion risk
+### 8. ✅ `InvoiceItem::saved` → `recalculateTotals` → `static::saved` recursion risk
 
-**Files:** `app/Models/Invoice.php:103-107`, `app/Models/InvoiceItem.php:46-50`
-The `preventRecalculation` runtime flag is checked in the invoice saved handler but is **never set anywhere** in the codebase. Recursion is avoided only because `recalculateTotals` uses `withoutEvents`/`updateQuietly` — correct by accident. A future change to `recalculateTotals` could trigger infinite recursion. Make the guard explicit.
+**Files:** `app/Models/Invoice.php`, `app/Models/InvoiceItem.php`
+The `preventRecalculation` runtime flag was checked in the invoice `saved` handler but **never set anywhere** in the codebase. Recursion was avoided only because `recalculateTotals` saves via `withoutEvents`/`updateQuietly` (suppressing the `saved` event) — correct by accident.
+**Fix:** `9d1cd4c` — deleted the dead `static::saved` hook and the vestigial flag reference. The `withoutEvents`/`updateQuietly` persistence in `recalculateTotals()` is now the sole (and intentional) recursion guard, documented explicitly with a warning not to replace it with a plain `update`/`save` without a real re-entry guard. Added a recursion-safety test that calls `recalculateTotals()` directly on an invoice with items (verifying correct pre-tax/GST/total independently of which hook fired) and then does a plain `save()` to confirm no stack overflow — the scenario that would fail loudly if a future auto-recalc `saved` hook were added without a real guard.
 
 ### 9. ✅ `updateStatusFromPayments()` blindly resets `partially_paid`/`overdue` to `sent`
 
@@ -173,6 +174,7 @@ Existing Expenses is confusing. change to "Bills" and make it similar to "Invoic
 | 11       | High     | Unallocated/FIFO payment plumbing                                          | ✅ (FIFO removed)    |
 | 4, 9, 19 | High     | Silent data loss / status corruption                                       | ✅                   |
 | 12, 13   | High     | Payment edit guards                                                        | ✅                   |
+| 8        | Med      | Dead `preventRecalculation` recursion guard                                | ✅                   |
 | Others   | Med/Low  | Maintainability / consistency                                              | ☐                   |
 
 ---
@@ -193,3 +195,4 @@ Existing Expenses is confusing. change to "Bills" and make it similar to "Invoic
 | `e717b23` | #9   | `fix(invoice): re-derive status from due_date when payments removed` |
 | `67ab762` | #19  | `fix(invoice): upsert items on edit to preserve item id and time_entry_id` |
 | `ca5f177` | #12, #13 | `fix(payment): guard amount and client edits when allocations exist` |
+| `9d1cd4c` | #8   | `refactor(invoice): remove dead preventRecalculation recursion guard` |
