@@ -91,10 +91,11 @@ Changing `client_id` left existing allocations pointing at invoices belonging to
 
 ## Medium Issues
 
-### 14. ☐ `Invoice::transitionTo` does two separate `update()` calls
+### 14. ✅ `Invoice::transitionTo` does two separate `update()` calls
 
-**File:** `app/Models/Invoice.php:285-304`
-One `update` for status, then another for `paid_at` — two DB writes and two model events. Collapse into one `update(['status' => ..., 'paid_at' => ...])`. Also: the partial-paid→paid auto-promotion on line 299 is unreachable (you can't `transitionTo('partially_paid')` and simultaneously have `amount_due <= 0`).
+**File:** `app/Models/Invoice.php`
+Two `update()` calls when transitioning to PAID (one for status, one for `paid_at`) — two DB writes and two rounds of model events. Also the partial-paid→paid auto-promotion block was unreachable.
+**Fix:** `b84508f` — collapsed into a single `update()` that stamps `paid_at` together with the status when transitioning to PAID. Removed the unreachable auto-promotion block (`amount_due <= 0` means the invoice is fully paid, so the caller transitions to PAID, not PARTIALLY_PAID).
 
 ### 15. ☐ `markAsSent` bypasses the state machine
 
@@ -198,3 +199,4 @@ Existing Expenses is confusing. change to "Bills" and make it similar to "Invoic
 | `ca5f177` | #12, #13 | `fix(payment): guard amount and client edits when allocations exist` |
 | `9d1cd4c` | #8   | `refactor(invoice): remove dead preventRecalculation recursion guard` |
 | `c83e774` | #10  | `fix(invoice): scopeOverdue excludes effectively-paid invoices` |
+| `b84508f` | #14  | `refactor(invoice): collapse transitionTo into one update; drop unreachable auto-promotion` |
