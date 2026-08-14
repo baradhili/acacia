@@ -21,9 +21,17 @@ class InvoiceObserver
     public function updated(Invoice $invoice): void
     {
         if ($invoice->wasChanged('purchase_order_id')) {
+            // Recalc both the old PO (invoice no longer counts against it)
+            // and the new PO (invoice now counts against it).
             $this->recalculatePo($invoice->getOriginal('purchase_order_id'));
             $this->recalculatePo($invoice->purchase_order_id);
-        } elseif ($invoice->wasChanged(['status', 'total'])) {
+        } elseif ($invoice->wasChanged('status')) {
+            // recalculateUsedAmount filters by status (excludes draft/cancelled),
+            // so a cancel/send transition changes the PO's used amount. Total
+            // changes are NOT handled here — those are owned by
+            // Invoice::recalculateTotals() via refreshPurchaseOrderUsedAmount,
+            // which runs whenever line items change (handling 'total' here too
+            // would recalc the PO twice on every line-item edit).
             $this->recalculatePo($invoice->purchase_order_id);
         }
     }
