@@ -97,10 +97,11 @@ Changing `client_id` left existing allocations pointing at invoices belonging to
 Two `update()` calls when transitioning to PAID (one for status, one for `paid_at`) — two DB writes and two rounds of model events. Also the partial-paid→paid auto-promotion block was unreachable.
 **Fix:** `b84508f` — collapsed into a single `update()` that stamps `paid_at` together with the status when transitioning to PAID. Removed the unreachable auto-promotion block (`amount_due <= 0` means the invoice is fully paid, so the caller transitions to PAID, not PARTIALLY_PAID).
 
-### 15. ☐ `markAsSent` bypasses the state machine
+### 15. ✅ `markAsSent` bypasses the state machine
 
 **File:** `app/Models/Invoice.php` (`markAsSent`)
-Raw `update()` instead of `transitionTo()`. The `markAsViewed` half of this item is now moot (removed in #3 / `f671cb3`); `markAsSent` still uses raw `update()` and ignores the `$transitions` guard. Either route it through `transitionTo()` or drop the transition table.
+Raw `update()` instead of `transitionTo()`, ignoring the `$transitions` guard. The `markAsViewed` half of this item was removed in #3 / `f671cb3`.
+**Fix:** `6aefc99` — `markAsSent()` now calls `transitionTo(STATUS_SENT)` (validates the transition) and stamps `sent_at` only on success. The sole caller (`InvoiceController::send`) already pre-checks `status === DRAFT`, so the validated transition is always draft → sent.
 
 ### 16. ☐ `getIsOverdueAttribute` compares a Carbon date to a date string
 
@@ -200,3 +201,4 @@ Existing Expenses is confusing. change to "Bills" and make it similar to "Invoic
 | `9d1cd4c` | #8   | `refactor(invoice): remove dead preventRecalculation recursion guard` |
 | `c83e774` | #10  | `fix(invoice): scopeOverdue excludes effectively-paid invoices` |
 | `b84508f` | #14  | `refactor(invoice): collapse transitionTo into one update; drop unreachable auto-promotion` |
+| `6aefc99` | #15  | `fix(invoice): route markAsSent through the state machine` |
