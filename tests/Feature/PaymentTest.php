@@ -255,11 +255,12 @@ class PaymentTest extends TestCase
         $this->assertEquals(Invoice::STATUS_PAID, $invoice1->status);
         $this->assertEquals(Invoice::STATUS_PAID, $invoice2->status);
 
-        // Remove allocation from invoice 1
+        // Remove allocation from invoice 1. invoice1's due_date is 5 days in
+        // the past, so the correct post-removal status is OVERDUE (not SENT).
         $payment->removeAllocation($invoice1);
 
         $invoice1->refresh();
-        $this->assertEquals(Invoice::STATUS_SENT, $invoice1->status);
+        $this->assertEquals(Invoice::STATUS_OVERDUE, $invoice1->status);
     }
 
     public function test_partial_payment_covers_multiple_invoices_correctly(): void

@@ -448,28 +448,39 @@ class Invoice extends Model
     }
 
     /**
-     * Update invoice status based on payments
+     * Update invoice status based on payments.
+     *
+     * When payments are removed and amountPaid drops to 0, re-derive the
+     * payable status from the invoice's own state instead of blindly forcing
+     * STATUS_SENT: a past-due invoice regains STATUS_OVERDUE, and a draft (or
+     * cancelled/paid) invoice is never clobbered.
      */
     public function updateStatusFromPayments(): void
     {
         $amountPaid = $this->amount_paid;
         $total = (float) $this->total;
 
-        if ($amountPaid <= 0) {
-            // No payments - revert to sent status (unless cancelled)
-            if ($this->status !== self::STATUS_CANCELLED) {
-                $this->update(['status' => self::STATUS_SENT, 'paid_at' => null]);
-            }
-        } elseif ($amountPaid >= $total) {
+        if ($amountPaid >= $total && $total > 0) {
             // Fully paid
-            $this->update([
-                'status' => self::STATUS_PAID,
-                'paid_at' => now(),
-            ]);
-        } else {
+            if ($this->status !== self::STATUS_PAID) {
+                $this->update([
+                    'status' => self::STATUS_PAID,
+                    'paid_at' => now(),
+                ]);
+            }
+        } elseif ($amountPaid > 0) {
             // Partially paid
             if ($this->status !== self::STATUS_PARTIALLY_PAID) {
                 $this->update(['status' => self::STATUS_PARTIALLY_PAID]);
+            }
+        } else {
+            // No payments: never clobber draft/cancelled/paid; otherwise
+            // overdue (past due_date) beats sent.
+            if (!in_array($this->status, [self::STATUS_DRAFT, self::STATUS_CANCELLED, self::STATUS_PAID])) {
+                $this->update([
+                    'status' => $this->is_overdue ? self::STATUS_OVERDUE : self::STATUS_SENT,
+                    'paid_at' => null,
+                ]);
             }
         }
     }
