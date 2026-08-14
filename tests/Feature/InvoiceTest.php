@@ -361,6 +361,42 @@ class InvoiceTest extends TestCase
         $this->assertEquals(1, $overdueCount);
     }
 
+    public function test_overdue_scope_excludes_paid_but_not_marked_invoices(): void
+    {
+        // A sent invoice past its due_date that has been fully paid via
+        // allocations but whose status is still 'sent' (e.g. status recompute
+        // hasn't run) must NOT appear as overdue — it has no outstanding balance.
+        $paidButSent = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->subDays(60)->toDateString(),
+            'due_date' => now()->subDays(30)->toDateString(),
+            'status' => Invoice::STATUS_SENT,
+            'total' => 110,
+        ]);
+        $payment = Payment::create([
+            'client_id' => $this->client->id,
+            'amount' => 110,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+        $payment->allocateToInvoice($paidButSent, 110);
+        // Force the status back to 'sent' to simulate the not-yet-flipped state.
+        $paidButSent->update(['status' => Invoice::STATUS_SENT]);
+
+        // A genuinely overdue (unpaid, past due) invoice for contrast.
+        Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->subDays(60)->toDateString(),
+            'due_date' => now()->subDays(30)->toDateString(),
+            'status' => Invoice::STATUS_SENT,
+            'total' => 200,
+        ]);
+
+        $overdueIds = Invoice::overdue()->pluck('id');
+        $this->assertNotContains($paidButSent->id, $overdueIds, 'Paid-but-not-marked invoice must not be overdue.');
+        $this->assertEquals(1, $overdueIds->count(), 'Only the genuinely overdue invoice should appear.');
+    }
+
     public function test_sent_invoice_updates_sent_at_timestamp(): void
     {
         $invoice = Invoice::create([

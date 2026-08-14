@@ -416,14 +416,31 @@ class Invoice extends Model
     }
 
     /**
-     * Scope for overdue invoices
+     * Scope for overdue invoices: either already flagged overdue, or any
+     * sent/partially_paid invoice past its due_date that still has an
+     * outstanding balance (amount_paid < total). The balance check excludes
+     * invoices that are effectively paid but whose status hasn't been flipped
+     * to paid yet, so they don't show as overdue forever. Zero-total invoices
+     * (no items / credit notes) are left to the status-based path.
      */
     public function scopeOverdue($query)
     {
         return $query->where('status', self::STATUS_OVERDUE)
             ->orWhere(function ($q) {
                 $q->whereIn('status', [self::STATUS_SENT, self::STATUS_PARTIALLY_PAID])
-                  ->where('due_date', '<', now()->toDateString());
+                  ->where('due_date', '<', now()->toDateString())
+                  // For invoices with a positive total, require an outstanding
+                  // balance (total > sum of allocations). Zero-total invoices
+                  // fall through (the status/due_date checks alone apply).
+                  ->where(function ($q) {
+                      $q->where('total', '<=', 0)
+                        ->orWhereRaw(
+                            'invoices.total - COALESCE(('
+                            . 'SELECT SUM(amount) FROM payment_allocations'
+                            . ' WHERE payment_allocations.invoice_id = invoices.id'
+                            . '), 0) > 0'
+                        );
+                  });
             });
     }
 
