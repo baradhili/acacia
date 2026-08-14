@@ -22,10 +22,11 @@ Two simultaneous requests read the same last row and +1, producing duplicate inv
 An audit found **no actual client portal exists** in this codebase (no public/guest routes, no token columns, no portal views/controllers/nav — clients only receive an emailed PDF). What existed was the staff-side `viewed` status scaffold plus dead notification code around it. The original bug (a `draft → viewed` bypass via the `markAsViewed()` elseif branch, plus `markAsSent`/`markAsViewed` bypassing `transitionTo()`) is moot: the whole `viewed` status was removed.
 **Fix:** `f671cb3` — removed `STATUS_VIEWED` entirely and collapsed the state machine to `draft → sent → partially_paid/overdue → paid`. Deleted `markAsViewed()`, the `markViewed` controller action + route, the `InvoiceViewedNotification` class (dead — the service method that fired it had zero callers), and `sendInvoiceViewedNotification`. Dropped `STATUS_VIEWED` from the 9 query-list sites that treated it as outstanding (Client, ARAgingWidget, PnLTrendWidget, MarkOverdueInvoices, DashboardService×2, ClientStatementService, ReconciliationService, PaymentController); `sent` is in every list so no invoice falls through. Removed the 'Viewed' status filter + badge from the index view. New migration backfills any existing `status='viewed'` rows to `'sent'`. Behavior change: invoices that would have been `viewed` now stay `sent` until paid/overdue. **Note:** the `markAsSent` raw-`update()` pattern (bypassing `transitionTo()`) remains — folded into item #15.
 
-### 4. ☐ `Payment::allocateToInvoice()` clamps to `unallocated_amount` and silently drops over-allocations
+### 4. ✅ `Payment::allocateToInvoice()` clamps to `unallocated_amount` and silently drops over-allocations
 
-**File:** `app/Models/Payment.php:209-240`
-`$amount = min($amount, $this->unallocated_amount)` silently truncates instead of erroring. When amount ≤ 0 it returns an unsaved `new PaymentAllocation()` (no id) that looks like success to callers. Return `null` or throw on insufficiency.
+**File:** `app/Models/Payment.php`
+`$amount = min($amount, $this->unallocated_amount)` silently truncated an over-allocation to the available balance, and when amount ≤ 0 it returned an unsaved `new PaymentAllocation()` (no id) that looked like success to callers.
+**Fix:** `572a8c9` — replaced both with `InvalidArgumentException`: amount must be > 0 and must not exceed `unallocated_amount`. All four production callers (`PaymentController::store`/`allocate`, `InvoiceController::recordPayment`, `CreditNote::applyToInvoice`) run inside `DB::beginTransaction()` blocks so the throw rolls back cleanly; the UI paths already pre-validate (`max:amount_due`, `max:unallocated_amount`), so this is defense-in-depth for direct/programmatic callers. Updated the one test that relied on the silent clamp to expect the throw.
 
 ### 5. ✅ `Payment::void()` / `destroy()` / `reallocateFifo()` update invoice statuses **before** deleting allocations
 
@@ -57,10 +58,11 @@ Investigation against `ekmungai/eloquent-ifrs` v6.0.0 source revealed the defect
 **Files:** `app/Models/Invoice.php:103-107`, `app/Models/InvoiceItem.php:46-50`
 The `preventRecalculation` runtime flag is checked in the invoice saved handler but is **never set anywhere** in the codebase. Recursion is avoided only because `recalculateTotals` uses `withoutEvents`/`updateQuietly` — correct by accident. A future change to `recalculateTotals` could trigger infinite recursion. Make the guard explicit.
 
-### 9. ☐ `updateStatusFromPayments()` blindly resets `partially_paid`/`overdue` to `sent`
+### 9. ✅ `updateStatusFromPayments()` blindly resets `partially_paid`/`overdue` to `sent`
 
-**File:** `app/Models/Invoice.php:432-454`
-When `amountPaid <= 0`, status reverts to `STATUS_SENT` regardless of prior state. An `overdue` invoice with its payment voided loses the overdue flag; an invoice that was never sent (`draft`) but had allocations removed becomes `sent`. Should restore the *prior* payable status or re-derive from `due_date`.
+**File:** `app/Models/Invoice.php`
+When `amountPaid <= 0`, status reverted to `STATUS_SENT` regardless of prior state — an `overdue` invoice lost its flag and a `draft` that had allocations removed became `sent`.
+**Fix:** `e717b23` — when payments drop to 0, never clobber `draft`/`cancelled`/`paid`; otherwise overdue (past `due_date`) beats sent, using the existing `getIsOverdueAttribute`. Also guarded the fully-paid branch with `$total > 0` so a zero-total invoice isn't marked paid by accident. Updated the one test whose post-removal expectation (due_date 5 days past) changes from SENT to OVERDUE under the corrected logic.
 
 ### 10. ☐ `scopeOverdue` includes invoices with `amount_due == 0` still marked sent
 
@@ -110,10 +112,11 @@ Raw `update()` instead of `transitionTo()`. The `markAsViewed` half of this item
 **Files:** `app/Observers/InvoiceObserver.php`, `app/Models/Invoice.php:220-225`
 Both the observer (`updated`/`created`/`deleted`) and `Invoice::recalculateTotals()` call `PurchaseOrder::recalculateUsedAmount()`. On a normal item save this runs at least twice. Pick one owner.
 
-### 19. ☐ `InvoiceController::update` deletes and recreates items, severing `time_entry_id` links
+### 19. ✅ `InvoiceController::update` deletes and recreates items, severing `time_entry_id` links
 
-**File:** `app/Http/Controllers/InvoiceController.php:201`
-`$invoice->items()->delete()` then recreates with new ids. Time entries still reference the now-deleted item id via `invoice_item_id`, and new items get `time_entry_id = null` (the update form doesn't pass it). **Editing a draft invoice silently unlinks its time entries.** Use upserts, or carry `time_entry_id` through the form.
+**Files:** `app/Http/Controllers/InvoiceController.php`, `resources/views/invoices/edit.blade.php`
+`$invoice->items()->delete()` then recreated with new ids; new items got `time_entry_id = null` because the form didn't pass it. **Editing a draft invoice silently unlinked its time entries.** (Note: the `time_entries.invoice_item_id` back-reference column the original report assumed doesn't actually exist in the migrations — the link is one-way, `invoice_items.time_entry_id` — so the concrete damage was the lost `time_entry_id`, which is what the fix addresses.)
+**Fix:** `67ab762` — replaced delete-all-recreate with an upsert: collect submitted item ids, delete only items the user removed (scoped to the invoice), `update()` existing items by id (preserving `time_entry_id` unless explicitly changed), `create()` new ones. Added `items.*.id` / `items.*.time_entry_id` validation and a hidden `items[][id]` input per existing row in the edit view so the id round-trips. Round-trip test added: edits a time-entry-linked item and asserts id + `time_entry_id` survive.
 
 ### 20. ☐ `createFromTimeEntries` doesn't actually create — it only renders
 
@@ -166,7 +169,7 @@ Existing Expenses is confusing. change to "Bills" and make it similar to "Invoic
 | 3        | Critical | `markAsViewed` state-machine bypass (resolved by removing 'viewed' status) | ✅                   |
 | 22, 23   | High     | Same IFRS `LineItem::DEBIT/CREDIT` family of bugs (Expense + Reports)      | ✅ (found during #7) |
 | 11       | High     | Unallocated/FIFO payment plumbing                                          | ✅ (FIFO removed)    |
-| 4, 9, 19 | High     | Silent data loss / status corruption                                       | ☐                   |
+| 4, 9, 19 | High     | Silent data loss / status corruption                                       | ✅                   |
 | 12, 13   | High     | Payment edit guards                                                        | ☐                   |
 | Others   | Med/Low  | Maintainability / consistency                                              | ☐                   |
 
@@ -184,3 +187,6 @@ Existing Expenses is confusing. change to "Bills" and make it similar to "Invoic
 | `450b8c5` | #2   | `fix(invoice,payment): make number generation concurrency-safe via unique-violation retry` |
 | `f671cb3` | #3   | `refactor(invoice): remove the 'viewed' status and dead client-portal scaffold`            |
 | `861824f` | #22, #23 | `fix(ifrs): correct Expense ledger posting and account-schedule reporting` |
+| `572a8c9` | #4   | `fix(payment): throw on over-allocation in allocateToInvoice` |
+| `e717b23` | #9   | `fix(invoice): re-derive status from due_date when payments removed` |
+| `67ab762` | #19  | `fix(invoice): upsert items on edit to preserve item id and time_entry_id` |
