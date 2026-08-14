@@ -328,7 +328,7 @@ class Invoice extends Model
     }
 
     /**
-     * Transition to a new status with validation
+     * Transition to a new status with validation.
      */
     public function transitionTo(string $status): bool
     {
@@ -336,17 +336,12 @@ class Invoice extends Model
             return false;
         }
 
-        $this->update(['status' => $status]);
-        
-        // Update paid_at when status changes to paid
+        // Single update: stamp paid_at together with the status when fully paid.
+        $payload = ['status' => $status];
         if ($status === self::STATUS_PAID) {
-            $this->update(['paid_at' => now()]);
+            $payload['paid_at'] = now();
         }
-
-        // Auto-update status based on payment if partially paid
-        if ($status === self::STATUS_PARTIALLY_PAID && $this->amount_due <= 0) {
-            $this->update(['status' => self::STATUS_PAID, 'paid_at' => now()]);
-        }
+        $this->update($payload);
 
         return true;
     }
