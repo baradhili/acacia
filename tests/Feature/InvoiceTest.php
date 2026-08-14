@@ -829,4 +829,48 @@ class InvoiceTest extends TestCase
         $this->assertEquals(150, (float) $refreshedItem->unit_price, 'unit_price should reflect the edit.');
         $this->assertEquals($timeEntry->id, $refreshedItem->time_entry_id, 'time_entry_id link must be preserved.');
     }
+
+    public function test_recalculate_totals_is_safe_to_call_and_does_not_recurse(): void
+    {
+        // Build an invoice with two items directly (not via the form), so the
+        // result does not depend on any controller or on a saved-hook firing.
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_DRAFT,
+        ]);
+        $invoice->items()->create([
+            'description' => 'Service A',
+            'quantity' => 2,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+        $invoice->items()->create([
+            'description' => 'Service B',
+            'quantity' => 1,
+            'unit_price' => 50,
+            'tax_rate' => 10,
+        ]);
+        $invoice->refresh();
+
+        // Calling recalculateTotals() directly must produce the correct
+        // pre-tax subtotal + GST + total (independent of which hook fired).
+        $invoice->recalculateTotals();
+        $invoice->refresh();
+        $this->assertEquals(250.00, (float) $invoice->subtotal, 'pre-tax subtotal');
+        $this->assertEquals(25.00, (float) $invoice->tax_amount, 'GST @10%');
+        $this->assertEquals(275.00, (float) $invoice->total, 'tax-inclusive total');
+
+        // A plain save() after recalculation must complete without recursing
+        // (recalculateTotals persists via withoutEvents/updateQuietly, so no
+        // saved hook re-enters). If this ever exhausts the stack, a future
+        // auto-recalc saved hook was added without a real re-entry guard.
+        $invoice->notes = 'Updated note';
+        $invoice->save();
+
+        $invoice->refresh();
+        $this->assertEquals(275.00, (float) $invoice->total, 'total must be unchanged by a plain save');
+        $this->assertSame('Updated note', $invoice->notes);
+    }
 }

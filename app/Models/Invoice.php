@@ -97,12 +97,15 @@ class Invoice extends Model
             }
         });
 
-        // Recalculate when items change (not via recalculateTotals to avoid recursion)
-        static::saved(function ($invoice) {
-            if (!isset($invoice->preventRecalculation) && $invoice->items()->exists()) {
-                $invoice->recalculateTotals();
-            }
-        });
+        // Invoice totals are recalculated explicitly via recalculateTotals()
+        // (from controllers, Estimate::convertToInvoice, etc.) and via the
+        // InvoiceItem saved/deleted hooks when a line item changes. There is
+        // intentionally no static::saved auto-recalc hook here: recalculateTotals()
+        // persists via updateQuietly() inside withoutEvents(), so firing it
+        // again on save would be both redundant and (without the quiet save) a
+        // recursion risk. If auto-recalc-on-save is ever needed, add it
+        // deliberately with a real guard — the old `preventRecalculation` flag
+        // was never set anywhere and protected nothing.
     }
 
     public static function generateInvoiceNumber(): string
@@ -239,7 +242,11 @@ class Invoice extends Model
         $discountAmount = $items->sum('discount_amount');
         $total = $subtotal + $taxAmount;
 
-        // Use withoutEvents to prevent the saved event from triggering recalculateTotals again
+        // Persist via updateQuietly() inside withoutEvents(). This is the
+        // recursion guard: it suppresses the model saved event so the
+        // (now-removed) auto-recalc hook could not re-enter, and any future
+        // saved hook added here will not loop. Do NOT replace this with a
+        // plain update()/save() without a real re-entry guard.
         static::withoutEvents(function () use ($subtotal, $taxAmount, $discountAmount, $total) {
             $this->updateQuietly([
                 'subtotal' => $subtotal,
