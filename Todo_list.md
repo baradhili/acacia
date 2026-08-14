@@ -65,10 +65,11 @@ The `preventRecalculation` runtime flag was checked in the invoice `saved` handl
 When `amountPaid <= 0`, status reverted to `STATUS_SENT` regardless of prior state — an `overdue` invoice lost its flag and a `draft` that had allocations removed became `sent`.
 **Fix:** `e717b23` — when payments drop to 0, never clobber `draft`/`cancelled`/`paid`; otherwise overdue (past `due_date`) beats sent, using the existing `getIsOverdueAttribute`. Also guarded the fully-paid branch with `$total > 0` so a zero-total invoice isn't marked paid by accident. Updated the one test whose post-removal expectation (due_date 5 days past) changes from SENT to OVERDUE under the corrected logic.
 
-### 10. ☐ `scopeOverdue` includes invoices with `amount_due == 0` still marked sent
+### 10. ✅ `scopeOverdue` includes invoices with `amount_due == 0` still marked sent
 
-**File:** `app/Models/Invoice.php:393-400`
-The scope catches `sent`/`viewed`/`partially_paid` past their due date, but doesn't exclude invoices that are really paid-but-not-marked-paid (`amount_due == 0`). Those show as "overdue" forever. Redundant with `MarkOverdueInvoices` command (status already flipped to `STATUS_OVERDUE`).
+**File:** `app/Models/Invoice.php`
+The scope flagged any sent/partially_paid invoice past its due_date, including invoices fully paid via allocations whose status hadn't been flipped to paid — those showed as "overdue" forever.
+**Fix:** `c83e774` — added a balance check: for invoices with `total > 0`, require an outstanding balance (`total > SUM(payment_allocations.amount)`) via a correlated subquery. Zero-total invoices fall through to the status/due_date path (preserves existing behavior). Added a test that builds a sent-but-fully-paid invoice past due and asserts it is excluded from the overdue scope.
 
 ### 11. ✅ Payments could be created without being allocated, then never posted to IFRS (FIFO removal)
 
@@ -196,3 +197,4 @@ Existing Expenses is confusing. change to "Bills" and make it similar to "Invoic
 | `67ab762` | #19  | `fix(invoice): upsert items on edit to preserve item id and time_entry_id` |
 | `ca5f177` | #12, #13 | `fix(payment): guard amount and client edits when allocations exist` |
 | `9d1cd4c` | #8   | `refactor(invoice): remove dead preventRecalculation recursion guard` |
+| `c83e774` | #10  | `fix(invoice): scopeOverdue excludes effectively-paid invoices` |
