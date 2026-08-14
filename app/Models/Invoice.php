@@ -300,14 +300,16 @@ class Invoice extends Model
     }
 
     /**
-     * Check if invoice is overdue
+     * Check if invoice is overdue (past due_date and not paid/cancelled).
      */
     public function getIsOverdueAttribute(): bool
     {
         if (in_array($this->status, [self::STATUS_PAID, self::STATUS_CANCELLED])) {
             return false;
         }
-        return $this->due_date && $this->due_date->lt(now()->toDateString());
+        // Compare Carbon-to-Carbon at day granularity: due_date is before the
+        // start of today means the invoice is overdue.
+        return $this->due_date && $this->due_date->isBefore(now()->startOfDay());
     }
 
     /**
