@@ -138,11 +138,28 @@ class PaymentController extends Controller
             'notes' => 'nullable|string',
         ]);
 
+        // #12: reject shrinking the amount below what's already allocated,
+        // otherwise unallocated_amount goes negative (hidden by the accessor)
+        // and downstream allocation logic breaks.
+        $allocatedAmount = (float) $payment->allocated_amount;
+        if ((float) $validated['amount'] < $allocatedAmount) {
+            return back()->withInput()->with('error',
+                'Amount cannot be less than $' . number_format($allocatedAmount, 2)
+                . ' already allocated to invoices. Remove the allocations first.');
+        }
+
+        // #13: reject changing the client when allocations exist — those
+        // allocations point at the old client's invoices and would be
+        // orphaned. The allocate() action already enforces client-match, so
+        // a client change must be preceded by removing allocations.
+        if ((int) $validated['client_id'] !== (int) $payment->client_id
+            && $payment->allocations()->exists()) {
+            return back()->withInput()->with('error',
+                'Cannot change the client on a payment with existing invoice allocations. Remove them first.');
+        }
+
         DB::beginTransaction();
         try {
-            // Update allocations status first
-            $payment->updateAllocatedInvoicesStatus();
-
             $payment->update([
                 'client_id' => $validated['client_id'],
                 'amount' => $validated['amount'],
@@ -152,7 +169,7 @@ class PaymentController extends Controller
                 'notes' => $validated['notes'] ?? null,
             ]);
 
-            // Recalculate allocations
+            // Recompute allocated invoice statuses against the new amount.
             foreach ($payment->allocations as $allocation) {
                 $allocation->invoice->updateStatusFromPayments();
             }

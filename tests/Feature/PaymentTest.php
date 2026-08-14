@@ -427,4 +427,53 @@ class PaymentTest extends TestCase
             Payment::where('client_id', $this->client->id)->distinct()->count('payment_number')
         );
     }
+
+    public function test_update_payment_rejects_amount_below_allocated(): void
+    {
+        $payment = Payment::create([
+            'client_id' => $this->client->id,
+            'amount' => 110,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+        $payment->allocateToInvoice($this->invoice, 110);
+
+        // Try to shrink the amount below what's already allocated.
+        $response = $this->actingAs($this->user)->put("/payments/{$payment->id}", [
+            'client_id' => $this->client->id,
+            'amount' => 50,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+
+        $response->assertSessionHas('error');
+        $payment->refresh();
+        $this->assertEquals(110, (float) $payment->amount, 'Amount must be unchanged.');
+    }
+
+    public function test_update_payment_rejects_client_change_with_allocations(): void
+    {
+        $otherClient = Client::factory()->create(['name' => 'Other Client']);
+
+        $payment = Payment::create([
+            'client_id' => $this->client->id,
+            'amount' => 110,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+        $payment->allocateToInvoice($this->invoice, 110);
+
+        // Try to change the client while allocations to the original client's
+        // invoice still exist.
+        $response = $this->actingAs($this->user)->put("/payments/{$payment->id}", [
+            'client_id' => $otherClient->id,
+            'amount' => 110,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+
+        $response->assertSessionHas('error');
+        $payment->refresh();
+        $this->assertEquals($this->client->id, $payment->client_id, 'Client must be unchanged.');
+    }
 }
