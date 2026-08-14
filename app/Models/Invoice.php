@@ -347,14 +347,15 @@ class Invoice extends Model
     }
 
     /**
-     * Mark invoice as sent
+     * Mark invoice as sent — routes through the state machine so the
+     * transition is validated, then stamps sent_at on success.
      */
     public function markAsSent(): bool
     {
-        $this->update([
-            'status' => self::STATUS_SENT,
-            'sent_at' => now(),
-        ]);
+        if (!$this->transitionTo(self::STATUS_SENT)) {
+            return false;
+        }
+        $this->update(['sent_at' => now()]);
         return true;
     }
 
