@@ -115,10 +115,11 @@ Mixed `lt(Carbon)` vs `lt(string)` (`due_date->lt(now()->toDateString())`), rely
 The original report flagged the relation as a redundant double-load; the real bug was worse — `payments()` returned full `Payment.amount`, not the amount allocated to *this* invoice, so any payment split across invoices was double-counted in both the show view (`$payment->amount` per payment) and the sales-by-customer report (`$inv->payments->sum('amount')` for `total_paid`).
 **Fix:** `0bbeced` — show view now iterates `$invoice->allocations` and shows `$allocation->amount` (the correct per-invoice portion) via `$allocation->payment` for number/date; dropped the redundant `payments` eager-load. Report switched to `$inv->allocations->sum('amount')`. Removed the now-unused `payments()` relation and its `HasManyThrough` import. `allocations()` is now the single source of truth for payment application.
 
-### 18. ☐ `InvoiceObserver` + `refreshPurchaseOrderUsedAmount` duplicate work
+### 18. ✅ `InvoiceObserver` + `refreshPurchaseOrderUsedAmount` duplicate work
 
-**Files:** `app/Observers/InvoiceObserver.php`, `app/Models/Invoice.php:220-225`
-Both the observer (`updated`/`created`/`deleted`) and `Invoice::recalculateTotals()` call `PurchaseOrder::recalculateUsedAmount()`. On a normal item save this runs at least twice. Pick one owner.
+**Files:** `app/Observers/InvoiceObserver.php`, `app/Models/Invoice.php`
+Both the observer (`updated`) and `Invoice::recalculateTotals()` (via `refreshPurchaseOrderUsedAmount`) called `PurchaseOrder::recalculateUsedAmount()` on total changes, so a normal line-item edit recalc'd the PO twice. Critically, `recalculateUsedAmount` filters by status (excludes draft/cancelled), so status transitions also affect the used amount — and those don't flow through `recalculateTotals`.
+**Fix:** `f2bb1b0` — made the observer the single owner of status-driven recalcs and the model the single owner of total-driven recalcs. The observer now handles `purchase_order_id` reassignment (old + new PO) and `status` changes (cancel/send); `total` changes are left solely to `recalculateTotals`/`refreshPurchaseOrderUsedAmount`. Eliminates the double recalc on line-item edits without losing status-change coverage.
 
 ### 19. ✅ `InvoiceController::update` deletes and recreates items, severing `time_entry_id` links
 
@@ -206,3 +207,4 @@ Existing Expenses is confusing. change to "Bills" and make it similar to "Invoic
 | `6aefc99` | #15  | `fix(invoice): route markAsSent through the state machine` |
 | `b4e69c3` | #16  | `refactor(invoice): compare Carbon-to-Carbon in is_overdue` |
 | `0bbeced` | #17  | `fix(invoice): use allocations (not payments) for per-invoice amounts; drop payments() relation` |
+| `f2bb1b0` | #18  | `refactor(invoice): dedupe PO used-amount recalc between observer and model` |
