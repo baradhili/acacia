@@ -311,7 +311,7 @@ class ReportController extends Controller
 
         $clientId = $request->get('client_id');
 
-        $query = \App\Models\Invoice::with(['client', 'payments'])
+        $query = \App\Models\Invoice::with(['client', 'allocations'])
             ->whereBetween('issue_date', [$startDate, $endDate])
             ->where('status', '!=', 'cancelled');
 
@@ -328,8 +328,11 @@ class ReportController extends Controller
                     'client' => $client,
                     'invoice_count' => $invoices->count(),
                     'total_invoiced' => $invoices->sum('total'),
+                    // Sum the amount allocated to each invoice (not the full
+                    // payment amount — a payment split across invoices would
+                    // otherwise be double-counted).
                     'total_paid' => $invoices->sum(function ($inv) {
-                        return $inv->payments->sum('amount');
+                        return $inv->allocations->sum('amount');
                     }),
                     'outstanding' => $invoices->sum('balance'),
                 ];
