@@ -75,15 +75,17 @@ The scope catches `sent`/`viewed`/`partially_paid` past their due date, but does
 `PaymentController::store` supported `allocate_type: 'no'` (unallocated payment) and FIFO allocation; nothing ever reconciled unallocated payments, and `postToIFRS` was never called from any controller (dead path).
 **Fix:** `ef3ec69` — removed FIFO allocation entirely (manual-only now). The `postToIFRS` method itself is now correct (see item 7, fixed in `0aac670`), but it is still **not called** from `PaymentController::store` / `InvoiceController::recordPayment` (manual payment entry never posts to the ledger — only the bank-reconciliation path does). Wiring it in is a follow-up.
 
-### 12. ☐ `PaymentController::update` allows changing `amount` below allocated total
+### 12. ✅ `PaymentController::update` allows changing `amount` below allocated total
 
-**File:** `app/Http/Controllers/PaymentController.php:132-170`
-Edit a payment from $1000 → $10 while it has $800 in allocations: `unallocated_amount` goes negative (hidden by `max(0, ...)`), downstream allocation logic breaks. Validate `amount >= allocated_amount`.
+**File:** `app/Http/Controllers/PaymentController.php`
+Validation was `'amount' => 'required|numeric|min:0.01'` with no relationship to `allocated_amount`, so shrinking a payment below its allocated total made `unallocated_amount` go negative (hidden by the accessor's `max(0, ...)`) and broke downstream allocation logic.
+**Fix:** `ca5f177` — added a guard rejecting `amount < allocated_amount` with a clear error pointing the user to remove allocations first.
 
-### 13. ☐ `PaymentController::update` does not re-validate allocations when `client_id` changes
+### 13. ✅ `PaymentController::update` does not re-validate allocations when `client_id` changes
 
-**File:** `app/Http/Controllers/PaymentController.php:132-170`
-Changing `client_id` on a payment leaves existing allocations pointing at invoices belonging to the old client — no cascade or guard. The `allocate` method checks client match, but `update` does not.
+**File:** `app/Http/Controllers/PaymentController.php`
+Changing `client_id` left existing allocations pointing at invoices belonging to the old client — no cascade or guard. The `allocate()` action already enforced client-match, but `update` didn't.
+**Fix:** `ca5f177` — added a guard blocking a `client_id` change when allocations exist (must remove them first). Also removed the dead pre-update `updateAllocatedInvoicesStatus()` call (it recomputed against the old state = no-op); the meaningful recompute after the update is kept. Two tests added covering each guard.
 
 ## Medium Issues
 
@@ -170,7 +172,7 @@ Existing Expenses is confusing. change to "Bills" and make it similar to "Invoic
 | 22, 23   | High     | Same IFRS `LineItem::DEBIT/CREDIT` family of bugs (Expense + Reports)      | ✅ (found during #7) |
 | 11       | High     | Unallocated/FIFO payment plumbing                                          | ✅ (FIFO removed)    |
 | 4, 9, 19 | High     | Silent data loss / status corruption                                       | ✅                   |
-| 12, 13   | High     | Payment edit guards                                                        | ☐                   |
+| 12, 13   | High     | Payment edit guards                                                        | ✅                   |
 | Others   | Med/Low  | Maintainability / consistency                                              | ☐                   |
 
 ---
@@ -190,3 +192,4 @@ Existing Expenses is confusing. change to "Bills" and make it similar to "Invoic
 | `572a8c9` | #4   | `fix(payment): throw on over-allocation in allocateToInvoice` |
 | `e717b23` | #9   | `fix(invoice): re-derive status from due_date when payments removed` |
 | `67ab762` | #19  | `fix(invoice): upsert items on edit to preserve item id and time_entry_id` |
+| `ca5f177` | #12, #13 | `fix(payment): guard amount and client edits when allocations exist` |
