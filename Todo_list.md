@@ -103,10 +103,11 @@ Two `update()` calls when transitioning to PAID (one for status, one for `paid_a
 Raw `update()` instead of `transitionTo()`, ignoring the `$transitions` guard. The `markAsViewed` half of this item was removed in #3 / `f671cb3`.
 **Fix:** `6aefc99` — `markAsSent()` now calls `transitionTo(STATUS_SENT)` (validates the transition) and stamps `sent_at` only on success. The sole caller (`InvoiceController::send`) already pre-checks `status === DRAFT`, so the validated transition is always draft → sent.
 
-### 16. ☐ `getIsOverdueAttribute` compares a Carbon date to a date string
+### 16. ✅ `getIsOverdueAttribute` compares a Carbon date to a date string
 
-**File:** `app/Models/Invoice.php:257-263`
-`$this->due_date->lt(now()->toDateString())` — Carbon coerces, but mixing `lt(Carbon)` vs `lt(string)` is inconsistent. Use `now()->startOfDay()`.
+**File:** `app/Models/Invoice.php`
+Mixed `lt(Carbon)` vs `lt(string)` (`due_date->lt(now()->toDateString())`), relying on Carbon's coercion.
+**Fix:** `b4e69c3` — switched to `due_date->isBefore(now()->startOfDay())` — Carbon-to-Carbon at day granularity, consistent with `scopeOverdue` (which uses `due_date < today`). Same semantics (an invoice due today is not overdue), just explicit and consistent.
 
 ### 17. ☐ `Invoice::payments()` HasManyThrough may double-count
 
@@ -202,3 +203,4 @@ Existing Expenses is confusing. change to "Bills" and make it similar to "Invoic
 | `c83e774` | #10  | `fix(invoice): scopeOverdue excludes effectively-paid invoices` |
 | `b84508f` | #14  | `refactor(invoice): collapse transitionTo into one update; drop unreachable auto-promotion` |
 | `6aefc99` | #15  | `fix(invoice): route markAsSent through the state machine` |
+| `b4e69c3` | #16  | `refactor(invoice): compare Carbon-to-Carbon in is_overdue` |
