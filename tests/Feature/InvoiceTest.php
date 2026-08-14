@@ -5,6 +5,9 @@ namespace Tests\Feature;
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
+use App\Models\Payment;
+use App\Models\Project;
+use App\Models\TimeEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -762,5 +765,68 @@ class InvoiceTest extends TestCase
             2,
             Invoice::where('client_id', $this->client->id)->distinct()->count('invoice_number')
         );
+    }
+
+    public function test_editing_invoice_preserves_item_id_and_time_entry_link(): void
+    {
+        // Set up a project + time entry so the invoice item can link to it.
+        $project = Project::factory()->create(['client_id' => $this->client->id]);
+        $timeEntry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $project->id,
+            'start_time' => now()->subHours(2),
+            'end_time' => now(),
+            'description' => 'Consulting work',
+            'billable' => true,
+            'status' => TimeEntry::STATUS_APPROVED,
+        ]);
+
+        // Create a draft invoice with one item linked to the time entry.
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'project_id' => $project->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_DRAFT,
+        ]);
+        $item = $invoice->items()->create([
+            'description' => 'Consulting work',
+            'quantity' => 2,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+            'time_entry_id' => $timeEntry->id,
+        ]);
+        $originalItemId = $item->id;
+
+        // Edit the invoice: change unit_price, pass the existing item id.
+        // (This mirrors the edit form, which now emits a hidden items[][id].)
+        $response = $this->actingAs($this->user)->put("/invoices/{$invoice->id}", [
+            'client_id' => $this->client->id,
+            'project_id' => $project->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'items' => [
+                [
+                    'id' => $originalItemId,
+                    'description' => 'Consulting work (updated)',
+                    'quantity' => 2,
+                    'unit_price' => 150,
+                    'tax_rate' => 10,
+                    'discount_percent' => 0,
+                ],
+            ],
+        ]);
+
+        $response->assertSessionHas('success');
+
+        // The item should have been UPDATED, not deleted+recreated: same id,
+        // and the time_entry_id link must survive the edit.
+        $invoice->refresh();
+        $this->assertCount(1, $invoice->items, 'Item count should stay at 1');
+
+        $refreshedItem = $invoice->items->first();
+        $this->assertEquals($originalItemId, $refreshedItem->id, 'Item id must be preserved across edit.');
+        $this->assertEquals(150, (float) $refreshedItem->unit_price, 'unit_price should reflect the edit.');
+        $this->assertEquals($timeEntry->id, $refreshedItem->time_entry_id, 'time_entry_id link must be preserved.');
     }
 }

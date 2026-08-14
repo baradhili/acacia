@@ -179,6 +179,8 @@ class InvoiceController extends Controller
             'notes' => 'nullable|string',
             'terms' => 'nullable|string',
             'items' => 'required|array|min:1',
+            'items.*.id' => 'nullable|integer',
+            'items.*.time_entry_id' => 'nullable|exists:time_entries,id',
             'items.*.description' => 'required|string',
             'items.*.quantity' => 'required|numeric|min:0',
             'items.*.unit_price' => 'required|numeric|min:0',
@@ -197,18 +199,47 @@ class InvoiceController extends Controller
                 'terms' => $validated['terms'] ?? null,
             ]);
 
-            // Delete existing items and recreate
-            $invoice->items()->delete();
+            // Upsert items: keep existing item ids stable (preserving
+            // time_entry_id and any TimeEntry.invoice_item_id links) rather
+            // than deleting and recreating, which severed those links.
+            $submittedIds = collect($validated['items'])
+                ->pluck('id')
+                ->filter()
+                ->map(fn ($id) => (int) $id)
+                ->all();
+
+            // Load existing items for this invoice keyed by id.
+            $existingItems = $invoice->items()->get()->keyBy('id');
+
+            // Delete items the user removed from the form.
+            if ($submittedIds) {
+                $invoice->items()->whereNotIn('id', $submittedIds)->delete();
+            } else {
+                $invoice->items()->delete();
+            }
 
             foreach ($validated['items'] as $index => $item) {
-                $invoice->items()->create([
+                $itemId = isset($item['id']) ? (int) $item['id'] : null;
+                $payload = [
                     'description' => $item['description'],
                     'quantity' => $item['quantity'],
                     'unit_price' => $item['unit_price'],
                     'tax_rate' => $item['tax_rate'] ?? config('australian.gst.rate', 10),
                     'discount_percent' => $item['discount_percent'] ?? 0,
                     'sort_order' => $index,
-                ]);
+                ];
+
+                if ($itemId && $existingItems->has($itemId)) {
+                    // Preserve time_entry_id unless explicitly changed.
+                    if (array_key_exists('time_entry_id', $item)) {
+                        $payload['time_entry_id'] = $item['time_entry_id'];
+                    }
+                    $existingItems->get($itemId)->update($payload);
+                } else {
+                    // New line: link time_entry_id only if provided.
+                    $payload['time_entry_id'] = $item['time_entry_id'] ?? null;
+                    $invoice->items()->create($payload);
+                }
             }
 
             $invoice->recalculateTotals();
