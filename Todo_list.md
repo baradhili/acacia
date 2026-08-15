@@ -160,7 +160,11 @@ Shared the exact defects fixed in #7 (`Payment::postToIFRS`, `0aac670`): nonexis
 `$allItems->where("type", IFRS\Models\LineItem::DEBIT)` / `::CREDIT` — the constants don't exist on `LineItem` (only `Balance::DEBIT/CREDIT` do), so any account-schedule report rendering that reached this code fatal-errored with `Undefined constant`. The `LineItem` has no `type` column at all. Also queried `transaction.date`/`whereBetween("date")`, but the Transaction column is `transaction_date`.
 **Fix:** `861824f` — debit/credit totals now derived from the line item's `credited` boolean (`false` = debit, `true` = credit), verified against the `ifrs_line_items` migration. All `date` references switched to `transaction_date`. Grep confirms zero `LineItem::DEBIT`/`::CREDIT` references remain in `app/` outside explanatory comments. (The `$item->tax_rate` references at lines 681/836/982 are on `InvoiceItem`/`Expense` — our own models, which do have `tax_rate` — so those were not bugs and are untouched.)
 
-### 24 ☐ Update IFRSSeeder.php so it creates the base entity and associates it with the admin user
+### 24 ✅ Update IFRSSeeder.php so it creates the base entity and associates it with the admin user
+
+**Files:** `database/seeders/IFRSSeeder.php`, `app/Models/User.php`, `tests/Feature/IFRSSeederTest.php` (new)
+Three defects found: (1) `User`'s `#[Fillable]` omitted `entity_id`, so the seeder's `firstOrCreate(..., ['entity_id' => ...])` silently dropped it — the admin user never got the association; (2) `UserSeeder` runs **before** `IFRSSeeder`, so the admin pre-exists and `firstOrCreate`'s second argument never applies; (3) the seeder created the currency before the entity via a throwaway `_TEMP_` entity (deleted afterwards) — backwards from the package README's documented order (entity first with name only, currency next, then attach `entity->currency_id`).
+**Fix:** `45e632b` — restructured per the README: `Entity::firstOrCreate` first (`year_start => 7` AU FY, `multi_currency => true`), then AUD `Currency::firstOrCreate` against it, then attach `currency_id`; `_TEMP_` hack removed (stale ones still cleaned up). Added `entity_id` to `User` fillable + an explicit `forceFill` association for the pre-existing admin user. Also seeds an `OPEN` `ReportingPeriod` for the entity's current year (`period_count => 1`, the README's canonical value) — without it `Transaction::save()` throws `MissingReportingPeriod`, so a fresh install couldn't post anything. `IFRSSeederTest` seeds in production order (RoleSeeder → UserSeeder → IFRSSeeder) and asserts the association, entity→AUD linkage, `year_start`, no `_TEMP_` rows, and the reporting period; plus an idempotency test.
 
 ### 25 ☐ Replace existing "Expenses" UI and linked files.
 
@@ -212,3 +216,4 @@ Existing Expenses is confusing. change to "Bills" and make it similar to "Invoic
 | `f2bb1b0` | #18  | `refactor(invoice): dedupe PO used-amount recalc between observer and model` |
 | — | #20 | Won't fix (deferred) — time entries out of scope; feature views missing, would 500 |
 | `c5203c3` | #21  | `refactor(misc): currency from config, createFromTimeEntry docblock, cosmetic and query cleanups` |
+| `45e632b` | #24  | `fix(ifrs): seeder creates base entity + currency first and reliably associates the admin user` |
