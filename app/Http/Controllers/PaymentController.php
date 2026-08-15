@@ -223,12 +223,15 @@ class PaymentController extends Controller
                 Invoice::STATUS_PARTIALLY_PAID,
                 Invoice::STATUS_OVERDUE,
             ])
-            ->withSum('allocations', 'amount')
+            // Only invoices with an outstanding balance (total > allocated).
+            // Same correlated-subquery pattern as Invoice::scopeOverdue.
+            ->whereRaw(
+                'COALESCE(invoices.total, 0) - COALESCE(('
+                . 'SELECT SUM(amount) FROM payment_allocations'
+                . ' WHERE payment_allocations.invoice_id = invoices.id'
+                . '), 0) > 0'
+            )
             ->get()
-            ->filter(function ($invoice) {
-                return $invoice->total - ($invoice->allocations_sum_amount ?? 0) > 0;
-            })
-            ->values()
             ->map(function ($invoice) {
                 return [
                     'id' => $invoice->id,

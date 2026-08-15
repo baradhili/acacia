@@ -36,6 +36,6 @@ class PaymentAllocation extends Model
      */
     public function getFormattedAmountAttribute(): string
     {
-        return 'A$' . number_format($this->amount, 2);
+        return config('australian.currency.symbol', 'A$') . number_format($this->amount, 2);
     }
 }

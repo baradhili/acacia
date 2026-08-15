@@ -271,7 +271,7 @@ class Estimate extends Model
      */
     public function getFormattedTotalAttribute(): string
     {
-        return 'A$' . number_format($this->total, 2);
+        return config('australian.currency.symbol', 'A$') . number_format($this->total, 2);
     }
 
     /**

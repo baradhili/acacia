@@ -16,11 +16,12 @@ use Illuminate\Support\Facades\Log;
 
 class Payment extends Model
 {
+    use HasFactory;
+
+    // Status constants
     const STATUS_PENDING = 'pending';
     const STATUS_COMPLETED = 'completed';
     const STATUS_VOID = 'void';
-
-    use HasFactory;
 
     protected $fillable = [
         'payment_number',
@@ -273,7 +274,7 @@ class Payment extends Model
      */
     public function getFormattedAmountAttribute(): string
     {
-        return 'A$' . number_format($this->amount, 2);
+        return config('australian.currency.symbol', 'A$') . number_format($this->amount, 2);
     }
 
     /**
