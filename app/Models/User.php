@@ -14,7 +14,7 @@ use Illuminate\Notifications\Notifiable;
 use IFRS\Models\Entity;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['name', 'email', 'password', 'salary', 'charge_out_rate', 'position', 'phone', 'profile_photo'])]
+#[Fillable(['name', 'email', 'password', 'salary', 'charge_out_rate', 'position', 'phone', 'profile_photo', 'entity_id'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
