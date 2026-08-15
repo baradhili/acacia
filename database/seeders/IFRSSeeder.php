@@ -6,59 +6,44 @@ use App\Models\User;
 use IFRS\Models\Account;
 use IFRS\Models\Entity;
 use IFRS\Models\Currency;
-use IFRS\Models\ExchangeRate;
+use IFRS\Models\ReportingPeriod;
 use IFRS\Models\Vat;
-use IFRS\Models\Category;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 
 class IFRSSeeder extends Seeder
 {
     public function run(): void
     {
-        // Create Australian Dollar currency (with temp entity_id for now)
-        $currencyExists = DB::table('ifrs_currencies')->where('currency_code', 'AUD')->exists();
-        $audId = null;
-        
-        if (!$currencyExists) {
-            // Create temp entity for currency reference
-            $tempEntityId = DB::table('ifrs_entities')->insertGetId([
-                'name' => '_TEMP_',
+        // IFRS needs an entity and a currency before doing anything. Per the
+        // package README the base entity comes first (created with a name,
+        // currency attached afterward), then the reporting currency, then the
+        // link back. This replaces the old _TEMP_ throwaway-entity approach,
+        // which created the currency before the real entity existed.
+        $entity = Entity::firstOrCreate(
+            ['name' => 'Professional Services Company'],
+            [
                 'locale' => 'en_AU',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-            
-            $audId = DB::table('ifrs_currencies')->insertGetId([
-                'currency_code' => 'AUD',
-                'name' => 'Australian Dollar',
-                'entity_id' => $tempEntityId,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-        } else {
-            $audId = DB::table('ifrs_currencies')->where('currency_code', 'AUD')->value('id');
+                'multi_currency' => true, // USD/EUR/GBP/NZD seeded below
+                'year_start' => 7, // AU financial year starts July (config/australian.php)
+            ],
+        );
+
+        $aud = Currency::firstOrCreate(
+            ['currency_code' => 'AUD', 'entity_id' => $entity->id],
+            ['name' => 'Australian Dollar'],
+        );
+
+        // Attach the reporting currency to the entity if not already linked.
+        if (!$entity->currency_id) {
+            $entity->update(['currency_id' => $aud->id]);
+            $entity->refresh();
         }
 
-        // Create default entity with currency reference
-        $entityExists = DB::table('ifrs_entities')->where('name', 'Professional Services Company')->exists();
-        $entityId = null;
-        
-        if (!$entityExists) {
-            $entityId = DB::table('ifrs_entities')->insertGetId([
-                'name' => 'Professional Services Company',
-                'currency_id' => $audId,
-                'locale' => 'en_AU',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-        } else {
-            $entityId = DB::table('ifrs_entities')->where('name', 'Professional Services Company')->value('id');
-        }
-
-        // Update currency with correct entity_id
-        DB::table('ifrs_currencies')->where('id', $audId)->update(['entity_id' => $entityId]);
+        // Remove throwaway entities left behind by older seeder runs.
+        DB::table('ifrs_entities')->where('name', '_TEMP_')->delete();
 
         // ============================================
         // MULTI-CURRENCY SUPPORT
@@ -83,12 +68,12 @@ class IFRSSeeder extends Seeder
         foreach ($currencies as $currency) {
             $exists = DB::table('ifrs_currencies')->where('currency_code', $currency['code'])->exists();
             $currencyId = null;
-            
+
             if (!$exists) {
                 $currencyId = DB::table('ifrs_currencies')->insertGetId([
                     'currency_code' => $currency['code'],
                     'name' => $currency['name'],
-                    'entity_id' => $entityId,
+                    'entity_id' => $entity->id,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
@@ -99,14 +84,14 @@ class IFRSSeeder extends Seeder
             // Create exchange rate to AUD (if not exists)
             $rateExists = DB::table('ifrs_exchange_rates')
                 ->where('currency_id', $currencyId)
-                ->where('entity_id', $entityId)
+                ->where('entity_id', $entity->id)
                 ->whereDate('valid_from', now()->startOfYear())
                 ->exists();
-            
+
             if (!$rateExists) {
                 DB::table('ifrs_exchange_rates')->insert([
                     'currency_id' => $currencyId,
-                    'entity_id' => $entityId,
+                    'entity_id' => $entity->id,
                     'rate' => $exchangeRates[$currency['code']],
                     'valid_from' => now()->startOfYear(),
                     'valid_to' => null,
@@ -118,27 +103,42 @@ class IFRSSeeder extends Seeder
 
         $this->command->info('Multi-currency support added: USD, EUR, GBP, NZD with exchange rates.');
 
-        // Delete temp entity if exists
-        DB::table('ifrs_entities')->where('name', '_TEMP_')->delete();
-
-        // Create admin user linked to entity
+        // Associate the admin user with the entity. UserSeeder runs before
+        // this seeder and creates admin@example.com WITHOUT an entity, and
+        // firstOrCreate only applies attributes on create — so an explicitly
+        // association step is required for the pre-existing user.
         $user = User::firstOrCreate(
             ['email' => 'admin@example.com'],
             [
                 'name' => 'Admin User',
-                'password' => bcrypt('password'),
-                'entity_id' => $entityId,
+                'password' => Hash::make('password'),
+                'entity_id' => $entity->id,
             ]
         );
 
-        // Assign admin role to the user
+        if (!$user->entity_id) {
+            $user->forceFill(['entity_id' => $entity->id])->save();
+        }
+
+        // Assign admin role to the user (RoleSeeder runs first; idempotent)
         $user->assignRole('admin');
 
         // Set authenticated user for IFRS operations
         Auth::login($user);
 
-        // Get entity model
-        $entity = Entity::find($entityId);
+        // Reporting period for the entity's current year — the package
+        // requires one before any Transaction can be posted
+        // (Transaction::save() throws MissingReportingPeriod otherwise).
+        ReportingPeriod::firstOrCreate(
+            [
+                'entity_id' => $entity->id,
+                'calendar_year' => ReportingPeriod::year(now(), $entity),
+            ],
+            [
+                'period_count' => 1,
+                'status' => ReportingPeriod::OPEN,
+            ],
+        );
 
         // ============================================
         // ASSET ACCOUNTS (Codes 100-599)
@@ -228,32 +228,32 @@ class IFRSSeeder extends Seeder
         // VAT / GST TAX RATES (after accounts created)
         // ============================================
         
-        $gstFreeExists = DB::table('ifrs_vats')->where('name', 'GST Free')->where('entity_id', $entityId)->exists();
+        $gstFreeExists = DB::table('ifrs_vats')->where('name', 'GST Free')->where('entity_id', $entity->id)->exists();
         if (!$gstFreeExists) {
             DB::table('ifrs_vats')->insert([
                 'name' => 'GST Free',
                 'code' => 'Z',
                 'rate' => 0,
-                'entity_id' => $entityId,
+                'entity_id' => $entity->id,
                 'account_id' => null,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
         }
 
-        $gst10Exists = DB::table('ifrs_vats')->where('name', 'GST 10%')->where('entity_id', $entityId)->exists();
+        $gst10Exists = DB::table('ifrs_vats')->where('name', 'GST 10%')->where('entity_id', $entity->id)->exists();
         if (!$gst10Exists) {
             // Get GST Payable account
             $gstPayableAccount = DB::table('ifrs_accounts')
-                ->where('entity_id', $entityId)
+                ->where('entity_id', $entity->id)
                 ->where('code', 2200)
                 ->first();
-            
+
             DB::table('ifrs_vats')->insert([
                 'name' => 'GST 10%',
                 'code' => 'G',
                 'rate' => 10,
-                'entity_id' => $entityId,
+                'entity_id' => $entity->id,
                 'account_id' => $gstPayableAccount ? $gstPayableAccount->id : null,
                 'created_at' => now(),
                 'updated_at' => now(),

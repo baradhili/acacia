@@ -5,9 +5,7 @@ namespace Tests\Feature;
 use App\Mail\PaymentReceiptMail;
 use App\Models\Client;
 use App\Models\Invoice;
-use App\Models\InvoiceItem;
 use App\Models\Payment;
-use App\Models\PaymentAllocation;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -62,7 +60,7 @@ class PaymentAdvancedTest extends TestCase
             'amount' => 110,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
-            'allocate_type' => 'fifo',
+            'allocate_type' => 'manual',
             'invoice_allocations' => [
                 ['invoice_id' => $invoice->id, 'amount' => 110],
             ],
@@ -90,8 +88,9 @@ class PaymentAdvancedTest extends TestCase
             'payment_method' => 'bank_transfer',
         ]);
 
-        // Allocate using FIFO
-        $payment->allocateToInvoicesFIFO();
+        // Allocate manually to both invoices (FIFO allocation has been removed)
+        $payment->allocateToInvoice($invoice1, 110);
+        $payment->allocateToInvoice($invoice2, 55);
 
         $payment->refresh();
 
@@ -128,89 +127,6 @@ class PaymentAdvancedTest extends TestCase
         $payment->refresh();
         $this->assertEquals(0, $payment->allocated_amount);
         $this->assertEquals(110, $payment->unallocated_amount);
-    }
-
-    public function test_fifo_allocation_allocates_to_oldest_invoice_first(): void
-    {
-        // Create older invoice (should be paid first)
-        $oldInvoice = Invoice::create([
-            'client_id' => $this->client->id,
-            'issue_date' => now()->subDays(10)->toDateString(),
-            'due_date' => now()->subDays(5)->toDateString(),
-            'status' => Invoice::STATUS_SENT,
-        ]);
-        $oldInvoice->items()->create([
-            'description' => 'Old Service',
-            'quantity' => 1,
-            'unit_price' => 50,
-            'tax_rate' => 0,
-        ]);
-
-        // Create newer invoice
-        $newInvoice = Invoice::create([
-            'client_id' => $this->client->id,
-            'issue_date' => now()->subDays(5)->toDateString(),
-            'due_date' => now()->addDays(5)->toDateString(),
-            'status' => Invoice::STATUS_SENT,
-        ]);
-        $newInvoice->items()->create([
-            'description' => 'New Service',
-            'quantity' => 1,
-            'unit_price' => 50,
-            'tax_rate' => 0,
-        ]);
-
-        // Create payment
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
-            'amount' => 50,
-            'payment_date' => now()->toDateString(),
-            'payment_method' => 'bank_transfer',
-        ]);
-
-        // Allocate using FIFO
-        $payment->allocateToInvoicesFIFO();
-
-        // Should allocate to oldest invoice first
-        $this->assertDatabaseHas('payment_allocations', [
-            'payment_id' => $payment->id,
-            'invoice_id' => $oldInvoice->id,
-            'allocation_type' => 'fifo',
-        ]);
-    }
-
-    public function test_partial_payment_covers_multiple_invoices_correctly_using_fifo(): void
-    {
-        // Create invoices totalling $275
-        $invoice1 = $this->createInvoiceWithAmount(110);
-        $invoice2 = $this->createInvoiceWithAmount(165);
-
-        // Payment of $165
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
-            'amount' => 165,
-            'payment_date' => now()->toDateString(),
-            'payment_method' => 'bank_transfer',
-        ]);
-
-        // Allocate using FIFO
-        $payment->allocateToInvoicesFIFO();
-
-        // First invoice should be fully paid ($110)
-        $invoice1->refresh();
-        $this->assertEquals(Invoice::STATUS_PAID, $invoice1->status);
-
-        // Second invoice should be partially paid ($55 remaining)
-        $invoice2->refresh();
-        $this->assertEquals(Invoice::STATUS_PARTIALLY_PAID, $invoice2->status);
-
-        // Verify allocation amounts
-        $allocations = PaymentAllocation::where('payment_id', $payment->id)
-            ->orderBy('created_at')
-            ->get();
-
-        $this->assertEquals(110, $allocations->first()->amount); // First invoice
-        $this->assertEquals(55, $allocations->last()->amount); // Second invoice partial
     }
 
     public function test_payment_generates_unique_payment_number(): void

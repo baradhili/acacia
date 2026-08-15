@@ -123,7 +123,6 @@ class DashboardService
 
         $outstandingInvoices = Invoice::whereIn('status', [
             Invoice::STATUS_SENT,
-            Invoice::STATUS_VIEWED,
             Invoice::STATUS_PARTIALLY_PAID,
             Invoice::STATUS_OVERDUE,
         ])->get();
@@ -246,23 +245,24 @@ class DashboardService
             ->whereIn('status', [PurchaseOrder::STATUS_OPEN, PurchaseOrder::STATUS_PARTIALLY_USED])
             ->get()
             ->map(function ($po) {
-                $spent = $po->getSpentAmount();
-                $remaining = $po->total - $spent;
-                $utilization = $po->total > 0 ? ($spent / $po->total) * 100 : 0;
+                $total = (float) $po->budgeted_amount;
+                $spent = (float) $po->used_amount;
+                $remaining = $po->remaining;
+                $utilization = $po->utilization;
 
                 return [
                     'id' => $po->id,
                     'po_number' => $po->po_number,
                     'project_name' => $po->project?->name ?? 'No Project',
                     'client_name' => $po->project?->client?->name ?? 'Unknown',
-                    'total' => $po->total,
-                    'total_formatted' => number_format($po->total, 2),
+                    'total' => $total,
+                    'total_formatted' => number_format($total, 2),
                     'spent' => $spent,
                     'spent_formatted' => number_format($spent, 2),
                     'remaining' => $remaining,
                     'remaining_formatted' => number_format($remaining, 2),
                     'utilization' => round($utilization, 1),
-                    'is_over_budget' => $spent > $po->total,
+                    'is_over_budget' => $spent > $total,
                 ];
             })
             ->filter(function ($po) {
@@ -387,7 +387,6 @@ class DashboardService
             // Outstanding invoices
             $outstanding = Invoice::whereIn('status', [
                 Invoice::STATUS_SENT,
-                Invoice::STATUS_VIEWED,
                 Invoice::STATUS_PARTIALLY_PAID,
                 Invoice::STATUS_OVERDUE,
             ])->sum('amount_due');

@@ -32,7 +32,7 @@ class ProcessRecurringInvoices extends Command
                 DB::beginTransaction();
 
                 // Create new invoice as draft
-                $newInvoice = Invoice::create([
+                $newInvoice = Invoice::createWithUniqueNumber([
                     'client_id' => $originalInvoice->client_id,
                     'issue_date' => Carbon::today()->toDateString(),
                     'due_date' => Carbon::today()->addDays($originalInvoice->payment_terms ?? 30)->toDateString(),

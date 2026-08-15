@@ -232,7 +232,7 @@ class Estimate extends Model
         // Ensure fresh items data
         $this->unsetRelation('items');
 
-        $invoice = Invoice::create([
+        $invoice = Invoice::createWithUniqueNumber([
             'client_id' => $this->client_id,
             'project_id' => $this->project_id,
             'created_by' => $this->created_by,
@@ -271,7 +271,7 @@ class Estimate extends Model
      */
     public function getFormattedTotalAttribute(): string
     {
-        return 'A$' . number_format($this->total, 2);
+        return config('australian.currency.symbol', 'A$') . number_format($this->total, 2);
     }
 
     /**

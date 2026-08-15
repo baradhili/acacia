@@ -88,8 +88,9 @@ class PurchaseOrderAllocationTest extends TestCase
         $this->assertEquals($this->purchaseOrder->id, $timeEntry->purchase_order_id);
     }
 
-    public function test_recalculates_used_amount_when_time_entries_are_allocated(): void
+    public function test_recalculates_used_amount_from_invoices_not_time_entries(): void
     {
+        // Linking approved time entries no longer consumes PO budget.
         $entry1 = TimeEntry::create([
             'user_id' => $this->user->id,
             'start_time' => Carbon::parse('2024-01-15 09:00'),
@@ -113,8 +114,56 @@ class PurchaseOrderAllocationTest extends TestCase
         ]);
 
         $this->purchaseOrder->refresh();
-        $this->assertEquals(800.0, $this->purchaseOrder->used_amount); // 8 hours * $100
-        $this->assertEquals(9200.0, $this->purchaseOrder->remaining);
+        // 8 hours * $100 of time booked, but consumed is driven by invoices (none) = 0
+        $this->assertEquals(0.0, $this->purchaseOrder->used_amount);
+        $this->assertEquals(10000.0, $this->purchaseOrder->remaining);
+    }
+
+    public function test_used_amount_reflects_invoices_issued_against_po(): void
+    {
+        // Issuing an invoice linked to the PO consumes its budget.
+        $invoice = \App\Models\Invoice::create([
+            'client_id' => $this->client->id,
+            'purchase_order_id' => $this->purchaseOrder->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => \App\Models\Invoice::STATUS_SENT,
+        ]);
+
+        $invoice->items()->create([
+            'description' => 'Consulting',
+            'quantity' => 10,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+
+        $this->purchaseOrder->refresh();
+        // 10 * 100 = 1000 subtotal + 10% tax = 1100 total
+        $this->assertEquals(1100.0, (float) $this->purchaseOrder->used_amount);
+        $this->assertEquals(8900.0, $this->purchaseOrder->remaining);
+        $this->assertEquals('partially_used', $this->purchaseOrder->status);
+    }
+
+    public function test_draft_and_cancelled_invoices_do_not_consume_po_budget(): void
+    {
+        $draftInvoice = \App\Models\Invoice::create([
+            'client_id' => $this->client->id,
+            'purchase_order_id' => $this->purchaseOrder->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => \App\Models\Invoice::STATUS_DRAFT,
+        ]);
+
+        $draftInvoice->items()->create([
+            'description' => 'Draft work',
+            'quantity' => 5,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+
+        $this->purchaseOrder->refresh();
+        // Draft invoices are not yet issued, so they don't consume budget.
+        $this->assertEquals(0.0, (float) $this->purchaseOrder->used_amount);
     }
 
     public function test_utilization_percentage_calculated_correctly(): void

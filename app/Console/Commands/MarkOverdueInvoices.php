@@ -17,7 +17,6 @@ class MarkOverdueInvoices extends Command
 
         $overdueInvoices = Invoice::whereIn('status', [
             Invoice::STATUS_SENT,
-            Invoice::STATUS_VIEWED,
             Invoice::STATUS_PARTIALLY_PAID,
         ])
         ->where('due_date', '<', now()->toDateString())

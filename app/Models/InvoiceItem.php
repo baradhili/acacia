@@ -96,7 +96,11 @@ class InvoiceItem extends Model
     }
 
     /**
-     * Create from time entry
+     * Build an (unsaved) invoice item from a time entry.
+     *
+     * Does NOT persist — the caller must save it (e.g. via
+     * $invoice->items()->create($item->getAttributes()) or ->save()), so the
+     * invoice_id foreign key is set by the relationship.
      */
     public static function createFromTimeEntry(TimeEntry $timeEntry): self
     {
@@ -124,7 +128,7 @@ class InvoiceItem extends Model
      */
     public function getFormattedUnitPriceAttribute(): string
     {
-        return 'A$' . number_format($this->unit_price, 2);
+        return config('australian.currency.symbol', 'A$') . number_format($this->unit_price, 2);
     }
 
     /**
@@ -132,6 +136,6 @@ class InvoiceItem extends Model
      */
     public function getFormattedTotalAttribute(): string
     {
-        return 'A$' . number_format($this->total, 2);
+        return config('australian.currency.symbol', 'A$') . number_format($this->total, 2);
     }
 }

@@ -60,7 +60,7 @@ class PaymentController extends Controller
             'payment_method' => 'required|string',
             'reference' => 'nullable|string',
             'notes' => 'nullable|string',
-            'allocate_type' => 'required|in:fifo,manual,no',
+            'allocate_type' => 'required|in:manual,no',
             'invoice_allocations' => 'required_if:allocate_type,manual|array',
             'invoice_allocations.*.invoice_id' => 'required_with:invoice_allocations|exists:invoices,id',
             'invoice_allocations.*.amount' => 'required_with:invoice_allocations|numeric|min:0',
@@ -68,7 +68,7 @@ class PaymentController extends Controller
 
         DB::beginTransaction();
         try {
-            $payment = Payment::create([
+            $payment = Payment::createWithUniqueNumber([
                 'client_id' => $validated['client_id'],
                 'received_by' => Auth::id(),
                 'amount' => $validated['amount'],
@@ -79,9 +79,7 @@ class PaymentController extends Controller
             ]);
 
             // Allocate payment
-            if ($validated['allocate_type'] === 'fifo') {
-                $payment->allocateToInvoicesFIFO();
-            } elseif ($validated['allocate_type'] === 'manual' && !empty($validated['invoice_allocations'])) {
+            if ($validated['allocate_type'] === 'manual' && !empty($validated['invoice_allocations'])) {
                 foreach ($validated['invoice_allocations'] as $allocation) {
                     $invoice = Invoice::find($allocation['invoice_id']);
                     if ($invoice && $allocation['amount'] > 0) {
@@ -140,11 +138,28 @@ class PaymentController extends Controller
             'notes' => 'nullable|string',
         ]);
 
+        // #12: reject shrinking the amount below what's already allocated,
+        // otherwise unallocated_amount goes negative (hidden by the accessor)
+        // and downstream allocation logic breaks.
+        $allocatedAmount = (float) $payment->allocated_amount;
+        if ((float) $validated['amount'] < $allocatedAmount) {
+            return back()->withInput()->with('error',
+                'Amount cannot be less than $' . number_format($allocatedAmount, 2)
+                . ' already allocated to invoices. Remove the allocations first.');
+        }
+
+        // #13: reject changing the client when allocations exist — those
+        // allocations point at the old client's invoices and would be
+        // orphaned. The allocate() action already enforces client-match, so
+        // a client change must be preceded by removing allocations.
+        if ((int) $validated['client_id'] !== (int) $payment->client_id
+            && $payment->allocations()->exists()) {
+            return back()->withInput()->with('error',
+                'Cannot change the client on a payment with existing invoice allocations. Remove them first.');
+        }
+
         DB::beginTransaction();
         try {
-            // Update allocations status first
-            $payment->updateAllocatedInvoicesStatus();
-
             $payment->update([
                 'client_id' => $validated['client_id'],
                 'amount' => $validated['amount'],
@@ -154,7 +169,7 @@ class PaymentController extends Controller
                 'notes' => $validated['notes'] ?? null,
             ]);
 
-            // Recalculate allocations
+            // Recompute allocated invoice statuses against the new amount.
             foreach ($payment->allocations as $allocation) {
                 $allocation->invoice->updateStatusFromPayments();
             }
@@ -173,11 +188,17 @@ class PaymentController extends Controller
     {
         DB::beginTransaction();
         try {
-            // Update invoice statuses
-            $payment->updateAllocatedInvoicesStatus();
-
-            // Delete allocations
+            // Capture invoices, delete allocations, THEN recompute status
+            // so updateStatusFromPayments() sees the allocations as gone.
+            $invoiceIds = $payment->allocations()->pluck('invoice_id');
             $payment->allocations()->delete();
+
+            foreach ($invoiceIds as $invoiceId) {
+                $invoice = Invoice::find($invoiceId);
+                if ($invoice) {
+                    $invoice->updateStatusFromPayments();
+                }
+            }
 
             $payment->delete();
 
@@ -199,16 +220,18 @@ class PaymentController extends Controller
         $invoices = Invoice::where('client_id', $client->id)
             ->whereIn('status', [
                 Invoice::STATUS_SENT,
-                Invoice::STATUS_VIEWED,
                 Invoice::STATUS_PARTIALLY_PAID,
                 Invoice::STATUS_OVERDUE,
             ])
-            ->withSum('allocations', 'amount')
+            // Only invoices with an outstanding balance (total > allocated).
+            // Same correlated-subquery pattern as Invoice::scopeOverdue.
+            ->whereRaw(
+                'COALESCE(invoices.total, 0) - COALESCE(('
+                . 'SELECT SUM(amount) FROM payment_allocations'
+                . ' WHERE payment_allocations.invoice_id = invoices.id'
+                . '), 0) > 0'
+            )
             ->get()
-            ->filter(function ($invoice) {
-                return $invoice->total - ($invoice->allocations_sum_amount ?? 0) > 0;
-            })
-            ->values()
             ->map(function ($invoice) {
                 return [
                     'id' => $invoice->id,
@@ -258,22 +281,5 @@ class PaymentController extends Controller
         }
 
         return back()->with('error', 'Could not remove allocation.');
-    }
-
-    /**
-     * Re-allocate using FIFO
-     */
-    public function reallocateFifo(Payment $payment)
-    {
-        // Clear existing allocations
-        $payment->allocations()->delete();
-        
-        // Reset invoice statuses
-        $payment->updateAllocatedInvoicesStatus();
-
-        // Re-allocate using FIFO
-        $payment->allocateToInvoicesFIFO();
-
-        return back()->with('success', 'Payment re-allocated using FIFO.');
     }
 }

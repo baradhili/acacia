@@ -34,7 +34,6 @@ class PnLTrendWidget extends AbstractWidget
 
             $outstanding = Invoice::whereIn('status', [
                 Invoice::STATUS_SENT,
-                Invoice::STATUS_VIEWED,
                 Invoice::STATUS_PARTIALLY_PAID,
                 Invoice::STATUS_OVERDUE,
             ])->get()->sum(fn($inv) => $inv->amount_due);

@@ -92,6 +92,9 @@
                 @php $items = old('items', $invoice->items->toArray()); @endphp
                 @foreach ($items as $index => $item)
                     <div class="item-row grid grid-cols-12 gap-2 mb-4 p-4 bg-gray-50 rounded-lg">
+                        @if (!empty($item['id']))
+                            <input type="hidden" name="items[{{ $index }}][id]" value="{{ $item['id'] }}">
+                        @endif
                         <div class="col-span-4">
                             <label class="block text-xs font-medium text-gray-700 mb-1">Description</label>
                             <input type="text" name="items[{{ $index }}][description]"

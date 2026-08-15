@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use IFRS\Models\Account;
+use IFRS\Models\Entity;
 use IFRS\Models\LineItem;
 use IFRS\Transactions\JournalEntry;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -174,53 +175,55 @@ class Expense extends Model
         $paidDate = now();
         $ifrsTransactionId = null;
 
-                    // Create IFRS journal entry on payment date (cash basis)
+        // Create IFRS journal entry on payment date (cash basis):
+        //   Dr Expense (main account, credited=false)
+        //   Cr Bank    (line item, flipped to credited=true by addLineItem)
         try {
-            $refPart = $this->reference ?? $this->id;
-            $journalEntry = new JournalEntry([
-                'date' => $paidDate,
-                'narration' => "Expense payment: {$this->category} - {$refPart}",
-                'reference' => $this->reference,
-            ]);
-
-            // Get expense account based on category or use default
             $expenseAccount = $this->getExpenseAccount();
-
-            // Debit expense account (increase expense)
-            $journalEntry->addLineItem(
-                LineItem::create([
-                    'account_id' => $expenseAccount->id,
-                    'amount' => $this->total,
-                    'type' => LineItem::DEBIT,
-                    'tax_rate' => 0,
-                ])
-            );
-
-            // Get bank/cash account based on payment method
             $bankAccount = $this->getBankAccount($paymentMethod);
 
-            // Credit bank (decrease asset)
-            $journalEntry->addLineItem(
-                LineItem::create([
+            // IFRS transactions need an entity. Prefer the authed user's
+            // entity, then fall back to the first entity. Pass entity_id
+            // explicitly so posting works in jobs where no user is authed.
+            $entity = $this->resolveIFRSEntity();
+            if (!$entity) {
+                Log::error('No IFRS entity available for expense posting', ['expense_id' => $this->id]);
+            } else {
+                $refPart = $this->reference ?? $this->id;
+                // Main account = Expense, credited = false -> Dr Expense.
+                $journalEntry = new JournalEntry([
+                    'transaction_date' => $paidDate,
+                    'account_id' => $expenseAccount->id,
+                    'credited' => false,
+                    'entity_id' => $entity->id,
+                    'narration' => "Expense payment: {$this->category} - {$refPart}",
+                    'reference' => $this->reference,
+                ]);
+
+                // Bank line item; addLineItem() flips credited to true -> Cr Bank.
+                $bankLine = new LineItem([
                     'account_id' => $bankAccount->id,
+                    'amount' => (float) $this->total,
+                    'entity_id' => $entity->id,
+                ]);
+                $journalEntry->addLineItem($bankLine);
+                $journalEntry->save();
+                $ifrsTransactionId = $journalEntry->id;
+
+                Log::info("Expense IFRS Journal Entry created", [
+                    'expense_id' => $this->id,
+                    'journal_entry_id' => $ifrsTransactionId,
                     'amount' => $this->total,
-                    'type' => LineItem::CREDIT,
-                    'tax_rate' => 0,
-                ])
-            );
-
-            $journalEntry->save();
-            $ifrsTransactionId = $journalEntry->id;
-
-            Log::info("Expense IFRS Journal Entry created", [
-                'expense_id' => $this->id,
-                'journal_entry_id' => $ifrsTransactionId,
-                'amount' => $this->total,
-            ]);
-        } catch (\Exception $e) {
+                ]);
+            }
+        } catch (\Throwable $e) {
+            // Throwable (not Exception) so a fatal Error (e.g. the old
+            // undefined LineItem::DEBIT constant) is captured and logged
+            // rather than breaking the payment flow.
             Log::error("Failed to create IFRS journal entry for expense", [
                 'expense_id' => $this->id,
                 'error' => $e->getMessage(),
+                'exception' => get_class($e),
             ]);
             // Continue even if IFRS entry fails - don't block the payment
         }
@@ -234,6 +237,24 @@ class Expense extends Model
         ]);
 
         return true;
+    }
+
+    /**
+     * Resolve the IFRS entity to post against: the authed user's entity if
+     * available, otherwise the first entity. Returns null if none exist.
+     */
+    protected function resolveIFRSEntity(): ?Entity
+    {
+        try {
+            $user = \Illuminate\Support\Facades\Auth::user();
+            if ($user && isset($user->entity) && $user->entity) {
+                return $user->entity;
+            }
+        } catch (\Throwable $e) {
+            // Auth not available (e.g. queued job) — fall through to query.
+        }
+
+        return Entity::orderBy('id')->first();
     }
 
     /**

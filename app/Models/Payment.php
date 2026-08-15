@@ -3,7 +3,9 @@
 namespace App\Models;
 
 use IFRS\Models\Account;
+use IFRS\Models\Entity;
 use IFRS\Models\LineItem;
+use IFRS\Models\Vat;
 use IFRS\Transactions\JournalEntry;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -14,11 +16,12 @@ use Illuminate\Support\Facades\Log;
 
 class Payment extends Model
 {
+    use HasFactory;
+
+    // Status constants
     const STATUS_PENDING = 'pending';
     const STATUS_COMPLETED = 'completed';
     const STATUS_VOID = 'void';
-
-    use HasFactory;
 
     protected $fillable = [
         'payment_number',
@@ -49,6 +52,7 @@ class Payment extends Model
     // IFRS Account codes for payment posting
     const IFRS_BANK_ACCOUNT_CODE = 320; // Operating Account
     const IFRS_REVENUE_ACCOUNT_CODE = 4100; // Consulting Revenue
+    const IFRS_GST_VAT_CODE = 'G'; // Seeded "GST 10%" Vat, linked to account 2200 (GST Payable)
 
     protected static function boot()
     {
@@ -79,6 +83,44 @@ class Payment extends Model
         }
 
         return sprintf('PAY-%s-%04d', $year, $nextNumber);
+    }
+
+    /**
+     * Create a payment, retrying if two concurrent requests race on
+     * generatePaymentNumber() and produce a duplicate payment_number.
+     *
+     * The unique() constraint on payment_number is the real source of truth —
+     * the loser of a race gets a QueryException (SQLSTATE 23000). Each retry
+     * re-enters the creating hook, which regenerates from the now-higher max,
+     * so the next attempt picks the following number.
+     */
+    public static function createWithUniqueNumber(array $attributes): self
+    {
+        $attempts = 5;
+        for ($i = 1; $i <= $attempts; $i++) {
+            try {
+                return self::create($attributes);
+            } catch (\Illuminate\Database\QueryException $e) {
+                if (!self::isUniqueViolation($e) || $i === $attempts) {
+                    throw $e;
+                }
+            }
+        }
+        // Unreachable — the loop either returns or rethrows.
+        throw new \RuntimeException('Unable to create payment with a unique number.');
+    }
+
+    /**
+     * Is the given QueryException a unique-constraint violation? Covers both
+     * MySQL (SQLSTATE 23000 / driver code 1062) and SQLite (SQLSTATE 23000 /
+     * driver codes 19, 2067) via the shared SQLSTATE.
+     */
+    protected static function isUniqueViolation(\Illuminate\Database\QueryException $e): bool
+    {
+        $errorInfo = $e->errorInfo ?? [];
+        // errorInfo[0] is the SQLSTATE; errorInfo[1] is the driver-specific code.
+        return ($errorInfo[0] ?? null) === '23000'
+            || ($errorInfo[1] ?? null) === 1062;
     }
 
     public static function paymentMethods(): array
@@ -160,61 +202,24 @@ class Payment extends Model
     }
 
     /**
-     * Allocate payment to invoices using FIFO (oldest first)
+     * Allocate payment to specific invoice.
+     *
+     * @throws \InvalidArgumentException if $amount is <= 0 or exceeds the
+     *         payment's unallocated balance. Callers run inside transactions
+     *         so the throw rolls back any partial work cleanly.
      */
-    public function allocateToInvoicesFIFO(): void
+    public function allocateToInvoice(Invoice $invoice, float $amount): PaymentAllocation
     {
-        $remainingAmount = $this->unallocated_amount;
-        
-        if ($remainingAmount <= 0) {
-            return;
-        }
-
-        // Get outstanding invoices for this client, ordered by due date (oldest first)
-        $invoices = Invoice::where('client_id', $this->client_id)
-            ->whereIn('status', [Invoice::STATUS_SENT, Invoice::STATUS_VIEWED, Invoice::STATUS_PARTIALLY_PAID, Invoice::STATUS_OVERDUE])
-            ->orderBy('due_date')
-            ->get();
-
-        foreach ($invoices as $invoice) {
-            if ($remainingAmount <= 0) {
-                break;
-            }
-
-            $invoiceAmountDue = $invoice->amount_due;
-            
-            if ($invoiceAmountDue <= 0) {
-                continue;
-            }
-
-            $allocationAmount = min($remainingAmount, $invoiceAmountDue);
-            
-            PaymentAllocation::create([
-                'payment_id' => $this->id,
-                'invoice_id' => $invoice->id,
-                'amount' => $allocationAmount,
-                'allocation_type' => 'fifo',
-            ]);
-
-            $remainingAmount -= $allocationAmount;
-
-            // Update invoice status
-            $invoice->updateStatusFromPayments();
-        }
-    }
-
-    /**
-     * Allocate payment to specific invoice
-     */
-    public function allocateToInvoice(Invoice $invoice, float $amount, string $allocationType = 'manual'): PaymentAllocation
-    {
-        // Ensure we don't allocate more than available
-        $amount = min($amount, $this->unallocated_amount);
-
         if ($amount <= 0) {
-            return PaymentAllocation::where('payment_id', $this->id)
-                ->where('invoice_id', $invoice->id)
-                ->first() ?? new PaymentAllocation();
+            throw new \InvalidArgumentException('Allocation amount must be greater than zero.');
+        }
+
+        $unallocated = $this->unallocated_amount;
+        if ($amount > $unallocated) {
+            throw new \InvalidArgumentException(
+                "Cannot allocate {$amount} to invoice {$invoice->id}: "
+                . "only {$unallocated} unallocated on payment {$this->id}."
+            );
         }
 
         $allocation = PaymentAllocation::firstOrCreate(
@@ -224,7 +229,6 @@ class Payment extends Model
             ],
             [
                 'amount' => $amount,
-                'allocation_type' => $allocationType,
             ]
         );
 
@@ -270,7 +274,7 @@ class Payment extends Model
      */
     public function getFormattedAmountAttribute(): string
     {
-        return 'A$' . number_format($this->amount, 2);
+        return config('australian.currency.symbol', 'A$') . number_format($this->amount, 2);
     }
 
     /**
@@ -298,21 +302,28 @@ class Payment extends Model
     }
 
     /**
-     * Post payment to IFRS (Dr Cash / Cr Revenue on payment date)
-     * 
-     * For each allocation, posts:
-     * - Dr Bank (Asset) - the payment amount
-     * - Cr Revenue (Income) - the allocated amount
+     * Post payment to IFRS using the cash-basis double-entry pattern:
+     *
+     *   Dr Bank     (account 320, main account)        — tax-inclusive amount
+     *   Cr Revenue  (account 4100, vat_inclusive line) — net amount
+     *   Cr GST Payable (account 2200, auto via addVat) — GST component
+     *
+     * The revenue LineItem is marked vat_inclusive with the seeded "GST 10%"
+     * Vat (code G); the IFRS package backs the GST out and credits account
+     * 2200 automatically, so the ledger reflects true ATO cash-basis receipts.
+     *
+     * Returns the IFRS transaction id, or null on failure (accounts missing,
+     * no entity/reporting period, or any Throwable during posting).
      */
     public function postToIFRS(): ?int
     {
         if ($this->ifrs_receipt_id) {
             Log::info("Payment {$this->id} already posted to IFRS", ['ifrs_receipt_id' => $this->ifrs_receipt_id]);
-            return $this->ifrs_receipt_id;
+            return (int) $this->ifrs_receipt_id;
         }
 
         try {
-            // Find the bank and revenue accounts
+            // Find the bank and revenue accounts.
             $bankAccount = Account::where('code', self::IFRS_BANK_ACCOUNT_CODE)->first();
             $revenueAccount = Account::where('code', self::IFRS_REVENUE_ACCOUNT_CODE)->first();
 
@@ -324,54 +335,87 @@ class Payment extends Model
                 return null;
             }
 
-            // Create journal entry for the payment
-            // Dr Bank (Debit - increase asset)
-            // Cr Revenue (Credit - increase income)
+            // IFRS transactions need an entity (for the reporting period and
+            // currency). Prefer the authed user's entity, then fall back to
+            // the first entity. Pass entity_id explicitly so posting works in
+            // queued jobs where no user is authed.
+            $entity = $this->resolveIFRSEntity();
+            if (!$entity) {
+                Log::error('No IFRS entity available for payment posting', ['payment_id' => $this->id]);
+                return null;
+            }
+
+            // Main account = Bank, credited = false → Dr Bank (asset increases).
             $journalEntry = new JournalEntry([
-                'date' => $this->payment_date,
-                'narration' => "Payment received: {$this->payment_number} from {$this->client->name}",
+                'transaction_date' => $this->payment_date,
+                'account_id' => $bankAccount->id,
+                'credited' => false,
+                'entity_id' => $entity->id,
+                'narration' => "Payment received: {$this->payment_number} from {$this->client?->name}",
                 'reference' => $this->payment_number,
             ]);
 
-            // Debit bank (increase asset)
-            $journalEntry->addLineItem(
-                LineItem::create([
-                    'account_id' => $bankAccount->id,
-                    'amount' => $this->amount,
-                    'type' => LineItem::DEBIT,
-                    'tax_rate' => 0,
-                ])
-            );
+            // Revenue line is the tax-inclusive amount with the GST 10% Vat
+            // applied. vat_inclusive=true makes the package credit Revenue the
+            // net amount and auto-credit account 2200 (GST Payable) for the GST
+            // component. addLineItem() flips credited to true → Cr Revenue.
+            $revenueLine = new LineItem([
+                'account_id' => $revenueAccount->id,
+                'amount' => (float) $this->amount,
+                'vat_inclusive' => true,
+                'entity_id' => $entity->id,
+            ]);
 
-            // Credit revenue
-            $journalEntry->addLineItem(
-                LineItem::create([
-                    'account_id' => $revenueAccount->id,
-                    'amount' => $this->amount,
-                    'type' => LineItem::CREDIT,
-                    'tax_rate' => 0,
-                ])
-            );
+            $gstVat = Vat::where('code', self::IFRS_GST_VAT_CODE)
+                ->where('entity_id', $entity->id)
+                ->first();
+            if ($gstVat) {
+                $revenueLine->addVat($gstVat);
+            }
 
+            $journalEntry->addLineItem($revenueLine);
             $journalEntry->save();
 
-            // Store the IFRS receipt ID
+            // Store the IFRS transaction id.
             $this->update(['ifrs_receipt_id' => $journalEntry->id]);
 
             Log::info("Payment {$this->id} posted to IFRS", [
                 'ifrs_receipt_id' => $journalEntry->id,
                 'amount' => $this->amount,
+                'gst_posted' => (bool) $gstVat,
             ]);
 
             return $journalEntry->id;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            // Throwable (not Exception) so a fatal Error (e.g. undefined
+            // constant) is captured and logged rather than breaking the
+            // reconciliation flow that calls this.
             Log::error('Failed to post payment to IFRS', [
                 'payment_id' => $this->id,
                 'error' => $e->getMessage(),
+                'exception' => get_class($e),
             ]);
             return null;
         }
+    }
+
+    /**
+     * Resolve the IFRS entity to post against: the authed user's entity if
+     * available, otherwise the first entity. Returns null if none exist.
+     */
+    protected function resolveIFRSEntity(): ?Entity
+    {
+        try {
+            $user = \Illuminate\Support\Facades\Auth::user();
+            if ($user && isset($user->entity) && $user->entity) {
+                return $user->entity;
+            }
+        } catch (\Throwable $e) {
+            // Auth not available (e.g. queued job) — fall through to query.
+        }
+
+        return Entity::orderBy('id')->first();
     }
 
     /**
@@ -391,11 +435,18 @@ class Payment extends Model
             return false;
         }
 
-        // Remove all allocations
-        foreach ($this->allocations as $allocation) {
-            $allocation->invoice->updateStatusFromPayments();
-        }
+        // Capture affected invoices, then delete allocations BEFORE
+        // recomputing status — otherwise updateStatusFromPayments() still
+        // sees the allocations and treats the invoice as paid.
+        $invoiceIds = $this->allocations()->pluck('invoice_id');
         $this->allocations()->delete();
+
+        foreach ($invoiceIds as $invoiceId) {
+            $invoice = Invoice::find($invoiceId);
+            if ($invoice) {
+                $invoice->updateStatusFromPayments();
+            }
+        }
 
         // Update status to void
         $this->update(['status' => self::STATUS_VOID]);

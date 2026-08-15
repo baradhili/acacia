@@ -88,12 +88,7 @@
                 <label class="block text-sm font-medium text-gray-700 mb-2">Allocate payment to invoices</label>
                 <div class="flex gap-4">
                     <label class="flex items-center">
-                        <input type="radio" name="allocate_type" value="fifo" checked
-                            class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                        <span class="ml-2 text-sm text-gray-700">Auto (FIFO - oldest first)</span>
-                    </label>
-                    <label class="flex items-center">
-                        <input type="radio" name="allocate_type" value="manual"
+                        <input type="radio" name="allocate_type" value="manual" checked
                             class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                         <span class="ml-2 text-sm text-gray-700">Manual allocation</span>
                     </label>
@@ -105,7 +100,7 @@
                 </div>
             </div>
 
-            <div id="manualAllocation" class="hidden">
+            <div id="manualAllocation">
                 <p class="text-sm text-gray-600 mb-4">
                     Select invoices to allocate payment to. Select a client first to see outstanding invoices.
                 </p>

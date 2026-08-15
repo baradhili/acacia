@@ -19,15 +19,6 @@
                     Allocate to Invoice
                 </button>
             @endif
-            @if ($payment->allocations->isNotEmpty())
-                <form action="{{ route('payments.reallocateFifo', $payment) }}" method="POST" class="inline">
-                    @csrf
-                    <button type="submit" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg"
-                        onclick="return confirm('This will clear current allocations and re-allocate using FIFO. Continue?');">
-                        Re-allocate (FIFO)
-                    </button>
-                </form>
-            @endif
             <a href="{{ route('payments.edit', $payment) }}"
                 class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
                 Edit
@@ -55,7 +46,6 @@
                                 <th class="text-left py-2 text-xs font-medium text-gray-500 uppercase">Invoice</th>
                                 <th class="text-left py-2 text-xs font-medium text-gray-500 uppercase">Date</th>
                                 <th class="text-right py-2 text-xs font-medium text-gray-500 uppercase">Amount</th>
-                                <th class="text-center py-2 text-xs font-medium text-gray-500 uppercase">Type</th>
                                 <th class="text-right py-2 text-xs font-medium text-gray-500 uppercase">Actions</th>
                             </tr>
                         </thead>
@@ -70,13 +60,6 @@
                                     </td>
                                     <td class="py-3">{{ $allocation->invoice->due_date?->format('d M Y') }}</td>
                                     <td class="py-3 text-right font-medium">${{ number_format($allocation->amount, 2) }}
-                                    </td>
-                                    <td class="py-3 text-center">
-                                        <span
-                                            class="px-2 py-1 text-xs rounded-full 
-                                            {{ $allocation->allocation_type === 'fifo' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800' }}">
-                                            {{ ucfirst($allocation->allocation_type) }}
-                                        </span>
                                     </td>
                                     <td class="py-3 text-right">
                                         <form

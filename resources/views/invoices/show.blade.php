@@ -128,8 +128,8 @@
             <!-- Payments -->
             <div class="bg-white rounded-lg shadow p-6">
                 <h2 class="text-lg font-semibold text-gray-800 mb-4">Payments</h2>
-                
-                @if($invoice->payments->isNotEmpty())
+
+                @if($invoice->allocations->isNotEmpty())
                     <table class="min-w-full mb-4">
                         <thead>
                             <tr class="border-b">
@@ -139,11 +139,11 @@
                             </tr>
                         </thead>
                         <tbody class="divide-y">
-                            @foreach($invoice->payments as $payment)
+                            @foreach($invoice->allocations as $allocation)
                                 <tr>
-                                    <td class="py-2">{{ $payment->payment_number }}</td>
-                                    <td class="py-2">{{ $payment->payment_date->format('d M Y') }}</td>
-                                    <td class="py-2 text-right">${{ number_format($payment->amount, 2) }}</td>
+                                    <td class="py-2">{{ $allocation->payment->payment_number }}</td>
+                                    <td class="py-2">{{ $allocation->payment->payment_date->format('d M Y') }}</td>
+                                    <td class="py-2 text-right">${{ number_format($allocation->amount, 2) }}</td>
                                 </tr>
                             @endforeach
                         </tbody>

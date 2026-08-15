@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\User;
-use App\Notifications\InvoiceViewedNotification;
 use App\Notifications\OverdueReminderNotification;
 use App\Notifications\PaymentReceivedNotification;
 use Illuminate\Support\Facades\Notification;
@@ -13,30 +12,6 @@ use Illuminate\Support\Facades\Log;
 
 class InvoiceNotificationService
 {
-    /**
-     * Send invoice viewed notification to admin
-     */
-    public function sendInvoiceViewedNotification(Invoice $invoice): void
-    {
-        try {
-            // Send to admins
-            $admins = User::role('admin')->get();
-            foreach ($admins as $admin) {
-                Notification::send($admin, new InvoiceViewedNotification($invoice));
-            }
-
-            Log::info('Invoice viewed notification sent', [
-                'invoice_id' => $invoice->id,
-                'invoice_number' => $invoice->invoice_number,
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Failed to send invoice viewed notification', [
-                'invoice_id' => $invoice->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
-    }
-
     /**
      * Send payment received notification to client and admin
      */
@@ -103,7 +78,6 @@ class InvoiceNotificationService
     public function getNotificationStats(): array
     {
         return [
-            'invoice_viewed' => \App\Models\Notification::where('type', InvoiceViewedNotification::class)->count(),
             'payment_received' => \App\Models\Notification::where('type', PaymentReceivedNotification::class)->count(),
             'overdue_reminder' => \App\Models\Notification::where('type', OverdueReminderNotification::class)->count(),
         ];

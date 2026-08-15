@@ -146,11 +146,7 @@ class InvoiceAdvancedTest extends TestCase
         $invoice->markAsSent();
         $this->assertEquals(Invoice::STATUS_SENT, $invoice->status);
 
-        // Sent -> Viewed
-        $invoice->markAsViewed();
-        $this->assertEquals(Invoice::STATUS_VIEWED, $invoice->status);
-
-        // Viewed -> Partially Paid
+        // Sent -> Partially Paid
         $invoice->update(['status' => Invoice::STATUS_PARTIALLY_PAID]);
         $this->assertEquals(Invoice::STATUS_PARTIALLY_PAID, $invoice->status);
 

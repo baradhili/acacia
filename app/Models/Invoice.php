@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
@@ -57,7 +56,6 @@ class Invoice extends Model
     // Status constants
     const STATUS_DRAFT = 'draft';
     const STATUS_SENT = 'sent';
-    const STATUS_VIEWED = 'viewed';
     const STATUS_PARTIALLY_PAID = 'partially_paid';
     const STATUS_PAID = 'paid';
     const STATUS_OVERDUE = 'overdue';
@@ -72,8 +70,7 @@ class Invoice extends Model
     // Valid state transitions
     protected static array $transitions = [
         'draft' => ['sent', 'cancelled'],
-        'sent' => ['viewed', 'partially_paid', 'paid', 'overdue', 'cancelled'],
-        'viewed' => ['partially_paid', 'paid', 'overdue', 'cancelled'],
+        'sent' => ['partially_paid', 'paid', 'overdue', 'cancelled'],
         'partially_paid' => ['paid', 'overdue'],
         'paid' => [],  // Paid invoices cannot be cancelled
         'overdue' => ['partially_paid', 'paid'],
@@ -99,12 +96,15 @@ class Invoice extends Model
             }
         });
 
-        // Recalculate when items change (not via recalculateTotals to avoid recursion)
-        static::saved(function ($invoice) {
-            if (!isset($invoice->preventRecalculation) && $invoice->items()->exists()) {
-                $invoice->recalculateTotals();
-            }
-        });
+        // Invoice totals are recalculated explicitly via recalculateTotals()
+        // (from controllers, Estimate::convertToInvoice, etc.) and via the
+        // InvoiceItem saved/deleted hooks when a line item changes. There is
+        // intentionally no static::saved auto-recalc hook here: recalculateTotals()
+        // persists via updateQuietly() inside withoutEvents(), so firing it
+        // again on save would be both redundant and (without the quiet save) a
+        // recursion risk. If auto-recalc-on-save is ever needed, add it
+        // deliberately with a real guard — the old `preventRecalculation` flag
+        // was never set anywhere and protected nothing.
     }
 
     public static function generateInvoiceNumber(): string
@@ -122,6 +122,44 @@ class Invoice extends Model
         }
 
         return sprintf('INV-%s-%04d', $year, $nextNumber);
+    }
+
+    /**
+     * Create an invoice, retrying if two concurrent requests race on
+     * generateInvoiceNumber() and produce a duplicate invoice_number.
+     *
+     * The unique() constraint on invoice_number is the real source of truth —
+     * the loser of a race gets a QueryException (SQLSTATE 23000). Each retry
+     * re-enters the creating hook, which regenerates from the now-higher max,
+     * so the next attempt picks the following number.
+     */
+    public static function createWithUniqueNumber(array $attributes): self
+    {
+        $attempts = 5;
+        for ($i = 1; $i <= $attempts; $i++) {
+            try {
+                return self::create($attributes);
+            } catch (\Illuminate\Database\QueryException $e) {
+                if (!self::isUniqueViolation($e) || $i === $attempts) {
+                    throw $e;
+                }
+            }
+        }
+        // Unreachable — the loop either returns or rethrows.
+        throw new \RuntimeException('Unable to create invoice with a unique number.');
+    }
+
+    /**
+     * Is the given QueryException a unique-constraint violation? Covers both
+     * MySQL (SQLSTATE 23000 / driver code 1062) and SQLite (SQLSTATE 23000 /
+     * driver codes 19, 2067) via the shared SQLSTATE.
+     */
+    protected static function isUniqueViolation(\Illuminate\Database\QueryException $e): bool
+    {
+        $errorInfo = $e->errorInfo ?? [];
+        // errorInfo[0] is the SQLSTATE; errorInfo[1] is the driver-specific code.
+        return ($errorInfo[0] ?? null) === '23000'
+            || ($errorInfo[1] ?? null) === 1062;
     }
 
     public function client(): BelongsTo
@@ -147,11 +185,6 @@ class Invoice extends Model
     public function items(): HasMany
     {
         return $this->hasMany(InvoiceItem::class)->orderBy('sort_order');
-    }
-
-    public function payments(): HasManyThrough
-    {
-        return $this->hasManyThrough(Payment::class, PaymentAllocation::class, 'invoice_id', 'id', 'id', 'payment_id');
     }
 
     public function allocations(): HasMany
@@ -191,14 +224,23 @@ class Invoice extends Model
             return;
         }
 
-        // InvoiceItem.total includes tax (calculated in calculateTotals)
-        // So we use sum of totals directly, not adding tax again
-        $subtotal = $items->sum('total');
+        // InvoiceItem.total is tax-inclusive (calculated in calculateTotals),
+        // so derive subtotal as the pre-tax line amount (quantity * unit_price,
+        // less discount) and rebuild total as subtotal + tax. Storing the
+        // pre-tax value here keeps `subtotal + tax_amount == total` and makes
+        // SUM(subtotal) reports reflect true pre-GST revenue.
+        $subtotal = $items->sum(function ($item) {
+            return ($item->quantity * $item->unit_price) - $item->discount_amount;
+        });
         $taxAmount = $items->sum('tax_amount');
         $discountAmount = $items->sum('discount_amount');
-        $total = $subtotal;
+        $total = $subtotal + $taxAmount;
 
-        // Use withoutEvents to prevent the saved event from triggering recalculateTotals again
+        // Persist via updateQuietly() inside withoutEvents(). This is the
+        // recursion guard: it suppresses the model saved event so the
+        // (now-removed) auto-recalc hook could not re-enter, and any future
+        // saved hook added here will not loop. Do NOT replace this with a
+        // plain update()/save() without a real re-entry guard.
         static::withoutEvents(function () use ($subtotal, $taxAmount, $discountAmount, $total) {
             $this->updateQuietly([
                 'subtotal' => $subtotal,
@@ -207,6 +249,21 @@ class Invoice extends Model
                 'total' => $total,
             ]);
         });
+
+        // Keep the linked PO's consumed amount in sync when totals change.
+        // This runs silently (updateQuietly above) so the InvoiceObserver
+        // would otherwise miss total-only changes from line-item edits.
+        $this->refreshPurchaseOrderUsedAmount();
+    }
+
+    /**
+     * Recalculate the linked purchase order's used amount, if any.
+     */
+    protected function refreshPurchaseOrderUsedAmount(): void
+    {
+        if ($this->purchase_order_id && $this->purchaseOrder) {
+            $this->purchaseOrder->recalculateUsedAmount();
+        }
     }
 
     /**
@@ -237,14 +294,16 @@ class Invoice extends Model
     }
 
     /**
-     * Check if invoice is overdue
+     * Check if invoice is overdue (past due_date and not paid/cancelled).
      */
     public function getIsOverdueAttribute(): bool
     {
         if (in_array($this->status, [self::STATUS_PAID, self::STATUS_CANCELLED])) {
             return false;
         }
-        return $this->due_date && $this->due_date->lt(now()->toDateString());
+        // Compare Carbon-to-Carbon at day granularity: due_date is before the
+        // start of today means the invoice is overdue.
+        return $this->due_date && $this->due_date->isBefore(now()->startOfDay());
     }
 
     /**
@@ -265,7 +324,7 @@ class Invoice extends Model
     }
 
     /**
-     * Transition to a new status with validation
+     * Transition to a new status with validation.
      */
     public function transitionTo(string $status): bool
     {
@@ -273,49 +332,26 @@ class Invoice extends Model
             return false;
         }
 
-        $this->update(['status' => $status]);
-        
-        // Update paid_at when status changes to paid
+        // Single update: stamp paid_at together with the status when fully paid.
+        $payload = ['status' => $status];
         if ($status === self::STATUS_PAID) {
-            $this->update(['paid_at' => now()]);
+            $payload['paid_at'] = now();
         }
-
-        // Auto-update status based on payment if partially paid
-        if ($status === self::STATUS_PARTIALLY_PAID && $this->amount_due <= 0) {
-            $this->update(['status' => self::STATUS_PAID, 'paid_at' => now()]);
-        }
+        $this->update($payload);
 
         return true;
     }
 
     /**
-     * Mark invoice as sent
+     * Mark invoice as sent — routes through the state machine so the
+     * transition is validated, then stamps sent_at on success.
      */
     public function markAsSent(): bool
     {
-        $this->update([
-            'status' => self::STATUS_SENT,
-            'sent_at' => now(),
-        ]);
-        return true;
-    }
-
-    /**
-     * Mark invoice as viewed
-     */
-    public function markAsViewed(): bool
-    {
-        if ($this->status === self::STATUS_SENT) {
-            $this->update([
-                'status' => self::STATUS_VIEWED,
-                'viewed_at' => now(),
-            ]);
-        } elseif ($this->status === self::STATUS_DRAFT) {
-            $this->update([
-                'status' => self::STATUS_VIEWED,
-                'viewed_at' => now(),
-            ]);
+        if (!$this->transitionTo(self::STATUS_SENT)) {
+            return false;
         }
+        $this->update(['sent_at' => now()]);
         return true;
     }
 
@@ -360,27 +396,43 @@ class Invoice extends Model
     }
 
     /**
-     * Scope for outstanding invoices (sent, viewed, partially_paid, overdue)
+     * Scope for outstanding invoices (sent, partially_paid, overdue)
      */
     public function scopeOutstanding($query)
     {
         return $query->whereIn('status', [
             self::STATUS_SENT,
-            self::STATUS_VIEWED,
             self::STATUS_PARTIALLY_PAID,
             self::STATUS_OVERDUE,
         ]);
     }
 
     /**
-     * Scope for overdue invoices
+     * Scope for overdue invoices: either already flagged overdue, or any
+     * sent/partially_paid invoice past its due_date that still has an
+     * outstanding balance (amount_paid < total). The balance check excludes
+     * invoices that are effectively paid but whose status hasn't been flipped
+     * to paid yet, so they don't show as overdue forever. Zero-total invoices
+     * (no items / credit notes) are left to the status-based path.
      */
     public function scopeOverdue($query)
     {
         return $query->where('status', self::STATUS_OVERDUE)
             ->orWhere(function ($q) {
-                $q->whereIn('status', [self::STATUS_SENT, self::STATUS_VIEWED, self::STATUS_PARTIALLY_PAID])
-                  ->where('due_date', '<', now()->toDateString());
+                $q->whereIn('status', [self::STATUS_SENT, self::STATUS_PARTIALLY_PAID])
+                  ->where('due_date', '<', now()->toDateString())
+                  // For invoices with a positive total, require an outstanding
+                  // balance (total > sum of allocations). Zero-total invoices
+                  // fall through (the status/due_date checks alone apply).
+                  ->where(function ($q) {
+                      $q->where('total', '<=', 0)
+                        ->orWhereRaw(
+                            'invoices.total - COALESCE(('
+                            . 'SELECT SUM(amount) FROM payment_allocations'
+                            . ' WHERE payment_allocations.invoice_id = invoices.id'
+                            . '), 0) > 0'
+                        );
+                  });
             });
     }
 
@@ -397,7 +449,7 @@ class Invoice extends Model
      */
     public function getFormattedTotalAttribute(): string
     {
-        return 'A$' . number_format($this->total, 2);
+        return config('australian.currency.symbol', 'A$') . number_format($this->total, 2);
     }
 
     /**
@@ -412,28 +464,39 @@ class Invoice extends Model
     }
 
     /**
-     * Update invoice status based on payments
+     * Update invoice status based on payments.
+     *
+     * When payments are removed and amountPaid drops to 0, re-derive the
+     * payable status from the invoice's own state instead of blindly forcing
+     * STATUS_SENT: a past-due invoice regains STATUS_OVERDUE, and a draft (or
+     * cancelled/paid) invoice is never clobbered.
      */
     public function updateStatusFromPayments(): void
     {
         $amountPaid = $this->amount_paid;
         $total = (float) $this->total;
 
-        if ($amountPaid <= 0) {
-            // No payments - revert to sent status (unless cancelled)
-            if ($this->status !== self::STATUS_CANCELLED) {
-                $this->update(['status' => self::STATUS_SENT, 'paid_at' => null]);
-            }
-        } elseif ($amountPaid >= $total) {
+        if ($amountPaid >= $total && $total > 0) {
             // Fully paid
-            $this->update([
-                'status' => self::STATUS_PAID,
-                'paid_at' => now(),
-            ]);
-        } else {
+            if ($this->status !== self::STATUS_PAID) {
+                $this->update([
+                    'status' => self::STATUS_PAID,
+                    'paid_at' => now(),
+                ]);
+            }
+        } elseif ($amountPaid > 0) {
             // Partially paid
             if ($this->status !== self::STATUS_PARTIALLY_PAID) {
                 $this->update(['status' => self::STATUS_PARTIALLY_PAID]);
+            }
+        } else {
+            // No payments: never clobber draft/cancelled/paid; otherwise
+            // overdue (past due_date) beats sent.
+            if (!in_array($this->status, [self::STATUS_DRAFT, self::STATUS_CANCELLED, self::STATUS_PAID])) {
+                $this->update([
+                    'status' => $this->is_overdue ? self::STATUS_OVERDUE : self::STATUS_SENT,
+                    'paid_at' => null,
+                ]);
             }
         }
     }

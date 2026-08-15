@@ -2,9 +2,14 @@
 
 namespace App\Observers;
 
-use App\Models\PurchaseOrder;
 use App\Models\TimeEntry;
 
+/**
+ * Timesheet changes no longer affect a purchase order's consumed amount:
+ * PO used_amount is derived from invoices (see InvoiceObserver and
+ * PurchaseOrder::recalculateUsedAmount). This observer is retained for
+ * future time-entry side-effects but currently has none.
+ */
 class TimeEntryObserver
 {
     /**
@@ -12,7 +17,6 @@ class TimeEntryObserver
      */
     public function created(TimeEntry $timeEntry): void
     {
-        $this->recalculatePoIfLinked($timeEntry);
     }
 
     /**
@@ -20,24 +24,6 @@ class TimeEntryObserver
      */
     public function updated(TimeEntry $timeEntry): void
     {
-        // Check if PO relationship changed
-        if ($timeEntry->wasChanged('purchase_order_id')) {
-            // Recalculate old PO if exists
-            if ($timeEntry->getOriginal('purchase_order_id')) {
-                $this->recalculatePo($timeEntry->getOriginal('purchase_order_id'));
-            }
-            // Recalculate new PO if exists
-            if ($timeEntry->purchase_order_id) {
-                $this->recalculatePo($timeEntry->purchase_order_id);
-            }
-        }
-
-        // Recalculate if hours, rate, or billable status changed on approved entry
-        if ($timeEntry->status === TimeEntry::STATUS_APPROVED && 
-            ($timeEntry->wasChanged(['hours', 'rate', 'billable'])) &&
-            $timeEntry->purchase_order_id) {
-            $this->recalculatePo($timeEntry->purchase_order_id);
-        }
     }
 
     /**
@@ -45,7 +31,6 @@ class TimeEntryObserver
      */
     public function deleted(TimeEntry $timeEntry): void
     {
-        $this->recalculatePoIfLinked($timeEntry);
     }
 
     /**
@@ -53,7 +38,6 @@ class TimeEntryObserver
      */
     public function restored(TimeEntry $timeEntry): void
     {
-        $this->recalculatePoIfLinked($timeEntry);
     }
 
     /**
@@ -61,27 +45,5 @@ class TimeEntryObserver
      */
     public function forceDeleted(TimeEntry $timeEntry): void
     {
-        $this->recalculatePoIfLinked($timeEntry);
-    }
-
-    /**
-     * Recalculate PO used amount if the entry is linked to one.
-     */
-    protected function recalculatePoIfLinked(TimeEntry $timeEntry): void
-    {
-        if ($timeEntry->purchase_order_id) {
-            $this->recalculatePo($timeEntry->purchase_order_id);
-        }
-    }
-
-    /**
-     * Recalculate PO used amount and update status.
-     */
-    protected function recalculatePo(int $poId): void
-    {
-        $po = PurchaseOrder::find($poId);
-        if ($po) {
-            $po->recalculateUsedAmount();
-        }
     }
 }
