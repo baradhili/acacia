@@ -135,14 +135,15 @@ Investigation confirmed the bug is worse than reported: the POST route (`invoice
 
 ## Low-Severity / Style
 
-### 21. ☐ Misc cosmetic / consistency
+### 21. ✅ Misc cosmetic / consistency
 
-- `InvoiceItem::createFromTimeEntry` (line 101) builds but doesn't `save()` — fine if callers save, but the docstring doesn't say so.
-- `formattedAmount` and every `formatted*` accessor hardcode `'A$'` — pull from a config/i18n layer if currency ever changes.
-- `InvoiceController::send` (line 246) requires `status === DRAFT`, but `markAsSent` itself has no guard — inconsistent with `send`'s check.
-- `PaymentController::getClientInvoices` filters in PHP after loading — push to a `whereRaw('total - (...) > 0')` or `having`.
-- `time_entry_ids` validated in `store` but never linked to created items (no `time_entry_id` passed to `items()->create`) — see item 19.
-- `Invoice` uses `const STATUS_*` (good) but `Payment` interleaves `use HasFactory` between constant blocks (`Payment.php:16-21`) — cosmetic.
+**Fix:** `c5203c3` (plus two sub-items resolved elsewhere):
+- ✅ `InvoiceItem::createFromTimeEntry` docblock now states explicitly that it builds an **unsaved** item and the caller must persist it.
+- ✅ All 10 hardcoded `'A$'` literals in `formatted*` accessors now read `config('australian.currency.symbol', 'A$')` (key already existed at `config/australian.php:67`), across Invoice, Estimate, Payment, PaymentAllocation, InvoiceItem, EstimateItem, CreditNoteItem.
+- ✅ `Payment.php` `use HasFactory;` moved above the STATUS_ constants (was interleaved), matching Invoice.php's convention.
+- ✅ `PaymentController::getClientInvoices` outstanding-balance filter pushed from PHP (`withSum` + `->filter()`) into SQL via the same correlated-subquery `whereRaw` as `scopeOverdue`; dropped the now-unneeded `withSum`.
+- ✅ *(resolved by #15 / `6aefc99`)* `markAsSent` now validates via `transitionTo()`, eliminating the guard inconsistency with `send`'s pre-check.
+- 🚫 *(deferred with #20 — time entries out of scope)* `time_entry_ids` validated in `store` but never linked to created items.
 
 ## Newly discovered during the #7 IFRS fix (same `LineItem::DEBIT/CREDIT` family of bugs)
 
@@ -210,3 +211,4 @@ Existing Expenses is confusing. change to "Bills" and make it similar to "Invoic
 | `0bbeced` | #17  | `fix(invoice): use allocations (not payments) for per-invoice amounts; drop payments() relation` |
 | `f2bb1b0` | #18  | `refactor(invoice): dedupe PO used-amount recalc between observer and model` |
 | — | #20 | Won't fix (deferred) — time entries out of scope; feature views missing, would 500 |
+| `c5203c3` | #21  | `refactor(misc): currency from config, createFromTimeEntry docblock, cosmetic and query cleanups` |
