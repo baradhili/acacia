@@ -127,10 +127,11 @@ Both the observer (`updated`) and `Invoice::recalculateTotals()` (via `refreshPu
 `$invoice->items()->delete()` then recreated with new ids; new items got `time_entry_id = null` because the form didn't pass it. **Editing a draft invoice silently unlinked its time entries.** (Note: the `time_entries.invoice_item_id` back-reference column the original report assumed doesn't actually exist in the migrations — the link is one-way, `invoice_items.time_entry_id` — so the concrete damage was the lost `time_entry_id`, which is what the fix addresses.)
 **Fix:** `67ab762` — replaced delete-all-recreate with an upsert: collect submitted item ids, delete only items the user removed (scoped to the invoice), `update()` existing items by id (preserving `time_entry_id` unless explicitly changed), `create()` new ones. Added `items.*.id` / `items.*.time_entry_id` validation and a hidden `items[][id]` input per existing row in the edit view so the id round-trips. Round-trip test added: edits a time-entry-linked item and asserts id + `time_entry_id` survive.
 
-### 20. ☐ `createFromTimeEntries` doesn't actually create — it only renders
+### 20. 🚫 Won't fix (deferred) — `createFromTimeEntries` doesn't actually create
 
-**File:** `app/Http/Controllers/InvoiceController.php:290-327`
-Returns a view with computed totals but doesn't persist anything. The route is wired for GET+POST; the POST handler appears missing. Confirm and add if needed.
+**Files:** `app/Http/Controllers/InvoiceController.php`, `routes/web.php`, missing views
+Investigation confirmed the bug is worse than reported: the POST route (`invoices.create-from-time-entries.store`) points to the **same render-only method** as the GET, so posting just re-renders and never persists. Additionally the view itself (`resources/views/invoices/create-from-time-entries.blade.php`) **does not exist**, so both GET and POST have been 500ing with `ViewNotFoundException` — the feature is unreachable/broken end-to-end, and nothing in the UI links to these routes (no tests either). The sibling `createFromPurchaseOrder` has the same problem (`invoices/create-from-po.blade.php` also missing; route `purchase-orders/{po}/create-invoice`).
+**Decision:** deferred per maintainer — time entries are out of scope for now. When revisiting: create the two missing views, split the POST into a real store handler that builds `InvoiceItem`s via `InvoiceItem::createFromTimeEntry()` (which already exists, unsave()-ed, for exactly this), and link `time_entry_id` on each item.
 
 ## Low-Severity / Style
 
@@ -208,3 +209,4 @@ Existing Expenses is confusing. change to "Bills" and make it similar to "Invoic
 | `b4e69c3` | #16  | `refactor(invoice): compare Carbon-to-Carbon in is_overdue` |
 | `0bbeced` | #17  | `fix(invoice): use allocations (not payments) for per-invoice amounts; drop payments() relation` |
 | `f2bb1b0` | #18  | `refactor(invoice): dedupe PO used-amount recalc between observer and model` |
+| — | #20 | Won't fix (deferred) — time entries out of scope; feature views missing, would 500 |
