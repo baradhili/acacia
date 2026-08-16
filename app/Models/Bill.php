@@ -431,6 +431,14 @@ class Bill extends Model
      */
     public function updateStatusFromPayments(): void
     {
+        // Read totals fresh from the database: callers may hold a stale
+        // instance whose totals were persisted by the BillItem saved-hook on
+        // a different instance (bill created + items added + payment
+        // allocated in one flow).
+        if ($this->exists) {
+            $this->refresh();
+        }
+
         $amountPaid = $this->amount_paid;
         $total = (float) $this->total;
 
@@ -449,10 +457,14 @@ class Bill extends Model
             }
         } else {
             // No payments: never clobber draft/cancelled; otherwise
-            // overdue (past due_date) beats open.
+            // overdue (past due_date) beats open. Evaluate overdue
+            // directly, not via is_overdue — that accessor returns false
+            // while the model is still marked paid, which we are about to
+            // revert from.
             if (!in_array($this->status, [self::STATUS_DRAFT, self::STATUS_CANCELLED])) {
+                $overdue = $this->due_date && $this->due_date->isBefore(now()->startOfDay());
                 $this->update([
-                    'status' => $this->is_overdue ? self::STATUS_OVERDUE : self::STATUS_OPEN,
+                    'status' => $overdue ? self::STATUS_OVERDUE : self::STATUS_OPEN,
                     'paid_at' => null,
                 ]);
             }

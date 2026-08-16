@@ -466,13 +466,24 @@ class Invoice extends Model
     /**
      * Update invoice status based on payments.
      *
+     * Reads totals fresh from the database first: callers may hold a stale
+     * instance whose totals were persisted by the InvoiceItem saved-hook on
+     * a different instance (invoice created + items added + payment
+     * allocated in one flow), which used to trip the $total > 0 guard and
+     * mark fully-paid invoices as partially_paid.
+     *
      * When payments are removed and amountPaid drops to 0, re-derive the
      * payable status from the invoice's own state instead of blindly forcing
-     * STATUS_SENT: a past-due invoice regains STATUS_OVERDUE, and a draft (or
-     * cancelled/paid) invoice is never clobbered.
+     * STATUS_SENT: a past-due invoice regains STATUS_OVERDUE, and a paid
+     * invoice whose payments were removed/voided reverts (paid_at cleared).
+     * Only draft and cancelled invoices are never clobbered.
      */
     public function updateStatusFromPayments(): void
     {
+        if ($this->exists) {
+            $this->refresh();
+        }
+
         $amountPaid = $this->amount_paid;
         $total = (float) $this->total;
 
@@ -490,11 +501,15 @@ class Invoice extends Model
                 $this->update(['status' => self::STATUS_PARTIALLY_PAID]);
             }
         } else {
-            // No payments: never clobber draft/cancelled/paid; otherwise
-            // overdue (past due_date) beats sent.
-            if (!in_array($this->status, [self::STATUS_DRAFT, self::STATUS_CANCELLED, self::STATUS_PAID])) {
+            // No payments: never clobber draft/cancelled; otherwise
+            // overdue (past due_date) beats sent. Evaluate overdue
+            // directly, not via is_overdue — that accessor returns false
+            // while the model is still marked paid, which we are about to
+            // revert from.
+            if (!in_array($this->status, [self::STATUS_DRAFT, self::STATUS_CANCELLED])) {
+                $overdue = $this->due_date && $this->due_date->isBefore(now()->startOfDay());
                 $this->update([
-                    'status' => $this->is_overdue ? self::STATUS_OVERDUE : self::STATUS_SENT,
+                    'status' => $overdue ? self::STATUS_OVERDUE : self::STATUS_SENT,
                     'paid_at' => null,
                 ]);
             }

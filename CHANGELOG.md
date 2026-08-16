@@ -46,9 +46,15 @@ Accounts-payable rework: Expenses replaced by Bills + Supplier Payments
 
 ### Fixed
 
-- **Bills can revert from `paid`**: unlike the mirrored `Invoice::updateStatusFromPayments()`
-  (see Todo_list.md #4, still open on the AR side), removing/voiding a payment correctly
-  reverts a paid bill to `open`/`overdue` and clears `paid_at`.
+- **`Invoice::updateStatusFromPayments()` could never un-pay an invoice** (#4, pre-existing —
+  failed at HEAD). Three defects: the no-payments branch excluded `STATUS_PAID`, so
+  removing/voiding allocations left paid invoices paid forever (now reverts to
+  overdue/sent and clears `paid_at`); the status decision used a possibly-stale in-memory
+  `total` (item roll-ups persist on a different instance), tripping the `$total > 0` guard
+  and marking fully-paid invoices partially_paid (now refreshes from the DB first); and the
+  revert used the `is_overdue` accessor, which reports false for still-paid models (now
+  evaluated directly). Same guards applied to `Bill::updateStatusFromPayments()`, which
+  already reverts paid bills when payments are removed.
 
 ## [Unreleased] — 2026-08-12 to 2026-08-15
 

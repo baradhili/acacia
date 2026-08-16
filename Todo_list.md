@@ -22,12 +22,14 @@ We should default to 100% allocation to the nominated invoice or bill respective
 
 ### 3 ☐ Replace "php artisan test" with a command that runs unit tests and uses behat to run feature tests
 
-### 4 ☐ AR: `Invoice::updateStatusFromPayments()` can never un-pay an invoice (pre-existing, fails at HEAD)
+### 4 ✅ AR: `Invoice::updateStatusFromPayments()` could never un-pay an invoice (pre-existing, failed at HEAD)
 
-**Files:** `app/Models/Invoice.php` (~L474), `tests/Feature/PaymentTest.php`
-Found while verifying the Bills work (fails on a clean checkout of this branch, unrelated to Bills):
-- The no-payments branch of `updateStatusFromPayments()` excludes `STATUS_PAID` (`!in_array($this->status, [DRAFT, CANCELLED, PAID])`), so when allocations are removed/voided and `amount_paid` drops to 0, a paid invoice stays `paid` forever instead of reverting to `sent`/`overdue`. `PaymentTest::reallocating_payment_updates_invoice_status` fails on this (expects `overdue` after `removeAllocation()`, gets `paid`) — a regression of the intent behind fix e717b23 (#9). Fix: allow the revert-from-paid path when payments drop to zero (paid → overdue if past due, else sent; clear `paid_at`).
-- `PaymentTest::partial_payment_covers_multiple_invoices_correctly` also fails at HEAD (expects `paid`, gets `partially_paid`) — cause not yet diagnosed, needs investigation alongside the above.
+**Files:** `app/Models/Invoice.php`, `tests/Feature/PaymentTest.php`
+Found while verifying the Bills work (failed on a clean checkout of this branch, unrelated to Bills). Three defects fixed in `updateStatusFromPayments()`:
+- The no-payments branch excluded `STATUS_PAID`, so removing/voiding allocations left paid invoices `paid` forever (`reallocating_payment_updates_invoice_status` expected `overdue`, got `paid`). Now reverts: paid → overdue if past due, else sent; `paid_at` cleared. Only draft/cancelled are never clobbered.
+- The status decision used the possibly-stale in-memory `total` — when items were added via the item saved-hook on a different instance, `total` was still 0 and the `$total > 0` guard mis-classified fully-paid invoices as `partially_paid` (`partial_payment_covers_multiple_invoices_correctly`). Now refreshes from the DB first.
+- The overdue evaluation used the `is_overdue` accessor, which returns false while the model is still marked paid — reverting from paid always chose `sent`. Now evaluated directly.
+Same three guards applied to `Bill::updateStatusFromPayments()`.
 
 
 
@@ -38,3 +40,4 @@ Found while verifying the Bills work (fails on a clean checkout of this branch, 
 | Commit    | Item     | Summary                                                                                           |
 | --------- | -------- | ------------------------------------------------------------------------------------------------- |
 |           | #1       | `feat(ap): replace Expenses with Bills + Supplier Payments (per-line GST, paid-at-entry, IFRS-aligned categories)` |
+|           | #4       | `fix(invoice): un-pay invoices when payments are removed; fix stale-total and is_overdue defects in updateStatusFromPayments` |
