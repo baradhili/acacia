@@ -5,4 +5,4 @@ When inputting a receipt. the following is wrong:
 - [ ] I attached a document, but the documents list doesn't show it - even though it is there.
 - [ ] Expense categories don't link to expense journal numbers.
 - [ ] There should be a way to edit the chart of accounts
-- [ ] 
+- [ ] squash migration changes
