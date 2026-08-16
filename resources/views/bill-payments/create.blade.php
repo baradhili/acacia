@@ -167,14 +167,17 @@
                         html += `
                         <label class="flex items-start p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
                             <input type="checkbox" name="bill_allocations[][bill_id]" value="${bill.id}"
-                                class="mt-1 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 bill-checkbox">
+                                class="mt-1 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 bill-checkbox"
+                                data-amount-due="${parseFloat(bill.amount_due).toFixed(2)}">
                             <div class="ml-3 flex-1">
                                 <div class="flex justify-between">
                                     <span class="font-medium">${bill.bill_number}</span>
-                                    <span class="text-red-600 font-medium">$${parseFloat(bill.total).toFixed(2)}</span>
+                                    <span class="text-red-600 font-medium" data-due
+                                        title="Outstanding balance">$${parseFloat(bill.amount_due).toFixed(2)}</span>
                                 </div>
                                 <div class="text-sm text-gray-500">
                                     Due: ${new Date(bill.due_date).toLocaleDateString('en-AU')}
+                                    · Bill total: $${parseFloat(bill.total).toFixed(2)}
                                 </div>
                             </div>
                             <div class="ml-3 w-32">
@@ -187,26 +190,47 @@
                     });
                     billsList.innerHTML = html;
 
-                    // Add event listeners to update amount when checkbox is toggled
+                    // Default to 100% allocation of each nominated bill:
+                    // ticking pre-fills the full outstanding balance, and the
+                    // payment amount follows the sum of the allocations.
                     document.querySelectorAll('.bill-checkbox').forEach(checkbox => {
                         checkbox.addEventListener('change', function() {
                             const row = this.closest('label');
                             const amountInput = row.querySelector('.allocation-amount');
                             if (this.checked) {
-                                // Pre-fill with bill total
-                                const totalText = row.querySelector('.text-red-600').textContent;
-                                const total = parseFloat(totalText.replace('$', ''));
-                                amountInput.value = total.toFixed(2);
+                                amountInput.value = this.dataset.amountDue;
                             } else {
                                 amountInput.value = '';
                             }
+                            syncPaymentAmount();
                         });
+                    });
+
+                    document.querySelectorAll('.allocation-amount').forEach(input => {
+                        input.addEventListener('input', syncPaymentAmount);
                     });
                 })
                 .catch(error => {
                     console.error('Error loading bills:', error);
                     billsList.innerHTML = '<p class="text-red-500">Error loading bills. Please try again.</p>';
                 });
+        }
+
+        // Keep the payment amount in step with the checked allocations (the
+        // 100%-of-nominated default). Manually editing the payment amount
+        // afterwards is still possible — it only re-syncs when an allocation
+        // changes.
+        function syncPaymentAmount() {
+            let sum = 0;
+            document.querySelectorAll('.bill-checkbox:checked').forEach(checkbox => {
+                const row = checkbox.closest('label');
+                const amount = parseFloat(row.querySelector('.allocation-amount')?.value) || 0;
+                sum += amount;
+            });
+            const amountField = document.querySelector('input[name="amount"]');
+            if (sum > 0) {
+                amountField.value = sum.toFixed(2);
+            }
         }
 
         loadSupplierBills();

@@ -255,16 +255,32 @@ class BillPaymentTest extends TestCase
         ]);
         $payment->allocateToBill($paid, 110);
 
+        // Partially paid: total 220, 110 allocated → 110 still due.
+        $partial = $this->createOpenBill(200); // 200 + 20 GST = 220
+        $partialPayment = BillPayment::createWithUniqueNumber([
+            'supplier_id' => $this->supplier->id,
+            'amount' => 110,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+        $partialPayment->allocateToBill($partial, 110);
+
         $draft = Bill::create(['supplier_id' => $this->supplier->id]);
 
         $response = $this->actingAs($this->user)
             ->get(route('bill-payments.supplier-bills', $this->supplier));
 
         $response->assertStatus(200);
-        $bills = $response->json();
-        $this->assertCount(1, $bills);
-        $this->assertEquals($outstanding->id, $bills[0]['id']);
-        $this->assertEquals($outstanding->bill_number, $bills[0]['bill_number']);
+        $bills = collect($response->json())->keyBy('id');
+
+        $this->assertCount(2, $bills);
+        $this->assertArrayNotHasKey($draft->id, $bills);
+        $this->assertArrayNotHasKey($paid->id, $bills);
+
+        // amount_due drives the 100%-allocation default in the UI.
+        $this->assertEquals(110.0, $bills[$outstanding->id]['amount_due']);
+        $this->assertEquals(220.0, $bills[$partial->id]['total']);
+        $this->assertEquals(110.0, $bills[$partial->id]['amount_due']);
     }
 
     public function test_void_deletes_allocations_and_restores_status(): void

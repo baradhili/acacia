@@ -10,6 +10,14 @@ Accounts-payable rework: Expenses replaced by Bills + Supplier Payments
 
 ### Added — Bills / accounts payable
 
+- **Allocations default to 100% of the nominated document** (#2): the client-invoices /
+  supplier-bills JSON endpoints return `amount_due` (outstanding balance); ticking an
+  invoice/bill on the payment-create forms pre-fills its allocation with the outstanding
+  balance (previously the full total, over-allocating partially-paid documents) and the
+  payment amount auto-syncs to the sum of checked allocations; the allocate modals
+  pre-fill with the nominated document's outstanding balance capped at the payment's
+  unallocated amount.
+
 - **Bills subsystem** mirroring Invoices: `bills`/`bill_items`/`bill_payments`/
   `bill_payment_allocations` tables; `BILL-{Y}-####` and `SPAY-{Y}-####` numbering with the
   unique-violation retry; invoice-style state machine (`draft → open → partially_paid → paid`,

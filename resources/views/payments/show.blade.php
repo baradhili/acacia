@@ -221,7 +221,7 @@
                                     ->values();
                             @endphp
                             @foreach ($outstandingInvoices as $inv)
-                                <option value="{{ $inv->id }}">
+                                <option value="{{ $inv->id }}" data-due="{{ $inv->amount_due }}">
                                     {{ $inv->invoice_number }} - ${{ number_format($inv->amount_due, 2) }} due
                                 </option>
                             @endforeach
@@ -232,6 +232,9 @@
                         <input type="number" name="amount" step="0.01" min="0.01"
                             max="{{ $payment->unallocated_amount }}" required
                             class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                        <p class="text-xs text-gray-500 mt-1">
+                            Defaults to the invoice's full outstanding balance when selected.
+                        </p>
                     </div>
                 </div>
                 <div class="flex justify-end gap-2 mt-6">
@@ -249,7 +252,24 @@
 
     @push('scripts')
         <script>
-        // No document delete handling on show view - delete only available in edit view
+        // Default the allocation amount to 100% of the nominated invoice's
+        // outstanding balance (capped at the unallocated payment balance).
+        document.addEventListener('DOMContentLoaded', function() {
+            const modal = document.getElementById('allocateModal');
+            const select = modal?.querySelector('select[name="invoice_id"]');
+            const amount = modal?.querySelector('input[name="amount"]');
+
+            if (select && amount) {
+                const prefill = () => {
+                    const due = parseFloat(select.selectedOptions[0]?.dataset.due) || 0;
+                    if (due > 0) {
+                        amount.value = Math.min(due, {{ $payment->unallocated_amount }}).toFixed(2);
+                    }
+                };
+                select.addEventListener('change', prefill);
+                prefill();
+            }
+        });
         </script>
     @endpush
 

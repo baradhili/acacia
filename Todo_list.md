@@ -16,9 +16,15 @@ Existing Expenses is confusing. change to "Bills" and make it similar to "Invoic
 
 **Done:** Bills/BillItems/BillPayments/BillPaymentAllocations mirror the AR subsystem (state machine, `createWithUniqueNumber` race retry, item upsert on edit, edit guards, allocation/over-allocation logic). Categories are now per-line IFRS expense accounts picked from the chart of accounts, so journals align by construction. Per-line GST treatment (10% inclusive vs GST-free). Paid-at-entry (parking/entertainment/online) creates bill+payment+allocation+ledger posting in one transaction; the Wise debit auto-create path reuses it. Receipts replaced by the Document morph (like invoices). `BillPayment::postToIFRS()` posts Cr Bank / Dr expense (net) / Dr GST per line — and actually calls `post()` so ledger rows are written. Legacy expenses migrated (paid ones carry their old journal id so nothing double-posts) and the expenses tables dropped; bank transactions / reconciliation history / documents repointed. Downstream consumers (dashboard, widgets, GST/tax reports, reconciliation, audit) re-pointed; dashboard daily-cashflow `paid_at` bug and reconciliation `Client`-as-supplier bug fixed en route.
 
-### 2 ☐ Change the invoice payment allocation and bill payment allocation methods.
+### 2 ✅ Change the invoice payment allocation and bill payment allocation methods.
 
 We should default to 100% allocation to the nominated invoice or bill respectively. It
+
+**Done:** allocation now defaults to 100% of the nominated document's outstanding balance everywhere:
+- `payments/client-invoices/{client}` and `bill-payments/supplier-bills/{supplier}` JSON now return `amount_due` (total minus allocated) alongside `total`.
+- Payment-create forms (AR + AP): ticking an invoice/bill pre-fills its allocation with the **outstanding balance** (previously the full total, over-allocating partially-paid documents), shows both outstanding and total, and the payment Amount auto-syncs to the sum of checked allocations — still editable afterwards for partial/unallocated entry.
+- Allocate modals on payment/bill-payment show pages: picking an invoice/bill pre-fills the amount with its full outstanding balance (capped at the payment's unallocated amount).
+- The per-invoice/per-bill Record Payment modals already defaulted to the full balance (amount = amount_due, max = amount_due).
 
 ### 3 ☐ Replace "php artisan test" with a command that runs unit tests and uses behat to run feature tests
 
@@ -41,3 +47,4 @@ Same three guards applied to `Bill::updateStatusFromPayments()`.
 | --------- | -------- | ------------------------------------------------------------------------------------------------- |
 |           | #1       | `feat(ap): replace Expenses with Bills + Supplier Payments (per-line GST, paid-at-entry, IFRS-aligned categories)` |
 |           | #4       | `fix(invoice): un-pay invoices when payments are removed; fix stale-total and is_overdue defects in updateStatusFromPayments` |
+|           | #2       | `feat(payments): default allocations to 100% of the nominated invoice/bill outstanding balance` |
