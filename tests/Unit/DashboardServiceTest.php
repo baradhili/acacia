@@ -3,7 +3,6 @@
 namespace Tests\Unit;
 
 use App\Models\Client;
-use App\Models\Expense;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PurchaseOrder;

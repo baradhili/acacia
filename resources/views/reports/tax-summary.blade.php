@@ -56,7 +56,7 @@
                             ${{ number_format($totalPurchaseTax, 2) }}
                         </p>
                         <p class="text-xs text-red-600 mt-1">
-                            From {{ $purchasesByTaxRate->sum('transaction_count') }} expense(s)
+                            From {{ $purchasesByTaxRate->sum('transaction_count') }} bill line(s)
                         </p>
                     </div>
                     <div class="bg-indigo-50 rounded-lg p-6">

@@ -10,15 +10,25 @@ Investigation confirmed the bug is worse than reported: the POST route (`invoice
 
 - 🚫 *(deferred with #20 — time entries out of scope)* `time_entry_ids` validated in `store` but never linked to created items.
 
-## 1 ☐ Replace existing "Expenses" UI and linked files.
+## 1 ✅ Replace existing "Expenses" UI and linked files.
 
 Existing Expenses is confusing. change to "Bills" and make it similar to "Invoices/Payments" - except Bills are invoices _from_ a supplier. There should also be an option to record Bills that were paid immediately - such as things like parking, entertainment, online purchases etc. Make sure Expense categories align to Journals
+
+**Done:** Bills/BillItems/BillPayments/BillPaymentAllocations mirror the AR subsystem (state machine, `createWithUniqueNumber` race retry, item upsert on edit, edit guards, allocation/over-allocation logic). Categories are now per-line IFRS expense accounts picked from the chart of accounts, so journals align by construction. Per-line GST treatment (10% inclusive vs GST-free). Paid-at-entry (parking/entertainment/online) creates bill+payment+allocation+ledger posting in one transaction; the Wise debit auto-create path reuses it. Receipts replaced by the Document morph (like invoices). `BillPayment::postToIFRS()` posts Cr Bank / Dr expense (net) / Dr GST per line — and actually calls `post()` so ledger rows are written. Legacy expenses migrated (paid ones carry their old journal id so nothing double-posts) and the expenses tables dropped; bank transactions / reconciliation history / documents repointed. Downstream consumers (dashboard, widgets, GST/tax reports, reconciliation, audit) re-pointed; dashboard daily-cashflow `paid_at` bug and reconciliation `Client`-as-supplier bug fixed en route.
 
 ### 2 ☐ Change the invoice payment allocation and bill payment allocation methods.
 
 We should default to 100% allocation to the nominated invoice or bill respectively. It
 
 ### 3 ☐ Replace "php artisan test" with a command that runs unit tests and uses behat to run feature tests
+
+### 4 ☐ AR: `Invoice::updateStatusFromPayments()` can never un-pay an invoice (pre-existing, fails at HEAD)
+
+**Files:** `app/Models/Invoice.php` (~L474), `tests/Feature/PaymentTest.php`
+Found while verifying the Bills work (fails on a clean checkout of this branch, unrelated to Bills):
+- The no-payments branch of `updateStatusFromPayments()` excludes `STATUS_PAID` (`!in_array($this->status, [DRAFT, CANCELLED, PAID])`), so when allocations are removed/voided and `amount_paid` drops to 0, a paid invoice stays `paid` forever instead of reverting to `sent`/`overdue`. `PaymentTest::reallocating_payment_updates_invoice_status` fails on this (expects `overdue` after `removeAllocation()`, gets `paid`) — a regression of the intent behind fix e717b23 (#9). Fix: allow the revert-from-paid path when payments drop to zero (paid → overdue if past due, else sent; clear `paid_at`).
+- `PaymentTest::partial_payment_covers_multiple_invoices_correctly` also fails at HEAD (expects `paid`, gets `partially_paid`) — cause not yet diagnosed, needs investigation alongside the above.
+
 
 
 ---
@@ -27,4 +37,4 @@ We should default to 100% allocation to the nominated invoice or bill respective
 
 | Commit    | Item     | Summary                                                                                           |
 | --------- | -------- | ------------------------------------------------------------------------------------------------- |
-|  |       |    |
+|           | #1       | `feat(ap): replace Expenses with Bills + Supplier Payments (per-line GST, paid-at-entry, IFRS-aligned categories)` |

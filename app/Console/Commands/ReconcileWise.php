@@ -10,13 +10,12 @@ use Illuminate\Console\Command;
 
 class ReconcileWise extends Command
 {
-    protected $signature = 'reconcile:wise 
+    protected $signature = 'reconcile:wise
                             {--days=30 : Number of days to fetch}
                             {--dry-run : Show what would be done without making changes}
                             {--auto-match : Automatically match pending transactions}
                             {--auto-create-receipts : Auto-create cash receipts from unmatched Wise credits}
-                            {--auto-create-purchases : Auto-create expenses from unmatched Wise debits}
-                            {--category=other : Default expense category for auto-created purchases}';
+                            {--auto-create-purchases : Auto-create paid bills from unmatched Wise debits}';
 
     protected $description = 'Fetch transactions from Wise API and reconcile with IFRS ledger';
 
@@ -34,7 +33,6 @@ class ReconcileWise extends Command
         $autoMatch = $this->option('auto-match');
         $autoCreateReceipts = $this->option('auto-create-receipts');
         $autoCreatePurchases = $this->option('auto-create-purchases');
-        $category = $this->option('category');
 
         $this->info('Starting Wise reconciliation...');
 
@@ -116,16 +114,16 @@ class ReconcileWise extends Command
             }
         }
 
-        // Auto-create expenses from unmatched debits
+        // Auto-create paid bills from unmatched debits
         if ($autoCreatePurchases && !$dryRun) {
-            $this->info('Creating expenses from unmatched Wise debits...');
-            $expenseResults = $this->reconciliationService->autoCreatePurchases($category, true);
-            $this->info("Expenses created: {$expenseResults['count']}");
-            if ($expenseResults['skipped'] > 0) {
-                $this->warn("Skipped (no matching supplier): {$expenseResults['skipped']}");
+            $this->info('Creating bills from unmatched Wise debits...');
+            $billResults = $this->reconciliationService->autoCreatePurchases(true);
+            $this->info("Bills created: {$billResults['count']}");
+            if ($billResults['skipped'] > 0) {
+                $this->warn("Skipped (no matching supplier): {$billResults['skipped']}");
             }
-            if (!empty($expenseResults['errors'])) {
-                foreach ($expenseResults['errors'] as $error) {
+            if (!empty($billResults['errors'])) {
+                foreach ($billResults['errors'] as $error) {
                     $this->error("Error: {$error['transaction_id']} - {$error['error']}");
                 }
             }

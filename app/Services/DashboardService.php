@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\BankTransaction;
+use App\Models\BillPayment;
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -52,17 +53,17 @@ class DashboardService
             ->where('payment_date', '<', $thirtyDaysAgo)
             ->sum('amount');
 
-        // Outflows (expenses paid) in last 30 days
-        $outflows = \App\Models\Expense::where('status', \App\Models\Expense::STATUS_PAID)
-            ->where('paid_at', '>=', $thirtyDaysAgo)
-            ->where('paid_at', '<=', $today)
-            ->sum('total');
+        // Outflows (supplier payments) in last 30 days
+        $outflows = BillPayment::where('status', BillPayment::STATUS_COMPLETED)
+            ->where('payment_date', '>=', $thirtyDaysAgo)
+            ->where('payment_date', '<=', $today)
+            ->sum('amount');
 
         // Previous period outflows
-        $previousOutflows = \App\Models\Expense::where('status', \App\Models\Expense::STATUS_PAID)
-            ->where('paid_at', '>=', $sixtyDaysAgo)
-            ->where('paid_at', '<', $thirtyDaysAgo)
-            ->sum('total');
+        $previousOutflows = BillPayment::where('status', BillPayment::STATUS_COMPLETED)
+            ->where('payment_date', '>=', $sixtyDaysAgo)
+            ->where('payment_date', '<', $thirtyDaysAgo)
+            ->sum('amount');
 
         $netCashFlow = $inflows - $outflows;
         $previousNet = $previousInflows - $previousOutflows;
@@ -98,9 +99,9 @@ class DashboardService
                 ->whereBetween('payment_date', [$dayStart, $dayEnd])
                 ->sum('amount');
 
-            $outflow = \App\Models\Expense::where('status', \App\Models\Expense::STATUS_PAID)
-                ->whereBetween('paid_at', [$dayStart, $dayEnd])
-                ->sum('total');
+            $outflow = BillPayment::where('status', BillPayment::STATUS_COMPLETED)
+                ->whereBetween('payment_date', [$dayStart, $dayEnd])
+                ->sum('amount');
 
             $data[] = [
                 'date' => $date->format('Y-m-d'),
@@ -375,10 +376,10 @@ class DashboardService
                 ->whereBetween('payment_date', [$monthStart, $monthEnd])
                 ->sum('amount');
 
-            // Expenses
-            $expenses = \App\Models\Expense::where('status', \App\Models\Expense::STATUS_PAID)
-                ->whereBetween('paid_at', [$monthStart, $monthEnd])
-                ->sum('total');
+            // Expenses (supplier payments made)
+            $expenses = BillPayment::where('status', BillPayment::STATUS_COMPLETED)
+                ->whereBetween('payment_date', [$monthStart, $monthEnd])
+                ->sum('amount');
 
             // Invoices issued
             $invoicesIssued = Invoice::whereBetween('issue_date', [$monthStart, $monthEnd])

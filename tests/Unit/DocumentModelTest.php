@@ -4,7 +4,7 @@ namespace Tests\Unit;
 
 use App\Models\Client;
 use App\Models\Document;
-use App\Models\Expense;
+use App\Models\Bill;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PurchaseOrder;
@@ -93,28 +93,28 @@ class DocumentModelTest extends TestCase
     public function test_document_morph_to_parent_model(): void
     {
         $supplier = Supplier::factory()->create();
-        $expense = Expense::factory()->draft()->create(['supplier_id' => $supplier->id]);
+        $bill = Bill::create(['supplier_id' => $supplier->id]);
         $document = Document::factory()->create([
-            'documentable_type' => 'App\\Models\\Expense',
-            'documentable_id' => $expense->id,
+            'documentable_type' => 'App\\Models\\Bill',
+            'documentable_id' => $bill->id,
         ]);
 
-        $this->assertInstanceOf(Expense::class, $document->documentable);
-        $this->assertEquals($expense->id, $document->documentable->id);
+        $this->assertInstanceOf(Bill::class, $document->documentable);
+        $this->assertEquals($bill->id, $document->documentable->id);
     }
 
-    public function test_expense_can_have_many_documents(): void
+    public function test_bill_can_have_many_documents(): void
     {
         $supplier = Supplier::factory()->create();
-        $expense = Expense::factory()->draft()->create(['supplier_id' => $supplier->id]);
+        $bill = Bill::create(['supplier_id' => $supplier->id]);
 
         Document::factory()->count(3)->create([
-            'documentable_type' => 'App\\Models\\Expense',
-            'documentable_id' => $expense->id,
+            'documentable_type' => 'App\\Models\\Bill',
+            'documentable_id' => $bill->id,
         ]);
 
-        $expense->refresh();
-        $this->assertCount(3, $expense->documents);
+        $bill->refresh();
+        $this->assertCount(3, $bill->documents);
     }
 
     public function test_invoice_can_have_many_documents(): void
@@ -186,7 +186,7 @@ class DocumentModelTest extends TestCase
     {
         $supplier = Supplier::factory()->create();
         $client = Client::factory()->create();
-        $expense = Expense::factory()->draft()->create(['supplier_id' => $supplier->id]);
+        $bill = Bill::create(['supplier_id' => $supplier->id]);
         $invoice = Invoice::create([
             'client_id' => $client->id,
             'invoice_number' => 'INV-2024-DIFF',
@@ -199,8 +199,8 @@ class DocumentModelTest extends TestCase
         ]);
 
         Document::factory()->create([
-            'documentable_type' => 'App\\Models\\Expense',
-            'documentable_id' => $expense->id,
+            'documentable_type' => 'App\\Models\\Bill',
+            'documentable_id' => $bill->id,
         ]);
 
         Document::factory()->create([
@@ -208,7 +208,7 @@ class DocumentModelTest extends TestCase
             'documentable_id' => $invoice->id,
         ]);
 
-        $this->assertEquals(1, Document::where('documentable_type', 'App\\Models\\Expense')->count());
+        $this->assertEquals(1, Document::where('documentable_type', 'App\\Models\\Bill')->count());
         $this->assertEquals(1, Document::where('documentable_type', 'App\\Models\\Invoice')->count());
     }
 

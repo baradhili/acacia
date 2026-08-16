@@ -3,6 +3,53 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] — 2026-08-15
+
+Accounts-payable rework: Expenses replaced by Bills + Supplier Payments
+(branch `Accounts-payable-fixes`, Todo_list.md #1).
+
+### Added — Bills / accounts payable
+
+- **Bills subsystem** mirroring Invoices: `bills`/`bill_items`/`bill_payments`/
+  `bill_payment_allocations` tables; `BILL-{Y}-####` and `SPAY-{Y}-####` numbering with the
+  unique-violation retry; invoice-style state machine (`draft → open → partially_paid → paid`,
+  plus `overdue`/`cancelled`); draft-only edit/delete with item-id-preserving upsert; payment
+  edit guards (amount ≥ allocated, supplier frozen while allocated); allocation, void and
+  over-allocation semantics identical to AR.
+- **Paid-at-entry mechanism** (#1): "already paid" checkbox on the bill form (parking,
+  entertainment, online purchases) creates the bill, payment, full allocation and ledger
+  posting in one transaction. The Wise bank-debit auto-create path reuses the same flow.
+- **Per-line GST treatment** (#1): each bill line is GST 10% inclusive or GST-free
+  (bank fees, rego, input-taxed supplies), enforced per item — not per bill.
+- **Expense categories = IFRS chart-of-accounts entries**: each line picks an expense
+  account, so bill categories and journals align by construction. Seeded two new accounts
+  (Meals & Entertainment 5500, Phone & Internet 7250).
+- **`BillPayment::postToIFRS()`**: Cr Bank / Dr expense (net) / Dr GST per line — taxable
+  lines post tax-inclusive with the GST 10% Vat (package nets the GST out), GST-free lines
+  post in full with no Vat; allocation amounts apportioned across bill items in cents.
+  Calls `post()` (not just `save()`) so ledger rows are actually written.
+
+### Changed
+
+- **Legacy Expenses converted and dropped** (#1): each expense → a bill + one line item
+  (category mapped to the seeded IFRS expense account); paid expenses also get a payment +
+  allocation carrying the old `ifrs_transaction_id` so nothing double-posts. Bank
+  transactions, reconciliation history and documents are repointed at the bills; receipt
+  files became Document rows (same morph invoices use — no more bespoke receipt upload);
+  `expenses` table dropped.
+- **Downstream consumers re-pointed to bills**: dashboard cash-flow/PnL (also fixes the
+  daily-cash-flow outflows always being 0 — it queried a nonexistent `paid_at` column on
+  expenses), GST/tax-summary input tax now reads bill items (per-line treatment),
+  expenses-by-category report groups by IFRS account, Wise reconciliation creates paid
+  bills (also fixes supplier lookup querying `clients` instead of `suppliers`), audit
+  logging and document factories follow the new models.
+
+### Fixed
+
+- **Bills can revert from `paid`**: unlike the mirrored `Invoice::updateStatusFromPayments()`
+  (see Todo_list.md #4, still open on the AR side), removing/voiding a payment correctly
+  reverts a paid bill to `open`/`overdue` and clears `paid_at`.
+
 ## [Unreleased] — 2026-08-12 to 2026-08-15
 
 Invoice, payment, and IFRS accounting subsystem review (branch `fixes-2`).

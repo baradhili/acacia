@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Client;
-use App\Models\Expense;
+use App\Models\Bill;
+use App\Models\BillItem;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use IFRS\Models\Account;
 use IFRS\Models\Currency;
 use IFRS\Models\ReportingPeriod;
@@ -360,38 +362,40 @@ class ReportController extends Controller
             ? Carbon::parse($request->end_date)->endOfDay()
             : Carbon::now()->endOfDay();
 
-        $category = $request->get('category');
+        $accountId = $request->get('account_id');
 
-        $query = Expense::with(['supplier'])
-            ->whereBetween('expense_date', [$startDate, $endDate])
-            ->where('status', '!=', 'cancelled');
+        // Group paid-bill line items by their IFRS expense account, so the
+        // report aligns with the chart of accounts (and the journals).
+        $query = BillItem::query()
+            ->join('bills', 'bills.id', '=', 'bill_items.bill_id')
+            ->join('ifrs_accounts', 'ifrs_accounts.id', '=', 'bill_items.expense_account_id')
+            ->whereBetween('bills.bill_date', [$startDate, $endDate])
+            ->whereIn('bills.status', [Bill::STATUS_OPEN, Bill::STATUS_PARTIALLY_PAID, Bill::STATUS_PAID, Bill::STATUS_OVERDUE]);
 
-        if ($category) {
-            $query->where('category', $category);
+        if ($accountId) {
+            $query->where('bill_items.expense_account_id', $accountId);
         }
 
-        $expenses = $query->get();
+        $byCategory = $query->groupBy('ifrs_accounts.id', 'ifrs_accounts.code', 'ifrs_accounts.name')
+            ->orderBy('ifrs_accounts.code')
+            ->get([
+                'ifrs_accounts.id as account_id',
+                'ifrs_accounts.code as account_code',
+                'ifrs_accounts.name as account_name',
+                DB::raw('COUNT(*) as expense_count'),
+                DB::raw('SUM(bill_items.total - bill_items.tax_amount) as total_amount'),
+                DB::raw('SUM(bill_items.tax_amount) as total_tax'),
+                DB::raw('SUM(bill_items.total) as total'),
+            ]);
 
-        $byCategory = $expenses->groupBy('category')
-            ->map(function ($expenses, $cat) {
-                return [
-                    'category' => ucwords(str_replace('_', ' ', $cat)),
-                    'category_key' => $cat,
-                    'expense_count' => $expenses->count(),
-                    'total_amount' => $expenses->sum('amount'),
-                    'total_tax' => $expenses->sum('tax_amount'),
-                    'total' => $expenses->sum('total'),
-                ];
-            })->sortByDesc('total_amount');
-
-        $categories = Expense::CATEGORIES;
+        $categories = Bill::expenseAccounts();
 
         $totalAmount = $byCategory->sum('total_amount');
         $totalTax = $byCategory->sum('total_tax');
         $total = $byCategory->sum('total');
 
         return view('reports.expenses-by-category', compact(
-            'byCategory', 'categories', 'startDate', 'endDate', 'category',
+            'byCategory', 'categories', 'startDate', 'endDate', 'accountId',
             'totalAmount', 'totalTax', 'total'
         ));
     }
@@ -474,13 +478,14 @@ class ReportController extends Controller
         $gstCollected = $invoices->sum('tax_amount');
         $totalInvoices = $invoices->sum('subtotal');
 
-        // Get GST paid from expenses (input tax)
-        $expenses = Expense::whereBetween('expense_date', [$startDate, $endDate])
-            ->whereIn('status', ['paid', 'approved'])
+        // Get GST paid from bills (input tax) — per-line GST treatment means
+        // GST-free lines simply contribute no tax_amount.
+        $bills = Bill::whereBetween('bill_date', [$startDate, $endDate])
+            ->whereNotIn('status', [Bill::STATUS_DRAFT, Bill::STATUS_CANCELLED])
             ->get();
-        
-        $gstPaid = $expenses->sum('tax_amount');
-        $totalExpenses = $expenses->sum('amount');
+
+        $gstPaid = $bills->sum('tax_amount');
+        $totalExpenses = $bills->sum('subtotal');
 
         $netGst = $gstCollected - $gstPaid;
 
@@ -705,25 +710,25 @@ class ReportController extends Controller
               ];
           })->sortByDesc("tax_rate");
 
-        // Get expenses with tax by rate
-        $expenses = Expense::whereBetween("expense_date", [$startDate, $endDate])
-            ->whereIn("status", ["paid", "approved"])
-            ->with("supplier")
+        // Get bill line items with tax by rate (per-line GST treatment:
+        // GST-free lines have tax_rate 0 and are naturally excluded by the
+        // tax_rate > 0 filter below).
+        $bills = Bill::whereBetween("bill_date", [$startDate, $endDate])
+            ->whereNotIn("status", [Bill::STATUS_DRAFT, Bill::STATUS_CANCELLED])
+            ->with(["supplier", "items"])
             ->get();
 
-        $purchasesByTaxRate = $expenses->map(function ($expense) {
-            $netAmount = $expense->amount;
-            $taxRate = $expense->tax_amount > 0 && $expense->amount > 0
-                ? ($expense->tax_amount / $expense->amount) * 100
-                : 0;
-            return [
-                "tax_rate" => round($taxRate, 2),
-                "net_amount" => $netAmount,
-                "tax_amount" => $expense->tax_amount,
-                "gross_amount" => $expense->total,
-                "reference" => $expense->reference ?? "N/A",
-                "supplier_name" => $expense->supplier->name ?? "N/A",
-            ];
+        $purchasesByTaxRate = $bills->flatMap(function ($bill) {
+            return $bill->items->map(function ($item) use ($bill) {
+                return [
+                    "tax_rate" => (float) ($item->tax_rate ?? 0),
+                    "net_amount" => ($item->quantity * $item->unit_price) - $item->discount_amount,
+                    "tax_amount" => $item->tax_amount,
+                    "gross_amount" => $item->total,
+                    "reference" => $bill->reference ?? $bill->bill_number,
+                    "supplier_name" => $bill->supplier->name ?? "N/A",
+                ];
+            });
         })->filter(function ($item) {
             return $item["tax_rate"] > 0;
         })->groupBy("tax_rate")
@@ -855,19 +860,19 @@ class ReportController extends Controller
               ];
           })->sortByDesc("tax_rate");
 
-        $expenses = Expense::whereBetween("expense_date", [$startDate, $endDate])
-            ->whereIn("status", ["paid", "approved"])
+        $bills = Bill::whereBetween("bill_date", [$startDate, $endDate])
+            ->whereNotIn("status", [Bill::STATUS_DRAFT, Bill::STATUS_CANCELLED])
+            ->with("items")
             ->get();
 
-        $purchasesByTaxRate = $expenses->map(function ($expense) {
-            $netAmount = $expense->amount;
-            $taxRate = $expense->tax_amount > 0 && $expense->amount > 0
-                ? ($expense->tax_amount / $expense->amount) * 100 : 0;
-            return [
-                "tax_rate" => round($taxRate, 2),
-                "net_amount" => $netAmount,
-                "tax_amount" => $expense->tax_amount,
-            ];
+        $purchasesByTaxRate = $bills->flatMap(function ($bill) {
+            return $bill->items->map(function ($item) {
+                return [
+                    "tax_rate" => (float) ($item->tax_rate ?? 0),
+                    "net_amount" => ($item->quantity * $item->unit_price) - $item->discount_amount,
+                    "tax_amount" => $item->tax_amount,
+                ];
+            });
         })->filter(fn($item) => $item["tax_rate"] > 0)
           ->groupBy("tax_rate")
           ->map(function ($items, $rate) {
@@ -1001,19 +1006,19 @@ class ReportController extends Controller
               ];
           })->sortByDesc("tax_rate");
 
-        $expenses = Expense::whereBetween("expense_date", [$startDate, $endDate])
-            ->whereIn("status", ["paid", "approved"])
+        $bills = Bill::whereBetween("bill_date", [$startDate, $endDate])
+            ->whereNotIn("status", [Bill::STATUS_DRAFT, Bill::STATUS_CANCELLED])
+            ->with("items")
             ->get();
 
-        $purchasesByTaxRate = $expenses->map(function ($expense) {
-            $netAmount = $expense->amount;
-            $taxRate = $expense->tax_amount > 0 && $expense->amount > 0
-                ? ($expense->tax_amount / $expense->amount) * 100 : 0;
-            return [
-                "tax_rate" => round($taxRate, 2),
-                "net_amount" => $netAmount,
-                "tax_amount" => $expense->tax_amount,
-            ];
+        $purchasesByTaxRate = $bills->flatMap(function ($bill) {
+            return $bill->items->map(function ($item) {
+                return [
+                    "tax_rate" => (float) ($item->tax_rate ?? 0),
+                    "net_amount" => ($item->quantity * $item->unit_price) - $item->discount_amount,
+                    "tax_amount" => $item->tax_amount,
+                ];
+            });
         })->filter(fn($item) => $item["tax_rate"] > 0)
           ->groupBy("tax_rate")
           ->map(function ($items, $rate) {

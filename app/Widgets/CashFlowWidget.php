@@ -2,8 +2,8 @@
 
 namespace App\Widgets;
 
+use App\Models\BillPayment;
 use App\Models\Payment;
-use App\Models\Expense;
 use Carbon\Carbon;
 use Arrilot\Widgets\AbstractWidget;
 
@@ -27,15 +27,15 @@ class CashFlowWidget extends AbstractWidget
             ->where('payment_date', '<', $thirtyDaysAgo)
             ->sum('amount');
 
-        $outflows = Expense::where('status', Expense::STATUS_PAID)
-            ->where('paid_date', '>=', $thirtyDaysAgo)
-            ->where('paid_date', '<=', $today)
-            ->sum('total');
+        $outflows = BillPayment::where('status', BillPayment::STATUS_COMPLETED)
+            ->where('payment_date', '>=', $thirtyDaysAgo)
+            ->where('payment_date', '<=', $today)
+            ->sum('amount');
 
-        $previousOutflows = Expense::where('status', Expense::STATUS_PAID)
-            ->where('paid_date', '>=', $sixtyDaysAgo)
-            ->where('paid_date', '<', $thirtyDaysAgo)
-            ->sum('total');
+        $previousOutflows = BillPayment::where('status', BillPayment::STATUS_COMPLETED)
+            ->where('payment_date', '>=', $sixtyDaysAgo)
+            ->where('payment_date', '<', $thirtyDaysAgo)
+            ->sum('amount');
 
         $netCashFlow = $inflows - $outflows;
         $previousNet = $previousInflows - $previousOutflows;
