@@ -2,9 +2,9 @@
 
 namespace App\Widgets;
 
+use App\Models\BillPayment;
 use App\Models\Invoice;
 use App\Models\Payment;
-use App\Models\Expense;
 use Carbon\Carbon;
 use Arrilot\Widgets\AbstractWidget;
 
@@ -25,9 +25,9 @@ class PnLTrendWidget extends AbstractWidget
                 ->whereBetween('payment_date', [$monthStart, $monthEnd])
                 ->sum('amount');
 
-            $expenses = Expense::where('status', Expense::STATUS_PAID)
-                ->whereBetween('paid_date', [$monthStart, $monthEnd])
-                ->sum('total');
+            $expenses = BillPayment::where('status', BillPayment::STATUS_COMPLETED)
+                ->whereBetween('payment_date', [$monthStart, $monthEnd])
+                ->sum('amount');
 
             $invoicesIssued = Invoice::whereBetween('issue_date', [$monthStart, $monthEnd])
                 ->sum('total');

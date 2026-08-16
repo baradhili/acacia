@@ -237,6 +237,8 @@ class PaymentController extends Controller
                     'id' => $invoice->id,
                     'invoice_number' => $invoice->invoice_number,
                     'total' => $invoice->total,
+                    // Outstanding balance — the 100%-allocation default.
+                    'amount_due' => round((float) $invoice->amount_due, 2),
                     'due_date' => $invoice->due_date,
                 ];
             });

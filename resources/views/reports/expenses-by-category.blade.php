@@ -22,12 +22,12 @@
                     class="rounded-md border-gray-300 shadow-sm">
             </div>
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                <select name="category" class="rounded-md border-gray-300 shadow-sm">
-                    <option value="">All Categories</option>
-                    @foreach($categories as $cat)
-                        <option value="{{ $cat }}" {{ $category == $cat ? 'selected' : '' }}>
-                            {{ ucwords(str_replace('_', ' ', $cat)) }}
+                <label class="block text-sm font-medium text-gray-700 mb-1">Account</label>
+                <select name="account_id" class="rounded-md border-gray-300 shadow-sm">
+                    <option value="">All Accounts</option>
+                    @foreach($categories as $catId => $label)
+                        <option value="{{ $catId }}" {{ request('account_id') == $catId ? 'selected' : '' }}>
+                            {{ $label }}
                         </option>
                     @endforeach
                 </select>
@@ -42,7 +42,7 @@
         <table class="report-table">
             <thead>
                 <tr>
-                    <th>Category</th>
+                    <th>Account</th>
                     <th class="text-right">Count</th>
                     <th class="text-right">Amount (ex. GST)</th>
                     <th class="text-right">GST</th>
@@ -52,11 +52,11 @@
             <tbody>
                 @forelse($byCategory as $item)
                     <tr>
-                        <td>{{ $item['category'] }}</td>
-                        <td class="text-right">{{ $item['expense_count'] }}</td>
-                        <td class="text-right">${{ number_format($item['total_amount'], 2) }}</td>
-                        <td class="text-right">${{ number_format($item['total_tax'], 2) }}</td>
-                        <td class="text-right font-medium">${{ number_format($item['total'], 2) }}</td>
+                        <td>{{ $item->account_code }} — {{ $item->account_name }}</td>
+                        <td class="text-right">{{ $item->expense_count }}</td>
+                        <td class="text-right">${{ number_format($item->total_amount, 2) }}</td>
+                        <td class="text-right">${{ number_format($item->total_tax, 2) }}</td>
+                        <td class="text-right font-medium">${{ number_format($item->total, 2) }}</td>
                     </tr>
                 @empty
                     <tr>

@@ -16,6 +16,7 @@ class ReconciliationHistory extends Model
     const ACTION_MANUAL_MATCH = 'manual_match';
     const ACTION_AUTO_CREATE_RECEIPT = 'auto_create_receipt';
     const ACTION_AUTO_CREATE_EXPENSE = 'auto_create_expense';
+    const ACTION_AUTO_CREATE_BILL = 'auto_create_bill';
     const ACTION_IGNORE = 'ignore';
     const ACTION_UNMATCH = 'unmatch';
     const ACTION_UNIGNORE = 'unignore';
@@ -102,7 +103,7 @@ class ReconciliationHistory extends Model
 
         return match ($this->linked_transaction_type) {
             'payment' => Payment::find($this->linked_transaction_id),
-            'expense' => Expense::find($this->linked_transaction_id),
+            'bill', 'expense' => Bill::find($this->linked_transaction_id),
             'invoice' => Invoice::find($this->linked_transaction_id),
             'ledger' => \IFRS\Models\Ledger::find($this->linked_transaction_id),
             default => null,

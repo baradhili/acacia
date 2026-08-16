@@ -363,6 +363,51 @@ class PaymentTest extends TestCase
         $this->assertEquals('void', Payment::STATUS_VOID);
     }
 
+    public function test_get_client_invoices_returns_outstanding_with_amount_due(): void
+    {
+        // The setUp invoice: 110 total, fully outstanding.
+        $partial = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_SENT,
+        ]);
+        $partial->items()->create([
+            'description' => 'Partial Service',
+            'quantity' => 1,
+            'unit_price' => 200,
+            'tax_rate' => 10,
+        ]);
+        $partial->refresh();
+        $partial->recalculateTotals();
+
+        $payment = Payment::create([
+            'client_id' => $this->client->id,
+            'amount' => 110,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+        $payment->allocateToInvoice($partial, 110); // 220 total → 110 still due
+
+        $draft = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+        ]); // draft — excluded
+
+        $response = $this->actingAs($this->user)
+            ->get(route('payments.client-invoices', $this->client));
+
+        $response->assertStatus(200);
+        $invoices = collect($response->json())->keyBy('id');
+
+        // amount_due drives the 100%-allocation default in the UI.
+        $this->assertEquals(110.0, $invoices[$this->invoice->id]['amount_due']);
+        $this->assertEquals(110.0, $invoices[$partial->id]['amount_due']);
+        $this->assertEquals(220.0, $invoices[$partial->id]['total']);
+        $this->assertArrayNotHasKey($draft->id, $invoices);
+    }
+
     public function test_payment_unallocated_amount_calculated_correctly(): void
     {
         $payment = Payment::create([

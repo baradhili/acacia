@@ -2,9 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\Bill;
 use App\Models\Client;
 use App\Models\Document;
-use App\Models\Expense;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PurchaseOrder;
@@ -40,24 +40,24 @@ class DocumentTest extends TestCase
         $response->assertRedirect('/login');
     }
 
-    public function test_can_upload_document_for_expense(): void
+    public function test_can_upload_document_for_bill(): void
     {
         $supplier = Supplier::factory()->create();
-        $expense = Expense::factory()->draft()->create(['supplier_id' => $supplier->id]);
-        
+        $bill = Bill::create(['supplier_id' => $supplier->id]);
+
         $file = UploadedFile::fake()->create('receipt.pdf', 1024);
-        
+
         $response = $this->actingAs($this->user)->post('/documents', [
-            'documentable_type' => 'Expense',
-            'documentable_id' => $expense->id,
+            'documentable_type' => 'Bill',
+            'documentable_id' => $bill->id,
             'file' => $file,
         ]);
-        
+
         $response->assertStatus(201);
-        
+
         $this->assertDatabaseHas('documents', [
-            'documentable_type' => 'App\\Models\\Expense',
-            'documentable_id' => $expense->id,
+            'documentable_type' => 'App\\Models\\Bill',
+            'documentable_id' => $bill->id,
             'name' => 'receipt.pdf',
             'uploaded_by' => $this->user->id,
         ]);
@@ -96,7 +96,7 @@ class DocumentTest extends TestCase
     public function test_document_upload_requires_file(): void
     {
         $response = $this->actingAs($this->user)->post('/documents', [
-            'documentable_type' => 'Expense',
+            'documentable_type' => 'Bill',
             'documentable_id' => 1,
         ]);
         
@@ -108,7 +108,7 @@ class DocumentTest extends TestCase
         $file = UploadedFile::fake()->create('document.exe', 1024);
         
         $response = $this->actingAs($this->user)->post('/documents', [
-            'documentable_type' => 'Expense',
+            'documentable_type' => 'Bill',
             'documentable_id' => 1,
             'file' => $file,
         ]);
@@ -121,7 +121,7 @@ class DocumentTest extends TestCase
         $file = UploadedFile::fake()->create('large.pdf', 30000); // 30MB
         
         $response = $this->actingAs($this->user)->post('/documents', [
-            'documentable_type' => 'Expense',
+            'documentable_type' => 'Bill',
             'documentable_id' => 1,
             'file' => $file,
         ]);
@@ -132,18 +132,18 @@ class DocumentTest extends TestCase
     public function test_can_get_documents_for_model(): void
     {
         $supplier = Supplier::factory()->create();
-        $expense = Expense::factory()->draft()->create(['supplier_id' => $supplier->id]);
-        
+        $bill = Bill::create(['supplier_id' => $supplier->id]);
+
         Document::factory()->count(3)->create([
-            'documentable_type' => 'App\\Models\\Expense',
-            'documentable_id' => $expense->id,
+            'documentable_type' => 'App\\Models\\Bill',
+            'documentable_id' => $bill->id,
         ]);
         
         // Use the named route with short class name
         $response = $this->actingAs($this->user)->get(
             route('documents.for-model', [
-                'type' => 'Expense',
-                'id' => $expense->id
+                'type' => 'Bill',
+                'id' => $bill->id
             ])
         );
         
@@ -217,29 +217,29 @@ class DocumentTest extends TestCase
     public function test_document_polymorphic_relationship(): void
     {
         $supplier = Supplier::factory()->create();
-        $expense = Expense::factory()->draft()->create(['supplier_id' => $supplier->id]);
-        
+        $bill = Bill::create(['supplier_id' => $supplier->id]);
+
         $document = Document::factory()->create([
-            'documentable_type' => 'App\Models\Expense',
-            'documentable_id' => $expense->id,
+            'documentable_type' => 'App\Models\Bill',
+            'documentable_id' => $bill->id,
         ]);
-        
-        $this->assertInstanceOf(Expense::class, $document->documentable);
-        $this->assertEquals($expense->id, $document->documentable->id);
+
+        $this->assertInstanceOf(Bill::class, $document->documentable);
+        $this->assertEquals($bill->id, $document->documentable->id);
     }
 
-    public function test_expense_has_documents_relationship(): void
+    public function test_bill_has_documents_relationship(): void
     {
         $supplier = Supplier::factory()->create();
-        $expense = Expense::factory()->draft()->create(['supplier_id' => $supplier->id]);
-        
+        $bill = Bill::create(['supplier_id' => $supplier->id]);
+
         Document::factory()->count(2)->create([
-            'documentable_type' => 'App\Models\Expense',
-            'documentable_id' => $expense->id,
+            'documentable_type' => 'App\Models\Bill',
+            'documentable_id' => $bill->id,
         ]);
-        
-        $expense->refresh();
-        $this->assertCount(2, $expense->documents);
+
+        $bill->refresh();
+        $this->assertCount(2, $bill->documents);
     }
 
     public function test_invoice_has_documents_relationship(): void

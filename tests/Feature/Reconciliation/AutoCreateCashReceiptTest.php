@@ -3,10 +3,12 @@
 namespace Tests\Feature\Reconciliation;
 
 use App\Models\BankTransaction;
+use App\Models\Bill;
+use App\Models\BillPayment;
 use App\Models\Client;
-use App\Models\Expense;
 use App\Models\Payment;
 use App\Models\ReconciliationHistory;
+use App\Models\Supplier;
 use App\Services\ReconciliationService;
 use Carbon\Carbon;
 use IFRS\Models\Account;
@@ -79,12 +81,31 @@ class AutoCreateCashReceiptTest extends TestCase
             'entity_id' => $entity->id,
         ]);
         $gstPayable = Account::create([
+            // CONTROL type: Vat::save rejects non-CONTROL accounts, and this
+            // account backs the GST 10% Vat below.
             'name' => 'GST Payable',
-            'account_type' => Account::CURRENT_LIABILITY,
+            'account_type' => Account::CONTROL,
             'code' => 2200,
             'currency_id' => $currency->id,
             'entity_id' => $entity->id,
         ]);
+
+        // Expense accounts touched by bill posting / account suggestions.
+        foreach ([
+            ['Travel & Accommodation', Account::OPERATING_EXPENSE, 5300],
+            ['Meals & Entertainment', Account::OPERATING_EXPENSE, 5500],
+            ['Office Supplies', Account::OVERHEAD_EXPENSE, 7400],
+            ['Subscriptions & Licenses', Account::OVERHEAD_EXPENSE, 7500],
+            ['Other Expenses', Account::OTHER_EXPENSE, 8900],
+        ] as [$name, $type, $code]) {
+            Account::create([
+                'name' => $name,
+                'account_type' => $type,
+                'code' => $code,
+                'currency_id' => $currency->id,
+                'entity_id' => $entity->id,
+            ]);
+        }
 
         Vat::create([
             'name' => 'GST 10%',
@@ -381,9 +402,9 @@ class AutoCreateCashReceiptTest extends TestCase
     // Auto-Create Purchase Tests (Task 2)
     // ========================
 
-    public function test_creates_expense_from_unmatched_wise_debit(): void
+    public function test_creates_bill_from_unmatched_wise_debit(): void
     {
-        $supplier = $this->createClient(['name' => 'AWS Cloud']);
+        $supplier = $this->createSupplier(['name' => 'AWS Cloud']);
 
         $bankTxn = $this->createBankTransaction([
             'type' => BankTransaction::TYPE_DEBIT,
@@ -391,38 +412,33 @@ class AutoCreateCashReceiptTest extends TestCase
             'amount' => 250.00,
         ]);
 
-        $expense = $this->service->createPurchaseFromBankTransaction(
-            $bankTxn,
-            $supplier->id,
-            'software'
-        );
+        $bill = $this->service->createPurchaseFromBankTransaction($bankTxn, $supplier->id);
 
-        $this->assertNotNull($expense);
-        $this->assertInstanceOf(Expense::class, $expense);
-        $this->assertEquals($supplier->id, $expense->supplier_id);
-        $this->assertEquals(250.00, $expense->total);
-        $this->assertEquals('software', $expense->category);
+        $this->assertNotNull($bill);
+        $this->assertInstanceOf(Bill::class, $bill);
+        $this->assertEquals($supplier->id, $bill->supplier_id);
+        $this->assertEquals(250.00, (float) $bill->total);
+        // Bank amounts carry no GST breakdown — line posts GST-free.
+        $this->assertEquals(0, (float) $bill->items->first()->tax_rate);
 
         // Verify bank transaction is marked as matched
         $bankTxn->refresh();
         $this->assertEquals(BankTransaction::STATUS_MATCHED, $bankTxn->status);
-        $this->assertEquals($expense->id, $bankTxn->matched_transaction_id);
+        $this->assertEquals($bill->id, $bankTxn->matched_transaction_id);
+        $this->assertEquals('bill', $bankTxn->matched_transaction_type);
     }
 
-    public function test_cannot_create_expense_from_credit_transaction(): void
+    public function test_cannot_create_bill_from_credit_transaction(): void
     {
-        $supplier = $this->createClient();
+        $supplier = $this->createSupplier();
 
         $bankTxn = $this->createBankTransaction([
             'type' => BankTransaction::TYPE_CREDIT,
         ]);
 
-        $expense = $this->service->createPurchaseFromBankTransaction(
-            $bankTxn,
-            $supplier->id
-        );
+        $bill = $this->service->createPurchaseFromBankTransaction($bankTxn, $supplier->id);
 
-        $this->assertNull($expense);
+        $this->assertNull($bill);
     }
 
     public function test_returns_null_for_invalid_supplier(): void
@@ -431,60 +447,67 @@ class AutoCreateCashReceiptTest extends TestCase
             'type' => BankTransaction::TYPE_DEBIT,
         ]);
 
-        $expense = $this->service->createPurchaseFromBankTransaction(
+        $bill = $this->service->createPurchaseFromBankTransaction(
             $bankTxn,
             99999 // Non-existent supplier
         );
 
-        $this->assertNull($expense);
+        $this->assertNull($bill);
     }
 
-    public function test_marks_expense_as_paid_when_requested(): void
+    public function test_marks_bill_as_paid_when_requested(): void
     {
-        $supplier = $this->createClient();
+        $this->seedIfrs();
+        $supplier = $this->createSupplier();
 
         $bankTxn = $this->createBankTransaction([
             'type' => BankTransaction::TYPE_DEBIT,
             'transaction_date' => Carbon::parse('2025-07-15'),
         ]);
 
-        $expense = $this->service->createPurchaseFromBankTransaction(
+        $bill = $this->service->createPurchaseFromBankTransaction(
             $bankTxn,
             $supplier->id,
-            'software',
+            null,
             null,
             true // Mark as paid
         );
 
-        $this->assertNotNull($expense);
-        $this->assertEquals(Expense::STATUS_PAID, $expense->status);
-        $this->assertNotNull($expense->ifrs_transaction_id);
+        $this->assertNotNull($bill);
+        $this->assertEquals(Bill::STATUS_PAID, $bill->fresh()->status);
+        $this->assertNotNull($bill->fresh()->paid_at);
+
+        // The paid-at-entry payment carries the IFRS journal id.
+        $payment = BillPayment::where('supplier_id', $supplier->id)->first();
+        $this->assertNotNull($payment);
+        $this->assertNotNull($payment->ifrs_payment_id);
     }
 
-    public function test_does_not_mark_expense_as_paid_when_disabled(): void
+    public function test_does_not_mark_bill_as_paid_when_disabled(): void
     {
-        $supplier = $this->createClient();
+        $supplier = $this->createSupplier();
 
         $bankTxn = $this->createBankTransaction([
             'type' => BankTransaction::TYPE_DEBIT,
         ]);
 
-        $expense = $this->service->createPurchaseFromBankTransaction(
+        $bill = $this->service->createPurchaseFromBankTransaction(
             $bankTxn,
             $supplier->id,
-            'software',
+            null,
             null,
             false // Don't mark as paid
         );
 
-        $this->assertNotNull($expense);
-        $this->assertEquals(Expense::STATUS_DRAFT, $expense->status);
+        $this->assertNotNull($bill);
+        $this->assertEquals(Bill::STATUS_DRAFT, $bill->fresh()->status);
+        $this->assertEquals(0, BillPayment::count());
     }
 
     public function test_auto_create_purchases_for_all_unmatched_debits(): void
     {
-        $supplier1 = $this->createClient(['name' => 'Google Cloud']);
-        $supplier2 = $this->createClient(['name' => 'AWS']);
+        $supplier1 = $this->createSupplier(['name' => 'Google Cloud']);
+        $supplier2 = $this->createSupplier(['name' => 'AWS']);
 
         // Create unmatched debit transactions
         $txn1 = $this->createBankTransaction([
@@ -507,18 +530,18 @@ class AutoCreateCashReceiptTest extends TestCase
             'amount' => 50.00,
         ]);
 
-        $results = $this->service->autoCreatePurchases();
+        $results = $this->service->autoCreatePurchases(false);
 
         $this->assertEquals(2, $results['count']);
         $this->assertEquals(1, $results['skipped']);
         $this->assertCount(2, $results['created']);
 
-        // Verify all expenses were created
-        $this->assertDatabaseHas('expenses', [
+        // Verify all bills were created
+        $this->assertDatabaseHas('bills', [
             'supplier_id' => $supplier1->id,
             'total' => 100.00,
         ]);
-        $this->assertDatabaseHas('expenses', [
+        $this->assertDatabaseHas('bills', [
             'supplier_id' => $supplier2->id,
             'total' => 200.00,
         ]);
@@ -526,29 +549,41 @@ class AutoCreateCashReceiptTest extends TestCase
 
     public function test_finds_supplier_by_merchant_name(): void
     {
-        $supplier = $this->createClient(['name' => 'Microsoft Corporation']);
+        $supplier = $this->createSupplier(['name' => 'Microsoft Corporation']);
 
         $bankTxn = $this->createBankTransaction([
             'type' => BankTransaction::TYPE_DEBIT,
             'merchant_name' => 'Microsoft Corporation',
         ]);
 
-        $results = $this->service->autoCreatePurchases();
+        $results = $this->service->autoCreatePurchases(false);
 
         $this->assertEquals(1, $results['count']);
-        $this->assertDatabaseHas('expenses', ['supplier_id' => $supplier->id]);
+        $this->assertDatabaseHas('bills', ['supplier_id' => $supplier->id]);
     }
 
-    public function test_suggests_expense_category_based_on_merchant(): void
+    public function test_suggests_expense_account_based_on_merchant(): void
     {
-        $this->assertEquals('software', $this->service->suggestExpenseCategory('AWS Cloud'));
-        $this->assertEquals('software', $this->service->suggestExpenseCategory('Google Workspace'));
-        $this->assertEquals('software', $this->service->suggestExpenseCategory('Microsoft Azure'));
-        $this->assertEquals('travel', $this->service->suggestExpenseCategory('Qantas Airlines'));
-        $this->assertEquals('travel', $this->service->suggestExpenseCategory('Uber Trip'));
-        $this->assertEquals('meals', $this->service->suggestExpenseCategory('Starbucks Coffee'));
-        $this->assertEquals('office_supplies', $this->service->suggestExpenseCategory('Officeworks'));
-        $this->assertEquals('other', $this->service->suggestExpenseCategory('Random Merchant'));
+        $this->seedIfrs();
+
+        $accounts = Account::whereIn('code', [7500, 5300, 5500, 7400, 8900])->get()->keyBy('code');
+
+        $this->assertEquals($accounts[7500]->id, $this->service->suggestExpenseAccount('AWS Cloud'));
+        $this->assertEquals($accounts[7500]->id, $this->service->suggestExpenseAccount('Google Workspace'));
+        $this->assertEquals($accounts[7500]->id, $this->service->suggestExpenseAccount('Microsoft Azure'));
+        $this->assertEquals($accounts[5300]->id, $this->service->suggestExpenseAccount('Qantas Airlines'));
+        $this->assertEquals($accounts[5300]->id, $this->service->suggestExpenseAccount('Uber Trip'));
+        $this->assertEquals($accounts[5500]->id, $this->service->suggestExpenseAccount('Starbucks Coffee'));
+        $this->assertEquals($accounts[7400]->id, $this->service->suggestExpenseAccount('Officeworks'));
+        $this->assertEquals($accounts[8900]->id, $this->service->suggestExpenseAccount('Random Merchant'));
+    }
+
+    protected function createSupplier(array $attributes = []): Supplier
+    {
+        return Supplier::create(array_merge([
+            'name' => 'Test Supplier',
+            'email' => 'supplier@example.com',
+        ], $attributes));
     }
 
     // ========================

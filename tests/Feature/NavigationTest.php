@@ -58,6 +58,8 @@ class NavigationTest extends TestCase
         $response->assertSee('Projects');
         $response->assertSee('Invoices');
         $response->assertSee('Payments');
+        $response->assertSee('Bills');
+        $response->assertSee('Supplier Payments');
         $response->assertSee('Time Entries');
         $response->assertSee('Purchase Orders');
     }

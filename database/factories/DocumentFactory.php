@@ -23,7 +23,7 @@ class DocumentFactory extends Factory
         $path = 'uploads/' . $this->faker->date('Y/m') . '/' . Str::random(10) . '.pdf';
         
         return [
-            'documentable_type' => 'App\Models\Expense',
+            'documentable_type' => 'App\Models\Bill',
             'documentable_id' => $this->faker->numberBetween(1, 10),
             'name' => $name,
             'file_path' => $path,
@@ -45,13 +45,13 @@ class DocumentFactory extends Factory
     }
 
     /**
-     * Indicate the document is for an expense.
+     * Indicate the document is for a bill.
      */
-    public function forExpense(int $expenseId = null): static
+    public function forBill(int $billId = null): static
     {
         return $this->state(fn (array $attributes) => [
-            'documentable_type' => 'App\Models\Expense',
-            'documentable_id' => $expenseId ?? $this->faker->numberBetween(1, 10),
+            'documentable_type' => 'App\Models\Bill',
+            'documentable_id' => $billId ?? $this->faker->numberBetween(1, 10),
         ]);
     }
 

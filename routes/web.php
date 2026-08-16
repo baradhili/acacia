@@ -1,12 +1,13 @@
 <?php
 
+use App\Http\Controllers\BillController;
+use App\Http\Controllers\BillPaymentController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ChartOfAccountsController;
 use App\Http\Controllers\CreditNoteController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\EstimateController;
-use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\LogoController;
 use App\Http\Controllers\PaymentController;
@@ -104,13 +105,17 @@ Route::middleware('auth')->group(function () {
     Route::get('/credit-notes/create-from-invoice/{invoice}', [CreditNoteController::class, 'createFromInvoice'])->name('credit-notes.create-from-invoice');
     Route::post('/credit-notes/{creditNote}/apply-to-invoice', [CreditNoteController::class, 'applyToInvoice'])->name('credit-notes.applyToInvoice');
 
-    // Expenses
-    Route::resource('expenses', ExpenseController::class);
-    Route::post('/expenses/{expense}/submit', [ExpenseController::class, 'submit'])->name('expenses.submit');
-    Route::post('/expenses/{expense}/approve', [ExpenseController::class, 'approve'])->name('expenses.approve');
-    Route::post('/expenses/{expense}/pay', [ExpenseController::class, 'pay'])->name('expenses.pay');
-    Route::post('/expenses/{expense}/cancel', [ExpenseController::class, 'cancel'])->name('expenses.cancel');
-    Route::get('/expenses/{expense}/receipt', [ExpenseController::class, 'downloadReceipt'])->name('expenses.download-receipt');
+    // Bills (accounts payable — invoices from suppliers)
+    Route::resource('bills', BillController::class);
+    Route::post('/bills/{bill}/open', [BillController::class, 'open'])->name('bills.open');
+    Route::post('/bills/{bill}/cancel', [BillController::class, 'cancel'])->name('bills.cancel');
+    Route::post('/bills/{bill}/record-payment', [BillController::class, 'recordPayment'])->name('bills.recordPayment');
+
+    // Bill Payments (supplier payments)
+    Route::resource('bill-payments', BillPaymentController::class);
+    Route::get('/bill-payments/supplier-bills/{supplier}', [BillPaymentController::class, 'getSupplierBills'])->name('bill-payments.supplier-bills');
+    Route::post('/bill-payments/{billPayment}/allocate', [BillPaymentController::class, 'allocate'])->name('bill-payments.allocate');
+    Route::post('/bill-payments/{billPayment}/remove-allocation/{bill}', [BillPaymentController::class, 'removeAllocation'])->name('bill-payments.removeAllocation');
 
     // Documents (API)
     Route::get('/documents', [DocumentController::class, 'index'])->name('documents.index');

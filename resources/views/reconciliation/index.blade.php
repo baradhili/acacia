@@ -59,7 +59,7 @@
             <ol class="list-decimal ml-6 mt-4 space-y-2">
                 <li>Configure your Wise API credentials in the settings (coming in Phase 6)</li>
                 <li>Import transactions from Wise or upload a CSV export</li>
-                <li>Review and match transactions to invoices and expenses</li>
+                <li>Review and match transactions to invoices, bills and payments</li>
                 <li>Create any missing transactions automatically</li>
             </ol>
         </div>

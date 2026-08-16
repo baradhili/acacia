@@ -2,7 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Models\Expense;
+use App\Models\Bill;
+use App\Models\Supplier;
 use App\Models\User;
 use Carbon\Carbon;
 use IFRS\Models\Currency;
@@ -113,15 +114,29 @@ class IfrsReportsTest extends TestCase
         $response->assertSee('Tax Summary');
     }
 
-    public function test_tax_summary_calculates_input_tax_from_expenses(): void
+    public function test_tax_summary_calculates_input_tax_from_bills(): void
     {
-        $expense = Expense::factory()->create([
-            'expense_date' => Carbon::now(),
-            'amount' => 100,
-            'tax_amount' => 15,
-            'total' => 115,
-            'status' => 'paid',
+        $supplier = Supplier::create(['name' => 'Test Supplier']);
+
+        $bill = Bill::create([
+            'supplier_id' => $supplier->id,
+            'bill_date' => Carbon::now()->toDateString(),
+            'due_date' => Carbon::now()->addDays(30)->toDateString(),
         ]);
+        $bill->items()->create([
+            'description' => 'Taxable purchase',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+        $bill->items()->create([
+            'description' => 'GST-free purchase',
+            'quantity' => 1,
+            'unit_price' => 50,
+            'tax_rate' => 0,
+        ]);
+        $bill->recalculateTotals();
+        $bill->markAsOpen();
 
         $response = $this->actingAs($this->user)
             ->get(route('reports.tax-summary', [
@@ -157,27 +172,35 @@ class IfrsReportsTest extends TestCase
     }
 
     // ============================================================
-    // Expense IFRS Journal Entry Tests
+    // Bill IFRS Journal Entry Tests (per-line GST posting is covered
+    // in Unit/BillPaymentModelTest)
     // ============================================================
-    public function test_expense_can_be_marked_as_paid(): void
+    public function test_bill_can_be_marked_as_paid(): void
     {
-        $expense = Expense::factory()->create([
-            'category' => 'office_supplies',
-            'amount' => 100,
-            'tax_amount' => 15,
-            'total' => 115,
-            'status' => 'approved',
-            'expense_date' => Carbon::now(),
+        $supplier = Supplier::create(['name' => 'Test Supplier']);
+
+        $bill = Bill::create(['supplier_id' => $supplier->id]);
+        $bill->items()->create([
+            'description' => 'Office supplies',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
         ]);
+        $bill->recalculateTotals();
+        $bill->markAsOpen();
 
-        $result = $expense->markAsPaid(
-            paymentMethod: 'bank_transfer',
-            userId: $this->user->id
-        );
+        $payment = \App\Models\BillPayment::createWithUniqueNumber([
+            'supplier_id' => $supplier->id,
+            'paid_by' => $this->user->id,
+            'amount' => 110,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+        $payment->allocateToBill($bill, 110);
 
-        $expense->refresh();
+        $bill->refresh();
 
-        $this->assertTrue($result);
-        $this->assertEquals('paid', $expense->status);
+        $this->assertEquals(Bill::STATUS_PAID, $bill->status);
+        $this->assertNotNull($bill->paid_at);
     }
 }

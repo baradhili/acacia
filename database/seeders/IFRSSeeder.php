@@ -206,10 +206,12 @@ class IFRSSeeder extends Seeder
         $this->createAccount('Staff Training', Account::OPERATING_EXPENSE, 5200, $entity);
         $this->createAccount('Travel & Accommodation', Account::OPERATING_EXPENSE, 5300, $entity);
         $this->createAccount('Motor Vehicle Expenses', Account::OPERATING_EXPENSE, 5400, $entity);
+        $this->createAccount('Meals & Entertainment', Account::OPERATING_EXPENSE, 5500, $entity);
 
         // Overhead Expenses (Codes 7000-7999)
         $this->createAccount('Rent & Lease', Account::OVERHEAD_EXPENSE, 7100, $entity);
         $this->createAccount('Utilities', Account::OVERHEAD_EXPENSE, 7200, $entity);
+        $this->createAccount('Phone & Internet', Account::OVERHEAD_EXPENSE, 7250, $entity);
         $this->createAccount('Insurance', Account::OVERHEAD_EXPENSE, 7300, $entity);
         $this->createAccount('Office Supplies', Account::OVERHEAD_EXPENSE, 7400, $entity);
         $this->createAccount('Subscriptions & Licenses', Account::OVERHEAD_EXPENSE, 7500, $entity);

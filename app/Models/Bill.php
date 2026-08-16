@@ -2,26 +2,24 @@
 
 namespace App\Models;
 
-use Carbon\Carbon;
+use IFRS\Models\Account;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
-class Invoice extends Model
+class Bill extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'invoice_number',
-        'client_id',
+        'bill_number',
+        'supplier_id',
         'project_id',
-        'purchase_order_id',
         'created_by',
         'status',
-        'issue_date',
+        'bill_date',
         'due_date',
         'paid_at',
         'subtotal',
@@ -29,106 +27,86 @@ class Invoice extends Model
         'discount_amount',
         'total',
         'notes',
-        'terms',
-        'ifrs_invoice_id',
-        'is_recurring',
-        'recurring_frequency',
-        'next_recurring_date',
-        'parent_invoice_id',
-        'sent_at',
-        'viewed_at',
+        'reference',
     ];
 
     protected $casts = [
-        'issue_date' => 'date',
+        'bill_date' => 'date',
         'due_date' => 'date',
-        'paid_at' => 'datetime',
-        'sent_at' => 'datetime',
-        'viewed_at' => 'datetime',
+        'paid_at' => 'date',
         'subtotal' => 'decimal:2',
         'tax_amount' => 'decimal:2',
         'discount_amount' => 'decimal:2',
         'total' => 'decimal:2',
-        'is_recurring' => 'boolean',
-        'next_recurring_date' => 'date',
     ];
 
-    // Status constants
+    // Status constants — mirrors Invoice with `open` (bill received and
+    // confirmed, awaiting payment) in place of the AR `sent`.
     const STATUS_DRAFT = 'draft';
-    const STATUS_SENT = 'sent';
+    const STATUS_OPEN = 'open';
     const STATUS_PARTIALLY_PAID = 'partially_paid';
     const STATUS_PAID = 'paid';
     const STATUS_OVERDUE = 'overdue';
     const STATUS_CANCELLED = 'cancelled';
 
-    // Recurring frequencies
-    const RECURRING_DAILY = 'daily';
-    const RECURRING_WEEKLY = 'weekly';
-    const RECURRING_MONTHLY = 'monthly';
-    const RECURRING_YEARLY = 'yearly';
-
     // Valid state transitions
     protected static array $transitions = [
-        'draft' => ['sent', 'cancelled'],
-        'sent' => ['partially_paid', 'paid', 'overdue', 'cancelled'],
+        'draft' => ['open', 'cancelled'],
+        'open' => ['partially_paid', 'paid', 'overdue', 'cancelled'],
         'partially_paid' => ['paid', 'overdue'],
-        'paid' => [],  // Paid invoices cannot be cancelled
+        'paid' => [],     // Paid bills cannot be cancelled
         'overdue' => ['partially_paid', 'paid'],
-        'cancelled' => [],  // Cancelled invoices are final
+        'cancelled' => [], // Cancelled bills are final
     ];
 
     protected static function boot()
     {
         parent::boot();
 
-        static::creating(function ($invoice) {
-            if (empty($invoice->invoice_number)) {
-                $invoice->invoice_number = self::generateInvoiceNumber();
+        static::creating(function ($bill) {
+            if (empty($bill->bill_number)) {
+                $bill->bill_number = self::generateBillNumber();
             }
-            if (empty($invoice->status)) {
-                $invoice->status = self::STATUS_DRAFT;
+            if (empty($bill->status)) {
+                $bill->status = self::STATUS_DRAFT;
             }
-            if (empty($invoice->issue_date)) {
-                $invoice->issue_date = now()->toDateString();
+            if (empty($bill->bill_date)) {
+                $bill->bill_date = now()->toDateString();
             }
-            if (empty($invoice->due_date) && config('australian.invoice_due_days')) {
-                $invoice->due_date = now()->addDays(config('australian.invoice_due_days', 30))->toDateString();
+            if (empty($bill->due_date) && config('australian.invoice_due_days')) {
+                $bill->due_date = now()->addDays(config('australian.invoice_due_days', 30))->toDateString();
             }
         });
 
-        // Invoice totals are recalculated explicitly via recalculateTotals()
-        // (from controllers, Estimate::convertToInvoice, etc.) and via the
-        // InvoiceItem saved/deleted hooks when a line item changes. There is
-        // intentionally no static::saved auto-recalc hook here: recalculateTotals()
-        // persists via updateQuietly() inside withoutEvents(), so firing it
-        // again on save would be both redundant and (without the quiet save) a
-        // recursion risk. If auto-recalc-on-save is ever needed, add it
-        // deliberately with a real guard — the old `preventRecalculation` flag
-        // was never set anywhere and protected nothing.
+        // Bill totals are recalculated explicitly via recalculateTotals()
+        // (from controllers) and via the BillItem saved/deleted hooks when a
+        // line item changes. Intentionally no static::saved auto-recalc hook:
+        // recalculateTotals() persists via updateQuietly() inside
+        // withoutEvents(), so firing it again on save would be redundant.
     }
 
-    public static function generateInvoiceNumber(): string
+    public static function generateBillNumber(): string
     {
         $year = date('Y');
-        $lastInvoice = self::whereYear('created_at', $year)
+        $lastBill = self::whereYear('created_at', $year)
             ->orderBy('id', 'desc')
             ->first();
 
-        if ($lastInvoice) {
-            preg_match('/INV-' . $year . '-(\d+)/', $lastInvoice->invoice_number, $matches);
+        if ($lastBill) {
+            preg_match('/BILL-' . $year . '-(\d+)/', $lastBill->bill_number, $matches);
             $nextNumber = isset($matches[1]) ? ((int) $matches[1]) + 1 : 1;
         } else {
             $nextNumber = 1;
         }
 
-        return sprintf('INV-%s-%04d', $year, $nextNumber);
+        return sprintf('BILL-%s-%04d', $year, $nextNumber);
     }
 
     /**
-     * Create an invoice, retrying if two concurrent requests race on
-     * generateInvoiceNumber() and produce a duplicate invoice_number.
+     * Create a bill, retrying if two concurrent requests race on
+     * generateBillNumber() and produce a duplicate bill_number.
      *
-     * The unique() constraint on invoice_number is the real source of truth —
+     * The unique() constraint on bill_number is the real source of truth —
      * the loser of a race gets a QueryException (SQLSTATE 23000). Each retry
      * re-enters the creating hook, which regenerates from the now-higher max,
      * so the next attempt picks the following number.
@@ -146,7 +124,7 @@ class Invoice extends Model
             }
         }
         // Unreachable — the loop either returns or rethrows.
-        throw new \RuntimeException('Unable to create invoice with a unique number.');
+        throw new \RuntimeException('Unable to create bill with a unique number.');
     }
 
     /**
@@ -162,19 +140,33 @@ class Invoice extends Model
             || ($errorInfo[1] ?? null) === 1062;
     }
 
-    public function client(): BelongsTo
+    /**
+     * IFRS expense accounts (the AP "categories"), for line-item dropdowns.
+     * Grouping journals by real chart-of-accounts entries keeps the bill
+     * categories and the ledger aligned by construction.
+     */
+    public static function expenseAccounts(): array
     {
-        return $this->belongsTo(Client::class);
+        return Account::whereIn('account_type', [
+            Account::OPERATING_EXPENSE,
+            Account::DIRECT_EXPENSE,
+            Account::OVERHEAD_EXPENSE,
+            Account::OTHER_EXPENSE,
+        ])
+            ->orderBy('code')
+            ->get()
+            ->mapWithKeys(fn ($account) => [$account->id => $account->code . ' — ' . $account->name])
+            ->all();
+    }
+
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class);
     }
 
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
-    }
-
-    public function purchaseOrder(): BelongsTo
-    {
-        return $this->belongsTo(PurchaseOrder::class);
     }
 
     public function creator(): BelongsTo
@@ -184,27 +176,12 @@ class Invoice extends Model
 
     public function items(): HasMany
     {
-        return $this->hasMany(InvoiceItem::class)->orderBy('sort_order');
+        return $this->hasMany(BillItem::class)->orderBy('sort_order');
     }
 
     public function allocations(): HasMany
     {
-        return $this->hasMany(PaymentAllocation::class);
-    }
-
-    public function parentInvoice(): BelongsTo
-    {
-        return $this->belongsTo(Invoice::class, 'parent_invoice_id');
-    }
-
-    public function childInvoices(): HasMany
-    {
-        return $this->hasMany(Invoice::class, 'parent_invoice_id');
-    }
-
-    public function creditNotes(): HasMany
-    {
-        return $this->hasMany(CreditNote::class);
+        return $this->hasMany(BillPaymentAllocation::class);
     }
 
     public function documents(): MorphMany
@@ -213,7 +190,7 @@ class Invoice extends Model
     }
 
     /**
-     * Recalculate invoice totals from items
+     * Recalculate bill totals from items.
      */
     public function recalculateTotals(): void
     {
@@ -224,11 +201,11 @@ class Invoice extends Model
             return;
         }
 
-        // InvoiceItem.total is tax-inclusive (calculated in calculateTotals),
+        // BillItem.total is tax-inclusive (calculated in calculateTotals),
         // so derive subtotal as the pre-tax line amount (quantity * unit_price,
         // less discount) and rebuild total as subtotal + tax. Storing the
         // pre-tax value here keeps `subtotal + tax_amount == total` and makes
-        // SUM(subtotal) reports reflect true pre-GST revenue.
+        // SUM(subtotal) reports reflect true pre-GST expenses.
         $subtotal = $items->sum(function ($item) {
             return ($item->quantity * $item->unit_price) - $item->discount_amount;
         });
@@ -237,10 +214,8 @@ class Invoice extends Model
         $total = $subtotal + $taxAmount;
 
         // Persist via updateQuietly() inside withoutEvents(). This is the
-        // recursion guard: it suppresses the model saved event so the
-        // (now-removed) auto-recalc hook could not re-enter, and any future
-        // saved hook added here will not loop. Do NOT replace this with a
-        // plain update()/save() without a real re-entry guard.
+        // recursion guard: it suppresses the model saved event so any future
+        // saved hook added here will not loop.
         static::withoutEvents(function () use ($subtotal, $taxAmount, $discountAmount, $total) {
             $this->updateQuietly([
                 'subtotal' => $subtotal,
@@ -249,25 +224,10 @@ class Invoice extends Model
                 'total' => $total,
             ]);
         });
-
-        // Keep the linked PO's consumed amount in sync when totals change.
-        // This runs silently (updateQuietly above) so the InvoiceObserver
-        // would otherwise miss total-only changes from line-item edits.
-        $this->refreshPurchaseOrderUsedAmount();
     }
 
     /**
-     * Recalculate the linked purchase order's used amount, if any.
-     */
-    protected function refreshPurchaseOrderUsedAmount(): void
-    {
-        if ($this->purchase_order_id && $this->purchaseOrder) {
-            $this->purchaseOrder->recalculateUsedAmount();
-        }
-    }
-
-    /**
-     * Get amount paid against this invoice
+     * Get amount paid against this bill
      */
     public function getAmountPaidAttribute(): float
     {
@@ -294,15 +254,15 @@ class Invoice extends Model
     }
 
     /**
-     * Check if invoice is overdue (past due_date and not paid/cancelled).
+     * Check if bill is overdue (past due_date and not paid/cancelled).
      */
     public function getIsOverdueAttribute(): bool
     {
         if (in_array($this->status, [self::STATUS_PAID, self::STATUS_CANCELLED])) {
             return false;
         }
-        // Compare Carbon-to-Carbon at day granularity: due_date is before the
-        // start of today means the invoice is overdue.
+        // Compare Carbon-to-Carbon at day granularity: due_date before the
+        // start of today means the bill is overdue.
         return $this->due_date && $this->due_date->isBefore(now()->startOfDay());
     }
 
@@ -343,20 +303,16 @@ class Invoice extends Model
     }
 
     /**
-     * Mark invoice as sent — routes through the state machine so the
-     * transition is validated, then stamps sent_at on success.
+     * Mark bill as open — routes through the state machine so the
+     * transition is validated.
      */
-    public function markAsSent(): bool
+    public function markAsOpen(): bool
     {
-        if (!$this->transitionTo(self::STATUS_SENT)) {
-            return false;
-        }
-        $this->update(['sent_at' => now()]);
-        return true;
+        return $this->transitionTo(self::STATUS_OPEN);
     }
 
     /**
-     * Mark invoice as overdue
+     * Mark bill as overdue
      */
     public function markAsOverdue(): bool
     {
@@ -364,7 +320,7 @@ class Invoice extends Model
     }
 
     /**
-     * Cancel invoice
+     * Cancel bill
      */
     public function cancel(): bool
     {
@@ -372,7 +328,7 @@ class Invoice extends Model
     }
 
     /**
-     * Check if invoice can be cancelled
+     * Check if bill can be cancelled
      */
     public function canBeCancelled(): bool
     {
@@ -380,7 +336,7 @@ class Invoice extends Model
     }
 
     /**
-     * Check if invoice can be edited
+     * Check if bill can be edited
      */
     public function canBeEdited(): bool
     {
@@ -388,7 +344,7 @@ class Invoice extends Model
     }
 
     /**
-     * Scope for draft invoices
+     * Scope for draft bills
      */
     public function scopeDraft($query)
     {
@@ -396,40 +352,39 @@ class Invoice extends Model
     }
 
     /**
-     * Scope for outstanding invoices (sent, partially_paid, overdue)
+     * Scope for outstanding bills (open, partially_paid, overdue)
      */
     public function scopeOutstanding($query)
     {
         return $query->whereIn('status', [
-            self::STATUS_SENT,
+            self::STATUS_OPEN,
             self::STATUS_PARTIALLY_PAID,
             self::STATUS_OVERDUE,
         ]);
     }
 
     /**
-     * Scope for overdue invoices: either already flagged overdue, or any
-     * sent/partially_paid invoice past its due_date that still has an
+     * Scope for overdue bills: either already flagged overdue, or any
+     * open/partially_paid bill past its due_date that still has an
      * outstanding balance (amount_paid < total). The balance check excludes
-     * invoices that are effectively paid but whose status hasn't been flipped
-     * to paid yet, so they don't show as overdue forever. Zero-total invoices
-     * (no items / credit notes) are left to the status-based path.
+     * bills that are effectively paid but whose status hasn't been flipped
+     * to paid yet, so they don't show as overdue forever.
      */
     public function scopeOverdue($query)
     {
         return $query->where('status', self::STATUS_OVERDUE)
             ->orWhere(function ($q) {
-                $q->whereIn('status', [self::STATUS_SENT, self::STATUS_PARTIALLY_PAID])
+                $q->whereIn('status', [self::STATUS_OPEN, self::STATUS_PARTIALLY_PAID])
                   ->where('due_date', '<', now()->toDateString())
-                  // For invoices with a positive total, require an outstanding
-                  // balance (total > sum of allocations). Zero-total invoices
+                  // For bills with a positive total, require an outstanding
+                  // balance (total > sum of allocations). Zero-total bills
                   // fall through (the status/due_date checks alone apply).
                   ->where(function ($q) {
                       $q->where('total', '<=', 0)
                         ->orWhereRaw(
-                            'invoices.total - COALESCE(('
-                            . 'SELECT SUM(amount) FROM payment_allocations'
-                            . ' WHERE payment_allocations.invoice_id = invoices.id'
+                            'bills.total - COALESCE(('
+                            . 'SELECT SUM(amount) FROM bill_payment_allocations'
+                            . ' WHERE bill_payment_allocations.bill_id = bills.id'
                             . '), 0) > 0'
                         );
                   });
@@ -437,7 +392,7 @@ class Invoice extends Model
     }
 
     /**
-     * Scope for paid invoices
+     * Scope for paid bills
      */
     public function scopePaid($query)
     {
@@ -464,22 +419,22 @@ class Invoice extends Model
     }
 
     /**
-     * Update invoice status based on payments.
-     *
-     * Reads totals fresh from the database first: callers may hold a stale
-     * instance whose totals were persisted by the InvoiceItem saved-hook on
-     * a different instance (invoice created + items added + payment
-     * allocated in one flow), which used to trip the $total > 0 guard and
-     * mark fully-paid invoices as partially_paid.
+     * Update bill status based on payments.
      *
      * When payments are removed and amountPaid drops to 0, re-derive the
-     * payable status from the invoice's own state instead of blindly forcing
-     * STATUS_SENT: a past-due invoice regains STATUS_OVERDUE, and a paid
-     * invoice whose payments were removed/voided reverts (paid_at cleared).
-     * Only draft and cancelled invoices are never clobbered.
+     * payable status from the bill's own state instead of blindly forcing
+     * STATUS_OPEN: a past-due bill regains STATUS_OVERDUE. Unlike
+     * Invoice::updateStatusFromPayments(), STATUS_PAID is NOT excluded
+     * here — a paid bill whose payments were removed/voided must revert
+     * (paid → overdue if past due, else open; paid_at cleared). Only
+     * draft and cancelled bills are never clobbered.
      */
     public function updateStatusFromPayments(): void
     {
+        // Read totals fresh from the database: callers may hold a stale
+        // instance whose totals were persisted by the BillItem saved-hook on
+        // a different instance (bill created + items added + payment
+        // allocated in one flow).
         if ($this->exists) {
             $this->refresh();
         }
@@ -502,14 +457,14 @@ class Invoice extends Model
             }
         } else {
             // No payments: never clobber draft/cancelled; otherwise
-            // overdue (past due_date) beats sent. Evaluate overdue
+            // overdue (past due_date) beats open. Evaluate overdue
             // directly, not via is_overdue — that accessor returns false
             // while the model is still marked paid, which we are about to
             // revert from.
             if (!in_array($this->status, [self::STATUS_DRAFT, self::STATUS_CANCELLED])) {
                 $overdue = $this->due_date && $this->due_date->isBefore(now()->startOfDay());
                 $this->update([
-                    'status' => $overdue ? self::STATUS_OVERDUE : self::STATUS_SENT,
+                    'status' => $overdue ? self::STATUS_OVERDUE : self::STATUS_OPEN,
                     'paid_at' => null,
                 ]);
             }
@@ -517,7 +472,7 @@ class Invoice extends Model
     }
 
     /**
-     * Check if invoice has been fully paid
+     * Check if bill has been fully paid
      */
     public function isPaid(): bool
     {
@@ -525,7 +480,7 @@ class Invoice extends Model
     }
 
     /**
-     * Check if invoice has outstanding balance
+     * Check if bill has outstanding balance
      */
     public function hasOutstandingBalance(): bool
     {

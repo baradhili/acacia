@@ -3,15 +3,19 @@
 namespace App\Services;
 
 use App\Models\BankTransaction;
+use App\Models\Bill;
+use App\Models\BillPayment;
 use App\Models\Client;
-use App\Models\Expense;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\ReconciliationHistory;
+use App\Models\Supplier;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use IFRS\Models\Account;
 use IFRS\Models\Ledger;
 
 class ReconciliationService
@@ -516,22 +520,22 @@ class ReconciliationService
     }
 
     /**
-     * Auto-create a purchase/expense from an unmatched Wise debit
-     * 
+     * Auto-create a bill (paid at entry) from an unmatched Wise debit
+     *
      * @param BankTransaction $bankTransaction The unmatched debit transaction
-     * @param int $supplierId The supplier to associate with the expense
-     * @param string $category The expense category
-     * @param int|null $paidByUserId The user recording the expense
-     * @param bool $markAsPaid Whether to mark the expense as paid immediately
-     * @return Expense|null The created expense or null on failure
+     * @param int $supplierId The supplier to associate with the bill
+     * @param int|null $expenseAccountId IFRS expense account for the line item
+     * @param int|null $paidByUserId The user recording the bill
+     * @param bool $markAsPaid Whether to record payment immediately
+     * @return Bill|null The created bill or null on failure
      */
     public function createPurchaseFromBankTransaction(
         BankTransaction $bankTransaction,
         int $supplierId,
-        string $category = 'other',
+        ?int $expenseAccountId = null,
         ?int $paidByUserId = null,
         bool $markAsPaid = true
-    ): ?Expense {
+    ): ?Bill {
         // Validate this is a debit transaction
         if ($bankTransaction->type !== BankTransaction::TYPE_DEBIT) {
             Log::warning("Cannot create purchase from credit transaction", [
@@ -542,7 +546,7 @@ class ReconciliationService
         }
 
         // Validate supplier exists
-        $supplier = Client::find($supplierId);
+        $supplier = Supplier::find($supplierId);
         if (!$supplier) {
             Log::error("Supplier not found for purchase creation", [
                 'supplier_id' => $supplierId,
@@ -551,47 +555,60 @@ class ReconciliationService
             return null;
         }
 
-        // Validate category
-        $validCategories = Expense::CATEGORIES;
-        if (!in_array($category, $validCategories)) {
-            $category = 'other';
-        }
-
         try {
-            // Create the expense
-            $expense = Expense::create([
+            $description = "Auto-created from Wise transaction {$bankTransaction->source_id}."
+                . " Description: {$bankTransaction->description}";
+
+            $bill = Bill::createWithUniqueNumber([
                 'supplier_id' => $supplierId,
-                'category' => $category,
-                'amount' => $bankTransaction->amount,
-                'tax_amount' => 0, // GST not included in bank amount for simplicity
-                'total' => $bankTransaction->amount,
-                'expense_date' => $bankTransaction->transaction_date,
-                'due_date' => $bankTransaction->transaction_date,
-                'status' => Expense::STATUS_DRAFT,
-                'description' => "Auto-created from Wise transaction {$bankTransaction->source_id}. Description: {$bankTransaction->description}",
+                'created_by' => $paidByUserId,
+                'bill_date' => $bankTransaction->transaction_date->toDateString(),
+                'due_date' => $bankTransaction->transaction_date->toDateString(),
                 'reference' => $bankTransaction->reference,
                 'notes' => "Imported from Wise - {$bankTransaction->merchant_name}",
-                'paid_by_user_id' => $paidByUserId,
-                'paid_date' => $markAsPaid ? $bankTransaction->transaction_date : null,
-                'payment_method' => Payment::METHOD_BANK_TRANSFER,
             ]);
 
-            // Mark bank transaction as matched
-            $bankTransaction->markAsMatched($expense->id, 'expense');
+            // Bank amounts carry no GST breakdown, so the line is GST-free;
+            // GST can be claimed later by editing the draft bill.
+            $bill->items()->create([
+                'description' => Str::limit($description, 240),
+                'quantity' => 1,
+                'unit_price' => $bankTransaction->amount,
+                'tax_rate' => 0,
+                'expense_account_id' => $expenseAccountId,
+                'sort_order' => 0,
+            ]);
 
-            Log::info("Purchase/Expense created from unmatched Wise debit", [
-                'expense_id' => $expense->id,
+            $bill->recalculateTotals();
+
+            // Mark bank transaction as matched
+            $bankTransaction->markAsMatched($bill->id, 'bill');
+
+            Log::info("Bill created from unmatched Wise debit", [
+                'bill_id' => $bill->id,
                 'supplier_id' => $supplierId,
-                'amount' => $expense->total,
+                'amount' => $bill->total,
                 'bank_transaction_id' => $bankTransaction->id,
             ]);
 
-            // Mark as paid if requested (creates IFRS journal entry)
+            // Paid-at-entry: bill payment + allocation + IFRS posting.
             if ($markAsPaid) {
-                $expense->markAsPaid(Payment::METHOD_BANK_TRANSFER, $paidByUserId);
+                $bill->markAsOpen();
+
+                $payment = BillPayment::createWithUniqueNumber([
+                    'supplier_id' => $supplierId,
+                    'paid_by' => $paidByUserId,
+                    'amount' => $bill->total,
+                    'payment_date' => $bankTransaction->transaction_date->toDateString(),
+                    'payment_method' => Payment::METHOD_BANK_TRANSFER,
+                    'reference' => $bankTransaction->reference,
+                ]);
+
+                $payment->allocateToBill($bill, (float) $bill->total);
+                $payment->postToIFRS();
             }
 
-            return $expense;
+            return $bill;
 
         } catch (\Exception $e) {
             Log::error("Failed to create purchase from Wise transaction", [
@@ -603,13 +620,12 @@ class ReconciliationService
     }
 
     /**
-     * Auto-create purchases/expenses for all unmatched Wise debits
-     * 
-     * @param string|null $category Default category to use
-     * @param bool $markAsPaid Whether to mark expenses as paid
-     * @return array Results with created expenses and errors
+     * Auto-create paid bills for all unmatched Wise debits
+     *
+     * @param bool $markAsPaid Whether to mark bills as paid
+     * @return array Results with created bills and errors
      */
-    public function autoCreatePurchases(string $category = 'other', bool $markAsPaid = true): array
+    public function autoCreatePurchases(bool $markAsPaid = true): array
     {
         $transactions = BankTransaction::pending()
             ->fromSource(BankTransaction::SOURCE_WISE)
@@ -634,20 +650,20 @@ class ReconciliationService
                 continue;
             }
 
-            $expense = $this->createPurchaseFromBankTransaction(
+            $bill = $this->createPurchaseFromBankTransaction(
                 $transaction,
                 $matchedSupplierId,
-                $category,
+                $this->suggestExpenseAccount($transaction->merchant_name ?? ''),
                 null,
                 $markAsPaid
             );
 
-            if ($expense) {
-                $created[] = $expense;
+            if ($bill) {
+                $created[] = $bill;
             } else {
                 $errors[] = [
                     'transaction_id' => $transaction->id,
-                    'error' => 'Failed to create expense',
+                    'error' => 'Failed to create bill',
                 ];
             }
         }
@@ -670,7 +686,7 @@ class ReconciliationService
     {
         // Try to match by merchant name
         if (!empty($transaction->merchant_name)) {
-            $supplier = Client::where('name', 'like', '%' . $transaction->merchant_name . '%')->first();
+            $supplier = Supplier::where('name', 'like', '%' . $transaction->merchant_name . '%')->first();
             if ($supplier) {
                 return $supplier->id;
             }
@@ -678,7 +694,7 @@ class ReconciliationService
 
         // Try to match by payee name
         if (!empty($transaction->payee_name)) {
-            $supplier = Client::where('name', 'like', '%' . $transaction->payee_name . '%')->first();
+            $supplier = Supplier::where('name', 'like', '%' . $transaction->payee_name . '%')->first();
             if ($supplier) {
                 return $supplier->id;
             }
@@ -686,7 +702,7 @@ class ReconciliationService
 
         // Try to match by reference
         if (!empty($transaction->reference)) {
-            $supplier = Client::where('name', 'like', '%' . $transaction->reference . '%')->first();
+            $supplier = Supplier::where('name', 'like', '%' . $transaction->reference . '%')->first();
             if ($supplier) {
                 return $supplier->id;
             }
@@ -696,40 +712,33 @@ class ReconciliationService
     }
 
     /**
-     * Get expense category suggestions based on merchant name
-     * 
+     * Get an IFRS expense account suggestion based on merchant name
+     *
      * @param string $merchantName
-     * @return string Suggested category
+     * @return int|null IFRS account id, or null when no account matches
      */
-    public function suggestExpenseCategory(string $merchantName): string
+    public function suggestExpenseAccount(string $merchantName): ?int
     {
         $merchantLower = strtolower($merchantName);
-        
-        $categoryMap = [
-            'aws' => 'software',
-            'google' => 'software',
-            'microsoft' => 'software',
-            'slack' => 'software',
-            'zoom' => 'software',
-            'xero' => 'software',
-            'myob' => 'software',
-            'airline' => 'travel',
-            'hotel' => 'travel',
-            'uber' => 'travel',
-            'didi' => 'travel',
-            'restaurant' => 'meals',
-            'cafe' => 'meals',
-            'office' => 'office_supplies',
-            'staples' => 'office_supplies',
+
+        // Merchant keyword → seeded IFRS expense account code
+        $accountCodeMap = [
+            'aws' => 7500, 'google' => 7500, 'microsoft' => 7500,
+            'slack' => 7500, 'zoom' => 7500, 'xero' => 7500, 'myob' => 7500,
+            'airline' => 5300, 'hotel' => 5300, 'uber' => 5300, 'didi' => 5300,
+            'restaurant' => 5500, 'cafe' => 5500,
+            'office' => 7400, 'staples' => 7400,
         ];
 
-        foreach ($categoryMap as $keyword => $category) {
+        $code = 8900; // Other Expenses — fallback
+        foreach ($accountCodeMap as $keyword => $accountCode) {
             if (str_contains($merchantLower, $keyword)) {
-                return $category;
+                $code = $accountCode;
+                break;
             }
         }
 
-        return 'other';
+        return Account::where('code', $code)->value('id');
     }
 
     /**
@@ -899,7 +908,7 @@ class ReconciliationService
      * Manually link a bank transaction to an existing IFRS transaction
      * 
      * @param BankTransaction $bankTransaction The bank transaction to link
-     * @param string $transactionType The type of IFRS transaction (invoice, payment, expense, ledger)
+     * @param string $transactionType The type of IFRS transaction (invoice, payment, bill, ledger)
      * @param int $transactionId The ID of the IFRS transaction
      * @param string|null $notes Optional notes explaining the manual link
      * @return bool Success status
@@ -910,8 +919,8 @@ class ReconciliationService
         int $transactionId,
         ?string $notes = null
     ): bool {
-        // Validate transaction type
-        $validTypes = ['invoice', 'payment', 'expense', 'ledger'];
+        // Validate transaction type ('expense' kept as a legacy alias)
+        $validTypes = ['invoice', 'payment', 'bill', 'expense', 'ledger'];
         if (!in_array($transactionType, $validTypes)) {
             Log::warning("Invalid transaction type for manual override", [
                 'transaction_type' => $transactionType,
@@ -996,8 +1005,8 @@ class ReconciliationService
 
     /**
      * Find an IFRS transaction by type and ID
-     * 
-     * @param string $type Transaction type (invoice, payment, expense, ledger)
+     *
+     * @param string $type Transaction type (invoice, payment, bill, ledger)
      * @param int $id Transaction ID
      * @return mixed|null The transaction or null
      */
@@ -1006,7 +1015,7 @@ class ReconciliationService
         return match ($type) {
             'invoice' => Invoice::find($id),
             'payment' => Payment::find($id),
-            'expense' => Expense::find($id),
+            'bill', 'expense' => Bill::find($id),
             'ledger' => Ledger::find($id),
             default => null,
         };
@@ -1079,29 +1088,28 @@ class ReconciliationService
             $results = $results->merge($payments);
         }
 
-        // Search expenses if type is null or 'expense'
-        if ($type === null || $type === 'expense') {
-            $expenses = Expense::whereBetween('total', [
+        // Search bills if type is null or 'bill'
+        if ($type === null || $type === 'bill') {
+            $bills = Bill::whereBetween('total', [
                     $amount - self::AMOUNT_TOLERANCE,
                     $amount + self::AMOUNT_TOLERANCE,
                 ])
-                ->whereBetween('expense_date', [$dateFrom, $dateTo])
-                ->whereIn('status', [Expense::STATUS_APPROVED, Expense::STATUS_PAID])
+                ->whereBetween('bill_date', [$dateFrom, $dateTo])
+                ->whereIn('status', [Bill::STATUS_OPEN, Bill::STATUS_PAID, Bill::STATUS_PARTIALLY_PAID])
                 ->limit($limit)
                 ->get()
-                ->map(function ($expense) {
+                ->map(function ($bill) {
                     return [
-                        'type' => 'expense',
-                        'id' => $expense->id,
-                        'reference' => $expense->reference ?? "EXP-{$expense->id}",
-                        'amount' => $expense->total,
-                        'date' => $expense->expense_date,
-                        'supplier' => $expense->supplier?->name ?? 'Unknown',
-                        'category' => $expense->category,
-                        'status' => $expense->status,
+                        'type' => 'bill',
+                        'id' => $bill->id,
+                        'reference' => $bill->reference ?? $bill->bill_number,
+                        'amount' => $bill->total,
+                        'date' => $bill->bill_date,
+                        'supplier' => $bill->supplier?->name ?? 'Unknown',
+                        'status' => $bill->status,
                     ];
                 });
-            $results = $results->merge($expenses);
+            $results = $results->merge($bills);
         }
 
         // Search ledger entries if type is null or 'ledger'
