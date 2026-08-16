@@ -7,7 +7,12 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
+     * Squashed final schema (2026-08-16): users incl. the salary/position/
+     * phone and profile_photo columns that were previously added by
+     * separate migrations. `deleted_at` is deliberately NOT here — it is
+     * added in 2026_08_16_000001 so it lands after the IFRS package's
+     * entity_id/destroyed_at columns (the 2014_10_12 package migration
+     * sorts between this file and that one), preserving column order.
      */
     public function up(): void
     {
@@ -17,6 +22,11 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
+            $table->decimal('salary', 12, 2)->nullable();
+            $table->decimal('charge_out_rate', 10, 2)->nullable();
+            $table->string('position', 100)->nullable();
+            $table->string('phone', 50)->nullable();
+            $table->string('profile_photo')->nullable();
             $table->rememberToken();
             $table->timestamps();
         });
@@ -37,9 +47,6 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('users');
