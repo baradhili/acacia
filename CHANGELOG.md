@@ -3,6 +3,33 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] — 2026-08-16
+
+### Changed — migrations squashed (50 files → 9)
+
+Database was empty (seeded setup data only), so the migration history was collapsed into
+final-schema files with **no schema change** — verified byte-identical on MariaDB
+(normalised `mariadb-dump --no-data` diff of all 55 tables before/after; full test suite
+green; `migrate:fresh --seed` reproduces the exact seeded state). Deploying this branch
+requires a one-time `php artisan migrate:fresh --seed` (structure-only DB).
+
+- `0001_01_01_000000` users/password_reset_tokens/sessions (salary, position, phone,
+  profile_photo folded in; `deleted_at` deliberately added in `2026_08_16_000001` so it
+  lands after the IFRS package's `entity_id`/`destroyed_at`, preserving column order)
+- cache / jobs / spatie permission files kept as-is
+- `2026_08_16_000001` clients/suppliers/vendors (addresses, custom fields, logos, soft
+  deletes) + users soft deletes
+- `2026_08_16_000002` projects/project_staff/purchase_orders/time_entries (incl. the
+  formerly-separate time-entry FKs and projects.purchase_order_id)
+- `2026_08_16_000003` invoicing: invoices (recurring columns, unsigned `ifrs_invoice_id`),
+  invoice_items, credit notes, payments (status, credit_note_id, unsigned
+  `ifrs_receipt_id`), payment_allocations (no allocation_type), estimates
+- `2026_08_16_000004` bills/bill_items/bill_payments/bill_payment_allocations
+- `2026_08_16_000005` documents/bank_transactions/reconciliation_history/audit_logs/
+  fiscal_periods/widget_preferences
+- Deleted outright: the expenses trio and the expenses→bills conversion (expenses tables
+  are never created — bills replaced them), and the data-only `drop_viewed_invoice_status`
+
 ## [Unreleased] — 2026-08-15
 
 Accounts-payable rework: Expenses replaced by Bills + Supplier Payments
