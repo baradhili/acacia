@@ -17,7 +17,9 @@
 - [ ] Find where dates are in US m/d/y format and make them use the browser/system format
 
 - [ ] 
+
 - [ ] 
+
 - [ ] In teh invoices index view show an icon when invoices have a document attached. - possibly refelct this to all index views of items that can have attached documents.
 
 - [ ] Update invoice format - if there is a PO - show amount remaining
@@ -27,6 +29,12 @@
 - [ ] Country fields should be a dropdown - configurable "pinned countries" at top. use teh ISO country list.
 
 - [ ] 
+
 - [ ] Drop multiple files means all files should be uploaded
 
-- [ ] 
+- [ ] ### 0. `createFromTimeEntries` doesn't actually create
+  
+  **Files:** `app/Http/Controllers/InvoiceController.php`, `routes/web.php`, missing views
+  Investigation confirmed the bug is worse than reported: the POST route (`invoices.create-from-time-entries.store`) points to the **same render-only method** as the GET, so posting just re-renders and never persists. Additionally the view itself (`resources/views/invoices/create-from-time-entries.blade.php`) **does not exist**, so both GET and POST have been 500ing with `ViewNotFoundException` — the feature is unreachable/broken end-to-end, and nothing in the UI links to these routes (no tests either). The sibling `createFromPurchaseOrder` has the same problem (`invoices/create-from-po.blade.php` also missing; route `purchase-orders/{po}/create-invoice`). **Decision:** deferred per maintainer — time entries are out of scope for now. When revisiting: create the two missing views, split the POST into a real store handler that builds `InvoiceItem`s via `InvoiceItem::createFromTimeEntry()` (which already exists, unsave()-ed, for exactly this), and link `time_entry_id` on each item.
+  
+  - 🚫 *(deferred with #20 — time entries out of scope)* `time_entry_ids` validated in `store` but never linked to created items.

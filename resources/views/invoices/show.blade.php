@@ -113,7 +113,7 @@
                             <tr>
                                 <td class="py-3">{{ $item->description }}</td>
                                 <td class="py-3 text-right">{{ number_format($item->quantity, 2) }}</td>
-                                <td class="py-3 text-right">${{ number_format($item->unit_price, 2) }}</td>
+                                <td class="py-3 text-right">${{ $item->formatted_unit_price }}</td>
                                 <td class="py-3 text-right">{{ $item->tax_rate }}%</td>
                                 <td class="py-3 text-right font-medium">${{ number_format($item->total, 2) }}</td>
                             </tr>

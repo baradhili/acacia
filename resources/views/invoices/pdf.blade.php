@@ -239,7 +239,7 @@
                     <tr>
                         <td>{{ $item->description }}</td>
                         <td>{{ number_format($item->quantity, 2) }}</td>
-                        <td class="amount-col">${{ number_format($item->unit_price, 2) }}</td>
+                        <td class="amount-col">${{ $item->formatted_unit_price }}</td>
                         <td class="amount-col">{{ $item->tax_rate }}%</td>
                         <td class="amount-col">${{ number_format($item->total, 2) }}</td>
                     </tr>

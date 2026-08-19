@@ -100,6 +100,43 @@ class InvoiceTest extends TestCase
         $this->assertEquals(275, $invoice->total);
     }
 
+    public function test_invoice_items_accept_four_decimal_precision(): void
+    {
+        // Client reverse invoices can carry sub-cent unit prices and
+        // fractional quantities — both fields must keep 4dp through storage.
+        $response = $this->actingAs($this->user)->post('/invoices', [
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'items' => [
+                [
+                    'description' => 'Reverse charge line',
+                    'quantity' => 1000,
+                    'unit_price' => 0.0123, // 1000 × 0.0123 = 12.30
+                    'tax_rate' => 10,
+                ],
+                [
+                    'description' => 'Fractional quantity line',
+                    'quantity' => 0.1234,
+                    'unit_price' => 100, // 0.1234 × 100 = 12.34
+                    'tax_rate' => 10,
+                ],
+            ],
+        ]);
+
+        $response->assertSessionHas('success');
+        $invoice = Invoice::first();
+        $items = $invoice->items;
+
+        $this->assertEquals(0.0123, (float) $items[0]->unit_price);
+        $this->assertEquals(0.1234, (float) $items[1]->quantity);
+
+        // Line and invoice totals remain cents
+        $this->assertEquals(13.53, (float) $items[0]->total);
+        $this->assertEquals(13.57, (float) $items[1]->total);
+        $this->assertEquals(27.10, (float) $invoice->total);
+    }
+
     public function test_invoice_status_transitions(): void
     {
         $invoice = Invoice::create([

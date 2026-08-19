@@ -104,13 +104,13 @@
                         <div class="col-span-2">
                             <label class="block text-xs font-medium text-gray-700 mb-1">Qty</label>
                             <input type="number" name="items[{{ $index }}][quantity]"
-                                value="{{ $item['quantity'] ?? 1 }}" step="0.01" min="0" required
+                                value="{{ $item['quantity'] ?? 1 }}" step="0.0001" min="0" required
                                 class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm quantity-input">
                         </div>
                         <div class="col-span-2">
                             <label class="block text-xs font-medium text-gray-700 mb-1">Unit Price</label>
                             <input type="number" name="items[{{ $index }}][unit_price]"
-                                value="{{ $item['unit_price'] ?? 0 }}" step="0.01" min="0" required
+                                value="{{ $item['unit_price'] ?? 0 }}" step="0.0001" min="0" required
                                 class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm unit-price-input">
                         </div>
                         <div class="col-span-1">
@@ -163,13 +163,13 @@
             </div>
             <div class="col-span-2">
                 <label class="block text-xs font-medium text-gray-700 mb-1">Qty</label>
-                <input type="number" name="items[__INDEX__][quantity]" value="1" step="0.01" min="0"
+                <input type="number" name="items[__INDEX__][quantity]" value="1" step="0.0001" min="0"
                     required
                     class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm quantity-input">
             </div>
             <div class="col-span-2">
                 <label class="block text-xs font-medium text-gray-700 mb-1">Unit Price</label>
-                <input type="number" name="items[__INDEX__][unit_price]" value="0" step="0.01" min="0"
+                <input type="number" name="items[__INDEX__][unit_price]" value="0" step="0.0001" min="0"
                     required
                     class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm unit-price-input">
             </div>

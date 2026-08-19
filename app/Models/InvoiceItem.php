@@ -25,8 +25,10 @@ class InvoiceItem extends Model
     ];
 
     protected $casts = [
-        'quantity' => 'decimal:2',
-        'unit_price' => 'decimal:2',
+        // 4dp: client reverse invoices can carry per-unit prices like
+        // -e.0123 - the decimal:2 cast rounds on write, not just display.
+        'quantity' => 'decimal:4',
+        'unit_price' => 'decimal:4',
         'tax_rate' => 'decimal:2',
         'tax_amount' => 'decimal:2',
         'discount_percent' => 'decimal:2',
@@ -124,11 +126,15 @@ class InvoiceItem extends Model
     }
 
     /**
-     * Get formatted unit price
+     * Get formatted unit price — cents unless the price carries sub-cent
+     * precision (4dp entries from reverse invoices), in which case show
+     * all four digits.
      */
     public function getFormattedUnitPriceAttribute(): string
     {
-        return config('australian.currency.symbol', 'A$') . number_format($this->unit_price, 2);
+        $decimals = (float) $this->unit_price == round((float) $this->unit_price, 2) ? 2 : 4;
+
+        return number_format((float) $this->unit_price, $decimals);
     }
 
     /**
