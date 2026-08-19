@@ -2,10 +2,11 @@
 <aside class="w-64 bg-slate-800 text-white shrink-0 flex flex-col min-h-screen sticky top-0 self-start">
     <!-- Logo -->
     <div class="h-16 flex items-center px-6 border-b border-slate-700">
-        <a href="{{ route('dashboard') }}" class="text-xl font-bold">
-            Laravel ERP
-        </a>
-    </div>
+		<a href="{{ route('dashboard') }}" class="flex items-center gap-3">
+			<img src="{{ asset('images/logo.svg') }}" alt="Logo" class="h-8 w-auto">
+			<span class="text-xl font-bold">Laravel ERP</span>
+		</a>
+	</div>
 
     <!-- Navigation -->
     <nav class="mt-6 px-3 overflow-y-auto" style="max-height: calc(100vh - 6rem);">
