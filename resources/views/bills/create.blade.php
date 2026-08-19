@@ -6,7 +6,7 @@
         <h1 class="text-2xl font-bold text-gray-800">Create Bill</h1>
     </div>
 
-    <form action="{{ route('bills.store') }}" method="POST" class="space-y-6">
+    <form action="{{ route('bills.store') }}" method="POST" enctype="multipart/form-data" class="space-y-6">
         @csrf
 
         <div class="bg-white rounded-lg shadow p-6">
@@ -213,6 +213,19 @@
                         class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full"
                         placeholder="Transaction ID, card statement ref…">
                     @error('payment_reference')
+                        <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div class="md:col-span-3">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Receipt / supporting document</label>
+                    <input type="file" name="documents[]" multiple
+                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full"
+                        accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar">
+                    <p class="text-xs text-gray-500 mt-1">
+                        Attach the receipt or invoice for this paid expense (PDF, JPG, PNG, DOC up to 20MB).
+                    </p>
+                    @error('documents.*')
                         <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
                     @enderror
                 </div>

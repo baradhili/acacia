@@ -83,6 +83,9 @@ class BillController extends Controller
             'payment_date' => 'required_if:paid_now,1|nullable|date',
             'payment_method' => 'required_if:paid_now,1|nullable|in:' . implode(',', array_keys(BillPayment::paymentMethods())),
             'payment_reference' => 'nullable|string|max:255',
+            // Receipts uploaded alongside a bill paid at entry
+            'documents' => 'nullable|array',
+            'documents.*' => 'file|max:20480|mimes:pdf,jpg,jpeg,png,gif,doc,docx,xls,xlsx,txt,zip,rar',
         ]);
 
         DB::beginTransaction();
@@ -110,6 +113,19 @@ class BillController extends Controller
             }
 
             $bill->recalculateTotals();
+
+            // Attach any receipt documents uploaded with the bill (paid-at-
+            // entry expenses can never be edited afterwards, so the receipt
+            // rides along with creation)
+            foreach ($request->file('documents', []) as $file) {
+                $bill->documents()->create([
+                    'name' => $file->getClientOriginalName(),
+                    'file_path' => $file->store('uploads/' . now()->format('Y/m'), 'public'),
+                    'mime_type' => $file->getMimeType(),
+                    'size' => $file->getSize(),
+                    'uploaded_by' => Auth::id(),
+                ]);
+            }
 
             // Paid-at-entry: create the payment, allocate the full total and
             // post to the ledger in the same transaction.

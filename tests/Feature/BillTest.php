@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Bill;
 use App\Models\BillItem;
 use App\Models\BillPayment;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use App\Models\Supplier;
 use App\Models\User;
 use Carbon\Carbon;
@@ -193,6 +195,33 @@ class BillTest extends TestCase
         $this->assertEquals('CARD-123', $payment->reference);
         // No IFRS accounts are seeded here, so posting no-ops (logged, non-fatal).
         $this->assertNull($payment->ifrs_payment_id);
+    }
+
+    public function test_paid_at_entry_bill_can_attach_receipt_documents(): void
+    {
+        Storage::fake('public');
+
+        $response = $this->actingAs($this->user)->post('/bills', [
+            'supplier_id' => $this->supplier->id,
+            'bill_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'items' => [$this->itemDefaults()],
+            'paid_now' => '1',
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'credit_card',
+            'documents' => [
+                UploadedFile::fake()->create('parking-receipt.pdf', 100, 'application/pdf'),
+            ],
+        ]);
+
+        $response->assertSessionHas('success');
+        $bill = Bill::first();
+        $this->assertEquals(Bill::STATUS_PAID, $bill->status);
+
+        // The receipt is attached to the (uneditable) paid bill at creation
+        $this->assertEquals(1, $bill->documents->count());
+        $this->assertEquals('parking-receipt.pdf', $bill->documents->first()->name);
+        Storage::disk('public')->assertExists($bill->documents->first()->file_path);
     }
 
     public function test_paid_at_entry_requires_payment_details(): void
