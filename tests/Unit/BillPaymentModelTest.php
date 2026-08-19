@@ -109,12 +109,12 @@ class BillPaymentModelTest extends TestCase
         $bankChargesAccount = Account::where('code', 7800)->first();
 
         // Mixed-GST bill: $110 taxable (travel) + $50 GST-free (bank fee).
-        // GST-inclusive line of 110 = 100 net + 10 GST.
+        // Prices are entered GST-inclusive: 110 = 100 net + 10 GST.
         $bill = Bill::create(['supplier_id' => $this->supplier->id]);
         $bill->items()->create([
             'description' => 'Taxable travel',
             'quantity' => 1,
-            'unit_price' => 100,
+            'unit_price' => 110,
             'tax_rate' => 10,
             'expense_account_id' => $travelAccount->id,
         ]);
@@ -208,7 +208,7 @@ class BillPaymentModelTest extends TestCase
         $bill->items()->create([
             'description' => 'Item',
             'quantity' => 1,
-            'unit_price' => 100,
+            'unit_price' => 110, // GST-inclusive
             'tax_rate' => 10,
         ]);
         $bill->recalculateTotals();
@@ -233,7 +233,7 @@ class BillPaymentModelTest extends TestCase
         $bill->items()->create([
             'description' => 'Item',
             'quantity' => 1,
-            'unit_price' => 100,
+            'unit_price' => 110, // GST-inclusive
             'tax_rate' => 10,
         ]);
         $bill->recalculateTotals();

@@ -78,15 +78,16 @@ class BillModelTest extends TestCase
         $item = $bill->items()->create([
             'description' => 'Item',
             'quantity' => 3,
-            'unit_price' => 100,
+            'unit_price' => 110, // GST-inclusive
             'tax_rate' => 10,
             'discount_percent' => 10,
         ]);
 
-        // subtotal 300, discount 30, after discount 270, tax 27, total 297
-        $this->assertEquals(30, (float) $item->discount_amount);
+        // gross 330, discount 33, total paid 297 (incl $27 GST, ex-GST 270)
+        $this->assertEquals(33, (float) $item->discount_amount);
         $this->assertEquals(27, (float) $item->tax_amount);
         $this->assertEquals(297, (float) $item->total);
+        $this->assertEquals(270, (float) $item->subtotal);
     }
 
     public function test_item_saved_hook_rolls_up_to_bill(): void
@@ -95,7 +96,7 @@ class BillModelTest extends TestCase
         $bill->items()->create([
             'description' => 'A',
             'quantity' => 1,
-            'unit_price' => 100,
+            'unit_price' => 110, // GST-inclusive
             'tax_rate' => 10,
         ]);
 
@@ -111,7 +112,7 @@ class BillModelTest extends TestCase
         $bill->items()->create([
             'description' => 'A',
             'quantity' => 1,
-            'unit_price' => 100,
+            'unit_price' => 110, // GST-inclusive
             'tax_rate' => 10,
         ]);
         $bill->recalculateTotals();

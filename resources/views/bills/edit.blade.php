@@ -93,7 +93,9 @@
         <div class="bg-white rounded-lg shadow p-6">
             <h2 class="text-lg font-semibold text-gray-800 mb-4">Line Items</h2>
             <p class="text-sm text-gray-500 mb-4">
-                Each line carries its own GST treatment — untick GST for supplies that are GST-free by regulation.
+                Enter each line as the total you pay — supplier bills in Australia quote GST-inclusive
+                amounts. Tick Incl. GST when the amount includes GST (the GST portion is calculated
+                automatically: $110 → $100 + $10 GST). Untick for GST-free supplies.
             </p>
 
             <div id="itemsContainer">
@@ -137,11 +139,11 @@
                                 class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm discount-input">
                         </div>
                         <div class="col-span-1 flex flex-col justify-center">
-                            <label class="block text-xs font-medium text-gray-700 mb-1 text-center">GST</label>
+                            <label class="block text-xs font-medium text-gray-700 mb-1 text-center">Incl. GST</label>
                             <input type="checkbox" name="items[{{ $index }}][gst]" value="1"
                                 {{ !empty($item['gst']) ? 'checked' : '' }}
                                 class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mx-auto gst-toggle"
-                                title="Untick if this line is GST-free">
+                                title="Tick if the amount you entered already includes GST — the GST portion is calculated from it. Untick for GST-free supplies">
                         </div>
                         <div class="col-span-2">
                             <label class="block text-xs font-medium text-gray-700 mb-1">Expense Account</label>
@@ -170,7 +172,7 @@
 
             <div class="mt-6 border-t pt-4">
                 <div class="flex justify-between text-sm mb-1">
-                    <span class="text-gray-600">Subtotal</span>
+                    <span class="text-gray-600">Subtotal (ex GST)</span>
                     <span id="billSubtotal">$0.00</span>
                 </div>
                 <div class="flex justify-between text-sm mb-1">
@@ -223,10 +225,10 @@
                     class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm discount-input">
             </div>
             <div class="col-span-1 flex flex-col justify-center">
-                <label class="block text-xs font-medium text-gray-700 mb-1 text-center">GST</label>
+                <label class="block text-xs font-medium text-gray-700 mb-1 text-center">Incl. GST</label>
                 <input type="checkbox" name="items[__INDEX__][gst]" value="1" checked
                     class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mx-auto gst-toggle"
-                    title="Untick if this line is GST-free">
+                    title="Tick if the amount you entered already includes GST — the GST portion is calculated from it. Untick for GST-free supplies">
             </div>
             <div class="col-span-2">
                 <label class="block text-xs font-medium text-gray-700 mb-1">Expense Account</label>
@@ -314,15 +316,16 @@
                         const qty = parseFloat(qtyInput.value) || 0;
                         const price = parseFloat(priceInput.value) || 0;
                         const disc = parseFloat(discInput.value) || 0;
-                        const taxable = gstToggle.checked;
 
-                        const subtotal = qty * price;
-                        const discountAmount = subtotal * (disc / 100);
-                        const afterDiscount = subtotal - discountAmount;
-                        const total = afterDiscount * (1 + (taxable ? GST_RATE / 100 : 0));
+                        const gross = qty * price;
+                        const afterDiscount = gross * (1 - disc / 100);
+                        // The line total IS the amount paid (GST-inclusive
+                        // when ticked) — GST is a portion of it, not added
+                        // on top. Mirrors BillItem::calculateTotals.
+                        const total = afterDiscount;
 
                         totalDiv.textContent = '$' + total.toFixed(2);
-                        totalDiv.classList.toggle('text-gray-400', !taxable);
+                        totalDiv.classList.toggle('text-gray-400', !gstToggle.checked);
                         updateBillTotals();
                     }
 
@@ -349,10 +352,12 @@
                     const disc = parseFloat(row.querySelector('.discount-input')?.value) || 0;
                     const taxable = row.querySelector('.gst-toggle')?.checked ?? true;
 
-                    const lineSubtotal = qty * price;
-                    const afterDiscount = lineSubtotal * (1 - disc / 100);
-                    subtotal += afterDiscount;
-                    tax += afterDiscount * ((taxable ? GST_RATE : 0) / 100);
+                    // Amount paid is GST-inclusive; back out the GST portion
+                    // (at 10%: rate/(100+rate) — $110 → $100 + $10).
+                    const lineTotal = qty * price * (1 - disc / 100);
+                    const lineTax = taxable ? lineTotal * (GST_RATE / (100 + GST_RATE)) : 0;
+                    subtotal += lineTotal - lineTax;
+                    tax += lineTax;
                 });
 
                 document.getElementById('billSubtotal').textContent = '$' + subtotal.toFixed(2);

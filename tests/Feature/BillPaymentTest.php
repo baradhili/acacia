@@ -27,7 +27,7 @@ class BillPaymentTest extends TestCase
         ]);
     }
 
-    protected function createOpenBill(float $unitPrice = 100, int $count = 1): Bill
+    protected function createOpenBill(float $unitPrice = 110, int $count = 1): Bill
     {
         $bill = Bill::create(['supplier_id' => $this->supplier->id]);
         for ($i = 0; $i < $count; $i++) {
@@ -35,7 +35,7 @@ class BillPaymentTest extends TestCase
                 'description' => 'Item ' . ($i + 1),
                 'quantity' => 1,
                 'unit_price' => $unitPrice,
-                'tax_rate' => 10,
+                'tax_rate' => 10, // unit_price is GST-inclusive
             ]);
         }
         $bill->recalculateTotals();
@@ -256,7 +256,7 @@ class BillPaymentTest extends TestCase
         $payment->allocateToBill($paid, 110);
 
         // Partially paid: total 220, 110 allocated → 110 still due.
-        $partial = $this->createOpenBill(200); // 200 + 20 GST = 220
+        $partial = $this->createOpenBill(220); // 220 incl GST = 200 + 20
         $partialPayment = BillPayment::createWithUniqueNumber([
             'supplier_id' => $this->supplier->id,
             'amount' => 110,

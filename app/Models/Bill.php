@@ -201,13 +201,13 @@ class Bill extends Model
             return;
         }
 
-        // BillItem.total is tax-inclusive (calculated in calculateTotals),
-        // so derive subtotal as the pre-tax line amount (quantity * unit_price,
-        // less discount) and rebuild total as subtotal + tax. Storing the
-        // pre-tax value here keeps `subtotal + tax_amount == total` and makes
-        // SUM(subtotal) reports reflect true pre-GST expenses.
+        // BillItem.total is the tax-inclusive amount paid (unit prices are
+        // entered GST-inclusive; calculateTotals back-calculates the tax).
+        // Derive each line's pre-tax value as total - tax_amount so
+        // `subtotal + tax_amount == total` holds and SUM(subtotal) reports
+        // reflect true pre-GST expenses.
         $subtotal = $items->sum(function ($item) {
-            return ($item->quantity * $item->unit_price) - $item->discount_amount;
+            return (float) $item->total - (float) $item->tax_amount;
         });
         $taxAmount = $items->sum('tax_amount');
         $discountAmount = $items->sum('discount_amount');

@@ -74,7 +74,8 @@ class BillController extends Controller
             'items.*.description' => 'required|string',
             'items.*.quantity' => 'required|numeric|min:0',
             'items.*.unit_price' => 'required|numeric|min:0',
-            // Per-line GST: checkbox on = GST 10% inclusive, off = GST-free.
+            // Per-line GST: checkbox on = the entered amount is GST-inclusive
+            // (the GST portion is back-calculated from it), off = GST-free.
             'items.*.gst' => 'nullable|boolean',
             'items.*.discount_percent' => 'nullable|numeric|min:0|max:100',
             'items.*.expense_account_id' => 'nullable|integer|exists:ifrs_accounts,id',

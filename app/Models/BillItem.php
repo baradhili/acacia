@@ -73,26 +73,34 @@ class BillItem extends Model
     /**
      * Calculate item totals.
      *
-     * GST is per-line: tax_rate 10 posts GST-inclusive (the payment posting
-     * backs the GST out to the GST account), tax_rate 0 is GST-free (some
-     * supplies are GST-free by regulation — bank fees, rego, basic food…).
+     * The entered amount is what you PAY: Australian supplier bills quote
+     * GST-inclusive totals, and small purchases often show nothing else.
+     * The line total (qty × unit price, less discount) is therefore the
+     * tax-inclusive amount, and the GST portion is back-calculated from it
+     * (at 10%: $110 → $10 GST, $100 pre-tax).
+     *
+     * Per-line GST: tax_rate 10 means the amount includes GST (the payment
+     * posting backs the GST out to the GST account), tax_rate 0 is GST-free
+     * (some supplies are GST-free by regulation — bank fees, rego, basic
+     * food…).
      */
     public function calculateTotals(): void
     {
-        $subtotal = $this->quantity * $this->unit_price;
+        $gross = $this->quantity * $this->unit_price;
 
         // Calculate discount
         if ($this->discount_percent > 0) {
-            $this->discount_amount = $subtotal * ($this->discount_percent / 100);
+            $this->discount_amount = $gross * ($this->discount_percent / 100);
         }
 
-        $afterDiscount = $subtotal - $this->discount_amount;
+        // Tax-inclusive line total — the amount actually paid
+        $this->total = $gross - $this->discount_amount;
 
-        // Calculate tax
-        $this->tax_amount = $afterDiscount * ($this->tax_rate / 100);
-
-        // Calculate total including tax
-        $this->total = $afterDiscount + $this->tax_amount;
+        // Back-calculate the GST portion from the inclusive total
+        $rate = (float) $this->tax_rate;
+        $this->tax_amount = $rate > 0
+            ? round($this->total * $rate / (100 + $rate), 2)
+            : 0;
     }
 
     /**
@@ -100,7 +108,7 @@ class BillItem extends Model
      */
     public function getSubtotalAttribute(): float
     {
-        return ($this->quantity * $this->unit_price) - $this->discount_amount;
+        return round((float) $this->total - (float) $this->tax_amount, 2);
     }
 
     /**

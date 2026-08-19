@@ -80,7 +80,7 @@
                         <tr class="border-b">
                             <th class="text-left py-2 text-xs font-medium text-gray-500 uppercase">Description</th>
                             <th class="text-right py-2 text-xs font-medium text-gray-500 uppercase">Qty</th>
-                            <th class="text-right py-2 text-xs font-medium text-gray-500 uppercase">Unit Price</th>
+                            <th class="text-right py-2 text-xs font-medium text-gray-500 uppercase">Unit Price (as paid)</th>
                             <th class="text-right py-2 text-xs font-medium text-gray-500 uppercase">GST</th>
                             <th class="text-left py-2 text-xs font-medium text-gray-500 uppercase">Account</th>
                             <th class="text-right py-2 text-xs font-medium text-gray-500 uppercase">Total</th>
@@ -96,7 +96,7 @@
                                     @if($item->is_gst_free)
                                         <span class="text-gray-400" title="GST-free by regulation">Free</span>
                                     @else
-                                        {{ $item->tax_rate }}%
+                                        <span title="Amount is GST-inclusive; this portion was back-calculated">Incl. {{ $item->tax_rate }}%</span>
                                     @endif
                                 </td>
                                 <td class="py-3 text-sm text-gray-600">
