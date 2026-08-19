@@ -18,7 +18,10 @@
         "spatie/laravel-permission": "^6.0"
     },
     "require-dev": {
+        "behat/behat": "^3.32",
+        "behat/mink-browserkit-driver": "^2.3",
         "fakerphp/faker": "^1.23",
+        "friends-of-behat/mink-extension": "^2.7",
         "laravel/pail": "^1.2.5",
         "laravel/pao": "^1.0.6",
         "laravel/pint": "^1.27",
@@ -26,7 +29,8 @@
         "nunomaduro/collision": "^8.6",
         "orchestra/testbench": "^11.1",
         "pestphp/pest": "^4.7",
-        "phpunit/phpunit": "^12.5.12"
+        "phpunit/phpunit": "^12.5.12",
+        "soulcodex/laravel-behat": "dev-main"
     },
     "autoload": {
         "psr-4": {
@@ -91,5 +95,11 @@
         }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "repositories": {
+        "laravel-behat": {
+            "type": "vcs",
+            "url": "https://github.com/baradhili/laravel-behat.git"
+        }
+    }
 }

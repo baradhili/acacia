@@ -1,0 +1,19 @@
+default:
+  suites:
+    auth:
+      paths: [features/auth]
+      contexts: [AuthContext]
+    platform:
+      paths: [features/platform]
+      contexts: [PlatformContext]
+  extensions:
+    Behat\MinkExtension:
+      base_url: http://localhost
+      default_session: laravel
+      sessions:
+        laravel:
+          laravel: ~
+    Soulcodex\Behat\ServiceContainer\BehatExtension:
+      kernel:
+        bootstrap_path: /bootstrap/app.php
+        environment_path: .env.behat
