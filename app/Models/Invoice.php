@@ -70,10 +70,12 @@ class Invoice extends Model
     // Valid state transitions
     protected static array $transitions = [
         'draft' => ['sent', 'cancelled'],
-        'sent' => ['partially_paid', 'paid', 'overdue', 'cancelled'],
+        // sent/overdue may revert to draft (un-send) as long as nothing has
+        // been paid — revertToDraft() enforces the amount_paid == 0 guard.
+        'sent' => ['partially_paid', 'paid', 'overdue', 'cancelled', 'draft'],
         'partially_paid' => ['paid', 'overdue'],
         'paid' => [],  // Paid invoices cannot be cancelled
-        'overdue' => ['partially_paid', 'paid'],
+        'overdue' => ['partially_paid', 'paid', 'draft'],
         'cancelled' => [],  // Cancelled invoices are final
     ];
 
@@ -352,6 +354,28 @@ class Invoice extends Model
             return false;
         }
         $this->update(['sent_at' => now()]);
+        return true;
+    }
+
+    /**
+     * Un-send: revert a sent/overdue invoice back to draft. Only allowed
+     * when nothing has been paid against it — an invoice with allocations
+     * can never be a draft, because drafts are not payable. Sending is a
+     * pure status flip (no ledger posting happens there), so reverting is
+     * safe for the books.
+     */
+    public function revertToDraft(): bool
+    {
+        if ($this->amount_paid > 0
+            || !in_array($this->status, [self::STATUS_SENT, self::STATUS_OVERDUE])) {
+            return false;
+        }
+
+        if (!$this->transitionTo(self::STATUS_DRAFT)) {
+            return false;
+        }
+
+        $this->update(['sent_at' => null, 'viewed_at' => null]);
         return true;
     }
 

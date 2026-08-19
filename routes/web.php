@@ -86,6 +86,7 @@ Route::middleware('auth')->group(function () {
     // Invoices
     Route::resource('invoices', InvoiceController::class);
     Route::post('/invoices/{invoice}/send', [InvoiceController::class, 'send'])->name('invoices.send');
+    Route::post('/invoices/{invoice}/unsend', [InvoiceController::class, 'unsend'])->name('invoices.unsend');
     Route::post('/invoices/{invoice}/cancel', [InvoiceController::class, 'cancel'])->name('invoices.cancel');
     Route::post('/invoices/{invoice}/record-payment', [InvoiceController::class, 'recordPayment'])->name('invoices.recordPayment');
     Route::get('/invoices/{invoice}/pdf', [InvoiceController::class, 'pdf'])->name('invoices.pdf');
@@ -98,6 +99,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/payments/client-invoices/{client}', [PaymentController::class, 'getClientInvoices'])->name('payments.client-invoices');
     Route::post('/payments/{payment}/allocate', [PaymentController::class, 'allocate'])->name('payments.allocate');
     Route::post('/payments/{payment}/remove-allocation/{invoice}', [PaymentController::class, 'removeAllocation'])->name('payments.removeAllocation');
+    Route::post('/payments/{payment}/remove-allocations', [PaymentController::class, 'removeAllAllocations'])->name('payments.removeAllAllocations');
 
     // Credit Notes
     Route::resource('credit-notes', CreditNoteController::class);

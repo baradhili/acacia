@@ -298,6 +298,20 @@ class InvoiceController extends Controller
         return back()->with('success', 'Invoice marked as sent.');
     }
 
+    /**
+     * Un-send: return a sent/overdue invoice to draft. Rejected when any
+     * payment has been allocated — a payable invoice can never be a draft.
+     */
+    public function unsend(Invoice $invoice)
+    {
+        if ($invoice->revertToDraft()) {
+            return back()->with('success', 'Invoice returned to draft.');
+        }
+
+        return back()->with('error',
+            'Only sent invoices with no recorded payments can be returned to draft.');
+    }
+
     public function cancel(Invoice $invoice)
     {
         if (!$invoice->canBeCancelled()) {
@@ -381,10 +395,15 @@ class InvoiceController extends Controller
      */
     public function recordPayment(Request $request, Invoice $invoice)
     {
-        // Only outstanding invoices (sent/viewed/partially_paid/overdue) can
+        // Only outstanding invoices (sent/partially_paid/overdue) can
         // receive a payment — not drafts or cancelled invoices.
         if (in_array($invoice->status, [Invoice::STATUS_DRAFT, Invoice::STATUS_CANCELLED, Invoice::STATUS_PAID])) {
-            return back()->with('error', 'Payments can only be recorded against outstanding invoices.');
+            $reason = match ($invoice->status) {
+                Invoice::STATUS_DRAFT => 'Draft invoices cannot receive payments. Mark the invoice as sent first.',
+                Invoice::STATUS_PAID => 'This invoice is already fully paid.',
+                default => 'Cancelled invoices cannot receive payments.',
+            };
+            return back()->with('error', $reason);
         }
 
         $amountDue = (float) $invoice->amount_due;

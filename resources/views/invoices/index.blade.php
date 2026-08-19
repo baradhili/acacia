@@ -68,8 +68,14 @@
                         <td class="px-6 py-4 text-gray-900">{{ Str::limit($invoice->project->name ?? '-', 25) }}</td>
                         <td class="px-6 py-4 text-right text-gray-900">${{ number_format($invoice->total, 2) }}</td>
                         <td class="px-6 py-4 text-right text-gray-900">${{ number_format($invoice->amount_paid, 2) }}</td>
-                        <td class="px-6 py-4 text-right text-gray-900 {{ $invoice->amount_due > 0 ? 'text-red-600 font-medium' : 'text-green-600' }}">
-                            ${{ number_format($invoice->amount_due, 2) }}
+                        <td class="px-6 py-4 text-right">
+                            @if($invoice->status === 'draft')
+                                <span class="text-gray-400" title="Draft — mark as sent before recording payments">—</span>
+                            @else
+                                <span class="{{ $invoice->amount_due > 0 ? 'text-red-600 font-medium' : 'text-green-600' }}">
+                                    ${{ number_format($invoice->amount_due, 2) }}
+                                </span>
+                            @endif
                         </td>
                         <td class="px-6 py-4 text-gray-900">
                             {{ $invoice->issue_date->format('d M Y') }}

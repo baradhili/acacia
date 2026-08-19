@@ -6,6 +6,21 @@
         <h1 class="text-2xl font-bold text-gray-800">Record Supplier Payment</h1>
     </div>
 
+    @if (session('error'))
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            {{ session('error') }}
+        </div>
+    @endif
+    @if ($errors->any())
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            <ul class="list-disc list-inside text-sm">
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
     <form action="{{ route('bill-payments.store') }}" method="POST" class="space-y-6">
         @csrf
 
@@ -164,9 +179,13 @@
 
                     let html = '';
                     data.forEach(bill => {
+                        // The explicit index (the bill id) is essential: bare
+                        // [] never pairs [bill_id] and [amount] into one row
+                        // in PHP, which made allocation validation fail
+                        // silently.
                         html += `
                         <label class="flex items-start p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
-                            <input type="checkbox" name="bill_allocations[][bill_id]" value="${bill.id}"
+                            <input type="checkbox" name="bill_allocations[${bill.id}][bill_id]" value="${bill.id}"
                                 class="mt-1 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 bill-checkbox"
                                 data-amount-due="${parseFloat(bill.amount_due).toFixed(2)}">
                             <div class="ml-3 flex-1">
@@ -181,8 +200,8 @@
                                 </div>
                             </div>
                             <div class="ml-3 w-32">
-                                <input type="number" name="bill_allocations[][amount]"
-                                    placeholder="Amount" step="0.01" min="0"
+                                <input type="number" name="bill_allocations[${bill.id}][amount]"
+                                    placeholder="Amount" step="0.01" min="0" disabled
                                     class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm allocation-amount">
                             </div>
                         </label>
@@ -192,15 +211,19 @@
 
                     // Default to 100% allocation of each nominated bill:
                     // ticking pre-fills the full outstanding balance, and the
-                    // payment amount follows the sum of the allocations.
+                    // payment amount follows the sum of the allocations. The
+                    // amount input starts disabled so unchecked rows submit
+                    // nothing at all (no half-pairs for the server to reject).
                     document.querySelectorAll('.bill-checkbox').forEach(checkbox => {
                         checkbox.addEventListener('change', function() {
                             const row = this.closest('label');
                             const amountInput = row.querySelector('.allocation-amount');
                             if (this.checked) {
+                                amountInput.disabled = false;
                                 amountInput.value = this.dataset.amountDue;
                             } else {
                                 amountInput.value = '';
+                                amountInput.disabled = true;
                             }
                             syncPaymentAmount();
                         });

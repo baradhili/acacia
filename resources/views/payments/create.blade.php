@@ -6,6 +6,21 @@
         <h1 class="text-2xl font-bold text-gray-800">Record Payment</h1>
     </div>
 
+    @if (session('error'))
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            {{ session('error') }}
+        </div>
+    @endif
+    @if ($errors->any())
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            <ul class="list-disc list-inside text-sm">
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
     <form action="{{ route('payments.store') }}" method="POST" class="space-y-6">
         @csrf
 
@@ -143,6 +158,61 @@
             }
         });
 
+        function allocationRow(invoice) {
+            // The explicit index (the invoice id) is essential: bare []
+            // never pairs [invoice_id] and [amount] into one row in PHP,
+            // which made allocation validation fail silently.
+            return `
+                <label class="flex items-start p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
+                    <input type="checkbox" name="invoice_allocations[${invoice.id}][invoice_id]" value="${invoice.id}"
+                        class="mt-1 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 invoice-checkbox"
+                        data-amount-due="${parseFloat(invoice.amount_due).toFixed(2)}">
+                    <div class="ml-3 flex-1">
+                        <div class="flex justify-between">
+                            <span class="font-medium">${invoice.invoice_number}</span>
+                            <span class="text-red-600 font-medium" data-due
+                                title="Outstanding balance">$${parseFloat(invoice.amount_due).toFixed(2)}</span>
+                        </div>
+                        <div class="text-sm text-gray-500">
+                            Due: ${formatDate(invoice.due_date)}
+                            · Invoice total: $${parseFloat(invoice.total).toFixed(2)}
+                        </div>
+                    </div>
+                    <div class="ml-3 w-32">
+                        <input type="number" name="invoice_allocations[${invoice.id}][amount]"
+                            placeholder="Amount" step="0.01" min="0" disabled
+                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm allocation-amount">
+                    </div>
+                </label>
+            `;
+        }
+
+        function draftRow(invoice) {
+            return `
+                <div class="flex items-start p-3 bg-gray-50 rounded-lg opacity-60">
+                    <input type="checkbox" disabled class="mt-1 rounded border-gray-300 text-gray-400">
+                    <div class="ml-3 flex-1">
+                        <div class="flex justify-between">
+                            <span class="font-medium text-gray-500">${invoice.invoice_number}</span>
+                            <span class="text-gray-400 font-medium" title="Balance (invoice not sent yet)">
+                                $${parseFloat(invoice.amount_due).toFixed(2)}</span>
+                        </div>
+                        <div class="text-sm text-gray-400">
+                            Draft — mark as sent before allocating
+                            · Invoice total: $${parseFloat(invoice.total).toFixed(2)}
+                            · <a href="/invoices/${invoice.id}" class="underline hover:text-indigo-600">View</a>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function formatDate(value) {
+            if (!value) return '—';
+            const parsed = new Date(value);
+            return isNaN(parsed) ? '—' : parsed.toLocaleDateString('en-AU');
+        }
+
         function loadClientInvoices() {
             const clientId = document.getElementById('clientSelect').value;
             const invoicesList = document.getElementById('invoicesList');
@@ -154,53 +224,47 @@
 
             // Fetch outstanding invoices for this client
             fetch(`/payments/client-invoices/${clientId}`)
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) throw new Error(`Request failed (${response.status})`);
+                    return response.json();
+                })
                 .then(data => {
-                    if (data.length === 0) {
+                    if (!Array.isArray(data) || data.length === 0) {
                         invoicesList.innerHTML =
                         '<p class="text-gray-500">No outstanding invoices for this client.</p>';
                         return;
                     }
 
+                    const allocatable = data.filter(invoice => invoice.allocatable !== false);
+                    const drafts = data.filter(invoice => invoice.allocatable === false);
+
                     let html = '';
-                    data.forEach(invoice => {
+                    if (allocatable.length === 0) {
                         html += `
-                        <label class="flex items-start p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
-                            <input type="checkbox" name="invoice_allocations[][invoice_id]" value="${invoice.id}"
-                                class="mt-1 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 invoice-checkbox"
-                                data-amount-due="${parseFloat(invoice.amount_due).toFixed(2)}">
-                            <div class="ml-3 flex-1">
-                                <div class="flex justify-between">
-                                    <span class="font-medium">${invoice.invoice_number}</span>
-                                    <span class="text-red-600 font-medium" data-due
-                                        title="Outstanding balance">$${parseFloat(invoice.amount_due).toFixed(2)}</span>
-                                </div>
-                                <div class="text-sm text-gray-500">
-                                    Due: ${new Date(invoice.due_date).toLocaleDateString('en-AU')}
-                                    · Invoice total: $${parseFloat(invoice.total).toFixed(2)}
-                                </div>
-                            </div>
-                            <div class="ml-3 w-32">
-                                <input type="number" name="invoice_allocations[][amount]"
-                                    placeholder="Amount" step="0.01" min="0"
-                                    class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm allocation-amount">
-                            </div>
-                        </label>
-                    `;
-                    });
+                            <p class="text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-2">
+                                No allocatable invoices yet — the invoice(s) below are still drafts.
+                                Mark an invoice as sent (from the invoice page) to record payments against it.
+                            </p>`;
+                    }
+                    allocatable.forEach(invoice => { html += allocationRow(invoice); });
+                    drafts.forEach(invoice => { html += draftRow(invoice); });
                     invoicesList.innerHTML = html;
 
                     // Default to 100% allocation of each nominated invoice:
                     // ticking pre-fills the full outstanding balance, and the
-                    // payment amount follows the sum of the allocations.
+                    // payment amount follows the sum of the allocations. The
+                    // amount input starts disabled so unchecked rows submit
+                    // nothing at all (no half-pairs for the server to reject).
                     document.querySelectorAll('.invoice-checkbox').forEach(checkbox => {
                         checkbox.addEventListener('change', function() {
                             const row = this.closest('label');
                             const amountInput = row.querySelector('.allocation-amount');
                             if (this.checked) {
+                                amountInput.disabled = false;
                                 amountInput.value = this.dataset.amountDue;
                             } else {
                                 amountInput.value = '';
+                                amountInput.disabled = true;
                             }
                             syncPaymentAmount();
                         });
@@ -214,6 +278,13 @@
                     console.error('Error loading invoices:', error);
                     invoicesList.innerHTML = '<p class="text-red-500">Error loading invoices. Please try again.</p>';
                 });
+        }
+
+        // Restore the invoice list after a validation redirect (old input
+        // re-selects the client) or when arriving with ?client_id= preset.
+        if (document.getElementById('clientSelect').value
+            && document.querySelector('input[name="allocate_type"]:checked')?.value === 'manual') {
+            loadClientInvoices();
         }
 
         // Keep the payment amount in step with the checked allocations (the

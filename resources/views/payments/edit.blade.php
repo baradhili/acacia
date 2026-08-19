@@ -6,6 +6,30 @@
         <h1 class="text-2xl font-bold text-gray-800">Edit Payment {{ $payment->payment_number }}</h1>
     </div>
 
+    @if (session('error'))
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            {{ session('error') }}
+        </div>
+    @endif
+    @if ($errors->any())
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            <ul class="list-disc list-inside text-sm">
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+        <p class="text-sm text-blue-800">
+            <strong>Managing invoice allocations:</strong> allocations can't be edited on this page —
+            use the <a href="{{ route('payments.show', $payment) }}" class="underline font-medium">Allocate to Invoice</a>
+            action on the payment view page to add allocations, or the Remove buttons there to un-allocate.
+            To change the client of a payment with allocations, remove them all first.
+        </p>
+    </div>
+
     <form action="{{ route('payments.update', $payment) }}" method="POST" class="space-y-6">
         @csrf
         @method('PUT')

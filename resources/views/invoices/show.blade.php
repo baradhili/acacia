@@ -28,6 +28,15 @@
                     Edit
                 </a>
             @endif
+            @if(in_array($invoice->status, ['sent', 'overdue']) && $invoice->amount_paid == 0)
+                <form action="{{ route('invoices.unsend', $invoice) }}" method="POST" class="inline"
+                    onsubmit="return confirm('Return this invoice to draft? It can then be edited and sent again.');">
+                    @csrf
+                    <button type="submit" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg">
+                        Return to Draft
+                    </button>
+                </form>
+            @endif
             <a href="{{ route('invoices.downloadPdf', $invoice) }}" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg">
                 Download PDF
             </a>
@@ -56,6 +65,15 @@
     @if(session('error'))
         <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
             {{ session('error') }}
+        </div>
+    @endif
+    @if ($errors->any())
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            <ul class="list-disc list-inside text-sm">
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
         </div>
     @endif
 
@@ -165,12 +183,22 @@
                     </div>
                 </div>
 
-                @if($invoice->amount_due > 0 && $invoice->status !== 'cancelled')
+                @if(in_array($invoice->status, ['sent', 'partially_paid', 'overdue']) && $invoice->amount_due > 0)
                     <div class="mt-4 flex gap-2">
                         <button type="button" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg"
                             onclick="document.getElementById('paymentModal').classList.remove('hidden')">
                             Record Payment
                         </button>
+                    </div>
+                @elseif($invoice->status === 'draft' && $invoice->amount_due > 0)
+                    <div class="mt-4 flex items-center gap-3">
+                        <form action="{{ route('invoices.send', $invoice) }}" method="POST">
+                            @csrf
+                            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+                                Mark as Sent
+                            </button>
+                        </form>
+                        <p class="text-sm text-gray-500">Draft invoices must be sent before payments can be recorded.</p>
                     </div>
                 @endif
             </div>
@@ -351,6 +379,12 @@
 @push('scripts')
 <script>
 // No document delete handling on show view - delete only available in edit view
+
+// Reopen the payment modal after a failed submission (the page reloads
+// with the modal hidden, which used to make validation errors invisible).
+@if ($errors->any())
+    document.getElementById('paymentModal')?.classList.remove('hidden');
+@endif
 </script>
 @endpush
 
