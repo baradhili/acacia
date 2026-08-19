@@ -74,9 +74,11 @@ class BillController extends Controller
             'items.*.description' => 'required|string',
             'items.*.quantity' => 'required|numeric|min:0',
             'items.*.unit_price' => 'required|numeric|min:0',
-            // Per-line GST: checkbox on = the entered amount is GST-inclusive
-            // (the GST portion is back-calculated from it), off = GST-free.
+            // Per-line GST: 'gst' = the entered amount is GST-inclusive
+            // (portion back-calculated); 'gst_add' = the entered amount is
+            // ex-GST and GST is added on top; neither = GST-free.
             'items.*.gst' => 'nullable|boolean',
+            'items.*.gst_add' => 'nullable|boolean',
             'items.*.discount_percent' => 'nullable|numeric|min:0|max:100',
             'items.*.expense_account_id' => 'nullable|integer|exists:ifrs_accounts,id',
             'paid_now' => 'nullable|boolean',
@@ -105,7 +107,9 @@ class BillController extends Controller
                     'description' => $item['description'],
                     'quantity' => $item['quantity'],
                     'unit_price' => $item['unit_price'],
-                    'tax_rate' => !empty($item['gst']) ? config('australian.gst.rate', 10) : 0,
+                    'tax_rate' => (!empty($item['gst']) || !empty($item['gst_add'])) ? config('australian.gst.rate', 10) : 0,
+                    // "Incl. GST" wins if both boxes are somehow submitted
+                    'gst_added' => empty($item['gst']) && !empty($item['gst_add']),
                     'discount_percent' => $item['discount_percent'] ?? 0,
                     'expense_account_id' => $item['expense_account_id'] ?? null,
                     'sort_order' => $index,
@@ -202,7 +206,9 @@ class BillController extends Controller
             'items.*.description' => 'required|string',
             'items.*.quantity' => 'required|numeric|min:0',
             'items.*.unit_price' => 'required|numeric|min:0',
+            // Same per-line GST treatment as store()
             'items.*.gst' => 'nullable|boolean',
+            'items.*.gst_add' => 'nullable|boolean',
             'items.*.discount_percent' => 'nullable|numeric|min:0|max:100',
             'items.*.expense_account_id' => 'nullable|integer|exists:ifrs_accounts,id',
         ]);
@@ -242,7 +248,9 @@ class BillController extends Controller
                     'description' => $item['description'],
                     'quantity' => $item['quantity'],
                     'unit_price' => $item['unit_price'],
-                    'tax_rate' => !empty($item['gst']) ? config('australian.gst.rate', 10) : 0,
+                    'tax_rate' => (!empty($item['gst']) || !empty($item['gst_add'])) ? config('australian.gst.rate', 10) : 0,
+                    // "Incl. GST" wins if both boxes are somehow submitted
+                    'gst_added' => empty($item['gst']) && !empty($item['gst_add']),
                     'discount_percent' => $item['discount_percent'] ?? 0,
                     'expense_account_id' => $item['expense_account_id'] ?? null,
                     'sort_order' => $index,

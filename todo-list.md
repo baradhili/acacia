@@ -1,14 +1,14 @@
-- [ ] Need an option in bills to "add GST" per line item as well - for suppliers who show "ex-GST" for line items and then calculate it at subtotal
+- [x] Need an option in bills to "add GST" per line item as well - for suppliers who show "ex-GST" for line items and then calculate it at subtotal
 
-- [ ] For bills that are "already paid" - still need a method to attach documents
+- [x] For bills that are "already paid" at entry time - still need a method to attach documents
 
-- [ ] allow for 4 digits after the decimal point as sometimes client reverse invoices carry many significant digits. Also for bills
+- [x] allow for 4 digits after the decimal point as sometimes client reverse invoices carry many significant digits. 
 
 - [ ] Need to be able to edit opening balances as admin or accountant.
 
 - [ ] handle subscriptions that run for a time period overlapping financial years (ie. prorate for the year)
 
-- [ ] Time entries need to have date and then amount of hours as default, can have start and end time for the date as well as breaks - but optional
+- [ ] Time entries need to have date and then amount of hours as default - optional they can have start and end time for the date as well as zero or more breaks 
 
 - [ ] No way to edit or delete bill
 
@@ -16,10 +16,9 @@
 
 - [ ] Find where dates are in US m/d/y format and make them use the browser/system format
 
-- [ ] 
+- [ ] data is not actually being written to most ifrs tables - they are being written to invoices, bills, payments etc - just not seeing them in teh IFRS_transactions table 
 
 - [ ] 
-
 - [ ] In teh invoices index view show an icon when invoices have a document attached. - possibly refelct this to all index views of items that can have attached documents.
 
 - [ ] Update invoice format - if there is a PO - show amount remaining

@@ -99,6 +99,86 @@ class BillTest extends TestCase
         $this->assertTrue($bill->items[1]->is_gst_free);
     }
 
+    public function test_bill_supports_add_gst_ex_gst_entry(): void
+    {
+        // Suppliers who quote ex-GST lines and add GST at the subtotal:
+        // $100 entered with Add GST -> $110 with $10 GST on top.
+        $response = $this->actingAs($this->user)->post('/bills', [
+            'supplier_id' => $this->supplier->id,
+            'bill_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'items' => [
+                [
+                    'description' => 'Ex-GST supplier line',
+                    'quantity' => 1,
+                    'unit_price' => 100,
+                    'gst_add' => '1',
+                ],
+                [
+                    'description' => 'Inclusive line',
+                    'quantity' => 1,
+                    'unit_price' => 110,
+                    'gst' => '1',
+                ],
+                [
+                    'description' => 'GST-free line',
+                    'quantity' => 1,
+                    'unit_price' => 50,
+                ],
+            ],
+        ]);
+
+        $response->assertSessionHas('success');
+        $bill = Bill::first();
+        $items = $bill->items;
+
+        // Add-GST line: GST goes on top of the entered amount
+        $this->assertTrue((bool) $items[0]->gst_added);
+        $this->assertEquals(110, (float) $items[0]->total);
+        $this->assertEquals(10, (float) $items[0]->tax_amount);
+
+        // Inclusive line unchanged: $110 paid, $10 of it GST
+        $this->assertFalse((bool) $items[1]->gst_added);
+        $this->assertEquals(110, (float) $items[1]->total);
+        $this->assertEquals(10, (float) $items[1]->tax_amount);
+
+        // GST-free line untouched
+        $this->assertEquals(50, (float) $items[2]->total);
+        $this->assertEquals(0, (float) $items[2]->tax_amount);
+
+        // Mixed modes roll up correctly: 250 ex GST + 20 GST = 270
+        $this->assertEquals(250, (float) $bill->subtotal);
+        $this->assertEquals(20, (float) $bill->tax_amount);
+        $this->assertEquals(270, (float) $bill->total);
+    }
+
+    public function test_both_gst_ticks_normalise_to_inclusive(): void
+    {
+        // Defensive: the form makes the ticks mutually exclusive, but if
+        // both are ever submitted, "Incl. GST" wins — the entered amount is
+        // treated as what you pay, never inflated by 10%.
+        $response = $this->actingAs($this->user)->post('/bills', [
+            'supplier_id' => $this->supplier->id,
+            'bill_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'items' => [
+                [
+                    'description' => 'Both ticks',
+                    'quantity' => 1,
+                    'unit_price' => 110,
+                    'gst' => '1',
+                    'gst_add' => '1',
+                ],
+            ],
+        ]);
+
+        $response->assertSessionHas('success');
+        $bill = Bill::first();
+        $this->assertFalse((bool) $bill->items->first()->gst_added);
+        $this->assertEquals(110, (float) $bill->total);
+        $this->assertEquals(10, (float) $bill->tax_amount);
+    }
+
     public function test_gst_tick_backs_out_the_portion_instead_of_adding(): void
     {
         // Regression: the tick used to ADD 10% on top of the entered amount
@@ -329,6 +409,60 @@ class BillTest extends TestCase
         $this->assertEquals(225, (float) $bill->subtotal);
         $this->assertEquals(20, (float) $bill->tax_amount);
         $this->assertEquals(245, (float) $bill->total);
+    }
+
+    public function test_update_preserves_and_sets_add_gst_lines(): void
+    {
+        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
+        $exGst = $bill->items()->create([
+            'description' => 'Ex-GST line',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+            'gst_added' => true,
+        ]);
+        $bill->recalculateTotals();
+
+        $response = $this->actingAs($this->user)->put(route('bills.update', $bill), [
+            'supplier_id' => $this->supplier->id,
+            'bill_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'items' => [
+                [
+                    'id' => $exGst->id,
+                    'description' => 'Ex-GST line',
+                    'quantity' => 1,
+                    'unit_price' => 100,
+                    'gst_add' => '1',
+                ],
+                [
+                    'description' => 'New ex-GST line',
+                    'quantity' => 1,
+                    'unit_price' => 200,
+                    'gst_add' => '1',
+                ],
+            ],
+        ]);
+
+        $response->assertSessionHas('success');
+        $bill->refresh();
+
+        // The Add-GST treatment survives the edit round-trip instead of
+        // being silently flattened to GST-free (gst_add used to be stripped
+        // from the validated payload on update).
+        $this->assertTrue((bool) $exGst->fresh()->gst_added);
+        $this->assertEquals(110, (float) $exGst->fresh()->total);
+        $this->assertEquals(10, (float) $exGst->fresh()->tax_amount);
+
+        $newLine = $bill->items->firstWhere('description', 'New ex-GST line');
+        $this->assertTrue((bool) $newLine->gst_added);
+        $this->assertEquals(220, (float) $newLine->total);
+        $this->assertEquals(20, (float) $newLine->tax_amount);
+
+        // 300 ex GST + 30 GST on top = 330
+        $this->assertEquals(300, (float) $bill->subtotal);
+        $this->assertEquals(30, (float) $bill->tax_amount);
+        $this->assertEquals(330, (float) $bill->total);
     }
 
     public function test_payment_rejected_for_draft_and_paid_bills(): void

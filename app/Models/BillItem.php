@@ -16,6 +16,7 @@ class BillItem extends Model
         'quantity',
         'unit_price',
         'tax_rate',
+        'gst_added',
         'tax_amount',
         'discount_percent',
         'discount_amount',
@@ -28,6 +29,7 @@ class BillItem extends Model
         'quantity' => 'decimal:2',
         'unit_price' => 'decimal:2',
         'tax_rate' => 'decimal:2',
+        'gst_added' => 'boolean',
         'tax_amount' => 'decimal:2',
         'discount_percent' => 'decimal:2',
         'discount_amount' => 'decimal:2',
@@ -79,10 +81,14 @@ class BillItem extends Model
      * tax-inclusive amount, and the GST portion is back-calculated from it
      * (at 10%: $110 → $10 GST, $100 pre-tax).
      *
-     * Per-line GST: tax_rate 10 means the amount includes GST (the payment
-     * posting backs the GST out to the GST account), tax_rate 0 is GST-free
-     * (some supplies are GST-free by regulation — bank fees, rego, basic
-     * food…).
+     * Per-line GST mode:
+     * - gst_added, tax_rate > 0: "Add GST" — the entered amount is ex-GST
+     *   (suppliers who quote ex-GST lines and add GST at the subtotal), so
+     *   GST goes on top: $100 → $110 with $10 GST.
+     * - !gst_added, tax_rate > 0: "Incl. GST" — the entered amount is the
+     *   amount paid and the GST portion is back-calculated: $110 → $100
+     *   + $10 GST.
+     * - tax_rate 0: GST-free (by regulation — bank fees, rego, basic food…).
      */
     public function calculateTotals(): void
     {
@@ -93,14 +99,21 @@ class BillItem extends Model
             $this->discount_amount = $gross * ($this->discount_percent / 100);
         }
 
-        // Tax-inclusive line total — the amount actually paid
-        $this->total = $gross - $this->discount_amount;
-
-        // Back-calculate the GST portion from the inclusive total
+        $afterDiscount = $gross - $this->discount_amount;
         $rate = (float) $this->tax_rate;
-        $this->tax_amount = $rate > 0
-            ? round($this->total * $rate / (100 + $rate), 2)
-            : 0;
+
+        if ($rate <= 0) {
+            $this->total = $afterDiscount;
+            $this->tax_amount = 0;
+        } elseif ($this->gst_added) {
+            // Ex-GST entry: GST is added on top of the discounted amount
+            $this->tax_amount = round($afterDiscount * $rate / 100, 2);
+            $this->total = round($afterDiscount + $this->tax_amount, 2);
+        } else {
+            // Inclusive entry: the amount paid, GST backed out of it
+            $this->total = $afterDiscount;
+            $this->tax_amount = round($this->total * $rate / (100 + $rate), 2);
+        }
     }
 
     /**

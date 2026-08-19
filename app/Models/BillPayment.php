@@ -366,7 +366,10 @@ class BillPayment extends Model
 
                     $accountId = $item->expense_account_id ?: $defaultExpenseAccount->id;
                     $taxable = (float) $item->tax_rate > 0;
-                    $key = $accountId . '-' . ($taxable ? 'gst' : 'free');
+                    // gst = inclusive amount (vat_inclusive posting backs the
+                    // GST out); gstadd = ex-GST amount (package adds GST on
+                    // top); free = no GST.
+                    $key = $accountId . '-' . ($taxable ? ($item->gst_added ? 'gstadd' : 'gst') : 'free');
                     $groups[$key] = ($groups[$key] ?? 0) + $shareCents;
                 }
             }
@@ -395,7 +398,8 @@ class BillPayment extends Model
             foreach ($groups as $key => $cents) {
                 [$accountId, $treatment] = explode('-', $key);
                 $amount = $cents / 100;
-                $taxable = $treatment === 'gst' && $gstVat;
+                $vatInclusive = $treatment === 'gst';
+                $taxable = in_array($treatment, ['gst', 'gstadd']) && $gstVat;
 
                 // Debit expense line; addLineItem() flips credited to false
                 // (the transaction is credited) → Dr Expense. Lines must be
@@ -405,7 +409,7 @@ class BillPayment extends Model
                     'account_id' => (int) $accountId,
                     'amount' => $amount,
                     'quantity' => 1,
-                    'vat_inclusive' => $taxable,
+                    'vat_inclusive' => $vatInclusive,
                     'entity_id' => $entity->id,
                 ]);
 

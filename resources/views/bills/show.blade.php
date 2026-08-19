@@ -95,6 +95,8 @@
                                 <td class="py-3 text-right">
                                     @if($item->is_gst_free)
                                         <span class="text-gray-400" title="GST-free by regulation">Free</span>
+                                    @elseif($item->gst_added)
+                                        <span title="Ex-GST amount; GST was added on top">+ {{ $item->tax_rate }}%</span>
                                     @else
                                         <span title="Amount is GST-inclusive; this portion was back-calculated">Incl. {{ $item->tax_rate }}%</span>
                                     @endif

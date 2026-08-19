@@ -201,8 +201,9 @@ class Bill extends Model
             return;
         }
 
-        // BillItem.total is the tax-inclusive amount paid (unit prices are
-        // entered GST-inclusive; calculateTotals back-calculates the tax).
+        // BillItem.total is the tax-inclusive amount paid in every GST
+        // mode — inclusive lines back-calculate the tax, Add-GST (ex-GST)
+        // lines put it on top; see BillItem::calculateTotals.
         // Derive each line's pre-tax value as total - tax_amount so
         // `subtotal + tax_amount == total` holds and SUM(subtotal) reports
         // reflect true pre-GST expenses.
