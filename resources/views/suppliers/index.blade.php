@@ -29,6 +29,7 @@
                             <tr>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <a href="{{ route('suppliers.show', $supplier) }}" class="text-blue-600 hover:text-blue-900">{{ $supplier->name }}</a>
+                                    <x-document-icon :count="$supplier->documents_count" />
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-gray-500">{{ $supplier->email ?? '-' }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap text-gray-500">{{ $supplier->phone ?? '-' }}</td>

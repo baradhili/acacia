@@ -14,7 +14,7 @@ class BillController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Bill::with(['supplier', 'project']);
+        $query = Bill::with(['supplier', 'project'])->withCount('documents');
 
         // Filter by status
         if ($request->has('status') && $request->status) {

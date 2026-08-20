@@ -16,7 +16,7 @@ class PaymentController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Payment::with(['client', 'receiver']);
+        $query = Payment::with(['client', 'receiver'])->withCount('documents');
 
         // Filter by client
         if ($request->has('client_id') && $request->client_id) {

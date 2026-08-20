@@ -21,7 +21,7 @@ class InvoiceController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Invoice::with(['client', 'project']);
+        $query = Invoice::with(['client', 'project'])->withCount('documents');
 
         // Filter by status
         if ($request->has('status') && $request->status) {

@@ -9,7 +9,7 @@ class SupplierController extends Controller
 {
     public function index()
     {
-        $suppliers = Supplier::paginate(15);
+        $suppliers = Supplier::withCount('documents')->paginate(15);
         return view('suppliers.index', compact('suppliers'));
     }
 

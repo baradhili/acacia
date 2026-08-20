@@ -13,7 +13,7 @@ class BillPaymentController extends Controller
 {
     public function index(Request $request)
     {
-        $query = BillPayment::with(['supplier', 'payer']);
+        $query = BillPayment::with(['supplier', 'payer'])->withCount('documents');
 
         // Filter by supplier
         if ($request->has('supplier_id') && $request->supplier_id) {

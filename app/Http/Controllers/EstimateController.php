@@ -15,7 +15,7 @@ class EstimateController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Estimate::with(['client', 'project']);
+        $query = Estimate::with(['client', 'project'])->withCount('documents');
 
         // Filter by status
         if ($request->has('status') && $request->status) {

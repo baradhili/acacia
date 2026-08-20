@@ -12,6 +12,7 @@ class PurchaseOrderController extends Controller
     public function index()
     {
         $purchaseOrders = PurchaseOrder::with(['client', 'project'])
+            ->withCount('documents')
             ->latest()
             ->paginate(15);
 

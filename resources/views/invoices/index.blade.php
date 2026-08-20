@@ -63,6 +63,7 @@
                             <a href="{{ route('invoices.show', $invoice) }}" class="text-indigo-600 hover:text-indigo-900 font-medium">
                                 {{ $invoice->invoice_number }}
                             </a>
+                            <x-document-icon :count="$invoice->documents_count" />
                         </td>
                         <td class="px-6 py-4 text-gray-900">{{ $invoice->client->name ?? '-' }}</td>
                         <td class="px-6 py-4 text-gray-900">{{ Str::limit($invoice->project->name ?? '-', 25) }}</td>
