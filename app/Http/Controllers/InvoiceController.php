@@ -433,6 +433,10 @@ class InvoiceController extends Controller
 
             DB::commit();
 
+            // Ledger posting is best-effort (logged, non-fatal), matching
+            // the bill-payment flow; ifrs:post-payments backfills failures.
+            $payment->postToIFRS();
+
             return redirect()->route('invoices.show', $invoice)
                 ->with('success', 'Payment recorded successfully.');
         } catch (\Exception $e) {

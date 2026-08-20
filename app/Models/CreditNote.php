@@ -175,6 +175,11 @@ class CreditNote extends Model
             'remaining_amount' => $newRemainingAmount,
         ]);
 
+        // Ledger posting is best-effort (logged, non-fatal): the negative
+        // refund posts as Cr Bank / Dr Revenue / Dr GST, mirroring the
+        // original receipt. ifrs:post-payments backfills failures.
+        $refund->postToIFRS();
+
         return true;
     }
 

@@ -136,6 +136,10 @@ class PaymentController extends Controller
 
             DB::commit();
 
+            // Ledger posting is best-effort (logged, non-fatal), matching
+            // the bill-payment flow; ifrs:post-payments backfills failures.
+            $payment->postToIFRS();
+
             // Send receipt email if client has email
             if ($payment->client->email) {
                 try {
