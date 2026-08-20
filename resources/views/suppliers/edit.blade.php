@@ -51,11 +51,7 @@
                     <input type="text" name="postcode" value="{{ old('postcode', $supplier->postcode) }}"
                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Country</label>
-                    <input type="text" name="country" value="{{ old('country', $supplier->country) }}"
-                           class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                </div>
+                <x-country-select name="country" :value="$supplier->country" />
                 <div class="md:col-span-2">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
                     <textarea name="notes" rows="3"
