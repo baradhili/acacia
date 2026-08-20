@@ -48,7 +48,7 @@
             <tbody class="divide-y divide-gray-200">
                 @forelse($project->timeEntries as $entry)
                     <tr>
-                        <td class="px-4 py-3 text-sm text-gray-900">{{ $entry->start_time->format('d M Y') }}</td>
+                        <td class="px-4 py-3 text-sm text-gray-900">{{ $entry->entry_date?->format('d M Y') ?? '-' }}</td>
                         <td class="px-4 py-3 text-sm text-gray-900">{{ $entry->user->name }}</td>
                         <td class="px-4 py-3 text-sm text-gray-900">{{ Str::limit($entry->description, 40) }}</td>
                         <td class="px-4 py-3 text-center">

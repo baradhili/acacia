@@ -1,4 +1,4 @@
-- [x] Need an option in bills to "add GST" per line item as well - for suppliers who show "ex-GST" for line items and then calculate it at subtotal
+- [x] Need an option in bills to "add GST" per line item as well - for suppliers who show "ex-GST" for line items and then calculate it at subtotal. Make it another checkbox
 
 - [x] For bills that are "already paid" at entry time - still need a method to attach documents
 
@@ -6,19 +6,20 @@
 
 - [ ] Need to be able to edit opening balances as admin or accountant.
 
-- [ ] handle subscriptions that run for a time period overlapping financial years (ie. prorate for the year)
+- [ ] NOT YET - handle journaling subscriptions that run for a time period overlapping financial years (ie. prorate for the year) - have it as an flag  for a bill
 
-- [ ] Time entries need to have date and then amount of hours as default - optional they can have start and end time for the date as well as zero or more breaks 
+- [x] Time entries need to have date and then amount of hours as default - optional they can have start and end time for the date as well as zero or more breaks 
 
 - [ ] No way to edit or delete bill
 
-- [ ] time entry - can only go to a project - project is linked to po
+- [ ] THINK THROUGH - time entry - can only go to a project - project is linked to po
 
 - [ ] Find where dates are in US m/d/y format and make them use the browser/system format
 
-- [ ] data is not actually being written to most ifrs tables - they are being written to invoices, bills, payments etc - just not seeing them in teh IFRS_transactions table 
+- [ ] data is not actually being written to most ifrs tables - they are being written to the tables - invoices, bills, payments etc - just not seeing them in the IFRS_transactions table - plan in .zcode/plans
 
 - [ ] 
+
 - [ ] In teh invoices index view show an icon when invoices have a document attached. - possibly refelct this to all index views of items that can have attached documents.
 
 - [ ] Update invoice format - if there is a PO - show amount remaining
@@ -27,9 +28,9 @@
 
 - [ ] Country fields should be a dropdown - configurable "pinned countries" at top. use teh ISO country list.
 
-- [ ] 
-
 - [ ] Drop multiple files means all files should be uploaded
+
+- [ ] 
 
 - [ ] ### 0. `createFromTimeEntries` doesn't actually create
   

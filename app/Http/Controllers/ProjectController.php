@@ -82,7 +82,7 @@ class ProjectController extends Controller
     public function show(Project $project)
     {
         $project->load(['client', 'purchaseOrder', 'staffAssignments.user', 'timeEntries' => function ($q) {
-            $q->orderBy('start_time', 'desc');
+            $q->orderBy('entry_date', 'desc')->orderByDesc('id');
         }]);
 
         return view('projects.show', compact('project'));

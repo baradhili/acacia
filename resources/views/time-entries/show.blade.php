@@ -38,12 +38,28 @@
                 <p class="mt-1 text-gray-900">{{ $timeEntry->purchaseOrder?->po_number ?? '-' }}</p>
             </div>
             <div>
-                <h3 class="text-sm font-medium text-gray-500">Start Time</h3>
-                <p class="mt-1 text-gray-900">{{ $timeEntry->start_time->format('d M Y H:i') }}</p>
+                <h3 class="text-sm font-medium text-gray-500">Date</h3>
+                <p class="mt-1 text-gray-900">{{ $timeEntry->entry_date?->format('d M Y') ?? '-' }}</p>
             </div>
             <div>
-                <h3 class="text-sm font-medium text-gray-500">End Time</h3>
-                <p class="mt-1 text-gray-900">{{ $timeEntry->end_time?->format('d M Y H:i') ?? '-' }}</p>
+                <h3 class="text-sm font-medium text-gray-500">Times</h3>
+                <p class="mt-1 text-gray-900">
+                    @if ($timeEntry->start_time && $timeEntry->end_time)
+                        {{ $timeEntry->start_time->format('H:i') }} – {{ $timeEntry->end_time->format('H:i') }}
+                        @if ($timeEntry->breaks->isNotEmpty())
+                            <span class="text-gray-500">(less {{ $timeEntry->breaks->sum(fn ($b) => $b->durationMinutes()) }} min of breaks)</span>
+                        @endif
+                    @else
+                        <span class="text-gray-500">Manual hours</span>
+                    @endif
+                </p>
+                @if ($timeEntry->breaks->isNotEmpty())
+                    <ul class="mt-1 text-sm text-gray-600">
+                        @foreach ($timeEntry->breaks as $break)
+                            <li>Break: {{ $break->start_display }} – {{ $break->end_display }}</li>
+                        @endforeach
+                    </ul>
+                @endif
             </div>
             <div>
                 <h3 class="text-sm font-medium text-gray-500">Hours</h3>

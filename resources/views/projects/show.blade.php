@@ -161,7 +161,7 @@
                 <tbody class="divide-y divide-gray-200">
                     @foreach($project->timeEntries->take(10) as $entry)
                         <tr>
-                            <td class="px-4 py-3 text-gray-900">{{ $entry->start_time->format('d M Y') }}</td>
+                            <td class="px-4 py-3 text-gray-900">{{ $entry->entry_date?->format('d M Y') ?? '-' }}</td>
                             <td class="px-4 py-3 text-gray-900">{{ $entry->user->name }}</td>
                             <td class="px-4 py-3 text-gray-900">{{ Str::limit($entry->description, 50) }}</td>
                             <td class="px-4 py-3 text-right text-gray-900">{{ number_format($entry->hours, 1) }}</td>

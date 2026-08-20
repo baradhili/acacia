@@ -82,7 +82,7 @@ class ReportController extends Controller
         $clientId = $request->get('client_id');
 
         $query = TimeEntry::with(['project.client', 'user'])
-            ->whereBetween('start_time', [$startDate, $endDate])
+            ->whereBetween('entry_date', [$startDate->toDateString(), $endDate->toDateString()])
             ->approved();
 
         if ($clientId) {
@@ -128,7 +128,7 @@ class ReportController extends Controller
         $userId = $request->get('user_id');
 
         $query = TimeEntry::with(['user', 'project'])
-            ->whereBetween('start_time', [$startDate, $endDate])
+            ->whereBetween('entry_date', [$startDate->toDateString(), $endDate->toDateString()])
             ->approved();
 
         if ($userId) {
@@ -175,7 +175,7 @@ class ReportController extends Controller
         $projectId = $request->get('project_id');
 
         $query = TimeEntry::with(['project.client', 'user'])
-            ->whereBetween('start_time', [$startDate, $endDate])
+            ->whereBetween('entry_date', [$startDate->toDateString(), $endDate->toDateString()])
             ->approved();
 
         if ($projectId) {

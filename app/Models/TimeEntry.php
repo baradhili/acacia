@@ -15,6 +15,7 @@ class TimeEntry extends Model
         'user_id',
         'project_id',
         'purchase_order_id',
+        'entry_date',
         'start_time',
         'end_time',
         'hours',
@@ -28,6 +29,7 @@ class TimeEntry extends Model
     ];
 
     protected $casts = [
+        'entry_date' => 'date',
         'start_time' => 'datetime',
         'end_time' => 'datetime',
         'approved_at' => 'datetime',
@@ -40,8 +42,17 @@ class TimeEntry extends Model
     {
         parent::boot();
 
-        // Calculate hours from start/end times when saving
+        // Timed entries derive their hours; manual entries keep whatever
+        // was entered. Breaks are persisted child rows, so during a fresh
+        // create they don't exist yet and the span stands until they are
+        // saved (their hooks then trigger recalculateHours()).
         static::saving(function ($entry) {
+            // Defensive default for model-level creates that only set a
+            // start_time (the controller always sets entry_date explicitly).
+            if (!$entry->entry_date && $entry->start_time) {
+                $entry->entry_date = $entry->start_time->toDateString();
+            }
+
             if ($entry->start_time && $entry->end_time) {
                 $entry->hours = $entry->calculateHours();
             }
@@ -74,13 +85,38 @@ class TimeEntry extends Model
         return $this->belongsTo(User::class, 'approved_by');
     }
 
+    public function breaks(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(TimeEntryBreak::class)->orderBy('start_time');
+    }
+
     /**
-     * Calculate hours from start/end times if not set
+     * Recompute hours from (end − start − breaks) and persist. Called by
+     * the break hooks after break rows change, and by the controller after
+     * syncing breaks. No-op for manual (untimed) entries.
+     */
+    public function recalculateHours(): void
+    {
+        if (!$this->start_time || !$this->end_time) {
+            return;
+        }
+
+        $hours = $this->calculateHours();
+        if (abs((float) $this->hours - $hours) >= 0.001) {
+            $this->updateQuietly(['hours' => $hours]);
+        }
+    }
+
+    /**
+     * Calculate hours from start/end times minus persisted breaks
      */
     public function calculateHours(): float
     {
         if ($this->start_time && $this->end_time) {
-            return round($this->start_time->floatDiffInHours($this->end_time), 2);
+            $span = $this->start_time->floatDiffInHours($this->end_time);
+            $breakMinutes = $this->breaks()->get()->sum(fn ($b) => $b->durationMinutes());
+
+            return round(max($span - $breakMinutes / 60, 0), 2);
         }
         return (float) $this->hours;
     }
@@ -170,6 +206,6 @@ class TimeEntry extends Model
     public function scopeForUserAndPeriod($query, int $userId, Carbon $start, Carbon $end)
     {
         return $query->where('user_id', $userId)
-            ->whereBetween('start_time', [$start, $end]);
+            ->whereBetween('entry_date', [$start->toDateString(), $end->toDateString()]);
     }
 }
