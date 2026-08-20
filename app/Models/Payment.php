@@ -385,7 +385,7 @@ class Payment extends Model
             // Main account = Bank. Receipts: credited = false → Dr Bank
             // (asset increases). Refunds flip to credited = true → Cr Bank.
             $journalEntry = new JournalEntry([
-                'transaction_date' => $this->payment_date,
+                'transaction_date' => IfrsPosting::transactionDate($this->payment_date, $entity),
                 'account_id' => $bankAccount->id,
                 'credited' => $isRefund,
                 'entity_id' => $entity->id,

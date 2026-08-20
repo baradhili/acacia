@@ -414,7 +414,7 @@ class BillPayment extends Model
 
             // Main account = Bank, credited = true → Cr Bank (asset decreases).
             $journalEntry = new JournalEntry([
-                'transaction_date' => $this->payment_date,
+                'transaction_date' => IfrsPosting::transactionDate($this->payment_date, $entity),
                 'account_id' => $bankAccount->id,
                 'credited' => true,
                 'entity_id' => $entity->id,

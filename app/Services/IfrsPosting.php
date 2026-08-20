@@ -74,6 +74,25 @@ class IfrsPosting
     }
 
     /**
+     * The IFRS package rejects transactions dated exactly at the reporting
+     * period's start instant (that moment is reserved for Balance objects),
+     * and a date-only payment date lands precisely on midnight of 1 July
+     * for payments made on the first day of the fiscal year (year_start 7).
+     * Nudge those by one second — same calendar day, valid transaction.
+     *
+     * Call after ensureReportingPeriod(); periodStart() needs no period row
+     * but the transaction save that follows does.
+     */
+    public static function transactionDate($date, Entity $entity): Carbon
+    {
+        $date = Carbon::parse($date);
+
+        return $date->equalTo(ReportingPeriod::periodStart($date, $entity))
+            ? $date->addSecond()
+            : $date;
+    }
+
+    /**
      * Post a mirrored reversal of an already-posted transaction: the main
      * account's `credited` flag is inverted and every line item (including
      * its applied Vats) is recreated as-is, so each ledger leg flips Dr/Cr

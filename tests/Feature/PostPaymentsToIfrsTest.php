@@ -186,6 +186,24 @@ class PostPaymentsToIfrsTest extends TestCase
         ]);
     }
 
+    public function test_payment_dated_on_fiscal_year_start_still_posts(): void
+    {
+        // Jan 1 is the period start instant for this year_start=1 entity;
+        // the package reserves that exact moment for Balance objects, so a
+        // date-only payment date must be nudged past midnight.
+        $payment = Payment::create([
+            'client_id' => $this->client->id,
+            'amount' => 110,
+            'payment_date' => now()->startOfYear()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+
+        $this->assertNotNull($payment->postToIFRS());
+
+        $bank = Account::where('code', 320)->first();
+        $this->assertEquals(110, $this->debitSum($bank));
+    }
+
     public function test_credit_note_refund_payment_posts_flipped_legs(): void
     {
         // Credit-note refunds are negative payments; they must post the
