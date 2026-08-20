@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
+use App\Services\IfrsPosting;
 use IFRS\Models\Account;
-use IFRS\Models\Entity;
 use IFRS\Models\LineItem;
 use IFRS\Models\Vat;
 use IFRS\Transactions\JournalEntry;
@@ -53,6 +53,12 @@ class Payment extends Model
     const IFRS_BANK_ACCOUNT_CODE = 320; // Operating Account
     const IFRS_REVENUE_ACCOUNT_CODE = 4100; // Consulting Revenue
     const IFRS_GST_VAT_CODE = 'G'; // Seeded "GST 10%" Vat, linked to account 2200 (GST Payable)
+
+    /**
+     * Reason of the most recent postToIFRS() failure (null after a success
+     * or an already-posted skip), so the backfill command can report it.
+     */
+    public ?string $lastPostingError = null;
 
     protected static function boot()
     {
@@ -312,14 +318,28 @@ class Payment extends Model
      * Vat (code G); the IFRS package backs the GST out and credits account
      * 2200 automatically, so the ledger reflects true ATO cash-basis receipts.
      *
+     * Credit-note refunds (negative payments) post the absolute amount with
+     * every leg flipped — Cr Bank / Dr Revenue / Dr GST — because IFRS line
+     * items reject negative amounts; the result nets the original receipt
+     * to zero.
+     *
      * Returns the IFRS transaction id, or null on failure (accounts missing,
-     * no entity/reporting period, or any Throwable during posting).
+     * no entity, void payment, or any Throwable during posting). When null
+     * is returned the reason is on $this->lastPostingError.
      */
     public function postToIFRS(): ?int
     {
+        $this->lastPostingError = null;
+
         if ($this->ifrs_receipt_id) {
             Log::info("Payment {$this->id} already posted to IFRS", ['ifrs_receipt_id' => $this->ifrs_receipt_id]);
             return (int) $this->ifrs_receipt_id;
+        }
+
+        if ($this->status === self::STATUS_VOID) {
+            $this->lastPostingError = 'payment is void — voided payments are never posted';
+            Log::info("Payment {$this->id} is void; not posting to IFRS");
+            return null;
         }
 
         try {
@@ -328,6 +348,8 @@ class Payment extends Model
             $revenueAccount = Account::where('code', self::IFRS_REVENUE_ACCOUNT_CODE)->first();
 
             if (!$bankAccount || !$revenueAccount) {
+                $this->lastPostingError = 'IFRS accounts not found (bank '
+                    . self::IFRS_BANK_ACCOUNT_CODE . ' / revenue ' . self::IFRS_REVENUE_ACCOUNT_CODE . ')';
                 Log::error('IFRS accounts not found for payment posting', [
                     'bank_code' => self::IFRS_BANK_ACCOUNT_CODE,
                     'revenue_code' => self::IFRS_REVENUE_ACCOUNT_CODE,
@@ -339,29 +361,40 @@ class Payment extends Model
             // currency). Prefer the authed user's entity, then fall back to
             // the first entity. Pass entity_id explicitly so posting works in
             // queued jobs where no user is authed.
-            $entity = $this->resolveIFRSEntity();
+            $entity = IfrsPosting::resolveEntity();
             if (!$entity) {
+                $this->lastPostingError = 'no IFRS entity';
                 Log::error('No IFRS entity available for payment posting', ['payment_id' => $this->id]);
                 return null;
             }
 
-            // Main account = Bank, credited = false → Dr Bank (asset increases).
+            // Create the payment date's FY period if it doesn't exist yet —
+            // Transaction::save() throws MissingReportingPeriod otherwise.
+            IfrsPosting::ensureReportingPeriod($this->payment_date, $entity);
+
+            $isRefund = (float) $this->amount < 0;
+
+            // Main account = Bank. Receipts: credited = false → Dr Bank
+            // (asset increases). Refunds flip to credited = true → Cr Bank.
             $journalEntry = new JournalEntry([
                 'transaction_date' => $this->payment_date,
                 'account_id' => $bankAccount->id,
-                'credited' => false,
+                'credited' => $isRefund,
                 'entity_id' => $entity->id,
-                'narration' => "Payment received: {$this->payment_number} from {$this->client?->name}",
+                'narration' => $isRefund
+                    ? "Credit note refund: {$this->payment_number} to {$this->client?->name}"
+                    : "Payment received: {$this->payment_number} from {$this->client?->name}",
                 'reference' => $this->payment_number,
             ]);
 
             // Revenue line is the tax-inclusive amount with the GST 10% Vat
-            // applied. vat_inclusive=true makes the package credit Revenue the
-            // net amount and auto-credit account 2200 (GST Payable) for the GST
-            // component. addLineItem() flips credited to true → Cr Revenue.
+            // applied. vat_inclusive=true makes the package split the net
+            // amount to Revenue and the GST component to account 2200
+            // (auto-credited for receipts, auto-debited for refunds — the
+            // line legs follow the transaction's credited side).
             $revenueLine = new LineItem([
                 'account_id' => $revenueAccount->id,
-                'amount' => (float) $this->amount,
+                'amount' => abs((float) $this->amount),
                 'vat_inclusive' => true,
                 'entity_id' => $entity->id,
             ]);
@@ -374,7 +407,9 @@ class Payment extends Model
             }
 
             $journalEntry->addLineItem($revenueLine);
-            $journalEntry->save();
+            // post() saves the transaction AND writes the ledger rows
+            // (save() alone leaves it unposted and invisible to reports).
+            $journalEntry->post();
 
             // Store the IFRS transaction id.
             $this->update(['ifrs_receipt_id' => $journalEntry->id]);
@@ -391,6 +426,7 @@ class Payment extends Model
             // Throwable (not Exception) so a fatal Error (e.g. undefined
             // constant) is captured and logged rather than breaking the
             // reconciliation flow that calls this.
+            $this->lastPostingError = $e->getMessage();
             Log::error('Failed to post payment to IFRS', [
                 'payment_id' => $this->id,
                 'error' => $e->getMessage(),
@@ -398,24 +434,6 @@ class Payment extends Model
             ]);
             return null;
         }
-    }
-
-    /**
-     * Resolve the IFRS entity to post against: the authed user's entity if
-     * available, otherwise the first entity. Returns null if none exist.
-     */
-    protected function resolveIFRSEntity(): ?Entity
-    {
-        try {
-            $user = \Illuminate\Support\Facades\Auth::user();
-            if ($user && isset($user->entity) && $user->entity) {
-                return $user->entity;
-            }
-        } catch (\Throwable $e) {
-            // Auth not available (e.g. queued job) — fall through to query.
-        }
-
-        return Entity::orderBy('id')->first();
     }
 
     /**

@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
+use App\Services\IfrsPosting;
 use IFRS\Models\Account;
-use IFRS\Models\Entity;
 use IFRS\Models\LineItem;
 use IFRS\Models\Vat;
 use IFRS\Transactions\JournalEntry;
@@ -52,6 +52,12 @@ class BillPayment extends Model
     const IFRS_BANK_ACCOUNT_CODE = 320; // Operating Account
     const IFRS_DEFAULT_EXPENSE_ACCOUNT_CODE = 8900; // Other Expenses (fallback for legacy items)
     const IFRS_GST_VAT_CODE = 'G'; // Seeded "GST 10%" Vat, linked to account 2200 (GST Payable)
+
+    /**
+     * Reason of the most recent postToIFRS() failure (null after a success
+     * or an already-posted skip), so the backfill command can report it.
+     */
+    public ?string $lastPostingError = null;
 
     protected static function boot()
     {
@@ -297,13 +303,22 @@ class BillPayment extends Model
      * apportioned across its bill's items by total share.
      *
      * Returns the IFRS transaction id, or null on failure (accounts missing,
-     * no entity/reporting period, or any Throwable during posting).
+     * no entity, void payment, nothing allocatable, or any Throwable during
+     * posting). When null is returned the reason is on $this->lastPostingError.
      */
     public function postToIFRS(): ?int
     {
+        $this->lastPostingError = null;
+
         if ($this->ifrs_payment_id) {
             Log::info("Bill payment {$this->id} already posted to IFRS", ['ifrs_payment_id' => $this->ifrs_payment_id]);
             return (int) $this->ifrs_payment_id;
+        }
+
+        if ($this->status === self::STATUS_VOID) {
+            $this->lastPostingError = 'bill payment is void — voided payments are never posted';
+            Log::info("Bill payment {$this->id} is void; not posting to IFRS");
+            return null;
         }
 
         try {
@@ -311,6 +326,8 @@ class BillPayment extends Model
             $defaultExpenseAccount = Account::where('code', self::IFRS_DEFAULT_EXPENSE_ACCOUNT_CODE)->first();
 
             if (!$bankAccount || !$defaultExpenseAccount) {
+                $this->lastPostingError = 'IFRS accounts not found (bank ' . self::IFRS_BANK_ACCOUNT_CODE
+                    . ' / expense ' . self::IFRS_DEFAULT_EXPENSE_ACCOUNT_CODE . ')';
                 Log::error('IFRS accounts not found for bill payment posting', [
                     'bank_code' => self::IFRS_BANK_ACCOUNT_CODE,
                     'expense_code' => self::IFRS_DEFAULT_EXPENSE_ACCOUNT_CODE,
@@ -322,11 +339,16 @@ class BillPayment extends Model
             // currency). Prefer the authed user's entity, then fall back to
             // the first entity. Pass entity_id explicitly so posting works in
             // queued jobs where no user is authed.
-            $entity = $this->resolveIFRSEntity();
+            $entity = IfrsPosting::resolveEntity();
             if (!$entity) {
+                $this->lastPostingError = 'no IFRS entity';
                 Log::error('No IFRS entity available for bill payment posting', ['bill_payment_id' => $this->id]);
                 return null;
             }
+
+            // Create the payment date's FY period if it doesn't exist yet —
+            // Transaction::save() throws MissingReportingPeriod otherwise.
+            IfrsPosting::ensureReportingPeriod($this->payment_date, $entity);
 
             // Apportion each allocation across its bill's line items, then
             // aggregate by (expense account, GST treatment). Amounts are
@@ -375,6 +397,7 @@ class BillPayment extends Model
             }
 
             if (empty($groups)) {
+                $this->lastPostingError = 'nothing allocatable — no bill items behind this payment\'s allocations';
                 Log::error('Nothing to post for bill payment — no allocatable bill items', [
                     'bill_payment_id' => $this->id,
                 ]);
@@ -443,6 +466,7 @@ class BillPayment extends Model
         } catch (\Throwable $e) {
             // Throwable (not Exception) so a fatal Error is captured and
             // logged rather than breaking the payment flow that calls this.
+            $this->lastPostingError = $e->getMessage();
             Log::error('Failed to post bill payment to IFRS', [
                 'bill_payment_id' => $this->id,
                 'error' => $e->getMessage(),
@@ -450,24 +474,6 @@ class BillPayment extends Model
             ]);
             return null;
         }
-    }
-
-    /**
-     * Resolve the IFRS entity to post against: the authed user's entity if
-     * available, otherwise the first entity. Returns null if none exist.
-     */
-    protected function resolveIFRSEntity(): ?Entity
-    {
-        try {
-            $user = \Illuminate\Support\Facades\Auth::user();
-            if ($user && isset($user->entity) && $user->entity) {
-                return $user->entity;
-            }
-        } catch (\Throwable $e) {
-            // Auth not available (e.g. queued job) — fall through to query.
-        }
-
-        return Entity::orderBy('id')->first();
     }
 
     /**
