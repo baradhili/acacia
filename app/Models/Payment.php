@@ -349,6 +349,19 @@ class Payment extends Model
         }
 
         try {
+            // IFRS transactions need an entity (for the reporting period and
+            // currency). Prefer the authed user's entity, then fall back to
+            // the first entity. Resolve BEFORE any IFRS model query: the
+            // package's EntityScope dereferences Auth::user()->entity->id
+            // and fatals for authed users without an entity until
+            // resolveEntity() lends them the fallback in-memory.
+            $entity = IfrsPosting::resolveEntity();
+            if (!$entity) {
+                $this->lastPostingError = 'no IFRS entity';
+                Log::error('No IFRS entity available for payment posting', ['payment_id' => $this->id]);
+                return null;
+            }
+
             // Find the bank and revenue accounts.
             $bankAccount = Account::where('code', self::IFRS_BANK_ACCOUNT_CODE)->first();
             $revenueAccount = Account::where('code', self::IFRS_REVENUE_ACCOUNT_CODE)->first();
@@ -360,17 +373,6 @@ class Payment extends Model
                     'bank_code' => self::IFRS_BANK_ACCOUNT_CODE,
                     'revenue_code' => self::IFRS_REVENUE_ACCOUNT_CODE,
                 ]);
-                return null;
-            }
-
-            // IFRS transactions need an entity (for the reporting period and
-            // currency). Prefer the authed user's entity, then fall back to
-            // the first entity. Pass entity_id explicitly so posting works in
-            // queued jobs where no user is authed.
-            $entity = IfrsPosting::resolveEntity();
-            if (!$entity) {
-                $this->lastPostingError = 'no IFRS entity';
-                Log::error('No IFRS entity available for payment posting', ['payment_id' => $this->id]);
                 return null;
             }
 

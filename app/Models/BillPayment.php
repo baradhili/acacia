@@ -328,6 +328,19 @@ class BillPayment extends Model
         }
 
         try {
+            // IFRS transactions need an entity (for the reporting period and
+            // currency). Prefer the authed user's entity, then fall back to
+            // the first entity. Resolve BEFORE any IFRS model query: the
+            // package's EntityScope dereferences Auth::user()->entity->id
+            // and fatals for authed users without an entity until
+            // resolveEntity() lends them the fallback in-memory.
+            $entity = IfrsPosting::resolveEntity();
+            if (!$entity) {
+                $this->lastPostingError = 'no IFRS entity';
+                Log::error('No IFRS entity available for bill payment posting', ['bill_payment_id' => $this->id]);
+                return null;
+            }
+
             $bankAccount = Account::where('code', self::IFRS_BANK_ACCOUNT_CODE)->first();
             $defaultExpenseAccount = Account::where('code', self::IFRS_DEFAULT_EXPENSE_ACCOUNT_CODE)->first();
 
@@ -338,17 +351,6 @@ class BillPayment extends Model
                     'bank_code' => self::IFRS_BANK_ACCOUNT_CODE,
                     'expense_code' => self::IFRS_DEFAULT_EXPENSE_ACCOUNT_CODE,
                 ]);
-                return null;
-            }
-
-            // IFRS transactions need an entity (for the reporting period and
-            // currency). Prefer the authed user's entity, then fall back to
-            // the first entity. Pass entity_id explicitly so posting works in
-            // queued jobs where no user is authed.
-            $entity = IfrsPosting::resolveEntity();
-            if (!$entity) {
-                $this->lastPostingError = 'no IFRS entity';
-                Log::error('No IFRS entity available for bill payment posting', ['bill_payment_id' => $this->id]);
                 return null;
             }
 
@@ -426,9 +428,17 @@ class BillPayment extends Model
 
             foreach ($groups as $key => $cents) {
                 [$accountId, $treatment] = explode('-', $key);
-                $amount = $cents / 100;
                 $vatInclusive = $treatment === 'gst';
                 $taxable = in_array($treatment, ['gst', 'gstadd']) && $gstVat;
+
+                // Groups hold each line's tax-inclusive share of the
+                // allocation. For ex-GST ("gstadd") lines the Vat goes on
+                // top of the ex-GST amount, so back the rate out first —
+                // otherwise GST is charged on a share that already includes
+                // it and the bank leg overstates by the extra GST.
+                $amount = ($treatment === 'gstadd' && $gstVat)
+                    ? round($cents / (100 + (float) $gstVat->rate), 2)
+                    : $cents / 100;
 
                 // Debit expense line; addLineItem() flips credited to false
                 // (the transaction is credited) → Dr Expense. Lines must be

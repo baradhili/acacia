@@ -349,11 +349,103 @@ class PaymentTest extends TestCase
         ]);
 
         $this->assertTrue(method_exists($payment, 'void'));
-        
+
         // Void the payment
         $payment->void();
-        
+
         $this->assertEquals(Payment::STATUS_VOID, $payment->status);
+    }
+
+    public function test_credit_note_refund_payment_is_posted_to_ifrs(): void
+    {
+        $entity = $this->seedIfrs();
+
+        $creditNote = \App\Models\CreditNote::create([
+            'client_id' => $this->client->id,
+            'total' => -60,
+            'remaining_amount' => 60,
+            'status' => \App\Models\CreditNote::STATUS_ISSUED,
+        ]);
+
+        $this->assertTrue($creditNote->applyToInvoice($this->invoice, 55));
+
+        // The negative refund payment created by applyToInvoice() must be
+        // posted (Cr Bank / Dr Revenue / Dr GST) without throwing on the
+        // negative amount.
+        $refund = $creditNote->refresh()->refund;
+        $this->assertNotNull($refund->ifrs_receipt_id);
+        $this->assertEquals(-55, (float) $refund->amount);
+
+        $bank = \IFRS\Models\Account::where('code', 320)->first();
+        $revenue = \IFRS\Models\Account::where('code', 4100)->first();
+        $gst = \IFRS\Models\Account::where('code', 2200)->first();
+
+        // Cr Bank 55, Dr Revenue 50 net, Dr GST 5.
+        $this->assertEquals(55, (float) \IFRS\Models\Ledger::where('post_account', $bank->id)
+            ->where('entry_type', \IFRS\Models\Balance::CREDIT)->sum('amount'));
+        $this->assertEquals(50, (float) \IFRS\Models\Ledger::where('post_account', $revenue->id)
+            ->where('entry_type', \IFRS\Models\Balance::DEBIT)->sum('amount')
+            - \IFRS\Models\Ledger::where('post_account', $revenue->id)
+            ->where('entry_type', \IFRS\Models\Balance::CREDIT)->sum('amount'));
+        $this->assertEquals(5, (float) \IFRS\Models\Ledger::where('post_account', $gst->id)
+            ->where('entry_type', \IFRS\Models\Balance::DEBIT)->sum('amount')
+            - \IFRS\Models\Ledger::where('post_account', $gst->id)
+            ->where('entry_type', \IFRS\Models\Balance::CREDIT)->sum('amount'));
+    }
+
+    /**
+     * Seed the minimum IFRS prerequisites for receipt posting: currency,
+     * entity + reporting period, bank (320), revenue (4100), GST Payable
+     * (2200) and the GST 10% Vat. Mirrors BillPaymentModelTest::seedIfrs().
+     */
+    protected function seedIfrs(): \IFRS\Models\Entity
+    {
+        $entity = \IFRS\Models\Entity::create([
+            'name' => 'Test Entity',
+            'locale' => 'en_AU',
+            'multi_currency' => false,
+            'year_start' => 1,
+        ]);
+
+        $currency = \IFRS\Models\Currency::create([
+            'name' => 'Australian Dollar',
+            'currency_code' => 'AUD',
+            'entity_id' => $entity->id,
+        ]);
+        $entity->update(['currency_id' => $currency->id]);
+        $entity->refresh();
+
+        \IFRS\Models\ReportingPeriod::create([
+            'period_count' => 1,
+            'calendar_year' => (int) date('Y'),
+            'status' => \IFRS\Models\ReportingPeriod::OPEN,
+            'entity_id' => $entity->id,
+        ]);
+
+        foreach ([
+            ['Operating Account', \IFRS\Models\Account::BANK, 320],
+            ['Consulting Revenue', \IFRS\Models\Account::OPERATING_REVENUE, 4100],
+            ['GST Payable', \IFRS\Models\Account::CONTROL, 2200],
+        ] as [$name, $type, $code]) {
+            \IFRS\Models\Account::create([
+                'name' => $name,
+                'account_type' => $type,
+                'code' => $code,
+                'currency_id' => $currency->id,
+                'entity_id' => $entity->id,
+            ]);
+        }
+
+        $gstPayable = \IFRS\Models\Account::where('code', 2200)->first();
+        \IFRS\Models\Vat::create([
+            'name' => 'GST 10%',
+            'code' => 'G',
+            'rate' => 10,
+            'account_id' => $gstPayable->id,
+            'entity_id' => $entity->id,
+        ]);
+
+        return $entity;
     }
 
     public function test_payment_status_constants_are_defined(): void

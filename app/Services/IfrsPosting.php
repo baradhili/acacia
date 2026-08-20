@@ -26,16 +26,33 @@ class IfrsPosting
      */
     public static function resolveEntity(): ?Entity
     {
+        $user = null;
         try {
             $user = Auth::user();
-            if ($user && isset($user->entity) && $user->entity) {
-                return $user->entity;
-            }
         } catch (\Throwable $e) {
             // Auth not available (e.g. queued job) — fall through to query.
         }
 
-        return Entity::orderBy('id')->first();
+        if ($user) {
+            $entity = $user->entity;
+            if ($entity) {
+                return $entity;
+            }
+        }
+
+        $entity = Entity::orderBy('id')->first();
+
+        // EntityScope (the IFRS package's global scope) dereferences
+        // Auth::user()->entity->id on every IFRS model query and fatals
+        // with "property id on null" when the authed user has no entity.
+        // Lend the user the fallback entity as an in-memory relation
+        // (never persisted) so the scope — and the rest of this posting —
+        // resolve to the same entity returned here.
+        if ($entity && $user) {
+            $user->setRelation('entity', $entity);
+        }
+
+        return $entity;
     }
 
     /**
