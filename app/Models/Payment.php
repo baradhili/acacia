@@ -469,6 +469,17 @@ class Payment extends Model
         // Update status to void
         $this->update(['status' => self::STATUS_VOID]);
 
+        // If the payment was already posted, post a mirrored reversing
+        // entry so the ledger nets to zero (original stays for audit).
+        // Unposted payments just void as above.
+        if ($this->ifrs_receipt_id) {
+            IfrsPosting::reverseTransaction(
+                (int) $this->ifrs_receipt_id,
+                "Reversal of payment: {$this->payment_number} (voided)",
+                $this->payment_number,
+            );
+        }
+
         return true;
     }
 }

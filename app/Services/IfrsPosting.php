@@ -4,8 +4,12 @@ namespace App\Services;
 
 use Carbon\Carbon;
 use IFRS\Models\Entity;
+use IFRS\Models\LineItem;
 use IFRS\Models\ReportingPeriod;
+use IFRS\Models\Transaction;
+use IFRS\Transactions\JournalEntry;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Shared plumbing for posting payments to the IFRS ledger.
@@ -50,5 +54,83 @@ class IfrsPosting
             ['entity_id' => $entity->id, 'calendar_year' => $year],
             ['period_count' => 1, 'status' => ReportingPeriod::OPEN],
         );
+    }
+
+    /**
+     * Post a mirrored reversal of an already-posted transaction: the main
+     * account's `credited` flag is inverted and every line item (including
+     * its applied Vats) is recreated as-is, so each ledger leg flips Dr/Cr
+     * and the pair nets to zero. The reversal keeps the original
+     * transaction_date so the period it was reported in stays clean.
+     *
+     * Used by Payment::void() / BillPayment::void() to undo posted ledgers.
+     * Best-effort: returns the reversal transaction id, or null on failure
+     * (original missing or any Throwable — logged, not thrown).
+     */
+    public static function reverseTransaction(int $transactionId, string $narration, string $reference): ?int
+    {
+        try {
+            $original = Transaction::with('lineItems.appliedVats.vat')->find($transactionId);
+            if (!$original) {
+                Log::error('IFRS transaction not found for reversal', ['transaction_id' => $transactionId]);
+                return null;
+            }
+
+            $entity = Entity::find($original->entity_id);
+            if (!$entity) {
+                Log::error('IFRS entity not found for reversal', [
+                    'transaction_id' => $transactionId,
+                    'entity_id' => $original->entity_id,
+                ]);
+                return null;
+            }
+
+            self::ensureReportingPeriod($original->transaction_date, $entity);
+
+            $reversal = new JournalEntry([
+                'transaction_date' => $original->transaction_date,
+                'account_id' => $original->account_id,
+                'credited' => !$original->credited,
+                'entity_id' => $original->entity_id,
+                'narration' => $narration,
+                'reference' => $reference,
+            ]);
+
+            foreach ($original->lineItems as $line) {
+                // Lines are persisted before addLineItem() — unsaved items
+                // share a null id and the package silently drops all but
+                // the first (same constraint as BillPayment::postToIFRS()).
+                $reversalLine = LineItem::create([
+                    'account_id' => $line->account_id,
+                    'amount' => (float) $line->amount,
+                    'quantity' => (float) $line->quantity,
+                    'vat_inclusive' => $line->vat_inclusive,
+                    'entity_id' => $original->entity_id,
+                ]);
+
+                foreach ($line->appliedVats as $appliedVat) {
+                    $reversalLine->addVat($appliedVat->vat);
+                }
+                $reversalLine->save(); // persist the applied vats
+
+                $reversal->addLineItem($reversalLine);
+            }
+
+            $reversal->post();
+
+            Log::info('Posted IFRS reversal', [
+                'transaction_id' => $transactionId,
+                'reversal_id' => $reversal->id,
+            ]);
+
+            return $reversal->id;
+        } catch (\Throwable $e) {
+            Log::error('Failed to post IFRS reversal', [
+                'transaction_id' => $transactionId,
+                'error' => $e->getMessage(),
+                'exception' => get_class($e),
+            ]);
+            return null;
+        }
     }
 }
