@@ -16,7 +16,7 @@
 
 - [ ] Find where dates are in US m/d/y format and make them use the browser/system format
 
-- [ ] data is not actually being written to most ifrs tables - they are being written to the tables - invoices, bills, payments etc - just not seeing them in the IFRS_transactions table - plan in .zcode/plans
+- [x] data is not actually being written to most ifrs tables - they are being written to the tables - invoices, bills, payments etc - just not seeing them in the IFRS_transactions table - plan in .zcode/plans
 
 - [ ] 
 
@@ -26,7 +26,7 @@
 
 - [ ] Have "+" button on "Create Bill" to be able to add supplier in 
 
-- [ ] Country fields should be a dropdown - configurable "pinned countries" at top. use teh ISO country list.
+- [x] Country fields should be a dropdown - configurable "pinned countries" at top. use teh ISO country list.
 
 - [ ] Drop multiple files means all files should be uploaded
 
