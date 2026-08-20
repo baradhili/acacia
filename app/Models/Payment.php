@@ -314,6 +314,12 @@ class Payment extends Model
      *   Cr Revenue  (account 4100, vat_inclusive line) — net amount
      *   Cr GST Payable (account 2200, auto via addVat) — GST component
      *
+     * DESIGN DECISION — cash basis, do not reverse: invoices are subledger
+     * documents only and deliberately NEVER post to IFRS (no Accounts
+     * Receivable). Client receipts are the sole revenue ledger event, and
+     * revenue is recognised when this payment is received, not when the
+     * invoice is issued. Do not "complete" the ledger by posting invoices.
+     *
      * The revenue LineItem is marked vat_inclusive with the seeded "GST 10%"
      * Vat (code G); the IFRS package backs the GST out and credits account
      * 2200 automatically, so the ledger reflects true ATO cash-basis receipts.

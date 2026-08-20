@@ -294,6 +294,12 @@ class BillPayment extends Model
      *   Dr Expense  (per-account debit lines)       — net amount
      *   Dr GST      (account 2200, auto via addVat) — GST component
      *
+     * DESIGN DECISION — cash basis, do not reverse: bills are subledger
+     * documents only and deliberately NEVER post to IFRS (no Accounts
+     * Payable). Supplier payments are the sole expense ledger event, and
+     * expenses are recognised when this payment is made, not when the bill
+     * is received. Do not "complete" the ledger by posting bills.
+     *
      * GST is applied PER LINE ITEM, honouring each bill item's treatment:
      * taxable lines (tax_rate > 0) post tax-inclusive with the seeded
      * "GST 10%" Vat, so the package backs the GST out and debits account
