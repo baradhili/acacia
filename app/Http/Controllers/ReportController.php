@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Client;
 use App\Models\Bill;
 use App\Models\BillItem;
+use App\Models\BillPayment;
+use App\Models\Payment;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\User;
@@ -300,8 +302,18 @@ class ReportController extends Controller
             ]);
         }
 
+        // Surface swallowed posting failures: best-effort posting means a
+        // payment can exist without ever reaching the ledger.
+        $unpostedPayments = Payment::whereNull('ifrs_receipt_id')
+            ->where('status', '!=', Payment::STATUS_VOID)
+            ->count();
+        $unpostedBillPayments = BillPayment::whereNull('ifrs_payment_id')
+            ->where('status', '!=', BillPayment::STATUS_VOID)
+            ->count();
+
         return view('reports.trial-balance', compact(
-            'accountLines', 'endDate', 'debitTotal', 'creditTotal'
+            'accountLines', 'endDate', 'debitTotal', 'creditTotal',
+            'unpostedPayments', 'unpostedBillPayments'
         ));
     }
 
