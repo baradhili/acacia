@@ -159,6 +159,35 @@ class Bill extends Model
             ->all();
     }
 
+    /**
+     * Categories a bill line can be coded to, grouped for the line-item
+     * dropdown: expense accounts, plus non-current-asset accounts for
+     * capital purchases (the BAS G10/G11 split keys off the same
+     * account-type rule).
+     */
+    public static function purchaseAccounts(): array
+    {
+        $format = fn ($account) => $account->code . ' — ' . $account->name;
+
+        return [
+            'Expenses' => Account::whereIn('account_type', [
+                Account::OPERATING_EXPENSE,
+                Account::DIRECT_EXPENSE,
+                Account::OVERHEAD_EXPENSE,
+                Account::OTHER_EXPENSE,
+            ])
+                ->orderBy('code')
+                ->get()
+                ->mapWithKeys(fn ($account) => [$account->id => $format($account)])
+                ->all(),
+            'Capital purchases' => Account::where('account_type', Account::NON_CURRENT_ASSET)
+                ->orderBy('code')
+                ->get()
+                ->mapWithKeys(fn ($account) => [$account->id => $format($account)])
+                ->all(),
+        ];
+    }
+
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);

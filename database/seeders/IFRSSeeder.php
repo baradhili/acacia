@@ -149,6 +149,8 @@ class IFRSSeeder extends Seeder
         $this->createAccount('Computer Equipment', Account::NON_CURRENT_ASSET, 120, $entity);
         $this->createAccount('Furniture & Fixtures', Account::NON_CURRENT_ASSET, 130, $entity);
         $this->createAccount('Motor Vehicles', Account::NON_CURRENT_ASSET, 140, $entity);
+        $this->createAccount('Tools & Equipment', Account::NON_CURRENT_ASSET, 150, $entity);
+        $this->createAccount('Software', Account::NON_CURRENT_ASSET, 160, $entity);
         $this->createAccount('Accumulated Depreciation', Account::CONTRA_ASSET, 190, $entity);
 
         // Bank Accounts (Codes 300-399)

@@ -894,9 +894,10 @@ class ReportController extends Controller
      * $fyEnd. Sales and purchase values come from the stored line
      * amounts (item tax_amount is authoritative; invoice/bill totals
      * are GST-inclusive) — the same amounts the GST ledger accounts
-     * are posted from. G13 assumes no capital purchases (bill lines
-     * only carry expense accounts), and credit notes are excluded
-     * because their schema stores no GST split.
+     * are posted from. Bill lines categorised to non-current-asset
+     * accounts are capital purchases (G10); other lines are G11.
+     * Credit notes are excluded because their schema stores no GST
+     * split.
      */
     protected function buildBasStatement(int $fyEnd): array
     {
@@ -910,7 +911,7 @@ class ReportController extends Controller
 
         $bills = Bill::whereBetween("bill_date", [$fyStart, $fyEndDate])
             ->whereNotIn("status", [Bill::STATUS_DRAFT, Bill::STATUS_CANCELLED])
-            ->with("items")
+            ->with("items.expenseAccount")
             ->get();
 
         // BAS quarters: Q1 Jul-Sep, Q2 Oct-Dec, Q3 Jan-Mar, Q4 Apr-Jun.
@@ -930,6 +931,7 @@ class ReportController extends Controller
                 "end" => $start->copy()->addMonths(3)->subDay()->endOfDay(),
                 "g1" => 0.0,
                 "gst_sales" => 0.0,
+                "g10" => 0.0,
                 "g11" => 0.0,
                 "gst_purchases" => 0.0,
             ];
@@ -943,16 +945,23 @@ class ReportController extends Controller
 
         foreach ($bills as $bill) {
             $i = $quarterOf($bill->bill_date);
-            $quarters[$i]["g11"] += (float) $bill->total;
-            $quarters[$i]["gst_purchases"] += (float) $bill->items
-                ->filter(fn ($item) => (float) ($item->tax_rate ?? 0) > 0)
-                ->sum("tax_amount");
+            foreach ($bill->items as $item) {
+                // A line categorised to a non-current-asset account is a
+                // capital purchase (G10); everything else is non-capital
+                // (G11). GST credits (1B) cover both kinds.
+                $isCapital = ($item->expenseAccount->account_type ?? null) === Account::NON_CURRENT_ASSET;
+                if ($isCapital) {
+                    $quarters[$i]["g10"] += (float) $item->total;
+                } else {
+                    $quarters[$i]["g11"] += (float) $item->total;
+                }
+                if ((float) ($item->tax_rate ?? 0) > 0) {
+                    $quarters[$i]["gst_purchases"] += (float) $item->tax_amount;
+                }
+            }
         }
 
         foreach ($quarters as &$q) {
-            // G13 non-capital purchases: capital purchases cannot be
-            // identified from bill data, so G10 = 0 and G13 = G11.
-            $q["g13"] = $q["g11"];
             $q["net"] = $q["gst_sales"] - $q["gst_purchases"];
         }
         unset($q);
@@ -960,8 +969,8 @@ class ReportController extends Controller
         $totals = [
             "g1" => array_sum(array_column($quarters, "g1")),
             "gst_sales" => array_sum(array_column($quarters, "gst_sales")),
+            "g10" => array_sum(array_column($quarters, "g10")),
             "g11" => array_sum(array_column($quarters, "g11")),
-            "g13" => array_sum(array_column($quarters, "g13")),
             "gst_purchases" => array_sum(array_column($quarters, "gst_purchases")),
         ];
         $totals["net"] = $totals["gst_sales"] - $totals["gst_purchases"];

@@ -142,13 +142,17 @@
                             </label>
                         </div>
                         <div class="col-span-2">
-                            <label class="block text-xs font-medium text-gray-700 mb-1">Expense Account</label>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">Category</label>
                             <select name="items[{{ $index }}][expense_account_id]"
                                 class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
                                 <option value="">— Select —</option>
-                                @foreach ($expenseAccounts as $accountId => $label)
-                                    <option value="{{ $accountId }}"
-                                        {{ ($item['expense_account_id'] ?? '') == $accountId ? 'selected' : '' }}>{{ $label }}</option>
+                                @foreach ($purchaseAccounts as $groupLabel => $groupAccounts)
+                                    <optgroup label="{{ $groupLabel }}">
+                                        @foreach ($groupAccounts as $accountId => $label)
+                                            <option value="{{ $accountId }}"
+                                                {{ ($item['expense_account_id'] ?? '') == $accountId ? 'selected' : '' }}>{{ $label }}</option>
+                                        @endforeach
+                                    </optgroup>
                                 @endforeach
                             </select>
                         </div>
@@ -291,12 +295,16 @@
                 </label>
             </div>
             <div class="col-span-2">
-                <label class="block text-xs font-medium text-gray-700 mb-1">Expense Account</label>
+                <label class="block text-xs font-medium text-gray-700 mb-1">Category</label>
                 <select name="items[__INDEX__][expense_account_id]"
                     class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
                     <option value="">— Select —</option>
-                    @foreach ($expenseAccounts as $accountId => $label)
-                        <option value="{{ $accountId }}">{{ $label }}</option>
+                    @foreach ($purchaseAccounts as $groupLabel => $groupAccounts)
+                        <optgroup label="{{ $groupLabel }}">
+                            @foreach ($groupAccounts as $accountId => $label)
+                                <option value="{{ $accountId }}">{{ $label }}</option>
+                            @endforeach
+                        </optgroup>
                     @endforeach
                 </select>
             </div>

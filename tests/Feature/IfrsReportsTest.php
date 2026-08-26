@@ -38,6 +38,16 @@ class IfrsReportsTest extends TestCase
             'multi_currency' => false,
         ]);
 
+        // The entity's currency_id must reference a real currency row for
+        // account creation (FK) to work.
+        $currency = \IFRS\Models\Currency::create([
+            'name' => 'Australian Dollar',
+            'currency_code' => 'AUD',
+            'entity_id' => $this->entity->id,
+        ]);
+        $this->entity->update(['currency_id' => $currency->id]);
+        $this->entity->refresh();
+
         // Create IFRS reporting period
         ReportingPeriod::create([
             'entity_id' => $this->entity->id,
@@ -180,6 +190,113 @@ class IfrsReportsTest extends TestCase
         $response->assertSee('$30.00');
         $response->assertSee('$25.00');
         $response->assertSee('Payable to ATO');
+    }
+
+    public function test_bas_splits_capital_and_non_capital_purchases(): void
+    {
+        $supplier = Supplier::create(['name' => 'Test Supplier']);
+
+        $tools = \IFRS\Models\Account::create([
+            'name' => 'Tools & Equipment',
+            'account_type' => \IFRS\Models\Account::NON_CURRENT_ASSET,
+            'code' => 150,
+            'currency_id' => $this->entity->currency_id,
+            'entity_id' => $this->entity->id,
+        ]);
+        $office = \IFRS\Models\Account::create([
+            'name' => 'Office Supplies',
+            'account_type' => \IFRS\Models\Account::OPERATING_EXPENSE,
+            'code' => 5600,
+            'currency_id' => $this->entity->currency_id,
+            'entity_id' => $this->entity->id,
+        ]);
+
+        $bill = Bill::create([
+            'supplier_id' => $supplier->id,
+            'bill_date' => '2025-11-01',
+            'due_date' => '2025-12-01',
+        ]);
+        // Non-capital line: $55 incl GST; capital line: $1,100 incl GST.
+        $bill->items()->create([
+            'description' => 'Office supplies',
+            'quantity' => 1,
+            'unit_price' => 50,
+            'tax_rate' => 10,
+            'gst_added' => true,
+            'expense_account_id' => $office->id,
+        ]);
+        $bill->items()->create([
+            'description' => 'Cordless drill',
+            'quantity' => 1,
+            'unit_price' => 1000,
+            'tax_rate' => 10,
+            'gst_added' => true,
+            'expense_account_id' => $tools->id,
+        ]);
+        $bill->recalculateTotals();
+        $bill->markAsOpen();
+
+        $response = $this->actingAs($this->user)
+            ->get(route('reports.bas', ['fy' => 2026]));
+
+        $response->assertStatus(200);
+        $response->assertSee('G10 Capital purchases');
+        $response->assertSee('G11 Non-capital purchases');
+        // Q2: the drill lands in G10, supplies in G11.
+        $response->assertSee('$1,100.00');
+        $response->assertSee('$55.00');
+        // 1B covers GST on both lines: $5 + $100.
+        $response->assertSee('$105.00');
+    }
+
+    public function test_bill_views_offer_capital_purchase_categories(): void
+    {
+        \IFRS\Models\Account::create([
+            'name' => 'Tools & Equipment',
+            'account_type' => \IFRS\Models\Account::NON_CURRENT_ASSET,
+            'code' => 150,
+            'currency_id' => $this->entity->currency_id,
+            'entity_id' => $this->entity->id,
+        ]);
+        \IFRS\Models\Account::create([
+            'name' => 'Software',
+            'account_type' => \IFRS\Models\Account::NON_CURRENT_ASSET,
+            'code' => 160,
+            'currency_id' => $this->entity->currency_id,
+            'entity_id' => $this->entity->id,
+        ]);
+        \IFRS\Models\Account::create([
+            'name' => 'Office Supplies',
+            'account_type' => \IFRS\Models\Account::OPERATING_EXPENSE,
+            'code' => 5600,
+            'currency_id' => $this->entity->currency_id,
+            'entity_id' => $this->entity->id,
+        ]);
+
+        $this->actingAs($this->user)
+            ->get(route('bills.create'))
+            ->assertStatus(200)
+            ->assertSee('Capital purchases')
+            ->assertSee('Tools & Equipment')
+            ->assertSee('Software')
+            ->assertSee('Expenses');
+
+        $supplier = Supplier::create(['name' => 'Test Supplier']);
+        $bill = Bill::create(['supplier_id' => $supplier->id]);
+        $bill->items()->create([
+            'description' => 'Drill',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+            'gst_added' => true,
+        ]);
+        $bill->recalculateTotals();
+
+        $this->actingAs($this->user)
+            ->get(route('bills.edit', $bill))
+            ->assertStatus(200)
+            ->assertSee('Capital purchases')
+            ->assertSee('Tools & Equipment');
     }
 
     public function test_bas_excludes_draft_and_cancelled(): void

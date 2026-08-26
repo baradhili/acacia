@@ -62,7 +62,8 @@
                 <th>Quarter</th>
                 <th>Period</th>
                 <th class="text-right">G1 Sales (incl GST)</th>
-                <th class="text-right">G11 Purchases (incl GST)</th>
+                <th class="text-right">G10 Capital purchases</th>
+                <th class="text-right">G11 Non-capital purchases</th>
                 <th class="text-right">1A GST sales</th>
                 <th class="text-right">1B GST purchases</th>
                 <th class="text-right">Net GST</th>
@@ -74,6 +75,7 @@
                 <td>{{ $q['label'] }}</td>
                 <td>{{ $q['start']->format('d/m/Y') }} – {{ $q['end']->format('d/m/Y') }}</td>
                 <td class="text-right">${{ number_format($q['g1'], 2) }}</td>
+                <td class="text-right">${{ number_format($q['g10'], 2) }}</td>
                 <td class="text-right">${{ number_format($q['g11'], 2) }}</td>
                 <td class="text-right text-green">${{ number_format($q['gst_sales'], 2) }}</td>
                 <td class="text-right text-red">${{ number_format($q['gst_purchases'], 2) }}</td>
@@ -85,6 +87,7 @@
             <tr class="total-row">
                 <td colspan="2">FY{{ $fyEnd }} Total</td>
                 <td class="text-right">${{ number_format($statement['totals']['g1'], 2) }}</td>
+                <td class="text-right">${{ number_format($statement['totals']['g10'], 2) }}</td>
                 <td class="text-right">${{ number_format($statement['totals']['g11'], 2) }}</td>
                 <td class="text-right text-green">${{ number_format($statement['totals']['gst_sales'], 2) }}</td>
                 <td class="text-right text-red">${{ number_format($statement['totals']['gst_purchases'], 2) }}</td>
@@ -94,7 +97,7 @@
     </table>
 
     <div class="notes">
-        <p>G13 non-capital purchases equals G11 — capital purchases cannot be distinguished from bill data, so G10 is treated as nil.</p>
+        <p>Capital purchases (G10) are bill lines categorised to a non-current-asset account; all other bill lines are non-capital (G11).</p>
         <p>Credit notes are excluded (no GST split is stored for them). Draft and cancelled invoices/bills are excluded.</p>
     </div>
 

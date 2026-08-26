@@ -40,7 +40,7 @@ class BillController extends Controller
     {
         $suppliers = Supplier::orderBy('name')->pluck('name', 'id');
         $projects = Project::orderBy('name')->get();
-        $expenseAccounts = Bill::expenseAccounts();
+        $purchaseAccounts = Bill::purchaseAccounts();
         $paymentMethods = BillPayment::paymentMethods();
 
         $selectedSupplier = $request->supplier_id ? Supplier::find($request->supplier_id) : null;
@@ -49,7 +49,7 @@ class BillController extends Controller
         return view('bills.create', compact(
             'suppliers',
             'projects',
-            'expenseAccounts',
+            'purchaseAccounts',
             'paymentMethods',
             'selectedSupplier',
             'selectedProject'
@@ -182,9 +182,9 @@ class BillController extends Controller
 
         $suppliers = Supplier::orderBy('name')->pluck('name', 'id');
         $projects = Project::orderBy('name')->get();
-        $expenseAccounts = Bill::expenseAccounts();
+        $purchaseAccounts = Bill::purchaseAccounts();
 
-        return view('bills.edit', compact('bill', 'suppliers', 'projects', 'expenseAccounts'));
+        return view('bills.edit', compact('bill', 'suppliers', 'projects', 'purchaseAccounts'));
     }
 
     public function update(Request $request, Bill $bill)
