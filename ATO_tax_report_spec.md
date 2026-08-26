@@ -23,7 +23,7 @@ This report converts IFRS accrual journal data from the Eloquent IFRS accounting
 - map cash receipts and payments to the relevant ATO return labels;
 - produce an auditable trail from each ATO label back to the source Eloquent IFRS transactions and line items.
 
-Label references in this specification are indicative and must be verified against the final published ATO Company Tax Return 2026.
+Label references follow the published Company tax return 2026 (NAT 0656) instructions (published 30 May 2026). Section 5 maps source data to the form's item numbers and label letters (e.g. Item 6 label C = "Other sales of goods and services"). The 2026 form has no label changes from 2025.
 
 ---
 
@@ -109,14 +109,15 @@ Eloquent IFRS provides the following account types that must be treated as cash-
 
 ### 4.2 Transaction-based cash flow identification
 
-Rather than scanning raw journal lines, Eloquent IFRS transactions provide a structured approach to identifying cash movements:
-
-| Transaction type | Cash flow direction | ATO treatment |
-|---|---|---|
-| `CashSale` | Cash inflow (Bank account debited) | Assessable income when received |
-| `ClientReceipt` | Cash inflow (Bank account debited) | Assessable income when received |
-| `CashPurchase` | Cash outflow (Bank account credited) | Deductible expense when paid |
-| `SupplierPayment` | Cash outflow (Bank account credited) | Deductible expense when paid |
+Rather than scanning raw journal lines, cash movements are identified by joining
+ledger rows to their parent transaction: this system posts every cash movement as
+an Eloquent IFRS `JournalEntry` whose **main account is a BANK account** — client
+receipts post Dr Bank / Cr Revenue (+ Cr GST), supplier payments post Cr Bank /
+Dr Expense (+ Dr GST). The report therefore restricts Item 6 amounts to ledger
+rows whose parent transaction's main account is a BANK account, which excludes
+non-cash journals (depreciation, revaluations, forex) by construction. Because the
+GST back-out legs post to the same revenue/expense account, a per-account ledger
+balance is already GST-exclusive.
 
 ### 4.3 Income recognition
 
@@ -184,48 +185,83 @@ Eloquent IFRS supports VAT/GST at the line item level via the `Vat` model:
 
 ## 5. ATO Field Mapping
 
-### 5.1 Income fields
+The mapping below follows the real Company tax return 2026 label structure. Amounts
+are sourced from bank-settled (cash) ledger postings and are GST-exclusive, per the
+form's instruction to exclude input tax credit entitlements.
 
-| ATO field | Eloquent IFRS source logic |
+### 5.1 Income fields (Item 6 — income)
+
+| ATO label | Eloquent IFRS source logic |
 |---|---|
-| Total income | Sum of all `CashSale` and `ClientReceipt` transactions mapped to assessable income accounts (`OPERATING_REVENUE`, `NON_OPERATING_REVENUE`), net of GST (`Vat`), excluding non-assessable receipts. |
-| Gross payments where ABN not quoted | Cash payments made to suppliers without a quoted ABN, if required to be reported on the return. |
-| Gross payments subject to foreign resident withholding | Cash payments subject to foreign resident withholding, if required to be reported. |
-| Other assessable government industry payments | Cash receipts from government industry payments, if applicable. |
+| 6-A Gross payments where ABN not quoted | No source (no withholding on receipts); reported as $0. |
+| 6-B Gross payments subject to foreign resident withholding | Not applicable — resident company; $0. |
+| 6-C Other sales of goods and services | Net cash receipts posted to operating revenue accounts (4100, 4110, 4120, 4130), GST-exclusive. Primary label for a services company; fallback for unmapped operating revenue. |
+| 6-D Gross distribution from partnerships | Not applicable; $0. |
+| 6-E Gross distribution from trusts | Not applicable; $0. |
+| 6-F Gross interest | Net cash receipts to interest income accounts (4510), GST-exclusive. |
+| 6-G Gross rent and other leasing and hiring income | Not applicable (professional services); $0. |
+| 6-H Total dividends | Out of scope — dividend/franking module not implemented; $0. |
+| 6-I Fringe benefit employee contributions | Not applicable; $0. |
+| 6-Q Assessable government industry payments | Not applicable; $0. |
+| 6-J Unrealised gains on revaluation of assets to fair value | Non-cash; excluded. |
+| 6-R Other gross income | Net cash receipts to other income accounts (4520) and fallback for other unmapped non-operating revenue, GST-exclusive. |
+| 6-S Total income | Computed: sum of 6-A to 6-R. |
 
-### 5.2 Expense fields
+### 5.2 Expense fields (Item 6 — expenses)
 
-| ATO field | Eloquent IFRS source logic |
+Per the ATO instructions, expense amounts are taken from the financial statements
+(cash-basis ledger here), exclude input tax credits, and non-deductible amounts are
+added back at Item 7 label W.
+
+| ATO label | Eloquent IFRS source logic |
 |---|---|
-| Total expenses | Sum of all `CashPurchase` and `SupplierPayment` transactions mapped to deductible expense accounts (`OPERATING_EXPENSE`, `OVERHEAD_EXPENSE`, `DIRECT_EXPENSE`, `OTHER_EXPENSE`), net of GST (`Vat`). |
-| Accounting fees | Cash payments for accounting, audit and tax services. |
-| Advertising | Cash payments for advertising and marketing. |
-| Bad debts | Only cash recoveries or actual cash losses directly related to previously included income. |
-| Bank charges | Cash payments for bank fees and charges. |
-| Cost of sales | Cash payments for goods sold, net of trading stock adjustments if applicable. |
-| Depreciation expenses | Non-cash depreciation is excluded. Capital asset purchases are considered separately under small business simplified depreciation. |
-| Employee superannuation | Cash payments to complying superannuation funds for employees. |
-| Fringe benefits tax | Cash payments of fringe benefits tax. |
-| Insurance | Cash payments for insurance premiums. |
-| Interest expenses within Australia | Cash interest paid to Australian lenders. |
-| Interest expenses overseas | Cash interest paid to foreign lenders. |
-| Legal fees | Cash payments for legal services. |
-| Motor vehicle expenses | Cash payments for fuel, repairs, registration, insurance and other motor vehicle costs, reduced for private use. |
-| Repairs and maintenance | Cash payments for repairs and maintenance. |
-| Rent expenses | Cash payments for rent and leasing of business premises or equipment. |
-| Salaries and wages | Gross cash salary and wage payments, including net wages paid and PAYG withholding remitted. |
-| Subcontractor payments | Cash payments to subcontractors for business services. |
-| Other expenses | All other deductible cash expenses not separately listed. |
+| 6-B Foreign resident withholding expenses | Not applicable — resident company; $0. |
+| 6-A Cost of sales | No trading stock / COGS accounts seeded (services entity); $0. |
+| 6-C Contractor, sub-contractor and commission expenses | Account 5110 Contract Labour. |
+| 6-D Superannuation expenses | Not sourced — no payroll/superannuation ledger; $0 with note. |
+| 6-E Bad debts | Account 8100 Bad Debts; typically nil on cash basis. |
+| 6-F Lease expenses within Australia | Not seeded separately (premises rent is reported at 6-H). |
+| 6-I Lease expenses overseas | Not applicable; $0. |
+| 6-H Rent expenses | Account 7100 Rent & Lease (tenant rent of land and buildings). |
+| 6-V Interest expenses within Australia | Account 8200 Interest Expense. |
+| 6-J Interest expenses overseas | Not applicable; $0. |
+| 6-U Royalty expenses overseas | Not applicable; $0. |
+| 6-W Royalty expenses within Australia | Not seeded; falls back to 6-S if posted. |
+| 6-X Depreciation expenses | Non-cash book depreciation (account 7900) is excluded from this cash-basis report; SBE capital deductions are claimed via Item 10 instead of 7-F. |
+| 6-Y Motor vehicle expenses | Account 5400 Motor Vehicle Expenses; running expenses only — private-use reduction is a manual judgement. |
+| 6-Z Repairs and maintenance | Not seeded; falls back to 6-S if posted. |
+| 6-G Unrealised losses on revaluation of assets to fair value | Non-cash; excluded. |
+| 6-S All other expenses | Accounts 5100, 5120, 5200, 5300, 7250, 7300, 7400, 7500, 7600, 7700, 7800, 8300, 8900 plus fallback for any unmapped expense accounts. Includes salaries & wages, accounting/legal fees, advertising, bank charges and insurance — these have no separate labels on the 2026 form. |
+| 6-Q Total expenses | Computed: sum of 6-B to 6-S. |
+| 6-T Total profit or loss | 6-S less 6-Q. |
 
-### 5.3 Reconciliation fields
+### 5.3 Reconciliation fields (Item 7 — reconciliation to taxable income or loss)
 
-| ATO field | Eloquent IFRS source logic |
+| ATO label | Eloquent IFRS source logic |
 |---|---|
-| Net profit or loss | Total income less total expenses from the cash-basis report. |
-| Non-deductible expenses | Cash payments that are not deductible, such as private portion, entertainment, fines and penalties. |
-| Income not assessable | Cash receipts that are not assessable, such as capital contributions and exempt income. |
-| Deductible expenses not in accounts | Cash payments deductible for tax but not already included in expense labels, such as eligible capital asset purchases under simplified depreciation. |
-| Taxable income | Net profit or loss plus non-deductible expenses, less non-assessable income, plus deductible expenses not in accounts. |
+| 7-W Non-deductible expenses (add-back) | Cash payments posted to accounts flagged non-deductible: 5500 Meals & Entertainment (entertainment), 8400 Income Tax Expense, 8410 Franking Deficit Tax Expense. |
+| 7-V Exempt income (subtraction) | Accounts flagged exempt in the mapping (none seeded by default). |
+| 7-Q Other income not included in assessable income (subtraction) | Accounts flagged non-assessable in the mapping (none seeded by default). |
+| 7-F Deduction for decline in value of depreciating assets | Left blank for small business entities using simplified depreciation — claim via Item 10 instead. |
+| 7-R Tax losses deducted | Not tracked by the system; $0 with note. |
+| Other Item 7 labels (CGT, TOFA, R&D, franking credit gross-ups, etc.) | $0 / not applicable for this entity. |
+| 7-T Taxable or net income or loss | 6-T plus add-backs, less subtractions. |
+
+### 5.4 Financial and other information (Item 8) and SBE depreciation (Item 10)
+
+| ATO label | Eloquent IFRS source logic |
+|---|---|
+| 8-C Trade debtors | As-at ledger balance of RECEIVABLE accounts at 30 June (incl. opening balances). |
+| 8-D All current assets | As-at balances of BANK, RECEIVABLE, CURRENT_ASSET and INVENTORY accounts. |
+| 8-E Total assets | As-at balances of all asset account types. |
+| 8-F Trade creditors | As-at balance of PAYABLE accounts. |
+| 8-G All current liabilities | As-at balances of PAYABLE and CURRENT_LIABILITY accounts. |
+| 8-H Total liabilities | As-at balances of all liability account types. |
+| 8-D Total salary and wage expenses (information label) | Accounts 5100 Salaries & Wages + 5120 Director Remuneration (gross cash paid). |
+| 8-J Franked dividends paid / 8-K Unfranked dividends paid | Account 3400 Dividends Paid if posted; expected $0 until the dividend module exists. |
+| 8-P Opening franking account balance / 8-M Closing franking account balance | Not tracked — franking account module not implemented; rendered with a note. |
+| 10-A / 10-B SBE simplified depreciation | Capital purchases = net cash paid to NON_CURRENT_ASSET accounts (110–160) during the year, as reference data for the instant asset write-off (10-A) and general small business pool (10-B) labels; the deductible split is a manual judgement. |
+| Calculation statement | Estimated tax = 7-T × company tax rate from configuration (default 25% base rate entity; 30% otherwise). |
 
 ---
 
@@ -238,7 +274,8 @@ Eloquent IFRS supports VAT/GST at the line item level via the `Vat` model:
 | `entity_abn` | Australian Business Number |
 | `entity_tfn` | Tax File Number |
 | `income_year` | 2026 |
-| `ato_field_code` | Internal field code, e.g. `INC_01`, `EXP_12` |
+| `ato_item` | Form item number, e.g. `6` |
+| `ato_label` | Label letter within the item, e.g. `C` |
 | `ato_field_name` | ATO label description |
 | `amount_aud` | Amount in AUD, rounded to whole dollars |
 | `source_transaction_ids` | Eloquent IFRS transaction IDs included in the amount |
@@ -286,8 +323,8 @@ The report must be reconciled to the entity’s bank and credit card statements 
 
 | Rule | Description |
 |---|---|
-| V11 | All `CashSale` and `ClientReceipt` transactions must have a valid `Assignment` or be identifiable as cash receipts via account type. |
-| V12 | All `CashPurchase` and `SupplierPayment` transactions must be posted to expense accounts (`OPERATING_EXPENSE`, etc.) for inclusion. |
+| V11 | Every amount must come from a bank-settled transaction (parent transaction's main account is a BANK account) or an approved adjustment journal. |
+| V12 | All cash payments included in expense labels must be posted to expense accounts (`OPERATING_EXPENSE`, etc.). |
 | V13 | VAT (`Vat`) amounts must be correctly excluded from income and expense totals based on the entity’s GST registration status. |
 
 ---
