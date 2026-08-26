@@ -260,6 +260,18 @@
             Chart of Accounts
         </a>
 
+        @hasanyrole('admin|accountant')
+            <a href="{{ route('opening-balances.index') }}"
+                class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('opening-balances.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3">
+                    </path>
+                </svg>
+                Opening Balances
+            </a>
+        @endhasanyrole
+
         <!-- Reports -->
         <p class="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Reports</p>
         <a href="{{ route('reports.time-by-client') }}"

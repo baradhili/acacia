@@ -4,7 +4,7 @@
 
 - [x] allow for 4 digits after the decimal point as sometimes client reverse invoices carry many significant digits. 
 
-- [ ] Need to be able to edit opening balances as admin or accountant.
+- [x] Need to be able to edit opening balances as admin or accountant.
 
 - [ ] NOT YET - handle journaling subscriptions that run for a time period overlapping financial years (ie. prorate for the year) - have it as an flag  for a bill
 

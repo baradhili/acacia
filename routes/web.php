@@ -10,6 +10,7 @@ use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\EstimateController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\LogoController;
+use App\Http\Controllers\OpeningBalanceController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
@@ -41,6 +42,12 @@ Route::middleware('auth')->group(function () {
     // Users (admin only)
     Route::middleware('role:admin')->group(function () {
         Route::resource('users', UserController::class);
+    });
+
+    // Opening balances (admin or accountant)
+    Route::middleware('role:admin|accountant')->group(function () {
+        Route::get('/opening-balances', [OpeningBalanceController::class, 'index'])->name('opening-balances.index');
+        Route::post('/opening-balances', [OpeningBalanceController::class, 'store'])->name('opening-balances.store');
     });
 
     // Clients

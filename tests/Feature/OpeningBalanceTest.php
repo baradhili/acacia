@@ -1,0 +1,292 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Client;
+use App\Models\Payment;
+use App\Models\User;
+use IFRS\Models\Account;
+use IFRS\Models\Balance;
+use IFRS\Models\Currency;
+use IFRS\Models\Entity;
+use IFRS\Models\ReportingPeriod;
+use IFRS\Models\Vat;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
+use Tests\TestCase;
+
+class OpeningBalanceTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected User $admin;
+    protected User $accountant;
+    protected User $staff;
+    protected Entity $entity;
+    protected Account $bank;
+    protected Account $gstPayable;
+    protected Account $revenue;
+    protected int $year;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        foreach (['admin', 'accountant', 'staff'] as $role) {
+            Role::firstOrCreate(['name' => $role]);
+        }
+
+        $this->seedIfrs();
+
+        $this->admin = User::factory()->create();
+        $this->admin->assignRole('admin');
+
+        $this->accountant = User::factory()->create();
+        $this->accountant->assignRole('accountant');
+
+        $this->staff = User::factory()->create();
+        $this->staff->assignRole('staff');
+
+        $this->year = (int) date('Y');
+    }
+
+    /**
+     * Minimum IFRS prerequisites: entity (year_start 1) + current-year
+     * period, bank (320), GST Payable (2200), revenue (4100) and the GST
+     * 10% Vat. Mirrors PostPaymentsToIfrsTest::seedIfrs().
+     */
+    protected function seedIfrs(): void
+    {
+        $this->entity = Entity::create([
+            'name' => 'Test Entity',
+            'locale' => 'en_AU',
+            'multi_currency' => false,
+            'year_start' => 1,
+        ]);
+
+        $currency = Currency::create([
+            'name' => 'Australian Dollar',
+            'currency_code' => 'AUD',
+            'entity_id' => $this->entity->id,
+        ]);
+        $this->entity->update(['currency_id' => $currency->id]);
+        $this->entity->refresh();
+
+        ReportingPeriod::create([
+            'period_count' => 1,
+            'calendar_year' => (int) date('Y'),
+            'status' => ReportingPeriod::OPEN,
+            'entity_id' => $this->entity->id,
+        ]);
+
+        foreach ([
+            ['Operating Account', Account::BANK, 320],
+            ['GST Payable', Account::CONTROL, 2200],
+            ['Consulting Revenue', Account::OPERATING_REVENUE, 4100],
+        ] as [$name, $type, $code]) {
+            $account = Account::create([
+                'name' => $name,
+                'account_type' => $type,
+                'code' => $code,
+                'currency_id' => $currency->id,
+                'entity_id' => $this->entity->id,
+            ]);
+
+            $property = match ($code) {
+                320 => 'bank',
+                2200 => 'gstPayable',
+                4100 => 'revenue',
+            };
+            $this->$property = $account;
+        }
+
+        Vat::create([
+            'name' => 'GST 10%',
+            'code' => 'G',
+            'rate' => 10,
+            'account_id' => $this->gstPayable->id,
+            'entity_id' => $this->entity->id,
+        ]);
+    }
+
+    protected function saveBalances(array $balances, User $as, ?int $year = null)
+    {
+        return $this->actingAs($as)->post('/opening-balances', array_merge(
+            ['year' => $year ?? (int) date('Y')],
+            $balances ? ['balances' => $balances] : []
+        ));
+    }
+
+    public function test_opening_balances_are_admin_or_accountant_only(): void
+    {
+        $this->actingAs($this->staff)->get('/opening-balances')->assertStatus(403);
+        $this->actingAs($this->staff)
+            ->post('/opening-balances', ['year' => $this->year])
+            ->assertStatus(403);
+
+        $this->actingAs($this->admin)->get('/opening-balances')->assertOk();
+        $this->actingAs($this->accountant)->get('/opening-balances')->assertOk();
+    }
+
+    public function test_saving_opening_balances_creates_balance_rows(): void
+    {
+        $response = $this->saveBalances([
+            $this->bank->id => ['debit' => 15000, 'credit' => null],
+            $this->gstPayable->id => ['debit' => null, 'credit' => 480],
+        ], $this->admin);
+
+        $response->assertSessionHas('success');
+
+        $bankBalance = Balance::where('account_id', $this->bank->id)->first();
+        $this->assertNotNull($bankBalance);
+        $this->assertSame(Balance::DEBIT, $bankBalance->balance_type);
+        $this->assertEquals(15000, (float) $bankBalance->balance);
+        // Dated the day before the FY starts (year_start 1 → 31 Dec prior
+        // year). The vendor model does not cast the date, hence the string.
+        $this->assertSame(
+            ($this->year - 1) . '-12-31 00:00:00',
+            (string) $bankBalance->transaction_date
+        );
+        $this->assertEquals(
+            ReportingPeriod::where('entity_id', $this->entity->id)
+                ->where('calendar_year', $this->year)
+                ->first()->id,
+            $bankBalance->reporting_period_id
+        );
+
+        $gstBalance = Balance::where('account_id', $this->gstPayable->id)->first();
+        $this->assertNotNull($gstBalance);
+        $this->assertSame(Balance::CREDIT, $gstBalance->balance_type);
+        $this->assertEquals(480, (float) $gstBalance->balance);
+    }
+
+    public function test_index_lists_balance_sheet_accounts_only(): void
+    {
+        $response = $this->actingAs($this->admin)->get('/opening-balances');
+
+        $response->assertOk()
+            ->assertSee('Operating Account')
+            ->assertSee('GST Payable')
+            ->assertDontSee('Consulting Revenue');
+    }
+
+    public function test_index_prefills_existing_balances(): void
+    {
+        $this->saveBalances([
+            $this->bank->id => ['debit' => 15000, 'credit' => null],
+        ], $this->admin);
+
+        $response = $this->actingAs($this->admin)->get('/opening-balances');
+
+        $response->assertOk();
+        $this->assertStringContainsString(
+            'name="balances[' . $this->bank->id . '][debit]"',
+            $response->getContent()
+        );
+        $this->assertStringContainsString('value="15000"', $response->getContent());
+    }
+
+    public function test_editing_replaces_and_clearing_deletes_balance_rows(): void
+    {
+        $this->saveBalances([
+            $this->bank->id => ['debit' => 15000, 'credit' => null],
+            $this->gstPayable->id => ['debit' => null, 'credit' => 480],
+        ], $this->admin);
+
+        // Change the bank amount; clear the GST balance entirely.
+        $this->saveBalances([
+            $this->bank->id => ['debit' => 16000, 'credit' => null],
+            $this->gstPayable->id => ['debit' => null, 'credit' => null],
+        ], $this->admin)->assertSessionHas('success');
+
+        $this->assertEquals(1, Balance::where('account_id', $this->bank->id)->count());
+        $this->assertEquals(16000, (float) Balance::where('account_id', $this->bank->id)->value('balance'));
+        $this->assertEquals(0, Balance::where('account_id', $this->gstPayable->id)->count());
+    }
+
+    public function test_debit_and_credit_on_same_account_is_rejected(): void
+    {
+        $response = $this->saveBalances([
+            $this->bank->id => ['debit' => 100, 'credit' => 100],
+        ], $this->admin);
+
+        $response->assertSessionHas('error');
+        $this->assertEquals(0, Balance::count());
+    }
+
+    public function test_unknown_account_ids_are_ignored(): void
+    {
+        // Revenue is a P&L account — never balanceable.
+        $this->saveBalances([
+            $this->revenue->id => ['debit' => 500, 'credit' => null],
+        ], $this->admin)->assertSessionHas('success');
+
+        $this->assertEquals(0, Balance::count());
+    }
+
+    public function test_trial_balance_includes_opening_balances(): void
+    {
+        $this->saveBalances([
+            $this->bank->id => ['debit' => 15000, 'credit' => null],
+            $this->gstPayable->id => ['debit' => null, 'credit' => 480],
+        ], $this->admin);
+
+        $response = $this->actingAs($this->admin)->get('/reports/trial-balance');
+
+        $response->assertOk()
+            ->assertSee('$15,000.00')
+            ->assertSee('$480.00');
+    }
+
+    public function test_trial_balance_combines_opening_with_ledger_movements(): void
+    {
+        $client = Client::factory()->create();
+        $payment = Payment::create([
+            'client_id' => $client->id,
+            'amount' => 110,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+        $payment->postToIFRS();
+
+        $this->saveBalances([
+            $this->bank->id => ['debit' => 15000, 'credit' => null],
+        ], $this->admin);
+
+        $response = $this->actingAs($this->admin)->get('/reports/trial-balance');
+
+        // Opening 15,000 + receipt 110 = bank debit 15,110; revenue and
+        // GST come purely from the posted receipt.
+        $response->assertOk()
+            ->assertSee('$15,110.00')
+            ->assertSee('$100.00')
+            ->assertSee('$10.00');
+    }
+
+    public function test_balance_sheet_includes_opening_balances(): void
+    {
+        $this->saveBalances([
+            $this->bank->id => ['debit' => 15000, 'credit' => null],
+            $this->gstPayable->id => ['debit' => null, 'credit' => 480],
+        ], $this->admin);
+
+        $response = $this->actingAs($this->admin)->get('/reports/balance-sheet');
+
+        $response->assertOk()->assertSee('$15,000.00');
+    }
+
+    public function test_account_statement_includes_opening_balance(): void
+    {
+        $this->saveBalances([
+            $this->bank->id => ['debit' => 15000, 'credit' => null],
+        ], $this->admin);
+
+        $response = $this->actingAs($this->admin)->get(route('reports.account-statement', [
+            'account_id' => $this->bank->id,
+            'start_date' => now()->startOfMonth()->toDateString(),
+            'end_date' => now()->toDateString(),
+        ]));
+
+        $response->assertOk()->assertSee('$15,000.00');
+    }
+}

@@ -10,6 +10,7 @@ use App\Models\Payment;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Services\OpeningBalances;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -238,13 +239,18 @@ class ReportController extends Controller
         ) {
             // Cumulative from an arbitrary epoch: exact as-at balances that
             // don't depend on year-end closing entries having been posted
-            // (the package's period-scoped closingBalance() does).
+            // (the package's period-scoped closingBalance() does), plus
+            // the account's opening Balance rows.
             $balance = (float) Ledger::balance(
                 $account,
                 $closing ? Carbon::create(2000, 1, 1) : $startDate,
                 $endDate,
                 $entity->currency_id
             )[$entity->currency_id];
+
+            if ($closing) {
+                $balance += OpeningBalances::effectiveOpening($account, $entity);
+            }
 
             if (abs($balance) < 0.005) {
                 continue;
@@ -281,6 +287,10 @@ class ReportController extends Controller
                 $endDate,
                 $entity->currency_id
             )[$entity->currency_id];
+
+            // Opening Balance rows form the starting position of the
+            // trial balance (debit-positive; credit rows land negative).
+            $balance += OpeningBalances::effectiveOpening($account, $entity);
 
             if (abs($balance) < 0.005) {
                 continue;
@@ -692,14 +702,15 @@ class ReportController extends Controller
         ]);
 
         // Cumulative opening balance: everything posted before the period
-        // starts (the balances table only carries FY opening entries after
-        // a year-end close, so the ledger is the source of truth here).
+        // starts, plus the account's opening Balance rows (which sit
+        // before all ledger activity by construction).
         $opening = (float) Ledger::balance(
             $account,
             Carbon::create(2000, 1, 1),
             $startDate->copy()->subSecond(),
             $entity->currency_id
         )[$entity->currency_id];
+        $opening += OpeningBalances::effectiveOpening($account, $entity);
         $openingBalance = $isDebitNormal ? $opening : -$opening;
 
         $entries = Ledger::where('post_account', $account->id)
