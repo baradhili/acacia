@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Services\IfrsPosting;
 use IFRS\Models\Account;
+use IFRS\Models\Entity;
 use IFRS\Models\LineItem;
 use IFRS\Models\Vat;
 use IFRS\Transactions\JournalEntry;
@@ -52,6 +53,23 @@ class BillPayment extends Model
     const IFRS_BANK_ACCOUNT_CODE = 320; // Operating Account
     const IFRS_DEFAULT_EXPENSE_ACCOUNT_CODE = 8900; // Other Expenses (fallback for legacy items)
     const IFRS_GST_VAT_CODE = 'G'; // Seeded "GST 10%" Vat, linked to account 2200 (GST Payable)
+
+    /**
+     * The Vat used for purchase GST legs: input tax credits are
+     * receivable, so supplier payments prefer the seeded "GST Input 10%"
+     * Vat (code I, linked to 430 GST Receivable) and only fall back to
+     * the output Vat (G / 2200) when it is not seeded (unmigrated
+     * databases).
+     */
+    protected static function purchaseGstVat(Entity $entity): ?Vat
+    {
+        return Vat::where('code', config('subscriptions.purchase_gst_vat_code', 'I'))
+                ->where('entity_id', $entity->id)
+                ->first()
+            ?? Vat::where('code', self::IFRS_GST_VAT_CODE)
+                ->where('entity_id', $entity->id)
+                ->first();
+    }
 
     /**
      * Reason of the most recent postToIFRS() failure (null after a success
@@ -292,7 +310,7 @@ class BillPayment extends Model
      *
      *   Cr Bank     (account 320, main account)     — tax-inclusive amount
      *   Dr Expense  (per-account debit lines)       — net amount
-     *   Dr GST      (account 2200, auto via addVat) — GST component
+     *   Dr GST      (account 430, auto via addVat) — GST component (input credit)
      *
      * DESIGN DECISION — cash basis, do not reverse: bills are subledger
      * documents only and deliberately NEVER post to IFRS (no Accounts
@@ -302,8 +320,10 @@ class BillPayment extends Model
      *
      * GST is applied PER LINE ITEM, honouring each bill item's treatment:
      * taxable lines (tax_rate > 0) post tax-inclusive with the seeded
-     * "GST 10%" Vat, so the package backs the GST out and debits account
-     * 2200 automatically (net-BAS treatment, symmetric with receipts);
+     * "GST Input 10%" Vat, so the package backs the GST out and debits
+     * account 430 GST Receivable automatically (input tax credits are
+     * receivable, unlike the receipts-side credit to 2200); when only the
+     * output Vat (G) is seeded the GST nets against 2200 as before.
      * GST-free lines (tax_rate = 0 — some supplies are GST-free by
      * regulation) post their full amount with no Vat. Each allocation is
      * apportioned across its bill's items by total share.
@@ -422,9 +442,9 @@ class BillPayment extends Model
                 'reference' => $this->payment_number,
             ]);
 
-            $gstVat = Vat::where('code', self::IFRS_GST_VAT_CODE)
-                ->where('entity_id', $entity->id)
-                ->first();
+            // Purchase GST debits GST Receivable (430) via the input Vat;
+            // falls back to the output Vat when only G is seeded.
+            $gstVat = static::purchaseGstVat($entity);
 
             foreach ($groups as $key => $cents) {
                 [$accountId, $treatment] = explode('-', $key);
