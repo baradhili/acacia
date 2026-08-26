@@ -31,6 +31,9 @@
     </style>
 </head>
 <body>
+    @php
+        $money = fn ($amount) => $amount === null ? '—' : ($amount < 0 ? '-' : '') . '$' . number_format(abs($amount));
+    @endphp
     <div class="header">
         <h1>Company Tax Return {{ $fyEnd }} — Annual Report</h1>
         <p class="meta">
@@ -45,23 +48,23 @@
     <div class="summary">
         <div class="summary-box">
             <div class="summary-label">6-S Total income</div>
-            <div class="summary-value">${{ number_format($statement['totalIncome']) }}</div>
+            <div class="summary-value">{{ $money($statement['totalIncome']) }}</div>
         </div>
         <div class="summary-box">
             <div class="summary-label">6-Q Total expenses</div>
-            <div class="summary-value">${{ number_format($statement['totalExpenses']) }}</div>
+            <div class="summary-value">{{ $money($statement['totalExpenses']) }}</div>
         </div>
         <div class="summary-box">
             <div class="summary-label">6-T Profit or loss</div>
-            <div class="summary-value">${{ number_format($statement['profitOrLoss']) }}</div>
+            <div class="summary-value">{{ $money($statement['profitOrLoss']) }}</div>
         </div>
         <div class="summary-box">
             <div class="summary-label">7-T Taxable income</div>
-            <div class="summary-value">${{ number_format($statement['taxableIncome']) }}</div>
+            <div class="summary-value">{{ $money($statement['taxableIncome']) }}</div>
         </div>
         <div class="summary-box">
             <div class="summary-label">Est. tax @ {{ $statement['taxRate'] }}%</div>
-            <div class="summary-value">${{ number_format($statement['estimatedTax']) }}</div>
+            <div class="summary-value">{{ $money($statement['estimatedTax']) }}</div>
         </div>
     </div>
 
@@ -75,7 +78,7 @@
             <tr class="{{ $row['total'] ? 'total-row' : '' }}">
                 <td>{{ $row['label'] }}</td>
                 <td>{{ $row['name'] }}@if ($row['note']) <span class="note">— {{ $row['note'] }}</span>@endif</td>
-                <td class="text-right">${{ number_format($row['amount']) }}</td>
+                <td class="text-right">{{ $money($row['amount']) }}</td>
             </tr>
             @endforeach
         </tbody>
@@ -91,13 +94,13 @@
             <tr class="{{ $row['total'] ? 'total-row' : '' }}">
                 <td>{{ $row['label'] }}</td>
                 <td>{{ $row['name'] }}@if ($row['note']) <span class="note">— {{ $row['note'] }}</span>@endif</td>
-                <td class="text-right">${{ number_format($row['amount']) }}</td>
+                <td class="text-right">{{ $money($row['amount']) }}</td>
             </tr>
             @endforeach
             <tr class="total-row">
                 <td>T</td>
                 <td>Total profit or loss</td>
-                <td class="text-right">${{ number_format($statement['profitOrLoss']) }}</td>
+                <td class="text-right">{{ $money($statement['profitOrLoss']) }}</td>
             </tr>
         </tbody>
     </table>
@@ -112,7 +115,7 @@
             <tr class="{{ $row['total'] ? 'total-row' : '' }}">
                 <td>{{ $row['label'] }}</td>
                 <td>{{ $row['name'] }}@if ($row['note']) <span class="note">— {{ $row['note'] }}</span>@endif</td>
-                <td class="text-right">{{ $row['amount'] === null ? '—' : '$' . number_format($row['amount']) }}</td>
+                <td class="text-right">{{ $money($row['amount']) }}</td>
             </tr>
             @endforeach
         </tbody>
@@ -128,7 +131,7 @@
             <tr>
                 <td>{{ $row['label'] }}</td>
                 <td>{{ $row['name'] }}@if ($row['note']) <span class="note">— {{ $row['note'] }}</span>@endif</td>
-                <td class="text-right">{{ $row['amount'] === null ? '—' : '$' . number_format($row['amount']) }}</td>
+                <td class="text-right">{{ $money($row['amount']) }}</td>
             </tr>
             @endforeach
         </tbody>
@@ -144,14 +147,14 @@
             <tr>
                 <td>{{ $account['code'] }}</td>
                 <td>{{ $account['name'] }}</td>
-                <td class="text-right">${{ number_format($account['amount']) }}</td>
+                <td class="text-right">{{ $money($account['amount']) }}</td>
             </tr>
             @empty
             <tr><td colspan="3">No capital purchases in the period.</td></tr>
             @endforelse
             <tr class="total-row">
                 <td colspan="2">Total</td>
-                <td class="text-right">${{ number_format($statement['capitalPurchases']['total']) }}</td>
+                <td class="text-right">{{ $money($statement['capitalPurchases']['total']) }}</td>
             </tr>
         </tbody>
     </table>

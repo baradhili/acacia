@@ -1,5 +1,10 @@
 @extends('reports.layout')
 
+@php
+    // Whole-dollar, sign-aware formatting per spec V08 (e.g. -$239).
+    $money = fn ($amount) => $amount === null ? '—' : ($amount < 0 ? '-' : '') . '$' . number_format(abs($amount));
+@endphp
+
 @section('title', 'Company Tax Return')
 
 @section('header')
@@ -56,20 +61,20 @@
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div class="bg-green-50 rounded-lg p-6">
                         <p class="text-sm font-medium text-green-700">6-S — Total income</p>
-                        <p class="text-2xl font-bold text-green-800 mt-1">${{ number_format($statement['totalIncome']) }}</p>
+                        <p class="text-2xl font-bold text-green-800 mt-1">{{ $money($statement['totalIncome']) }}</p>
                     </div>
                     <div class="bg-red-50 rounded-lg p-6">
                         <p class="text-sm font-medium text-red-700">6-Q — Total expenses</p>
-                        <p class="text-2xl font-bold text-red-800 mt-1">${{ number_format($statement['totalExpenses']) }}</p>
+                        <p class="text-2xl font-bold text-red-800 mt-1">{{ $money($statement['totalExpenses']) }}</p>
                     </div>
                     <div class="bg-indigo-50 rounded-lg p-6">
                         <p class="text-sm font-medium text-indigo-700">6-T — Total profit or loss</p>
-                        <p class="text-2xl font-bold text-indigo-800 mt-1">${{ number_format($statement['profitOrLoss']) }}</p>
+                        <p class="text-2xl font-bold text-indigo-800 mt-1">{{ $money($statement['profitOrLoss']) }}</p>
                     </div>
                     <div class="bg-slate-100 rounded-lg p-6">
                         <p class="text-sm font-medium text-slate-700">7-T — Taxable income</p>
-                        <p class="text-2xl font-bold text-slate-800 mt-1">${{ number_format($statement['taxableIncome']) }}</p>
-                        <p class="text-xs text-slate-600 mt-1">Est. tax @ {{ $statement['taxRate'] }}%: ${{ number_format($statement['estimatedTax']) }}</p>
+                        <p class="text-2xl font-bold text-slate-800 mt-1">{{ $money($statement['taxableIncome']) }}</p>
+                        <p class="text-xs text-slate-600 mt-1">Est. tax @ {{ $statement['taxRate'] }}%: {{ $money($statement['estimatedTax']) }}</p>
                     </div>
                 </div>
 
@@ -103,13 +108,13 @@
                                         <td class="px-4 py-3 text-sm text-gray-900">
                                             {{ $row['name'] }}
                                             @foreach ($row['accounts'] as $account)
-                                                <span class="block text-xs text-gray-500">{{ $account['code'] }} {{ $account['name'] }} — ${{ number_format($account['amount']) }}</span>
+                                                <span class="block text-xs text-gray-500">{{ $account['code'] }} {{ $account['name'] }} — {{ $money($account['amount']) }}</span>
                                             @endforeach
                                             @if ($row['note'])
                                                 <span class="block text-xs text-gray-400">{{ $row['note'] }}</span>
                                             @endif
                                         </td>
-                                        <td class="px-4 py-3 text-sm text-gray-900 text-right">${{ number_format($row['amount']) }}</td>
+                                        <td class="px-4 py-3 text-sm text-gray-900 text-right">{{ $money($row['amount']) }}</td>
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -136,19 +141,19 @@
                                         <td class="px-4 py-3 text-sm text-gray-900">
                                             {{ $row['name'] }}
                                             @foreach ($row['accounts'] as $account)
-                                                <span class="block text-xs text-gray-500">{{ $account['code'] }} {{ $account['name'] }} — ${{ number_format($account['amount']) }}</span>
+                                                <span class="block text-xs text-gray-500">{{ $account['code'] }} {{ $account['name'] }} — {{ $money($account['amount']) }}</span>
                                             @endforeach
                                             @if ($row['note'])
                                                 <span class="block text-xs text-gray-400">{{ $row['note'] }}</span>
                                             @endif
                                         </td>
-                                        <td class="px-4 py-3 text-sm text-gray-900 text-right">${{ number_format($row['amount']) }}</td>
+                                        <td class="px-4 py-3 text-sm text-gray-900 text-right">{{ $money($row['amount']) }}</td>
                                     </tr>
                                 @endforeach
                                 <tr class="font-semibold bg-gray-50">
                                     <td class="px-4 py-3 text-sm text-gray-900">T</td>
                                     <td class="px-4 py-3 text-sm text-gray-900">Total profit or loss</td>
-                                    <td class="px-4 py-3 text-sm text-gray-900 text-right">${{ number_format($statement['profitOrLoss']) }}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-900 text-right">{{ $money($statement['profitOrLoss']) }}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -178,7 +183,7 @@
                                             @endif
                                         </td>
                                         <td class="px-4 py-3 text-sm text-gray-900 text-right">
-                                            {{ $row['amount'] === null ? '—' : '$' . number_format($row['amount']) }}
+                                            {{ $money($row['amount']) }}
                                         </td>
                                     </tr>
                                 @endforeach
@@ -210,7 +215,7 @@
                                             @endif
                                         </td>
                                         <td class="px-4 py-3 text-sm text-gray-900 text-right">
-                                            {{ $row['amount'] === null ? '—' : '$' . number_format($row['amount']) }}
+                                            {{ $money($row['amount']) }}
                                         </td>
                                     </tr>
                                 @endforeach
@@ -225,7 +230,7 @@
                     <p class="text-sm text-gray-600 mb-2">
                         Cash paid for capital assets during the year. Use these figures to complete labels 10-A (instant asset
                         write-off) and 10-B (general small business pool) — the deductible split is a manual judgement.
-                        Total: <span class="font-semibold">${{ number_format($statement['capitalPurchases']['total']) }}</span>
+                        Total: <span class="font-semibold">{{ $money($statement['capitalPurchases']['total']) }}</span>
                     </p>
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200">
@@ -241,7 +246,7 @@
                                     <tr>
                                         <td class="px-4 py-3 text-sm text-gray-900">{{ $account['code'] }}</td>
                                         <td class="px-4 py-3 text-sm text-gray-900">{{ $account['name'] }}</td>
-                                        <td class="px-4 py-3 text-sm text-gray-900 text-right">${{ number_format($account['amount']) }}</td>
+                                        <td class="px-4 py-3 text-sm text-gray-900 text-right">{{ $money($account['amount']) }}</td>
                                     </tr>
                                 @empty
                                     <tr>
@@ -257,12 +262,12 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="bg-gray-50 rounded-lg p-4 text-sm text-gray-700">
                         <p class="font-semibold mb-1">GST cross-check (excluded from labels)</p>
-                        <p>GST collected (credits to GST payable): ${{ number_format($statement['gst']['collected']) }}</p>
-                        <p>GST paid (debits to GST payable): ${{ number_format($statement['gst']['paid']) }}</p>
+                        <p>GST collected (credits to GST payable): {{ $money($statement['gst']['collected']) }}</p>
+                        <p>GST paid (debits to GST payable): {{ $money($statement['gst']['paid']) }}</p>
                     </div>
                     <div class="bg-gray-50 rounded-lg p-4 text-sm text-gray-700">
                         <p class="font-semibold mb-1">Bank movement cross-check</p>
-                        <p>Inflows: ${{ number_format($statement['bank']['inflows']) }} · Outflows: ${{ number_format($statement['bank']['outflows']) }}</p>
+                        <p>Inflows: {{ $money($statement['bank']['inflows']) }} · Outflows: {{ $money($statement['bank']['outflows']) }}</p>
                         <p class="text-xs text-gray-500 mt-1">Validations V05/V06 reconcile these to the label totals — see below.</p>
                     </div>
                 </div>
