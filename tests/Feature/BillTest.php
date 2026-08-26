@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Bill;
 use App\Models\BillItem;
 use App\Models\BillPayment;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use App\Models\Supplier;
 use App\Models\User;
 use Carbon\Carbon;
@@ -34,7 +36,8 @@ class BillTest extends TestCase
         return [
             'description' => 'Test Item',
             'quantity' => 1,
-            'unit_price' => 100,
+            // GST-inclusive: $100 ex GST + $10 GST — enter what you pay
+            'unit_price' => 110,
             'gst' => '1',
         ];
     }
@@ -70,14 +73,14 @@ class BillTest extends TestCase
 
     public function test_bill_calculates_mixed_gst_totals_correctly(): void
     {
-        // Line A: $100 + 10% GST = $110 (taxable)
+        // Line A: $110 GST-inclusive = $100 + $10 GST (taxable)
         // Line B: $100 GST-free   = $100
         // => subtotal 200, tax 10, total 210
         $bill = Bill::create(['supplier_id' => $this->supplier->id]);
         $bill->items()->create([
             'description' => 'Taxable line',
             'quantity' => 1,
-            'unit_price' => 100,
+            'unit_price' => 110,
             'tax_rate' => 10,
         ]);
         $bill->items()->create([
@@ -94,6 +97,131 @@ class BillTest extends TestCase
 
         $this->assertFalse($bill->items[0]->is_gst_free);
         $this->assertTrue($bill->items[1]->is_gst_free);
+    }
+
+    public function test_bill_supports_add_gst_ex_gst_entry(): void
+    {
+        // Suppliers who quote ex-GST lines and add GST at the subtotal:
+        // $100 entered with Add GST -> $110 with $10 GST on top.
+        $response = $this->actingAs($this->user)->post('/bills', [
+            'supplier_id' => $this->supplier->id,
+            'bill_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'items' => [
+                [
+                    'description' => 'Ex-GST supplier line',
+                    'quantity' => 1,
+                    'unit_price' => 100,
+                    'gst_add' => '1',
+                ],
+                [
+                    'description' => 'Inclusive line',
+                    'quantity' => 1,
+                    'unit_price' => 110,
+                    'gst' => '1',
+                ],
+                [
+                    'description' => 'GST-free line',
+                    'quantity' => 1,
+                    'unit_price' => 50,
+                ],
+            ],
+        ]);
+
+        $response->assertSessionHas('success');
+        $bill = Bill::first();
+        $items = $bill->items;
+
+        // Add-GST line: GST goes on top of the entered amount
+        $this->assertTrue((bool) $items[0]->gst_added);
+        $this->assertEquals(110, (float) $items[0]->total);
+        $this->assertEquals(10, (float) $items[0]->tax_amount);
+
+        // Inclusive line unchanged: $110 paid, $10 of it GST
+        $this->assertFalse((bool) $items[1]->gst_added);
+        $this->assertEquals(110, (float) $items[1]->total);
+        $this->assertEquals(10, (float) $items[1]->tax_amount);
+
+        // GST-free line untouched
+        $this->assertEquals(50, (float) $items[2]->total);
+        $this->assertEquals(0, (float) $items[2]->tax_amount);
+
+        // Mixed modes roll up correctly: 250 ex GST + 20 GST = 270
+        $this->assertEquals(250, (float) $bill->subtotal);
+        $this->assertEquals(20, (float) $bill->tax_amount);
+        $this->assertEquals(270, (float) $bill->total);
+    }
+
+    public function test_both_gst_ticks_normalise_to_inclusive(): void
+    {
+        // Defensive: the form makes the ticks mutually exclusive, but if
+        // both are ever submitted, "Incl. GST" wins — the entered amount is
+        // treated as what you pay, never inflated by 10%.
+        $response = $this->actingAs($this->user)->post('/bills', [
+            'supplier_id' => $this->supplier->id,
+            'bill_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'items' => [
+                [
+                    'description' => 'Both ticks',
+                    'quantity' => 1,
+                    'unit_price' => 110,
+                    'gst' => '1',
+                    'gst_add' => '1',
+                ],
+            ],
+        ]);
+
+        $response->assertSessionHas('success');
+        $bill = Bill::first();
+        $this->assertFalse((bool) $bill->items->first()->gst_added);
+        $this->assertEquals(110, (float) $bill->total);
+        $this->assertEquals(10, (float) $bill->tax_amount);
+    }
+
+    public function test_gst_tick_backs_out_the_portion_instead_of_adding(): void
+    {
+        // Regression: the tick used to ADD 10% on top of the entered amount
+        // ($110 → $121). It must mean the amount INCLUDES GST instead:
+        // $110 stays $110, with $10 of it GST.
+        $response = $this->actingAs($this->user)->post('/bills', [
+            'supplier_id' => $this->supplier->id,
+            'bill_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'items' => [
+                [
+                    'description' => 'Parking (GST inclusive)',
+                    'quantity' => 1,
+                    'unit_price' => 110,
+                    'gst' => '1',
+                ],
+            ],
+        ]);
+
+        $response->assertSessionHas('success');
+        $bill = Bill::first();
+        $this->assertEquals(110, (float) $bill->total);
+        $this->assertEquals(10, (float) $bill->tax_amount);
+        $this->assertEquals(100, (float) $bill->subtotal);
+
+        // Same amount unticked: nothing is GST.
+        $this->actingAs($this->user)->post('/bills', [
+            'supplier_id' => $this->supplier->id,
+            'bill_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'items' => [
+                [
+                    'description' => 'Bank fee (GST-free)',
+                    'quantity' => 1,
+                    'unit_price' => 110,
+                ],
+            ],
+        ]);
+
+        $free = Bill::where('id', '!=', $bill->id)->first();
+        $this->assertEquals(110, (float) $free->total);
+        $this->assertEquals(0, (float) $free->tax_amount);
+        $this->assertEquals(110, (float) $free->subtotal);
     }
 
     public function test_unchecked_gst_posts_tax_rate_zero(): void
@@ -138,7 +266,7 @@ class BillTest extends TestCase
         $this->assertNotNull($bill);
         $this->assertEquals(Bill::STATUS_PAID, $bill->status);
         $this->assertNotNull($bill->paid_at);
-        $this->assertEquals(110, (float) $bill->amount_paid); // 100 + GST
+        $this->assertEquals(110, (float) $bill->amount_paid); // $110 incl GST, as paid
 
         $payment = BillPayment::first();
         $this->assertNotNull($payment);
@@ -147,6 +275,33 @@ class BillTest extends TestCase
         $this->assertEquals('CARD-123', $payment->reference);
         // No IFRS accounts are seeded here, so posting no-ops (logged, non-fatal).
         $this->assertNull($payment->ifrs_payment_id);
+    }
+
+    public function test_paid_at_entry_bill_can_attach_receipt_documents(): void
+    {
+        Storage::fake('public');
+
+        $response = $this->actingAs($this->user)->post('/bills', [
+            'supplier_id' => $this->supplier->id,
+            'bill_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'items' => [$this->itemDefaults()],
+            'paid_now' => '1',
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'credit_card',
+            'documents' => [
+                UploadedFile::fake()->create('parking-receipt.pdf', 100, 'application/pdf'),
+            ],
+        ]);
+
+        $response->assertSessionHas('success');
+        $bill = Bill::first();
+        $this->assertEquals(Bill::STATUS_PAID, $bill->status);
+
+        // The receipt is attached to the (uneditable) paid bill at creation
+        $this->assertEquals(1, $bill->documents->count());
+        $this->assertEquals('parking-receipt.pdf', $bill->documents->first()->name);
+        Storage::disk('public')->assertExists($bill->documents->first()->file_path);
     }
 
     public function test_paid_at_entry_requires_payment_details(): void
@@ -230,7 +385,7 @@ class BillTest extends TestCase
                     'id' => $itemA->id,
                     'description' => 'Keep me (edited)',
                     'quantity' => 2,
-                    'unit_price' => 100,
+                    'unit_price' => 110,
                     'gst' => '1',
                 ],
                 [
@@ -250,10 +405,64 @@ class BillTest extends TestCase
         $this->assertEquals(2, $bill->items->count());
         $this->assertEquals('Keep me (edited)', $itemA->fresh()->description);
 
-        // 2*100 + 10% GST = 220, plus 25 GST-free = 245
+        // 2 × $110 (incl $20 GST) = 220, plus 25 GST-free = 245
         $this->assertEquals(225, (float) $bill->subtotal);
         $this->assertEquals(20, (float) $bill->tax_amount);
         $this->assertEquals(245, (float) $bill->total);
+    }
+
+    public function test_update_preserves_and_sets_add_gst_lines(): void
+    {
+        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
+        $exGst = $bill->items()->create([
+            'description' => 'Ex-GST line',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+            'gst_added' => true,
+        ]);
+        $bill->recalculateTotals();
+
+        $response = $this->actingAs($this->user)->put(route('bills.update', $bill), [
+            'supplier_id' => $this->supplier->id,
+            'bill_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'items' => [
+                [
+                    'id' => $exGst->id,
+                    'description' => 'Ex-GST line',
+                    'quantity' => 1,
+                    'unit_price' => 100,
+                    'gst_add' => '1',
+                ],
+                [
+                    'description' => 'New ex-GST line',
+                    'quantity' => 1,
+                    'unit_price' => 200,
+                    'gst_add' => '1',
+                ],
+            ],
+        ]);
+
+        $response->assertSessionHas('success');
+        $bill->refresh();
+
+        // The Add-GST treatment survives the edit round-trip instead of
+        // being silently flattened to GST-free (gst_add used to be stripped
+        // from the validated payload on update).
+        $this->assertTrue((bool) $exGst->fresh()->gst_added);
+        $this->assertEquals(110, (float) $exGst->fresh()->total);
+        $this->assertEquals(10, (float) $exGst->fresh()->tax_amount);
+
+        $newLine = $bill->items->firstWhere('description', 'New ex-GST line');
+        $this->assertTrue((bool) $newLine->gst_added);
+        $this->assertEquals(220, (float) $newLine->total);
+        $this->assertEquals(20, (float) $newLine->tax_amount);
+
+        // 300 ex GST + 30 GST on top = 330
+        $this->assertEquals(300, (float) $bill->subtotal);
+        $this->assertEquals(30, (float) $bill->tax_amount);
+        $this->assertEquals(330, (float) $bill->total);
     }
 
     public function test_payment_rejected_for_draft_and_paid_bills(): void
@@ -286,8 +495,8 @@ class BillTest extends TestCase
         $bill->items()->create([
             'description' => 'Item',
             'quantity' => 2,
-            'unit_price' => 125,
-            'tax_rate' => 10, // 250 + 25 GST = 275
+            'unit_price' => 137.5, // 2 × $137.50 = $275 incl ($250 + $25 GST)
+            'tax_rate' => 10,
         ]);
         $bill->recalculateTotals();
         $bill->markAsOpen();
@@ -311,7 +520,7 @@ class BillTest extends TestCase
         $bill->items()->create([
             'description' => 'Item',
             'quantity' => 1,
-            'unit_price' => 100,
+            'unit_price' => 110, // $110 incl GST
             'tax_rate' => 10,
         ]);
         $bill->recalculateTotals();

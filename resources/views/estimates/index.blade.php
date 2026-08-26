@@ -28,6 +28,7 @@
                             <a href="{{ route('estimates.show', $estimate) }}" class="text-indigo-600 hover:text-indigo-900 font-medium">
                                 {{ $estimate->estimate_number }}
                             </a>
+                            <x-document-icon :count="$estimate->documents_count" />
                         </td>
                         <td class="px-6 py-4 text-gray-900">{{ $estimate->client->name }}</td>
                         <td class="px-6 py-4 text-right text-gray-900">${{ number_format($estimate->total, 2) }}</td>

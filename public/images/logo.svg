@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 100" width="120" height="100">
+  <defs>
+    <linearGradient id="ds" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#14B8A6"/>
+      <stop offset="100%" stop-color="#0F766E"/>
+    </linearGradient>
+    <radialGradient id="df" cx="38%" cy="38%">
+      <stop offset="0%" stop-color="#14B8A6" stop-opacity="0.1"/>
+      <stop offset="100%" stop-color="#0B1120" stop-opacity="0.4"/>
+    </radialGradient>
+    <linearGradient id="f1" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#14B8A6" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#14B8A6"/>
+    </linearGradient>
+    <linearGradient id="f2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0EA5E9" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#0EA5E9"/>
+    </linearGradient>
+    <linearGradient id="f3" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#FF2D20" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#FF2D20"/>
+    </linearGradient>
+    <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Diamond frame -->
+  <rect x="20" y="15" width="70" height="70" rx="11"
+        transform="rotate(45 55 50)"
+        fill="url(#df)" stroke="url(#ds)" stroke-width="2"/>
+
+  <!-- Converging flow lines -->
+  <path d="M 28 32 C 48 32, 70 42, 86 50"
+        fill="none" stroke="url(#f1)" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 22 50 C 48 50, 70 49, 86 50"
+        fill="none" stroke="url(#f2)" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 28 68 C 48 68, 70 58, 86 50"
+        fill="none" stroke="url(#f3)" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Convergence dot -->
+  <circle cx="87" cy="50" r="3.5" fill="#14B8A6" filter="url(#glow)"/>
+</svg>

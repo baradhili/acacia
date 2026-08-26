@@ -1,0 +1,138 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Services\IfrsPosting;
+use App\Services\OpeningBalances;
+use Carbon\Carbon;
+use IFRS\Models\Account;
+use IFRS\Models\Balance;
+use IFRS\Models\ReportingPeriod;
+use IFRS\Models\Transaction;
+use IFRS\Reports\IncomeStatement;
+use IFRS\Scopes\EntityScope;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * Edit the entity's initial opening IFRS balances — one Balance row per
+ * balance-sheet account per fiscal year, dated the day before the FY
+ * starts (the package's documented mechanism). Admin/accountant only.
+ */
+class OpeningBalanceController extends Controller
+{
+    public function index(Request $request)
+    {
+        $entity = IfrsPosting::resolveEntity();
+        abort_unless((bool) $entity, 404, 'No IFRS entity configured.');
+
+        $periods = OpeningBalances::editablePeriods($entity);
+        $period = $periods->firstWhere('calendar_year', (int) $request->get('year')) ?? $periods->first();
+
+        $accounts = Account::where('entity_id', $entity->id)
+            ->whereNotIn('account_type', IncomeStatement::getAccountTypes())
+            ->orderBy('code')
+            ->get();
+
+        // Existing balances for the selected FY, keyed by account id.
+        $existing = collect();
+        if ($period) {
+            $existing = Balance::withoutGlobalScope(EntityScope::class)
+                ->where('entity_id', $entity->id)
+                ->where('reporting_period_id', $period->id)
+                ->get()
+                ->mapWithKeys(fn ($balance) => [$balance->account_id => [
+                    'side' => $balance->balance_type,
+                    'amount' => (float) $balance->balance,
+                ]]);
+        }
+
+        $openingDate = $period ? OpeningBalances::periodOpeningDate($period, $entity) : null;
+
+        return view('opening-balances.index', compact('periods', 'period', 'accounts', 'existing', 'openingDate'));
+    }
+
+    public function store(Request $request)
+    {
+        $entity = IfrsPosting::resolveEntity();
+        abort_unless((bool) $entity, 404, 'No IFRS entity configured.');
+
+        $validated = $request->validate([
+            'year' => 'required|integer',
+            'balances' => 'nullable|array',
+            'balances.*.debit' => 'nullable|numeric|min:0|max:999999999',
+            'balances.*.credit' => 'nullable|numeric|min:0|max:999999999',
+        ]);
+
+        $periods = OpeningBalances::editablePeriods($entity);
+        $period = $periods->firstWhere('calendar_year', (int) $validated['year']);
+        abort_unless((bool) $period, 422, 'Unknown or future fiscal year.');
+
+        $accounts = Account::where('entity_id', $entity->id)
+            ->whereNotIn('account_type', IncomeStatement::getAccountTypes())
+            ->get()
+            ->keyBy('id');
+
+        $rows = collect($validated['balances'] ?? [])
+            ->only($accounts->keys())
+            ->map(fn ($row) => [
+                'debit' => round((float) ($row['debit'] ?? 0), 2),
+                'credit' => round((float) ($row['credit'] ?? 0), 2),
+            ]);
+
+        foreach ($rows as $accountId => $row) {
+            if ($row['debit'] > 0 && $row['credit'] > 0) {
+                $account = $accounts[$accountId];
+                return back()->withInput()
+                    ->with('error', "{$account->code} {$account->name}: enter a debit or a credit, not both.");
+            }
+        }
+
+        $openingDate = OpeningBalances::periodOpeningDate($period, $entity);
+
+        DB::transaction(function () use ($rows, $accounts, $entity, $period, $openingDate) {
+            foreach ($accounts as $accountId => $account) {
+                $row = $rows[$accountId] ?? ['debit' => 0, 'credit' => 0];
+                $side = $row['debit'] > 0 ? Balance::DEBIT : ($row['credit'] > 0 ? Balance::CREDIT : null);
+                $amount = $side === Balance::DEBIT ? $row['debit'] : $row['credit'];
+
+                $existing = Balance::withoutGlobalScope(EntityScope::class)
+                    ->where('entity_id', $entity->id)
+                    ->where('reporting_period_id', $period->id)
+                    ->where('account_id', $account->id)
+                    ->first();
+
+                if ($side === null) {
+                    $existing?->delete();
+                    continue;
+                }
+
+                $unchanged = $existing
+                    && $existing->balance_type === $side
+                    && abs((float) $existing->balance - $amount) < 0.005;
+                if ($unchanged) {
+                    continue;
+                }
+
+                // Balance::save() multiplies the stored amount by the
+                // exchange rate on every save, so edits are always
+                // delete + recreate, never an in-place update.
+                $existing?->delete();
+
+                (new Balance([
+                    'entity_id' => $entity->id,
+                    'account_id' => $account->id,
+                    'reporting_period_id' => $period->id,
+                    'currency_id' => $account->currency_id,
+                    'transaction_type' => Transaction::JN,
+                    'transaction_date' => $openingDate,
+                    'balance_type' => $side,
+                    'balance' => $amount,
+                ]))->save();
+            }
+        });
+
+        return redirect()->route('opening-balances.index', ['year' => $period->calendar_year])
+            ->with('success', "Opening balances for FY{$period->calendar_year} saved.");
+    }
+}

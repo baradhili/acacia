@@ -14,7 +14,7 @@ class BillController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Bill::with(['supplier', 'project']);
+        $query = Bill::with(['supplier', 'project'])->withCount('documents');
 
         // Filter by status
         if ($request->has('status') && $request->status) {
@@ -40,7 +40,7 @@ class BillController extends Controller
     {
         $suppliers = Supplier::orderBy('name')->pluck('name', 'id');
         $projects = Project::orderBy('name')->get();
-        $expenseAccounts = Bill::expenseAccounts();
+        $purchaseAccounts = Bill::purchaseAccounts();
         $paymentMethods = BillPayment::paymentMethods();
 
         $selectedSupplier = $request->supplier_id ? Supplier::find($request->supplier_id) : null;
@@ -49,7 +49,7 @@ class BillController extends Controller
         return view('bills.create', compact(
             'suppliers',
             'projects',
-            'expenseAccounts',
+            'purchaseAccounts',
             'paymentMethods',
             'selectedSupplier',
             'selectedProject'
@@ -74,14 +74,20 @@ class BillController extends Controller
             'items.*.description' => 'required|string',
             'items.*.quantity' => 'required|numeric|min:0',
             'items.*.unit_price' => 'required|numeric|min:0',
-            // Per-line GST: checkbox on = GST 10% inclusive, off = GST-free.
+            // Per-line GST: 'gst' = the entered amount is GST-inclusive
+            // (portion back-calculated); 'gst_add' = the entered amount is
+            // ex-GST and GST is added on top; neither = GST-free.
             'items.*.gst' => 'nullable|boolean',
+            'items.*.gst_add' => 'nullable|boolean',
             'items.*.discount_percent' => 'nullable|numeric|min:0|max:100',
             'items.*.expense_account_id' => 'nullable|integer|exists:ifrs_accounts,id',
             'paid_now' => 'nullable|boolean',
             'payment_date' => 'required_if:paid_now,1|nullable|date',
             'payment_method' => 'required_if:paid_now,1|nullable|in:' . implode(',', array_keys(BillPayment::paymentMethods())),
             'payment_reference' => 'nullable|string|max:255',
+            // Receipts uploaded alongside a bill paid at entry
+            'documents' => 'nullable|array',
+            'documents.*' => 'file|max:20480|mimes:pdf,jpg,jpeg,png,gif,doc,docx,xls,xlsx,txt,zip,rar',
         ]);
 
         DB::beginTransaction();
@@ -101,7 +107,9 @@ class BillController extends Controller
                     'description' => $item['description'],
                     'quantity' => $item['quantity'],
                     'unit_price' => $item['unit_price'],
-                    'tax_rate' => !empty($item['gst']) ? config('australian.gst.rate', 10) : 0,
+                    'tax_rate' => (!empty($item['gst']) || !empty($item['gst_add'])) ? config('australian.gst.rate', 10) : 0,
+                    // "Incl. GST" wins if both boxes are somehow submitted
+                    'gst_added' => empty($item['gst']) && !empty($item['gst_add']),
                     'discount_percent' => $item['discount_percent'] ?? 0,
                     'expense_account_id' => $item['expense_account_id'] ?? null,
                     'sort_order' => $index,
@@ -109,6 +117,19 @@ class BillController extends Controller
             }
 
             $bill->recalculateTotals();
+
+            // Attach any receipt documents uploaded with the bill (paid-at-
+            // entry expenses can never be edited afterwards, so the receipt
+            // rides along with creation)
+            foreach ($request->file('documents', []) as $file) {
+                $bill->documents()->create([
+                    'name' => $file->getClientOriginalName(),
+                    'file_path' => $file->store('uploads/' . now()->format('Y/m'), 'public'),
+                    'mime_type' => $file->getMimeType(),
+                    'size' => $file->getSize(),
+                    'uploaded_by' => Auth::id(),
+                ]);
+            }
 
             // Paid-at-entry: create the payment, allocate the full total and
             // post to the ledger in the same transaction.
@@ -161,9 +182,9 @@ class BillController extends Controller
 
         $suppliers = Supplier::orderBy('name')->pluck('name', 'id');
         $projects = Project::orderBy('name')->get();
-        $expenseAccounts = Bill::expenseAccounts();
+        $purchaseAccounts = Bill::purchaseAccounts();
 
-        return view('bills.edit', compact('bill', 'suppliers', 'projects', 'expenseAccounts'));
+        return view('bills.edit', compact('bill', 'suppliers', 'projects', 'purchaseAccounts'));
     }
 
     public function update(Request $request, Bill $bill)
@@ -185,7 +206,9 @@ class BillController extends Controller
             'items.*.description' => 'required|string',
             'items.*.quantity' => 'required|numeric|min:0',
             'items.*.unit_price' => 'required|numeric|min:0',
+            // Same per-line GST treatment as store()
             'items.*.gst' => 'nullable|boolean',
+            'items.*.gst_add' => 'nullable|boolean',
             'items.*.discount_percent' => 'nullable|numeric|min:0|max:100',
             'items.*.expense_account_id' => 'nullable|integer|exists:ifrs_accounts,id',
         ]);
@@ -225,7 +248,9 @@ class BillController extends Controller
                     'description' => $item['description'],
                     'quantity' => $item['quantity'],
                     'unit_price' => $item['unit_price'],
-                    'tax_rate' => !empty($item['gst']) ? config('australian.gst.rate', 10) : 0,
+                    'tax_rate' => (!empty($item['gst']) || !empty($item['gst_add'])) ? config('australian.gst.rate', 10) : 0,
+                    // "Incl. GST" wins if both boxes are somehow submitted
+                    'gst_added' => empty($item['gst']) && !empty($item['gst_add']),
                     'discount_percent' => $item['discount_percent'] ?? 0,
                     'expense_account_id' => $item['expense_account_id'] ?? null,
                     'sort_order' => $index,

@@ -109,12 +109,12 @@ class BillPaymentModelTest extends TestCase
         $bankChargesAccount = Account::where('code', 7800)->first();
 
         // Mixed-GST bill: $110 taxable (travel) + $50 GST-free (bank fee).
-        // GST-inclusive line of 110 = 100 net + 10 GST.
+        // Prices are entered GST-inclusive: 110 = 100 net + 10 GST.
         $bill = Bill::create(['supplier_id' => $this->supplier->id]);
         $bill->items()->create([
             'description' => 'Taxable travel',
             'quantity' => 1,
-            'unit_price' => 100,
+            'unit_price' => 110,
             'tax_rate' => 10,
             'expense_account_id' => $travelAccount->id,
         ]);
@@ -171,6 +171,81 @@ class BillPaymentModelTest extends TestCase
         $this->assertEquals(10, (float) $gstDebit);
     }
 
+    public function test_post_to_ifrs_handles_all_three_gst_modes(): void
+    {
+        $this->seedIfrs();
+
+        $travelAccount = Account::where('code', 5300)->first();
+        $bankChargesAccount = Account::where('code', 7800)->first();
+
+        // Mixed-GST bill covering every mode:
+        // - $110 "Incl. GST" travel     (100 net + 10 GST)
+        // - $110 "Add GST" travel       ($100 ex-GST + 10 GST on top)
+        // - $50 GST-free bank fee
+        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
+        $bill->items()->create([
+            'description' => 'Incl-GST travel',
+            'quantity' => 1,
+            'unit_price' => 110,
+            'tax_rate' => 10,
+            'expense_account_id' => $travelAccount->id,
+        ]);
+        $bill->items()->create([
+            'description' => 'Ex-GST travel (GST added on top)',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+            'gst_added' => true,
+            'expense_account_id' => $travelAccount->id,
+        ]);
+        $bill->items()->create([
+            'description' => 'GST-free bank fee',
+            'quantity' => 1,
+            'unit_price' => 50,
+            'tax_rate' => 0,
+            'expense_account_id' => $bankChargesAccount->id,
+        ]);
+        $bill->recalculateTotals();
+        $bill->markAsOpen();
+        $this->assertEquals(270, (float) $bill->total);
+
+        $payment = BillPayment::createWithUniqueNumber([
+            'supplier_id' => $this->supplier->id,
+            'amount' => 270,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+        $payment->allocateToBill($bill, 270);
+
+        $this->assertNotNull($payment->postToIFRS());
+
+        $bank = Account::where('code', 320)->first();
+        $gst = Account::where('code', 2200)->first();
+
+        // Cr Bank exactly the amount paid — the ex-GST line must not push
+        // GST on top of an already tax-inclusive share.
+        $bankCredit = Ledger::where('post_account', $bank->id)
+            ->where('entry_type', Balance::CREDIT)->sum('amount');
+        $this->assertEquals(270, (float) $bankCredit);
+
+        // Dr Travel net 200 across both GST modes (100 + 100).
+        $travelNet = Ledger::where('post_account', $travelAccount->id)
+                ->where('entry_type', Balance::DEBIT)->sum('amount')
+            - Ledger::where('post_account', $travelAccount->id)
+                ->where('entry_type', Balance::CREDIT)->sum('amount');
+        $this->assertEquals(200, (float) $travelNet);
+
+        // Dr Bank Charges 50 in full (GST-free).
+        $feeDebit = Ledger::where('post_account', $bankChargesAccount->id)
+            ->where('entry_type', Balance::DEBIT)->sum('amount');
+        $this->assertEquals(50, (float) $feeDebit);
+
+        // Dr GST Payable 20 (10 from each taxable line).
+        $gstDebit = Ledger::where('post_account', $gst->id)
+            ->where('entry_type', Balance::DEBIT)->sum('amount');
+        $this->assertEquals(20, (float) $gstDebit);
+    }
+
     public function test_post_to_ifrs_is_idempotent(): void
     {
         $this->seedIfrs();
@@ -208,7 +283,7 @@ class BillPaymentModelTest extends TestCase
         $bill->items()->create([
             'description' => 'Item',
             'quantity' => 1,
-            'unit_price' => 100,
+            'unit_price' => 110, // GST-inclusive
             'tax_rate' => 10,
         ]);
         $bill->recalculateTotals();
@@ -233,7 +308,7 @@ class BillPaymentModelTest extends TestCase
         $bill->items()->create([
             'description' => 'Item',
             'quantity' => 1,
-            'unit_price' => 100,
+            'unit_price' => 110, // GST-inclusive
             'tax_rate' => 10,
         ]);
         $bill->recalculateTotals();

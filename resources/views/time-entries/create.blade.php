@@ -34,9 +34,29 @@
                 </div>
 
                 <div>
-                    <label for="start_time" class="block text-sm font-medium text-gray-700">Start Time *</label>
-                    <input type="datetime-local" name="start_time" id="start_time" value="{{ old('start_time') }}" required
+                    <label for="entry_date" class="block text-sm font-medium text-gray-700">Date *</label>
+                    <input type="date" name="entry_date" id="entry_date" value="{{ old('entry_date', now()->toDateString()) }}" required
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    @error('entry_date')
+                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div>
+                    <label for="hours" class="block text-sm font-medium text-gray-700">Hours *</label>
+                    <input type="number" name="hours" id="hours" value="{{ old('hours') }}" step="0.01" min="0" max="24" required
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    <p class="mt-1 text-sm text-gray-500">Entered manually — filled in automatically when start/end times are set</p>
+                    @error('hours')
+                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div>
+                    <label for="start_time" class="block text-sm font-medium text-gray-700">Start Time</label>
+                    <input type="time" name="start_time" id="start_time" value="{{ old('start_time') }}"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    <p class="mt-1 text-sm text-gray-500">Optional</p>
                     @error('start_time')
                         <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                     @enderror
@@ -44,30 +64,53 @@
 
                 <div>
                     <label for="end_time" class="block text-sm font-medium text-gray-700">End Time</label>
-                    <input type="datetime-local" name="end_time" id="end_time" value="{{ old('end_time') }}"
+                    <input type="time" name="end_time" id="end_time" value="{{ old('end_time') }}"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                    <p class="mt-1 text-sm text-gray-500">Hours will be calculated automatically</p>
+                    <p class="mt-1 text-sm text-gray-500">Optional — hours are derived from the times when both are set</p>
+                    @error('end_time')
+                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
                 </div>
+            </div>
 
-                <div>
-                    <label for="hours" class="block text-sm font-medium text-gray-700">Manual Hours</label>
-                    <input type="number" name="hours" id="hours" value="{{ old('hours') }}" step="0.01" min="0"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                    <p class="mt-1 text-sm text-gray-500">Leave empty if using start/end times</p>
+            <div class="mt-6">
+                <div class="flex items-center justify-between mb-2">
+                    <label class="block text-sm font-medium text-gray-700">Breaks</label>
+                    <button type="button" id="addBreakBtn"
+                        class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-lg text-sm">
+                        + Add Break
+                    </button>
                 </div>
+                <p class="text-sm text-gray-500 mb-2">Unpaid breaks within the start/end times (e.g. lunch), deducted from the hours</p>
+                <div id="breaksContainer" class="space-y-2">
+                    @php $oldBreaks = old('breaks', []); @endphp
+                    @foreach ($oldBreaks as $i => $break)
+                        <div class="break-row flex items-center gap-3">
+                            <input type="time" name="breaks[{{ $i }}][start]" value="{{ $break['start'] ?? '' }}"
+                                class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            <span class="text-gray-500">to</span>
+                            <input type="time" name="breaks[{{ $i }}][end]" value="{{ $break['end'] ?? '' }}"
+                                class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            <button type="button" class="remove-break text-red-600 hover:text-red-800 text-sm">Remove</button>
+                        </div>
+                    @endforeach
+                </div>
+                @error('breaks')
+                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                @enderror
+            </div>
 
-                <div>
-                    <label for="rate" class="block text-sm font-medium text-gray-700">Hourly Rate ($)</label>
-                    <input type="number" name="rate" id="rate" value="{{ old('rate') }}" step="0.01" min="0"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                    <p class="mt-1 text-sm text-gray-500">Leave empty to use project default</p>
-                </div>
+            <div class="mt-6">
+                <label for="rate" class="block text-sm font-medium text-gray-700">Hourly Rate ($)</label>
+                <input type="number" name="rate" id="rate" value="{{ old('rate') }}" step="0.01" min="0"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <p class="mt-1 text-sm text-gray-500">Leave empty to use project default</p>
+            </div>
 
-                <div class="flex items-center">
-                    <input type="checkbox" name="billable" id="billable" value="1" checked
-                        class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
-                    <label for="billable" class="ml-2 block text-sm text-gray-700">Billable</label>
-                </div>
+            <div class="mt-6 flex items-center">
+                <input type="checkbox" name="billable" id="billable" value="1" {{ old('billable', '1') ? 'checked' : '' }}
+                    class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                <label for="billable" class="ml-2 block text-sm text-gray-700">Billable</label>
             </div>
 
             <div class="mt-6">
@@ -86,5 +129,73 @@
             </div>
         </form>
     </div>
+
+    <template id="breakTemplate">
+        <div class="break-row flex items-center gap-3">
+            <input type="time" name="breaks[__INDEX__][start]"
+                class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+            <span class="text-gray-500">to</span>
+            <input type="time" name="breaks[__INDEX__][end]"
+                class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+            <button type="button" class="remove-break text-red-600 hover:text-red-800 text-sm">Remove</button>
+        </div>
+    </template>
+
+    @push('scripts')
+        <script>
+            let breakIndex = {{ max(count(old('breaks', [])), 0) }};
+
+            document.getElementById('addBreakBtn').addEventListener('click', function() {
+                const container = document.getElementById('breaksContainer');
+                const html = document.getElementById('breakTemplate').innerHTML.replace(/__INDEX__/g, breakIndex);
+                container.insertAdjacentHTML('beforeend', html);
+                breakIndex++;
+            });
+
+            document.getElementById('breaksContainer').addEventListener('click', function(e) {
+                if (e.target.classList.contains('remove-break')) {
+                    e.target.closest('.break-row').remove();
+                    syncHours();
+                }
+            });
+
+            // Hours: manual by default; when both start and end times are
+            // set the field is derived (span minus breaks) and read-only.
+            const hoursInput = document.getElementById('hours');
+            const startInput = document.getElementById('start_time');
+            const endInput = document.getElementById('end_time');
+
+            function toMinutes(v) {
+                const [h, m] = (v || '').split(':').map(Number);
+                return isNaN(h) ? null : h * 60 + (m || 0);
+            }
+
+            function syncHours() {
+                const start = toMinutes(startInput.value);
+                const end = toMinutes(endInput.value);
+
+                if (start === null || end === null || end <= start) {
+                    hoursInput.readOnly = false;
+                    return;
+                }
+
+                let breakMinutes = 0;
+                document.querySelectorAll('.break-row').forEach(row => {
+                    const bStart = toMinutes(row.querySelector('input[name$="[start]"]').value);
+                    const bEnd = toMinutes(row.querySelector('input[name$="[end]"]').value);
+                    if (bStart !== null && bEnd !== null && bEnd > bStart) {
+                        breakMinutes += bEnd - bStart;
+                    }
+                });
+
+                hoursInput.value = ((end - start - breakMinutes) / 60).toFixed(2);
+                hoursInput.readOnly = true;
+            }
+
+            [startInput, endInput].forEach(el => el.addEventListener('input', syncHours));
+            document.getElementById('breaksContainer').addEventListener('input', syncHours);
+            syncHours();
+        </script>
+    @endpush
 
 @endsection

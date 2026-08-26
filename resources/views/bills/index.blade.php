@@ -63,6 +63,7 @@
                             <a href="{{ route('bills.show', $bill) }}" class="text-indigo-600 hover:text-indigo-900 font-medium">
                                 {{ $bill->bill_number }}
                             </a>
+                            <x-document-icon :count="$bill->documents_count" />
                         </td>
                         <td class="px-6 py-4 text-gray-900">{{ $bill->supplier->name ?? '-' }}</td>
                         <td class="px-6 py-4 text-gray-900">{{ Str::limit($bill->reference ?? '-', 20) }}</td>

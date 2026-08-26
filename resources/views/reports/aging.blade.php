@@ -34,7 +34,7 @@
             <table class="report-table">
                 <thead>
                     <tr>
-                        <th>Client</th>
+                        <th>{{ $partyLabel }}</th>
                         <th class="text-right">Current</th>
                         <th class="text-right">1-30 Days</th>
                         <th class="text-right">31-60 Days</th>
@@ -48,10 +48,10 @@
                         $clientBuckets = [];
                         foreach ($buckets as $bucket) {
                             foreach ($bucket['invoices'] as $item) {
-                                $clientId = $item['invoice']->client_id;
+                                $clientId = $item['party_id'];
                                 if (!isset($clientBuckets[$clientId])) {
                                     $clientBuckets[$clientId] = [
-                                        'client' => $item['client'],
+                                        'client' => $item['party'],
                                         'current' => 0,
                                         'days_1_30' => 0,
                                         'days_31_60' => 0,
@@ -88,7 +88,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="text-center text-gray-500 py-4">No outstanding invoices</td>
+                            <td colspan="7" class="text-center text-gray-500 py-4">No outstanding {{ strtolower($partyLabel) === 'client' ? 'invoices' : 'bills' }}</td>
                         </tr>
                     @endforelse
                 </tbody>

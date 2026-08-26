@@ -13,7 +13,7 @@ class BillPaymentController extends Controller
 {
     public function index(Request $request)
     {
-        $query = BillPayment::with(['supplier', 'payer']);
+        $query = BillPayment::with(['supplier', 'payer'])->withCount('documents');
 
         // Filter by supplier
         if ($request->has('supplier_id') && $request->supplier_id) {
@@ -54,10 +54,22 @@ class BillPaymentController extends Controller
             'reference' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
             'allocate_type' => 'required|in:manual,no',
-            'bill_allocations' => 'required_if:allocate_type,manual|array',
+            'bill_allocations' => 'nullable|array',
             'bill_allocations.*.bill_id' => 'required_with:bill_allocations|exists:bills,id',
             'bill_allocations.*.amount' => 'required_with:bill_allocations|numeric|min:0',
         ]);
+
+        // Unchecked rows submit nothing; drop anything incomplete defensively.
+        // (The form indexes pairs as bill_allocations[{bill_id}][...] — bare
+        // [] names never pair bill_id and amount into one row in PHP.)
+        $allocations = array_filter($validated['bill_allocations'] ?? [], function ($allocation) {
+            return !empty($allocation['bill_id']) && (float) ($allocation['amount'] ?? 0) > 0;
+        });
+
+        if ($validated['allocate_type'] === 'manual' && empty($allocations)) {
+            return back()->withInput()->with('error',
+                'Select at least one bill to allocate, or choose "Leave unallocated".');
+        }
 
         DB::beginTransaction();
         try {
@@ -72,12 +84,10 @@ class BillPaymentController extends Controller
             ]);
 
             // Allocate payment
-            if ($validated['allocate_type'] === 'manual' && !empty($validated['bill_allocations'])) {
-                foreach ($validated['bill_allocations'] as $allocation) {
-                    $bill = Bill::find($allocation['bill_id']);
-                    if ($bill && $allocation['amount'] > 0) {
-                        $payment->allocateToBill($bill, (float) $allocation['amount']);
-                    }
+            foreach ($allocations as $allocation) {
+                $bill = Bill::find($allocation['bill_id']);
+                if ($bill) {
+                    $payment->allocateToBill($bill, (float) $allocation['amount']);
                 }
             }
             // 'no' = leave unallocated

@@ -2,9 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\Bill;
 use App\Models\Client;
 use App\Models\Document;
 use App\Models\Invoice;
+use App\Models\Payment;
+use App\Models\PurchaseOrder;
+use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -51,6 +55,91 @@ class DocumentViewUploadTest extends TestCase
         $response->assertSee('documentFile');
         $response->assertSee('documentable_type');
         $response->assertSee('documentable_id');
+    }
+
+    public function test_document_upload_input_accepts_multiple_files(): void
+    {
+        $client = Client::factory()->create();
+        $invoice = Invoice::create([
+            'client_id' => $client->id,
+            'invoice_number' => 'INV-2024-0008',
+            'status' => 'draft',
+            'issue_date' => now(),
+            'due_date' => now()->addDays(30),
+            'subtotal' => 100,
+            'tax_amount' => 10,
+            'total' => 110,
+        ]);
+
+        $response = $this->actingAs($this->user)->get(route('invoices.edit', $invoice));
+
+        $response->assertStatus(200);
+        // A dropped multi-file selection must reach the upload handler,
+        // so the input carries `multiple` and the JS passes the whole
+        // FileList rather than files[0].
+        $response->assertSee('id="documentFile" class="hidden" multiple', false);
+        $response->assertSee('uploadFiles(e.dataTransfer.files)');
+        $response->assertSee('uploadFiles(fileInput.files)');
+        $response->assertDontSee('files[0]');
+    }
+
+    public function test_document_upload_component_renders_on_all_edit_pages(): void
+    {
+        // bills.edit loads expense accounts through the IFRS package's
+        // EntityScope, which dereferences the authed user's entity.
+        $entity = \IFRS\Models\Entity::create([
+            'name' => 'Test Entity',
+            'locale' => 'en_AU',
+            'multi_currency' => false,
+            'year_start' => 1,
+        ]);
+        $this->user->update(['entity_id' => $entity->id]);
+
+        $client = Client::factory()->create();
+        $invoice = Invoice::create([
+            'client_id' => $client->id,
+            'invoice_number' => 'INV-2024-0009',
+            'status' => 'draft',
+            'issue_date' => now(),
+            'due_date' => now()->addDays(30),
+            'subtotal' => 100,
+            'tax_amount' => 10,
+            'total' => 110,
+        ]);
+        $bill = Bill::create(['supplier_id' => Supplier::factory()->create()->id]);
+        $payment = Payment::create([
+            'client_id' => $client->id,
+            'amount' => 110,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+        $purchaseOrder = PurchaseOrder::create([
+            'client_id' => $client->id,
+            'po_number' => 'PO-2024-0001',
+            'title' => 'Test PO',
+            'status' => 'draft',
+            'budgeted_amount' => 5000,
+            'used_amount' => 0,
+        ]);
+
+        $pages = [
+            [route('invoices.edit', $invoice), 'Invoice'],
+            [route('bills.edit', $bill), 'Bill'],
+            [route('payments.edit', $payment), 'Payment'],
+            [route('clients.edit', $client), 'Client'],
+            [route('suppliers.edit', Supplier::factory()->create()), 'Supplier'],
+            [route('purchase-orders.edit', $purchaseOrder), 'PurchaseOrder'],
+        ];
+
+        foreach ($pages as [$url, $type]) {
+            $response = $this->actingAs($this->user)->get($url);
+
+            $response->assertStatus(200);
+            $response->assertSee('documentUploadArea', false);
+            $response->assertSee('uploadFiles(e.dataTransfer.files)');
+            // The component derives the type from the model's class name.
+            $response->assertSee('value="' . $type . '"', false);
+        }
     }
 
     public function test_can_upload_document_for_invoice_via_view(): void

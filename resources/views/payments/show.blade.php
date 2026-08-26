@@ -31,13 +31,38 @@
             {{ session('success') }}
         </div>
     @endif
+    @if (session('error'))
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            {{ session('error') }}
+        </div>
+    @endif
+    @if ($errors->any())
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            <ul class="list-disc list-inside text-sm">
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Payment Details -->
         <div class="lg:col-span-2 space-y-6">
             <!-- Allocations -->
             <div class="bg-white rounded-lg shadow p-6">
-                <h2 class="text-lg font-semibold text-gray-800 mb-4">Invoice Allocations</h2>
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold text-gray-800">Invoice Allocations</h2>
+                    @if ($payment->allocations->isNotEmpty())
+                        <form action="{{ route('payments.removeAllAllocations', $payment) }}" method="POST"
+                            onsubmit="return confirm('Remove ALL invoice allocations from this payment? Each invoice\\'s status will be recalculated.');">
+                            @csrf
+                            <button type="submit" class="text-red-600 hover:text-red-800 text-sm font-medium">
+                                Remove All Allocations
+                            </button>
+                        </form>
+                    @endif
+                </div>
 
                 @if ($payment->allocations->isNotEmpty())
                     <table class="min-w-full">
@@ -209,23 +234,28 @@
                         <select name="invoice_id" required
                             class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
                             <option value="">Select Invoice</option>
-                            @php
-                                $outstandingInvoices = App\Models\Invoice::with('allocations')
-                                    ->where('client_id', $payment->client_id)
-                                    ->whereIn('status', ['sent', 'viewed', 'partially_paid', 'overdue'])
-                                    ->get()
-                                    ->filter(function ($inv) {
-                                        return $inv->amount_due > 0;
-                                    })
-                                    ->sortBy('due_date')
-                                    ->values();
-                            @endphp
-                            @foreach ($outstandingInvoices as $inv)
+                            @foreach ($allocatableInvoices as $inv)
                                 <option value="{{ $inv->id }}" data-due="{{ $inv->amount_due }}">
                                     {{ $inv->invoice_number }} - ${{ number_format($inv->amount_due, 2) }} due
                                 </option>
                             @endforeach
+                            @foreach ($draftInvoices as $inv)
+                                <option value="" disabled>
+                                    {{ $inv->invoice_number }} — draft, mark as sent first (${{ number_format($inv->amount_due, 2) }})
+                                </option>
+                            @endforeach
                         </select>
+                        @if ($allocatableInvoices->isEmpty() && $draftInvoices->isNotEmpty())
+                            <p class="text-xs text-yellow-700 mt-1">
+                                This client has {{ $draftInvoices->count() }} draft invoice(s) — mark them
+                                as sent (from the invoice page) before they can receive payments.
+                            </p>
+                        @endif
+                        @if ($allocatableInvoices->isEmpty() && $draftInvoices->isEmpty())
+                            <p class="text-xs text-gray-500 mt-1">
+                                No outstanding invoices for this client.
+                            </p>
+                        @endif
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Amount *</label>

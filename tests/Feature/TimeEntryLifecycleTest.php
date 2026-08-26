@@ -34,8 +34,9 @@ class TimeEntryLifecycleTest extends TestCase
     {
         $response = $this->actingAs($this->user)->post(route('time-entries.store'), [
             'project_id' => $this->project->id,
-            'start_time' => '2024-01-15T09:00',
-            'end_time' => '2024-01-15T17:00',
+            'entry_date' => '2024-01-15',
+            'start_time' => '09:00',
+            'end_time' => '17:00',
             'description' => 'Development work',
             'billable' => true,
         ]);
@@ -51,6 +52,139 @@ class TimeEntryLifecycleTest extends TestCase
 
         $entry = TimeEntry::first();
         $this->assertEquals(8.0, $entry->hours);
+        $this->assertEquals('2024-01-15 09:00', $entry->start_time->format('Y-m-d H:i'));
+        $this->assertEquals('2024-01-15 17:00', $entry->end_time->format('Y-m-d H:i'));
+    }
+
+    public function test_can_create_manual_hours_entry_without_times(): void
+    {
+        // The default entry shape: a date and the hours worked, no times.
+        $response = $this->actingAs($this->user)->post(route('time-entries.store'), [
+            'project_id' => $this->project->id,
+            'entry_date' => '2024-01-15',
+            'hours' => 6.5,
+            'description' => 'Manual day',
+        ]);
+
+        $response->assertRedirect(route('time-entries.index'));
+
+        $entry = TimeEntry::first();
+        $this->assertNull($entry->start_time);
+        $this->assertNull($entry->end_time);
+        $this->assertEquals(6.5, (float) $entry->hours);
+        $this->assertEquals('2024-01-15', $entry->entry_date->toDateString());
+    }
+
+    public function test_hours_required_when_no_times_given(): void
+    {
+        $response = $this->actingAs($this->user)->post(route('time-entries.store'), [
+            'project_id' => $this->project->id,
+            'entry_date' => '2024-01-15',
+        ]);
+
+        $response->assertSessionHasErrors('hours');
+    }
+
+    public function test_breaks_are_deducted_from_timed_entry(): void
+    {
+        // 09:00–17:00 = 8h, minus 30min lunch and 15min coffee = 7.25h
+        $response = $this->actingAs($this->user)->post(route('time-entries.store'), [
+            'project_id' => $this->project->id,
+            'entry_date' => '2024-01-15',
+            'start_time' => '09:00',
+            'end_time' => '17:00',
+            'hours' => '8.00', // JS-derived; server recomputes with breaks
+            'breaks' => [
+                ['start' => '12:30', 'end' => '13:00'],
+                ['start' => '15:00', 'end' => '15:15'],
+            ],
+            'description' => 'Full day with breaks',
+        ]);
+
+        $response->assertRedirect(route('time-entries.index'));
+
+        $entry = TimeEntry::first();
+        $this->assertEquals(7.25, (float) $entry->hours);
+        $this->assertEquals(2, $entry->breaks()->count());
+    }
+
+    public function test_break_outside_the_timed_span_is_rejected(): void
+    {
+        $response = $this->actingAs($this->user)->post(route('time-entries.store'), [
+            'project_id' => $this->project->id,
+            'entry_date' => '2024-01-15',
+            'start_time' => '09:00',
+            'end_time' => '17:00',
+            'hours' => '8.00',
+            'breaks' => [
+                ['start' => '12:00', 'end' => '18:00'], // ends after the entry
+            ],
+        ]);
+
+        $response->assertSessionHasErrors('breaks');
+    }
+
+    public function test_overlapping_breaks_are_rejected(): void
+    {
+        $response = $this->actingAs($this->user)->post(route('time-entries.store'), [
+            'project_id' => $this->project->id,
+            'entry_date' => '2024-01-15',
+            'start_time' => '09:00',
+            'end_time' => '17:00',
+            'hours' => '8.00',
+            'breaks' => [
+                ['start' => '12:00', 'end' => '13:00'],
+                ['start' => '12:30', 'end' => '13:30'],
+            ],
+        ]);
+
+        $response->assertSessionHasErrors('breaks');
+    }
+
+    public function test_breaks_without_times_are_rejected(): void
+    {
+        $response = $this->actingAs($this->user)->post(route('time-entries.store'), [
+            'project_id' => $this->project->id,
+            'entry_date' => '2024-01-15',
+            'hours' => 8,
+            'breaks' => [
+                ['start' => '12:00', 'end' => '13:00'],
+            ],
+        ]);
+
+        $response->assertSessionHasErrors('breaks');
+    }
+
+    public function test_updating_times_recomputes_hours_with_breaks(): void
+    {
+        $entry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $this->project->id,
+            'entry_date' => '2024-01-15',
+            'start_time' => Carbon::parse('2024-01-15 09:00'),
+            'end_time' => Carbon::parse('2024-01-15 17:00'),
+            'hours' => 8,
+        ]);
+        $entry->breaks()->createMany([
+            ['start_time' => '12:30', 'end_time' => '13:00'],
+        ]);
+        $entry->recalculateHours();
+        $this->assertEquals(7.5, (float) $entry->fresh()->hours);
+
+        // Shorten the day: 09:00–13:00 with the same break = 3.5h
+        $response = $this->actingAs($this->user)->put(route('time-entries.update', $entry), [
+            'project_id' => $this->project->id,
+            'entry_date' => '2024-01-15',
+            'start_time' => '09:00',
+            'end_time' => '13:00',
+            'hours' => '3.50',
+            'breaks' => [
+                ['start' => '12:30', 'end' => '13:00'],
+            ],
+        ]);
+
+        $response->assertSessionHas('success');
+        $this->assertEquals(3.5, (float) $entry->fresh()->hours);
     }
 
     public function test_can_calculate_hours_from_start_end_times(): void

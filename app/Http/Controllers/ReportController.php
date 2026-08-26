@@ -5,17 +5,23 @@ namespace App\Http\Controllers;
 use App\Models\Client;
 use App\Models\Bill;
 use App\Models\BillItem;
+use App\Models\BillPayment;
+use App\Models\Payment;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Services\OpeningBalances;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use IFRS\Models\Account;
+use IFRS\Models\Balance;
 use IFRS\Models\Currency;
+use IFRS\Models\Entity;
+use IFRS\Models\Ledger;
+use IFRS\Models\LineItem;
 use IFRS\Models\ReportingPeriod;
 use IFRS\Reports\IncomeStatement;
-use IFRS\Reports\BalanceSheet;
-use IFRS\Reports\TrialBalance;
 use IFRS\Reports\CashFlowStatement;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Maatwebsite\Excel\Facades\Excel;
@@ -24,21 +30,43 @@ use Illuminate\Http\Request;
 class ReportController extends Controller
 {
     /**
-     * Get the current or create a reporting period
+     * Ensure reporting periods exist for the financial year containing
+     * $date AND the FY before it. The package derives FY boundaries from
+     * the entity's year_start (July for Australia: 1 Jul – 30 Jun), but
+     * Account::openingBalance($year) internally resolves its period via
+     * "{year}-01-01" — which with year_start = 7 lands in the PREVIOUS
+     * financial year — so the package's statement helpers also need the
+     * prior-FY period row to exist. Mirrors IFRSSeeder's period shape.
      */
     protected function getReportingPeriod($date = null): ReportingPeriod
     {
-        $date = $date ?? Carbon::now();
-        return ReportingPeriod::where('period_status', ReportingPeriod::STATUS_OPEN)
-            ->whereDate('start_date', '<=', $date)
-            ->whereDate('end_date', '>=', $date)
-            ->first() ?? ReportingPeriod::create([
-                'year' => $date->year,
-                'period' => $date->month,
-                'start_date' => $date->copy()->startOfMonth(),
-                'end_date' => $date->copy()->endOfMonth(),
-                'period_status' => ReportingPeriod::STATUS_OPEN,
-            ]);
+        $date = Carbon::parse($date ?? now());
+        $entity = $this->ifrsEntity();
+        $year = ReportingPeriod::year($date, $entity);
+
+        $period = ReportingPeriod::firstOrCreate(
+            ['entity_id' => $entity->id, 'calendar_year' => $year],
+            ['period_count' => 1, 'status' => ReportingPeriod::OPEN],
+        );
+
+        if ($year - 1 >= 1) {
+            ReportingPeriod::firstOrCreate(
+                ['entity_id' => $entity->id, 'calendar_year' => $year - 1],
+                ['period_count' => 1, 'status' => ReportingPeriod::OPEN],
+            );
+        }
+
+        return $period;
+    }
+
+    /**
+     * The IFRS entity of the authenticated user (falling back to the first
+     * entity) — most package helpers need it explicitly in background
+     * contexts where no user is logged in.
+     */
+    protected function ifrsEntity(): ?Entity
+    {
+        return Auth::user()?->entity ?? Entity::first();
     }
 
     /**
@@ -57,7 +85,7 @@ class ReportController extends Controller
         $clientId = $request->get('client_id');
 
         $query = TimeEntry::with(['project.client', 'user'])
-            ->whereBetween('start_time', [$startDate, $endDate])
+            ->whereBetween('entry_date', [$startDate->toDateString(), $endDate->toDateString()])
             ->approved();
 
         if ($clientId) {
@@ -103,7 +131,7 @@ class ReportController extends Controller
         $userId = $request->get('user_id');
 
         $query = TimeEntry::with(['user', 'project'])
-            ->whereBetween('start_time', [$startDate, $endDate])
+            ->whereBetween('entry_date', [$startDate->toDateString(), $endDate->toDateString()])
             ->approved();
 
         if ($userId) {
@@ -150,7 +178,7 @@ class ReportController extends Controller
         $projectId = $request->get('project_id');
 
         $query = TimeEntry::with(['project.client', 'user'])
-            ->whereBetween('start_time', [$startDate, $endDate])
+            ->whereBetween('entry_date', [$startDate->toDateString(), $endDate->toDateString()])
             ->approved();
 
         if ($projectId) {
@@ -192,6 +220,51 @@ class ReportController extends Controller
     /**
      * Financial Reports
      */
+    /**
+     * Row builder for the financial statements: one row per account of the
+     * given types, with the account's balance for the statement period
+     * (movement for P&L sections, cumulative-to-date balance for
+     * balance-sheet sections). Balances are magnitudes — the views style
+     * signs per section.
+     */
+    protected function statementAccountRows(array $accountTypes, Carbon $startDate, Carbon $endDate, bool $closing = false): array
+    {
+        $entity = $this->ifrsEntity();
+        $rows = [];
+
+        foreach (Account::where('entity_id', $entity->id)
+            ->whereIn('account_type', $accountTypes)
+            ->orderBy('code')
+            ->get() as $account
+        ) {
+            // Cumulative from an arbitrary epoch: exact as-at balances that
+            // don't depend on year-end closing entries having been posted
+            // (the package's period-scoped closingBalance() does), plus
+            // the account's opening Balance rows.
+            $balance = (float) Ledger::balance(
+                $account,
+                $closing ? Carbon::create(2000, 1, 1) : $startDate,
+                $endDate,
+                $entity->currency_id
+            )[$entity->currency_id];
+
+            if ($closing) {
+                $balance += OpeningBalances::effectiveOpening($account, $entity);
+            }
+
+            if (abs($balance) < 0.005) {
+                continue;
+            }
+
+            $rows[] = [
+                'account' => ['name' => $account->name, 'code' => $account->code],
+                'balance' => round(abs($balance), 2),
+            ];
+        }
+
+        return $rows;
+    }
+
     public function trialBalance(Request $request)
     {
         $endDate = $request->get('end_date')
@@ -199,62 +272,103 @@ class ReportController extends Controller
             : Carbon::now()->endOfDay();
 
         $this->getReportingPeriod($endDate);
-        
-        $trialBalance = new TrialBalance();
-        $trialBalance->before($endDate);
-        
-        $accounts = Account::all();
-        
+        $entity = $this->ifrsEntity();
+
+        // Cumulative ledger balances as at $endDate: a positive balance is
+        // debit-normal, negative is credit-normal.
         $debitTotal = 0;
         $creditTotal = 0;
-        
         $accountLines = collect();
-        foreach ($trialBalance->getData()['accounts'] as $item) {
-            $account = Account::find($item['account']['id']);
-            if ($account) {
-                $balance = $item['balance'] ?? 0;
-                $isDebit = in_array($account->account_type, [
-                    Account::ASSET, Account::EXPENSE, Account::DIRECT_COSTS
-                ]);
-                
-                $debitBalance = $isDebit ? abs($balance) : 0;
-                $creditBalance = !$isDebit ? abs($balance) : 0;
-                
-                $debitTotal += $debitBalance;
-                $creditTotal += $creditBalance;
-                
-                $accountLines->push([
-                    'account' => $account,
-                    'code' => $account->code,
-                    'name' => $account->name,
-                    'type' => $account->account_type,
-                    'debit' => $debitBalance,
-                    'credit' => $creditBalance,
-                ]);
+
+        foreach (Account::where('entity_id', $entity->id)->orderBy('code')->get() as $account) {
+            $balance = (float) Ledger::balance(
+                $account,
+                Carbon::create(2000, 1, 1),
+                $endDate,
+                $entity->currency_id
+            )[$entity->currency_id];
+
+            // Opening Balance rows form the starting position of the
+            // trial balance (debit-positive; credit rows land negative).
+            $balance += OpeningBalances::effectiveOpening($account, $entity);
+
+            if (abs($balance) < 0.005) {
+                continue;
             }
+
+            $debitBalance = $balance > 0 ? abs($balance) : 0;
+            $creditBalance = $balance < 0 ? abs($balance) : 0;
+
+            $debitTotal += $debitBalance;
+            $creditTotal += $creditBalance;
+
+            $accountLines->push([
+                'account' => $account,
+                'code' => $account->code,
+                'name' => $account->name,
+                'type' => $account->account_type,
+                'debit' => $debitBalance,
+                'credit' => $creditBalance,
+            ]);
         }
-        
+
+        // Surface swallowed posting failures: best-effort posting means a
+        // payment can exist without ever reaching the ledger.
+        $unpostedPayments = Payment::whereNull('ifrs_receipt_id')
+            ->where('status', '!=', Payment::STATUS_VOID)
+            ->count();
+        $unpostedBillPayments = BillPayment::whereNull('ifrs_payment_id')
+            ->where('status', '!=', BillPayment::STATUS_VOID)
+            ->count();
+
         return view('reports.trial-balance', compact(
-            'accountLines', 'endDate', 'debitTotal', 'creditTotal'
+            'accountLines', 'endDate', 'debitTotal', 'creditTotal',
+            'unpostedPayments', 'unpostedBillPayments'
         ));
     }
 
     public function incomeStatement(Request $request)
     {
+        $entity = $this->ifrsEntity();
         $startDate = $request->get('start_date')
             ? Carbon::parse($request->start_date)->startOfDay()
-            : Carbon::now()->startOfMonth();
+            // Default to the start of the financial year (1 July in AU)
+            : ReportingPeriod::periodStart(now(), $entity);
 
         $endDate = $request->get('end_date')
             ? Carbon::parse($request->end_date)->endOfDay()
             : Carbon::now()->endOfDay();
 
         $this->getReportingPeriod($endDate);
-        
-        $incomeStatement = new IncomeStatement($startDate, $endDate);
-        
-        $lines = $incomeStatement->getData();
-        
+
+        // Authoritative totals from the package; detail rows per account
+        $statement = new IncomeStatement($startDate->toDateString(), $endDate->toDateString(), $entity);
+        $sections = $statement->getSections();
+
+        $revenue = $this->statementAccountRows(
+            [Account::OPERATING_REVENUE, Account::NON_OPERATING_REVENUE],
+            $startDate, $endDate
+        );
+        $directCosts = $this->statementAccountRows(
+            [Account::DIRECT_EXPENSE],
+            $startDate, $endDate
+        );
+        $expenses = $this->statementAccountRows(
+            [Account::OPERATING_EXPENSE, Account::OVERHEAD_EXPENSE, Account::OTHER_EXPENSE],
+            $startDate, $endDate
+        );
+
+        $lines = ['statement' => [
+            'revenue' => $revenue,
+            'revenueTotal' => (float) $sections['results'][IncomeStatement::TOTAL_REVENUE],
+            'direct_costs' => $directCosts,
+            'directCostsTotal' => array_sum(array_column($directCosts, 'balance')),
+            'grossProfit' => (float) $sections['results'][IncomeStatement::GROSS_PROFIT],
+            'expense' => $expenses,
+            'expenseTotal' => array_sum(array_column($expenses, 'balance')),
+            'netProfit' => (float) $sections['results'][IncomeStatement::NET_PROFIT],
+        ]];
+
         return view('reports.income-statement', compact(
             'lines', 'startDate', 'endDate'
         ));
@@ -266,12 +380,37 @@ class ReportController extends Controller
             ? Carbon::parse($request->end_date)->endOfDay()
             : Carbon::now()->endOfDay();
 
+        $entity = $this->ifrsEntity();
         $this->getReportingPeriod($endDate);
-        
-        $balanceSheet = new BalanceSheet($endDate);
-        
-        $lines = $balanceSheet->getData();
-        
+
+        // Balance-sheet sections report cumulative (as-at) balances
+        $fyStart = ReportingPeriod::periodStart($endDate, $entity);
+        $assets = $this->statementAccountRows(
+            [Account::NON_CURRENT_ASSET, Account::INVENTORY, Account::BANK, Account::CURRENT_ASSET, Account::RECEIVABLE],
+            $fyStart, $endDate, true
+        );
+        $liabilities = $this->statementAccountRows(
+            [Account::NON_CURRENT_LIABILITY, Account::CURRENT_LIABILITY, Account::PAYABLE, Account::CONTROL],
+            $fyStart, $endDate, true
+        );
+        $equity = $this->statementAccountRows(
+            [Account::EQUITY],
+            $fyStart, $endDate, true
+        );
+
+        // The period's profit adds to equity before it is closed
+        $incomeStatement = new IncomeStatement($fyStart->toDateString(), $endDate->toDateString(), $entity);
+        $netProfit = (float) $incomeStatement->getSections()['results'][IncomeStatement::NET_PROFIT];
+
+        $lines = ['statement' => [
+            'assets' => $assets,
+            'assetsTotal' => round(array_sum(array_column($assets, 'balance')), 2),
+            'liabilities' => $liabilities,
+            'liabilitiesTotal' => round(array_sum(array_column($liabilities, 'balance')), 2),
+            'equity' => $equity,
+            'equityTotal' => round(array_sum(array_column($equity, 'balance')) + $netProfit, 2),
+        ]];
+
         return view('reports.balance-sheet', compact(
             'lines', 'endDate'
         ));
@@ -279,20 +418,46 @@ class ReportController extends Controller
 
     public function cashFlowStatement(Request $request)
     {
+        $entity = $this->ifrsEntity();
         $startDate = $request->get('start_date')
             ? Carbon::parse($request->start_date)->startOfDay()
-            : Carbon::now()->startOfMonth();
+            // Default to the start of the financial year (1 July in AU)
+            : ReportingPeriod::periodStart(now(), $entity);
 
         $endDate = $request->get('end_date')
             ? Carbon::parse($request->end_date)->endOfDay()
             : Carbon::now()->endOfDay();
 
         $this->getReportingPeriod($endDate);
-        
-        $cashFlow = new CashFlowStatement($startDate, $endDate);
-        
-        $lines = $cashFlow->getData();
-        
+
+        $statement = new CashFlowStatement($startDate->toDateString(), $endDate->toDateString(), $entity);
+        $sections = $statement->getSections();
+
+        // The package derives cash flows from balance movements, not
+        // per-account lines; present the components it does expose.
+        $profit = (float) $sections['balances'][CashFlowStatement::PROFIT];
+        $operatingTotal = (float) $sections['results'][CashFlowStatement::OPERATIONS_CASH_FLOW];
+        $investingTotal = (float) $sections['results'][CashFlowStatement::INVESTMENT_CASH_FLOW];
+        $financingTotal = (float) $sections['results'][CashFlowStatement::FINANCING_CASH_FLOW];
+        $netCash = (float) $sections['balances'][CashFlowStatement::NET_CASH_FLOW];
+
+        $lines = ['statement' => [
+            'operating' => [
+                ['account' => ['name' => 'Net profit for the period'], 'balance' => round(abs($profit), 2)],
+                ['account' => ['name' => 'Working capital & other operating movements'], 'balance' => round(abs($operatingTotal - $profit), 2)],
+            ],
+            'operatingTotal' => round(abs($operatingTotal), 2),
+            'investing' => [
+                ['account' => ['name' => 'Non-current asset movements'], 'balance' => round(abs($investingTotal), 2)],
+            ],
+            'investingTotal' => round(abs($investingTotal), 2),
+            'financing' => [
+                ['account' => ['name' => 'Financing — loans & equity movements'], 'balance' => round(abs($financingTotal), 2)],
+            ],
+            'financingTotal' => round(abs($financingTotal), 2),
+            'netCash' => round($netCash, 2),
+        ]];
+
         return view('reports.cash-flow', compact(
             'lines', 'startDate', 'endDate'
         ));
@@ -336,7 +501,10 @@ class ReportController extends Controller
                     'total_paid' => $invoices->sum(function ($inv) {
                         return $inv->allocations->sum('amount');
                     }),
-                    'outstanding' => $invoices->sum('balance'),
+                    // Outstanding = total less allocations, floored at zero
+                    'outstanding' => $invoices->sum(function ($inv) {
+                        return max(0, (float) $inv->total - $inv->allocations->sum('amount'));
+                    }),
                 ];
             })->sortByDesc('total_invoiced');
 
@@ -408,13 +576,26 @@ class ReportController extends Controller
 
         $type = $request->get('type', 'ar'); // ar or ap
 
-        $invoices = \App\Models\Invoice::with(['client'])
-            ->where('status', '!=', 'cancelled')
-            ->where('balance', '>', 0)
-            ->get()
-            ->filter(function ($invoice) use ($asOfDate) {
-                return $invoice->due_date && Carbon::parse($invoice->due_date)->lte($asOfDate);
-            });
+        // Outstanding balance is total less allocations (amount_due) — there
+        // is no `balance` column to filter on, so eager-load allocations and
+        // filter in PHP.
+        if ($type === 'ap') {
+            $partyLabel = 'Supplier';
+            $documents = Bill::with(['supplier', 'allocations'])
+                ->where('status', '!=', Bill::STATUS_CANCELLED)
+                ->get();
+        } else {
+            $partyLabel = 'Client';
+            $documents = \App\Models\Invoice::with(['client', 'allocations'])
+                ->where('status', '!=', 'cancelled')
+                ->get();
+        }
+
+        $documents = $documents->filter(function ($document) use ($asOfDate) {
+            return $document->amount_due > 0
+                && $document->due_date
+                && Carbon::parse($document->due_date)->lte($asOfDate);
+        });
 
         // Group by aging buckets
         $buckets = [
@@ -425,9 +606,9 @@ class ReportController extends Controller
             'days_over_90' => ['label' => 'Over 90 Days', 'min' => 91, 'max' => null, 'invoices' => []],
         ];
 
-        foreach ($invoices as $invoice) {
-            $daysPastDue = Carbon::parse($invoice->due_date)->diffInDays($asOfDate);
-            
+        foreach ($documents as $document) {
+            $daysPastDue = Carbon::parse($document->due_date)->diffInDays($asOfDate);
+
             if ($daysPastDue <= 0) {
                 $bucket = &$buckets['current'];
             } elseif ($daysPastDue <= 30) {
@@ -439,11 +620,12 @@ class ReportController extends Controller
             } else {
                 $bucket = &$buckets['days_over_90'];
             }
-            
+
             $bucket['invoices'][] = [
-                'invoice' => $invoice,
-                'client' => $invoice->client,
-                'amount' => $invoice->balance,
+                'invoice' => $document,
+                'party' => $type === 'ap' ? $document->supplier : $document->client,
+                'party_id' => $document->{$type === 'ap' ? 'supplier_id' : 'client_id'},
+                'amount' => $document->amount_due,
                 'days_past_due' => $daysPastDue,
             ];
         }
@@ -456,7 +638,7 @@ class ReportController extends Controller
         $grandTotal = collect($buckets)->sum('total');
 
         return view('reports.aging', compact(
-            'buckets', 'asOfDate', 'type', 'grandTotal'
+            'buckets', 'asOfDate', 'type', 'grandTotal', 'partyLabel'
         ));
     }
 
@@ -499,6 +681,82 @@ class ReportController extends Controller
 
 
     /**
+     * Build an account statement from the ledger (v6 schema: post_account,
+     * posting_date, entry_type D/C + amount; narration/reference live on
+     * the transaction). The opening balance is cumulative — FY opening
+     * balances plus everything posted from the FY start up to the day
+     * before the statement period starts — sign-normalised to the
+     * account's normal side.
+     */
+    protected function buildAccountStatement(Account $account, Carbon $startDate, Carbon $endDate): array
+    {
+        $entity = $account->entity;
+
+        // Debit-normal account types; everything else (liabilities, equity,
+        // revenue, contra-assets) is credit-normal.
+        $isDebitNormal = in_array($account->account_type, [
+            Account::NON_CURRENT_ASSET, Account::INVENTORY, Account::BANK,
+            Account::CURRENT_ASSET, Account::RECEIVABLE,
+            Account::OPERATING_EXPENSE, Account::DIRECT_EXPENSE,
+            Account::OVERHEAD_EXPENSE, Account::OTHER_EXPENSE,
+        ]);
+
+        // Cumulative opening balance: everything posted before the period
+        // starts, plus the account's opening Balance rows (which sit
+        // before all ledger activity by construction).
+        $opening = (float) Ledger::balance(
+            $account,
+            Carbon::create(2000, 1, 1),
+            $startDate->copy()->subSecond(),
+            $entity->currency_id
+        )[$entity->currency_id];
+        $opening += OpeningBalances::effectiveOpening($account, $entity);
+        $openingBalance = $isDebitNormal ? $opening : -$opening;
+
+        $entries = Ledger::where('post_account', $account->id)
+            ->whereBetween('posting_date', [$startDate, $endDate])
+            ->with('transaction')
+            ->orderBy('posting_date')
+            ->orderBy('id')
+            ->get();
+
+        $runningBalance = $openingBalance;
+        $transactions = collect();
+
+        foreach ($entries as $entry) {
+            $isDebit = $entry->entry_type === Balance::DEBIT;
+            $debit = $isDebit ? (float) $entry->amount : 0.0;
+            $credit = $isDebit ? 0.0 : (float) $entry->amount;
+
+            $runningBalance += $isDebitNormal ? $debit - $credit : $credit - $debit;
+
+            $transaction = $entry->transaction;
+            $transactions->push([
+                // The vendor Transaction model does not cast the date, so
+                // wrap it for the view's ->format() calls
+                'date' => Carbon::parse($transaction->transaction_date ?? $entry->posting_date),
+                'transaction_id' => $entry->transaction_id,
+                'transaction_type' => config('ifrs.transactions')[$transaction->transaction_type ?? ''] ?? $transaction->transaction_type ?? '',
+                'narration' => $transaction->narration ?? '',
+                'reference' => $transaction->reference ?? '',
+                'debit' => $debit,
+                'credit' => $credit,
+                'balance' => $runningBalance,
+            ]);
+        }
+
+        return [
+            'account' => $account,
+            'opening_balance' => $openingBalance,
+            'closing_balance' => $runningBalance,
+            'total_debit' => $transactions->sum('debit'),
+            'total_credit' => $transactions->sum('credit'),
+            'transaction_count' => $transactions->count(),
+            'transactions' => $transactions,
+        ];
+    }
+
+    /**
      * IFRS Account Statement Report
      */
     public function accountStatement(Request $request)
@@ -517,67 +775,10 @@ class ReportController extends Controller
             ->get(["id", "code", "name", "account_type"]);
 
         $statementData = null;
-        $openingBalance = 0;
 
         if ($accountId) {
-            $account = Account::find($accountId);
-
-            // Get opening balance (before start date)
-            $openingBalanceData = $account->getBalance(Carbon::parse($startDate)->subDay());
-            $openingBalance = $openingBalanceData["balance"] ?? 0;
-
-            // Determine if debit or credit based on account type
-            $isDebitNormal = in_array($account->account_type, [
-                Account::ASSET, Account::DIRECT_COSTS, Account::EXPENSE,
-                Account::OPERATING_EXPENSE, Account::DIRECT_EXPENSE,
-                Account::OVERHEAD_EXPENSE, Account::OTHER_EXPENSE
-            ]);
-
-            // Get ledger entries
-            $entries = IFRS\Models\Ledger::where("account_id", $accountId)
-                ->whereBetween("entry_date", [$startDate, $endDate])
-                ->orderBy("entry_date")
-                ->orderBy("created_at")
-                ->get();
-
-            $runningBalance = $openingBalance;
-            $transactions = collect();
-
-            foreach ($entries as $entry) {
-                $amount = $entry->debit ?? $entry->credit;
-
-                if ($isDebitNormal) {
-                    $runningBalance += $entry->debit ?? 0;
-                    $runningBalance -= $entry->credit ?? 0;
-                } else {
-                    $runningBalance += $entry->credit ?? 0;
-                    $runningBalance -= $entry->debit ?? 0;
-                }
-
-                $transactions->push([
-                    "date" => $entry->entry_date,
-                    "transaction_id" => $entry->transaction_id,
-                    "transaction_type" => class_basename($entry->transaction_type ?? ""),
-                    "narration" => $entry->narration ?? "",
-                    "reference" => $entry->reference ?? "",
-                    "debit" => $entry->debit,
-                    "credit" => $entry->credit,
-                    "balance" => $runningBalance,
-                ]);
-            }
-
-            // Calculate closing balance
-            $closingBalance = $runningBalance;
-
-            $statementData = [
-                "account" => $account,
-                "opening_balance" => $openingBalance,
-                "closing_balance" => $closingBalance,
-                "total_debit" => $transactions->sum("debit"),
-                "total_credit" => $transactions->sum("credit"),
-                "transaction_count" => $transactions->count(),
-                "transactions" => $transactions,
-            ];
+            $this->getReportingPeriod($endDate);
+            $statementData = $this->buildAccountStatement(Account::find($accountId), $startDate, $endDate);
         }
 
         return view("reports.account-statement", compact(
@@ -613,16 +814,17 @@ class ReportController extends Controller
             // (not `date`), and debit/credit is determined by the line item's
             // `credited` boolean (false = debit, true = credit) — there is no
             // `type` column and `LineItem::DEBIT`/`::CREDIT` do not exist.
-            $lineItems = IFRS\Models\LineItem::where("account_id", $accountId)
+            $lineItems = LineItem::where("account_id", $accountId)
                 ->whereHas("transaction", function ($query) use ($startDate, $endDate) {
                     $query->whereBetween("transaction_date", [$startDate, $endDate]);
                 })
                 ->with(["transaction", "transaction.lineItems"])
-                ->orderBy("transaction.transaction_date")
                 ->get();
 
-            // Group by transaction
-            $groupedByTransaction = $lineItems->groupBy("transaction_id");
+            // Group by transaction (sorting by a related column in SQL would
+            // need a join; sort the grouped collection instead)
+            $groupedByTransaction = $lineItems->groupBy("transaction_id")
+                ->sortBy(fn ($items) => $items->first()->transaction->transaction_date);
 
             $scheduleLines = collect();
             $totalDebit = 0;
@@ -642,7 +844,7 @@ class ReportController extends Controller
                 $totalCredit += $creditTotal;
 
                 $scheduleLines->push([
-                    "date" => $transaction->transaction_date,
+                    "date" => Carbon::parse($transaction->transaction_date),
                     "transaction_id" => $transactionId,
                     "transaction_type" => class_basename($transaction),
                     "narration" => $transaction->narration ?? "",
@@ -670,88 +872,115 @@ class ReportController extends Controller
     }
 
     /**
-     * Tax Summary Report
+     * BAS (Business Activity Statement) Report — all four quarters of
+     * an Australian financial year (1 July – 30 June).
      */
-    public function taxSummary(Request $request)
+    public function bas(Request $request)
     {
-        $startDate = $request->get("start_date")
-            ? Carbon::parse($request->start_date)->startOfDay()
-            : Carbon::now()->startOfMonth();
+        // FY named by its June year-end: FY2026 = Jul 2025 – Jun 2026.
+        $currentFyEnd = now()->month >= 7 ? now()->year + 1 : now()->year;
+        $fyEnd = (int) $request->get("fy", $currentFyEnd);
 
-        $endDate = $request->get("end_date")
-            ? Carbon::parse($request->end_date)->endOfDay()
-            : Carbon::now()->endOfDay();
+        $statement = $this->buildBasStatement($fyEnd);
+        $availableFys = range($currentFyEnd, $currentFyEnd - 5);
 
-        // Get invoices with tax by rate
-        $invoices = \App\Models\Invoice::whereBetween("issue_date", [$startDate, $endDate])
-            ->where("status", "!=", "cancelled")
+        return view("reports.bas", compact(
+            "fyEnd", "currentFyEnd", "availableFys", "statement"
+        ));
+    }
+
+    /**
+     * Quarterly BAS figures for the financial year ending 30 June
+     * $fyEnd. Sales and purchase values come from the stored line
+     * amounts (item tax_amount is authoritative; invoice/bill totals
+     * are GST-inclusive) — the same amounts the GST ledger accounts
+     * are posted from. Bill lines categorised to non-current-asset
+     * accounts are capital purchases (G10); other lines are G11.
+     * Credit notes are excluded because their schema stores no GST
+     * split.
+     */
+    protected function buildBasStatement(int $fyEnd): array
+    {
+        $fyStart = Carbon::create($fyEnd - 1, 7, 1)->startOfDay();
+        $fyEndDate = Carbon::create($fyEnd, 6, 30)->endOfDay();
+
+        $invoices = \App\Models\Invoice::whereBetween("issue_date", [$fyStart, $fyEndDate])
+            ->whereNotIn("status", [\App\Models\Invoice::STATUS_DRAFT, \App\Models\Invoice::STATUS_CANCELLED])
             ->with("items")
             ->get();
 
-        $salesByTaxRate = $invoices->flatMap(function ($invoice) {
-            return $invoice->items->map(function ($item) use ($invoice) {
-                return [
-                    "tax_rate" => $item->tax_rate ?? 0,
-                    "net_amount" => $item->quantity * $item->unit_price,
-                    "tax_amount" => ($item->quantity * $item->unit_price) * ($item->tax_rate / 100),
-                    "gross_amount" => ($item->quantity * $item->unit_price) * (1 + $item->tax_rate / 100),
-                    "invoice_number" => $invoice->invoice_number,
-                    "client_name" => $invoice->client->name ?? "N/A",
-                ];
-            });
-        })->groupBy("tax_rate")
-          ->map(function ($items, $rate) {
-              return [
-                  "tax_rate" => (float) $rate,
-                  "transaction_count" => count($items),
-                  "net_amount" => collect($items)->sum("net_amount"),
-                  "tax_amount" => collect($items)->sum("tax_amount"),
-                  "gross_amount" => collect($items)->sum("gross_amount"),
-              ];
-          })->sortByDesc("tax_rate");
-
-        // Get bill line items with tax by rate (per-line GST treatment:
-        // GST-free lines have tax_rate 0 and are naturally excluded by the
-        // tax_rate > 0 filter below).
-        $bills = Bill::whereBetween("bill_date", [$startDate, $endDate])
+        $bills = Bill::whereBetween("bill_date", [$fyStart, $fyEndDate])
             ->whereNotIn("status", [Bill::STATUS_DRAFT, Bill::STATUS_CANCELLED])
-            ->with(["supplier", "items"])
+            ->with("items.expenseAccount")
             ->get();
 
-        $purchasesByTaxRate = $bills->flatMap(function ($bill) {
-            return $bill->items->map(function ($item) use ($bill) {
-                return [
-                    "tax_rate" => (float) ($item->tax_rate ?? 0),
-                    "net_amount" => ($item->quantity * $item->unit_price) - $item->discount_amount,
-                    "tax_amount" => $item->tax_amount,
-                    "gross_amount" => $item->total,
-                    "reference" => $bill->reference ?? $bill->bill_number,
-                    "supplier_name" => $bill->supplier->name ?? "N/A",
-                ];
-            });
-        })->filter(function ($item) {
-            return $item["tax_rate"] > 0;
-        })->groupBy("tax_rate")
-          ->map(function ($items, $rate) {
-              return [
-                  "tax_rate" => (float) $rate,
-                  "transaction_count" => count($items),
-                  "net_amount" => collect($items)->sum("net_amount"),
-                  "tax_amount" => collect($items)->sum("tax_amount"),
-                  "gross_amount" => collect($items)->sum("gross_amount"),
-              ];
-          })->sortByDesc("tax_rate");
+        // BAS quarters: Q1 Jul-Sep, Q2 Oct-Dec, Q3 Jan-Mar, Q4 Apr-Jun.
+        $quarterOf = fn ($date) => match (true) {
+            $date->month >= 7 && $date->month <= 9 => 0,
+            $date->month >= 10 => 1,
+            $date->month <= 3 => 2,
+            default => 3,
+        };
 
-        // Summary totals
-        $totalSalesTax = $salesByTaxRate->sum("tax_amount");
-        $totalPurchaseTax = $purchasesByTaxRate->sum("tax_amount");
-        $netTaxPayable = $totalSalesTax - $totalPurchaseTax;
+        $quarters = [];
+        foreach ([0, 1, 2, 3] as $i) {
+            $start = Carbon::create($fyEnd - 1, 7 + $i * 3, 1)->startOfDay();
+            $quarters[$i] = [
+                "label" => sprintf("Q%d (%s)", $i + 1, ["Jul-Sep", "Oct-Dec", "Jan-Mar", "Apr-Jun"][$i]),
+                "start" => $start,
+                "end" => $start->copy()->addMonths(3)->subDay()->endOfDay(),
+                "g1" => 0.0,
+                "gst_sales" => 0.0,
+                "g10" => 0.0,
+                "g11" => 0.0,
+                "gst_purchases" => 0.0,
+            ];
+        }
 
-        return view("reports.tax-summary", compact(
-            "startDate", "endDate",
-            "salesByTaxRate", "purchasesByTaxRate",
-            "totalSalesTax", "totalPurchaseTax", "netTaxPayable"
-        ));
+        foreach ($invoices as $invoice) {
+            $i = $quarterOf($invoice->issue_date);
+            $quarters[$i]["g1"] += (float) $invoice->total;
+            $quarters[$i]["gst_sales"] += (float) $invoice->items->sum("tax_amount");
+        }
+
+        foreach ($bills as $bill) {
+            $i = $quarterOf($bill->bill_date);
+            foreach ($bill->items as $item) {
+                // A line categorised to a non-current-asset account is a
+                // capital purchase (G10); everything else is non-capital
+                // (G11). GST credits (1B) cover both kinds.
+                $isCapital = ($item->expenseAccount->account_type ?? null) === Account::NON_CURRENT_ASSET;
+                if ($isCapital) {
+                    $quarters[$i]["g10"] += (float) $item->total;
+                } else {
+                    $quarters[$i]["g11"] += (float) $item->total;
+                }
+                if ((float) ($item->tax_rate ?? 0) > 0) {
+                    $quarters[$i]["gst_purchases"] += (float) $item->tax_amount;
+                }
+            }
+        }
+
+        foreach ($quarters as &$q) {
+            $q["net"] = $q["gst_sales"] - $q["gst_purchases"];
+        }
+        unset($q);
+
+        $totals = [
+            "g1" => array_sum(array_column($quarters, "g1")),
+            "gst_sales" => array_sum(array_column($quarters, "gst_sales")),
+            "g10" => array_sum(array_column($quarters, "g10")),
+            "g11" => array_sum(array_column($quarters, "g11")),
+            "gst_purchases" => array_sum(array_column($quarters, "gst_purchases")),
+        ];
+        $totals["net"] = $totals["gst_sales"] - $totals["gst_purchases"];
+
+        return [
+            "fyStart" => $fyStart,
+            "fyEnd" => $fyEndDate,
+            "quarters" => $quarters,
+            "totals" => $totals,
+        ];
     }
 
     /**
@@ -774,51 +1003,18 @@ class ReportController extends Controller
         }
 
         $account = Account::find($accountId);
-        $openingBalanceData = $account->getBalance(Carbon::parse($startDate)->subDay());
-        $openingBalance = $openingBalanceData["balance"] ?? 0;
-
-        $isDebitNormal = in_array($account->account_type, [
-            Account::ASSET, Account::DIRECT_COSTS, Account::EXPENSE,
-            Account::OPERATING_EXPENSE, Account::DIRECT_EXPENSE,
-            Account::OVERHEAD_EXPENSE, Account::OTHER_EXPENSE
-        ]);
-
-        $entries = IFRS\Models\Ledger::where("account_id", $accountId)
-            ->whereBetween("entry_date", [$startDate, $endDate])
-            ->orderBy("entry_date")
-            ->get();
-
-        $runningBalance = $openingBalance;
-        $transactions = collect();
-
-        foreach ($entries as $entry) {
-            if ($isDebitNormal) {
-                $runningBalance += $entry->debit ?? 0;
-                $runningBalance -= $entry->credit ?? 0;
-            } else {
-                $runningBalance += $entry->credit ?? 0;
-                $runningBalance -= $entry->debit ?? 0;
-            }
-
-            $transactions->push([
-                "date" => $entry->entry_date,
-                "reference" => $entry->reference ?? "",
-                "narration" => $entry->narration ?? "",
-                "debit" => $entry->debit,
-                "credit" => $entry->credit,
-                "balance" => $runningBalance,
-            ]);
-        }
+        $this->getReportingPeriod($endDate);
+        $statement = $this->buildAccountStatement($account, $startDate, $endDate);
 
         $pdf = Pdf::loadView("reports.pdf.account-statement", [
             "account" => $account,
             "startDate" => $startDate,
             "endDate" => $endDate,
-            "openingBalance" => $openingBalance,
-            "closingBalance" => $runningBalance,
-            "totalDebit" => $transactions->sum("debit"),
-            "totalCredit" => $transactions->sum("credit"),
-            "transactions" => $transactions,
+            "openingBalance" => $statement['opening_balance'],
+            "closingBalance" => $statement['closing_balance'],
+            "totalDebit" => $statement['total_debit'],
+            "totalCredit" => $statement['total_credit'],
+            "transactions" => $statement['transactions'],
         ]);
 
         $filename = "Account_Statement_{$account->code}_{$startDate->format('Ymd')}_{$endDate->format('Ymd')}.pdf";
@@ -826,79 +1022,20 @@ class ReportController extends Controller
     }
 
     /**
-     * Export Tax Summary to PDF
+     * Export BAS to PDF
      */
-    public function exportTaxSummaryPdf(Request $request)
+    public function exportBasPdf(Request $request)
     {
-        $startDate = $request->get("start_date")
-            ? Carbon::parse($request->start_date)->startOfDay()
-            : Carbon::now()->startOfMonth();
+        $currentFyEnd = now()->month >= 7 ? now()->year + 1 : now()->year;
+        $fyEnd = (int) $request->get("fy", $currentFyEnd);
+        $statement = $this->buildBasStatement($fyEnd);
 
-        $endDate = $request->get("end_date")
-            ? Carbon::parse($request->end_date)->endOfDay()
-            : Carbon::now()->endOfDay();
-
-        $invoices = \App\Models\Invoice::whereBetween("issue_date", [$startDate, $endDate])
-            ->where("status", "!=", "cancelled")
-            ->with("items")
-            ->get();
-
-        $salesByTaxRate = $invoices->flatMap(function ($invoice) {
-            return $invoice->items->map(function ($item) use ($invoice) {
-                return [
-                    "tax_rate" => $item->tax_rate ?? 0,
-                    "net_amount" => $item->quantity * $item->unit_price,
-                    "tax_amount" => ($item->quantity * $item->unit_price) * ($item->tax_rate / 100),
-                ];
-            });
-        })->groupBy("tax_rate")
-          ->map(function ($items, $rate) {
-              return [
-                  "tax_rate" => (float) $rate,
-                  "net_amount" => collect($items)->sum("net_amount"),
-                  "tax_amount" => collect($items)->sum("tax_amount"),
-              ];
-          })->sortByDesc("tax_rate");
-
-        $bills = Bill::whereBetween("bill_date", [$startDate, $endDate])
-            ->whereNotIn("status", [Bill::STATUS_DRAFT, Bill::STATUS_CANCELLED])
-            ->with("items")
-            ->get();
-
-        $purchasesByTaxRate = $bills->flatMap(function ($bill) {
-            return $bill->items->map(function ($item) {
-                return [
-                    "tax_rate" => (float) ($item->tax_rate ?? 0),
-                    "net_amount" => ($item->quantity * $item->unit_price) - $item->discount_amount,
-                    "tax_amount" => $item->tax_amount,
-                ];
-            });
-        })->filter(fn($item) => $item["tax_rate"] > 0)
-          ->groupBy("tax_rate")
-          ->map(function ($items, $rate) {
-              return [
-                  "tax_rate" => (float) $rate,
-                  "net_amount" => collect($items)->sum("net_amount"),
-                  "tax_amount" => collect($items)->sum("tax_amount"),
-              ];
-          })->sortByDesc("tax_rate");
-
-        $totalSalesTax = $salesByTaxRate->sum("tax_amount");
-        $totalPurchaseTax = $purchasesByTaxRate->sum("tax_amount");
-        $netTaxPayable = $totalSalesTax - $totalPurchaseTax;
-
-        $pdf = Pdf::loadView("reports.pdf.tax-summary", [
-            "startDate" => $startDate,
-            "endDate" => $endDate,
-            "salesByTaxRate" => $salesByTaxRate,
-            "purchasesByTaxRate" => $purchasesByTaxRate,
-            "totalSalesTax" => $totalSalesTax,
-            "totalPurchaseTax" => $totalPurchaseTax,
-            "netTaxPayable" => $netTaxPayable,
+        $pdf = Pdf::loadView("reports.pdf.bas", [
+            "fyEnd" => $fyEnd,
+            "statement" => $statement,
         ]);
 
-        $filename = "Tax_Summary_{$startDate->format('Ymd')}_{$endDate->format('Ymd')}.pdf";
-        return $pdf->download($filename);
+        return $pdf->download("BAS_FY{$fyEnd}.pdf");
     }
     /**
      * Export Account Statement to Excel
@@ -920,51 +1057,18 @@ class ReportController extends Controller
         }
 
         $account = Account::find($accountId);
-        $openingBalanceData = $account->getBalance(Carbon::parse($startDate)->subDay());
-        $openingBalance = $openingBalanceData["balance"] ?? 0;
-
-        $isDebitNormal = in_array($account->account_type, [
-            Account::ASSET, Account::DIRECT_COSTS, Account::EXPENSE,
-            Account::OPERATING_EXPENSE, Account::DIRECT_EXPENSE,
-            Account::OVERHEAD_EXPENSE, Account::OTHER_EXPENSE
-        ]);
-
-        $entries = IFRS\Models\Ledger::where("account_id", $accountId)
-            ->whereBetween("entry_date", [$startDate, $endDate])
-            ->orderBy("entry_date")
-            ->get();
-
-        $runningBalance = $openingBalance;
-        $transactions = collect();
-
-        foreach ($entries as $entry) {
-            if ($isDebitNormal) {
-                $runningBalance += $entry->debit ?? 0;
-                $runningBalance -= $entry->credit ?? 0;
-            } else {
-                $runningBalance += $entry->credit ?? 0;
-                $runningBalance -= $entry->debit ?? 0;
-            }
-
-            $transactions->push([
-                "date" => $entry->entry_date,
-                "reference" => $entry->reference ?? "",
-                "narration" => $entry->narration ?? "",
-                "debit" => $entry->debit,
-                "credit" => $entry->credit,
-                "balance" => $runningBalance,
-            ]);
-        }
+        $this->getReportingPeriod($endDate);
+        $statement = $this->buildAccountStatement($account, $startDate, $endDate);
 
         $export = new \App\Exports\AccountStatementExport(
             $account,
             $startDate,
             $endDate,
-            $openingBalance,
-            $runningBalance,
-            $transactions->sum("debit"),
-            $transactions->sum("credit"),
-            $transactions
+            $statement['opening_balance'],
+            $statement['closing_balance'],
+            $statement['total_debit'],
+            $statement['total_credit'],
+            $statement['transactions']
         );
 
         $filename = "Account_Statement_{$account->code}_{$startDate->format('Ymd')}_{$endDate->format('Ymd')}.xlsx";
@@ -972,78 +1076,16 @@ class ReportController extends Controller
     }
 
     /**
-     * Export Tax Summary to Excel
+     * Export BAS to Excel
      */
-    public function exportTaxSummaryExcel(Request $request)
+    public function exportBasExcel(Request $request)
     {
-        $startDate = $request->get("start_date")
-            ? Carbon::parse($request->start_date)->startOfDay()
-            : Carbon::now()->startOfMonth();
+        $currentFyEnd = now()->month >= 7 ? now()->year + 1 : now()->year;
+        $fyEnd = (int) $request->get("fy", $currentFyEnd);
+        $statement = $this->buildBasStatement($fyEnd);
 
-        $endDate = $request->get("end_date")
-            ? Carbon::parse($request->end_date)->endOfDay()
-            : Carbon::now()->endOfDay();
+        $export = new \App\Exports\BasExport($fyEnd, $statement);
 
-        $invoices = \App\Models\Invoice::whereBetween("issue_date", [$startDate, $endDate])
-            ->where("status", "!=", "cancelled")
-            ->with("items")
-            ->get();
-
-        $salesByTaxRate = $invoices->flatMap(function ($invoice) {
-            return $invoice->items->map(function ($item) {
-                return [
-                    "tax_rate" => $item->tax_rate ?? 0,
-                    "net_amount" => $item->quantity * $item->unit_price,
-                    "tax_amount" => ($item->quantity * $item->unit_price) * ($item->tax_rate / 100),
-                ];
-            });
-        })->groupBy("tax_rate")
-          ->map(function ($items, $rate) {
-              return [
-                  "tax_rate" => (float) $rate,
-                  "net_amount" => collect($items)->sum("net_amount"),
-                  "tax_amount" => collect($items)->sum("tax_amount"),
-              ];
-          })->sortByDesc("tax_rate");
-
-        $bills = Bill::whereBetween("bill_date", [$startDate, $endDate])
-            ->whereNotIn("status", [Bill::STATUS_DRAFT, Bill::STATUS_CANCELLED])
-            ->with("items")
-            ->get();
-
-        $purchasesByTaxRate = $bills->flatMap(function ($bill) {
-            return $bill->items->map(function ($item) {
-                return [
-                    "tax_rate" => (float) ($item->tax_rate ?? 0),
-                    "net_amount" => ($item->quantity * $item->unit_price) - $item->discount_amount,
-                    "tax_amount" => $item->tax_amount,
-                ];
-            });
-        })->filter(fn($item) => $item["tax_rate"] > 0)
-          ->groupBy("tax_rate")
-          ->map(function ($items, $rate) {
-              return [
-                  "tax_rate" => (float) $rate,
-                  "net_amount" => collect($items)->sum("net_amount"),
-                  "tax_amount" => collect($items)->sum("tax_amount"),
-              ];
-          })->sortByDesc("tax_rate");
-
-        $totalSalesTax = $salesByTaxRate->sum("tax_amount");
-        $totalPurchaseTax = $purchasesByTaxRate->sum("tax_amount");
-        $netTaxPayable = $totalSalesTax - $totalPurchaseTax;
-
-        $export = new \App\Exports\TaxSummaryExport(
-            $startDate,
-            $endDate,
-            $salesByTaxRate,
-            $purchasesByTaxRate,
-            $totalSalesTax,
-            $totalPurchaseTax,
-            $netTaxPayable
-        );
-
-        $filename = "Tax_Summary_{$startDate->format('Ymd')}_{$endDate->format('Ymd')}.xlsx";
-        return Excel::download($export, $filename);
+        return Excel::download($export, "BAS_FY{$fyEnd}.xlsx");
     }
 }

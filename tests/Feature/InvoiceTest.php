@@ -100,6 +100,43 @@ class InvoiceTest extends TestCase
         $this->assertEquals(275, $invoice->total);
     }
 
+    public function test_invoice_items_accept_four_decimal_precision(): void
+    {
+        // Client reverse invoices can carry sub-cent unit prices and
+        // fractional quantities — both fields must keep 4dp through storage.
+        $response = $this->actingAs($this->user)->post('/invoices', [
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'items' => [
+                [
+                    'description' => 'Reverse charge line',
+                    'quantity' => 1000,
+                    'unit_price' => 0.0123, // 1000 × 0.0123 = 12.30
+                    'tax_rate' => 10,
+                ],
+                [
+                    'description' => 'Fractional quantity line',
+                    'quantity' => 0.1234,
+                    'unit_price' => 100, // 0.1234 × 100 = 12.34
+                    'tax_rate' => 10,
+                ],
+            ],
+        ]);
+
+        $response->assertSessionHas('success');
+        $invoice = Invoice::first();
+        $items = $invoice->items;
+
+        $this->assertEquals(0.0123, (float) $items[0]->unit_price);
+        $this->assertEquals(0.1234, (float) $items[1]->quantity);
+
+        // Line and invoice totals remain cents
+        $this->assertEquals(13.53, (float) $items[0]->total);
+        $this->assertEquals(13.57, (float) $items[1]->total);
+        $this->assertEquals(27.10, (float) $invoice->total);
+    }
+
     public function test_invoice_status_transitions(): void
     {
         $invoice = Invoice::create([
@@ -457,6 +494,114 @@ class InvoiceTest extends TestCase
         $this->assertContains('overdue', $sentTransitions);
         // Sent can be cancelled (if not yet paid)
         $this->assertContains('cancelled', $sentTransitions);
+        // Sent and overdue can be un-sent (reverted to draft) while unpaid
+        $this->assertContains('draft', $sentTransitions);
+
+        $overdueInvoice = new Invoice();
+        $overdueInvoice->status = Invoice::STATUS_OVERDUE;
+        $this->assertContains('draft', $overdueInvoice->getValidTransitions());
+
+        // But invoices with payments can never go back to draft
+        $partiallyPaidInvoice = new Invoice();
+        $partiallyPaidInvoice->status = Invoice::STATUS_PARTIALLY_PAID;
+        $this->assertNotContains('draft', $partiallyPaidInvoice->getValidTransitions());
+        $paidInvoice = new Invoice();
+        $paidInvoice->status = Invoice::STATUS_PAID;
+        $this->assertNotContains('draft', $paidInvoice->getValidTransitions());
+    }
+
+    public function test_sent_invoice_can_be_reverted_to_draft(): void
+    {
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+        ]);
+        $invoice->markAsSent();
+        $this->assertNotNull($invoice->refresh()->sent_at);
+
+        $this->assertTrue($invoice->revertToDraft());
+        $invoice->refresh();
+        $this->assertEquals(Invoice::STATUS_DRAFT, $invoice->status);
+        $this->assertNull($invoice->sent_at);
+        $this->assertTrue($invoice->canBeEdited());
+    }
+
+    public function test_invoice_with_payments_cannot_be_reverted_to_draft(): void
+    {
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_SENT,
+        ]);
+        $invoice->items()->create([
+            'description' => 'Service',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+        $invoice->refresh();
+        $invoice->recalculateTotals();
+
+        $payment = Payment::create([
+            'client_id' => $this->client->id,
+            'amount' => 50,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+        $payment->allocateToInvoice($invoice, 50); // → partially_paid
+
+        $this->assertFalse($invoice->revertToDraft());
+        $this->assertEquals(Invoice::STATUS_PARTIALLY_PAID, $invoice->refresh()->status);
+    }
+
+    public function test_unsend_route_returns_sent_invoice_to_draft(): void
+    {
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+        ]);
+        $invoice->markAsSent();
+
+        $response = $this->actingAs($this->user)
+            ->post(route('invoices.unsend', $invoice));
+
+        $response->assertSessionHas('success');
+        $this->assertEquals(Invoice::STATUS_DRAFT, $invoice->refresh()->status);
+    }
+
+    public function test_unsend_route_rejects_invoice_with_payments(): void
+    {
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_SENT,
+        ]);
+        $invoice->items()->create([
+            'description' => 'Service',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+        $invoice->refresh();
+        $invoice->recalculateTotals();
+
+        $payment = Payment::create([
+            'client_id' => $this->client->id,
+            'amount' => 110,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+        $payment->allocateToInvoice($invoice, 110); // fully paid
+
+        $response = $this->actingAs($this->user)
+            ->post(route('invoices.unsend', $invoice));
+
+        $response->assertSessionHas('error');
+        $this->assertEquals(Invoice::STATUS_PAID, $invoice->refresh()->status);
     }
 
     public function test_paid_invoice_cannot_be_edited(): void

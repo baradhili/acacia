@@ -33,7 +33,12 @@
             <tbody class="divide-y divide-gray-200">
                 @forelse($timeEntries as $entry)
                     <tr>
-                        <td class="px-6 py-4 text-gray-900">{{ $entry->start_time->format('d M Y') }}</td>
+                        <td class="px-6 py-4 text-gray-900">
+                            {{ $entry->entry_date?->format('d M Y') ?? '-' }}
+                            @if ($entry->start_time && $entry->end_time)
+                                <span class="text-gray-500 text-sm">{{ $entry->start_time->format('H:i') }}–{{ $entry->end_time->format('H:i') }}</span>
+                            @endif
+                        </td>
                         <td class="px-6 py-4 text-gray-900">{{ $entry->user->name ?? '-' }}</td>
                         <td class="px-6 py-4 text-gray-900">{{ $entry->project?->name ?? '-' }}</td>
                         <td class="px-6 py-4 text-gray-900">{{ Str::limit($entry->description, 40) }}</td>

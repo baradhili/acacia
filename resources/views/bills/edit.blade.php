@@ -93,7 +93,10 @@
         <div class="bg-white rounded-lg shadow p-6">
             <h2 class="text-lg font-semibold text-gray-800 mb-4">Line Items</h2>
             <p class="text-sm text-gray-500 mb-4">
-                Each line carries its own GST treatment — untick GST for supplies that are GST-free by regulation.
+                Tick the GST treatment for each line: Incl. GST when the amount you entered is
+                what you pay and already includes GST (portion calculated: $110 → $100 + $10);
+                Add GST for suppliers who quote ex-GST lines and add GST at the subtotal
+                ($100 → $110); neither for GST-free supplies (bank fees, rego, basic food…).
             </p>
 
             <div id="itemsContainer">
@@ -103,7 +106,8 @@
                         'description' => $item->description,
                         'quantity' => $item->quantity,
                         'unit_price' => $item->unit_price,
-                        'gst' => (float) $item->tax_rate > 0 ? '1' : '',
+                        'gst' => (float) $item->tax_rate > 0 && !$item->gst_added ? '1' : '',
+                        'gst_add' => (float) $item->tax_rate > 0 && $item->gst_added ? '1' : '',
                         'discount_percent' => $item->discount_percent,
                         'expense_account_id' => $item->expense_account_id,
                     ])->all());
@@ -138,19 +142,31 @@
                         </div>
                         <div class="col-span-1 flex flex-col justify-center">
                             <label class="block text-xs font-medium text-gray-700 mb-1 text-center">GST</label>
-                            <input type="checkbox" name="items[{{ $index }}][gst]" value="1"
-                                {{ !empty($item['gst']) ? 'checked' : '' }}
-                                class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mx-auto gst-toggle"
-                                title="Untick if this line is GST-free">
+                            <label class="flex items-center justify-center gap-1 text-xs text-gray-600"
+                                title="The amount you entered already includes GST — the GST portion is calculated from it">
+                                <input type="checkbox" name="items[{{ $index }}][gst]" value="1"
+                                    {{ !empty($item['gst']) ? 'checked' : '' }}
+                                    class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 gst-toggle"> Incl
+                            </label>
+                            <label class="flex items-center justify-center gap-1 text-xs text-gray-600 mt-1"
+                                title="The amount you entered excludes GST (ex-GST supplier) — GST is added on top">
+                                <input type="checkbox" name="items[{{ $index }}][gst_add]" value="1"
+                                    {{ !empty($item['gst_add']) ? 'checked' : '' }}
+                                    class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 gst-add-toggle"> Add
+                            </label>
                         </div>
                         <div class="col-span-2">
-                            <label class="block text-xs font-medium text-gray-700 mb-1">Expense Account</label>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">Category</label>
                             <select name="items[{{ $index }}][expense_account_id]"
                                 class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
                                 <option value="">— Select —</option>
-                                @foreach ($expenseAccounts as $accountId => $label)
-                                    <option value="{{ $accountId }}"
-                                        {{ ($item['expense_account_id'] ?? '') == $accountId ? 'selected' : '' }}>{{ $label }}</option>
+                                @foreach ($purchaseAccounts as $groupLabel => $groupAccounts)
+                                    <optgroup label="{{ $groupLabel }}">
+                                        @foreach ($groupAccounts as $accountId => $label)
+                                            <option value="{{ $accountId }}"
+                                                {{ ($item['expense_account_id'] ?? '') == $accountId ? 'selected' : '' }}>{{ $label }}</option>
+                                        @endforeach
+                                    </optgroup>
                                 @endforeach
                             </select>
                         </div>
@@ -170,7 +186,7 @@
 
             <div class="mt-6 border-t pt-4">
                 <div class="flex justify-between text-sm mb-1">
-                    <span class="text-gray-600">Subtotal</span>
+                    <span class="text-gray-600">Subtotal (ex GST)</span>
                     <span id="billSubtotal">$0.00</span>
                 </div>
                 <div class="flex justify-between text-sm mb-1">
@@ -224,17 +240,28 @@
             </div>
             <div class="col-span-1 flex flex-col justify-center">
                 <label class="block text-xs font-medium text-gray-700 mb-1 text-center">GST</label>
-                <input type="checkbox" name="items[__INDEX__][gst]" value="1" checked
-                    class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mx-auto gst-toggle"
-                    title="Untick if this line is GST-free">
+                <label class="flex items-center justify-center gap-1 text-xs text-gray-600"
+                    title="The amount you entered already includes GST — the GST portion is calculated from it">
+                    <input type="checkbox" name="items[__INDEX__][gst]" value="1" checked
+                        class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 gst-toggle"> Incl
+                </label>
+                <label class="flex items-center justify-center gap-1 text-xs text-gray-600 mt-1"
+                    title="The amount you entered excludes GST (ex-GST supplier) — GST is added on top">
+                    <input type="checkbox" name="items[__INDEX__][gst_add]" value="1"
+                        class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 gst-add-toggle"> Add
+                </label>
             </div>
             <div class="col-span-2">
-                <label class="block text-xs font-medium text-gray-700 mb-1">Expense Account</label>
+                <label class="block text-xs font-medium text-gray-700 mb-1">Category</label>
                 <select name="items[__INDEX__][expense_account_id]"
                     class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
                     <option value="">— Select —</option>
-                    @foreach ($expenseAccounts as $accountId => $label)
-                        <option value="{{ $accountId }}">{{ $label }}</option>
+                    @foreach ($purchaseAccounts as $groupLabel => $groupAccounts)
+                        <optgroup label="{{ $groupLabel }}">
+                            @foreach ($groupAccounts as $accountId => $label)
+                                <option value="{{ $accountId }}">{{ $label }}</option>
+                            @endforeach
+                        </optgroup>
                     @endforeach
                 </select>
             </div>
@@ -246,47 +273,7 @@
         </div>
     </template>
 
-    <!-- Documents -->
-    <div class="bg-white rounded-lg shadow p-6 mt-6">
-        <h2 class="text-lg font-semibold text-gray-800 mb-4">Documents</h2>
-
-        <!-- Upload Form -->
-        <form id="documentUploadForm" class="mb-4">
-            @csrf
-            <input type="hidden" name="documentable_type" value="Bill">
-            <input type="hidden" name="documentable_id" value="{{ $bill->id }}">
-            <div id="documentUploadArea" class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-indigo-500 transition">
-                <svg class="mx-auto h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-                </svg>
-                <p class="mt-1 text-sm text-gray-600">Drop files or click to upload</p>
-                <p class="text-xs text-gray-500">Attach the supplier's invoice or receipt — PDF, JPG, PNG, DOC up to 20MB</p>
-            </div>
-            <input type="file" name="file" id="documentFile" class="hidden" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar">
-        </form>
-
-        <!-- Document List -->
-        @if($bill->documents->count() > 0)
-            <div class="border rounded-lg divide-y">
-                @foreach($bill->documents as $doc)
-                    <div class="flex items-center justify-between p-3" id="doc-{{ $doc->id }}">
-                        <div class="flex items-center">
-                            <svg class="h-5 w-5 text-gray-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-                            </svg>
-                            <span class="text-sm font-medium text-gray-900">{{ $doc->name }}</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <a href="{{ route('documents.download', $doc) }}" class="text-indigo-600 hover:text-indigo-900 text-sm">Download</a>
-                            <button type="button" class="text-red-600 hover:text-red-900 text-sm delete-doc-btn" data-doc-id="{{ $doc->id }}">Delete</button>
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        @else
-            <p class="text-sm text-gray-500 text-center py-2">No documents attached</p>
-        @endif
-    </div>
+    <x-document-upload :model="$bill" hint="Attach the supplier's invoice or receipt — PDF, JPG, PNG, DOC up to 20MB" />
 
     @push('scripts')
         <script>
@@ -307,6 +294,7 @@
                     const qtyInput = row.querySelector('.quantity-input');
                     const priceInput = row.querySelector('.unit-price-input');
                     const gstToggle = row.querySelector('.gst-toggle');
+                    const gstAddToggle = row.querySelector('.gst-add-toggle');
                     const discInput = row.querySelector('.discount-input');
                     const totalDiv = row.querySelector('.line-total');
 
@@ -314,17 +302,30 @@
                         const qty = parseFloat(qtyInput.value) || 0;
                         const price = parseFloat(priceInput.value) || 0;
                         const disc = parseFloat(discInput.value) || 0;
-                        const taxable = gstToggle.checked;
 
-                        const subtotal = qty * price;
-                        const discountAmount = subtotal * (disc / 100);
-                        const afterDiscount = subtotal - discountAmount;
-                        const total = afterDiscount * (1 + (taxable ? GST_RATE / 100 : 0));
+                        const gross = qty * price;
+                        const afterDiscount = gross * (1 - disc / 100);
+                        // Mirrors BillItem::calculateTotals — three modes:
+                        // Add (ex-GST, GST on top), Incl (GST backed out),
+                        // or free.
+                        const total = gstAddToggle.checked
+                            ? afterDiscount * (1 + GST_RATE / 100)
+                            : afterDiscount;
 
                         totalDiv.textContent = '$' + total.toFixed(2);
-                        totalDiv.classList.toggle('text-gray-400', !taxable);
+                        totalDiv.classList.toggle('text-gray-400', !gstToggle.checked && !gstAddToggle.checked);
                         updateBillTotals();
                     }
+
+                    // The two GST ticks are mutually exclusive
+                    gstToggle.addEventListener('change', function() {
+                        if (this.checked) gstAddToggle.checked = false;
+                        updateTotal();
+                    });
+                    gstAddToggle.addEventListener('change', function() {
+                        if (this.checked) gstToggle.checked = false;
+                        updateTotal();
+                    });
 
                     [qtyInput, priceInput, gstToggle, discInput].forEach(input => {
                         if (input) input.addEventListener('input', updateTotal);
@@ -347,12 +348,22 @@
                     const qty = parseFloat(row.querySelector('.quantity-input')?.value) || 0;
                     const price = parseFloat(row.querySelector('.unit-price-input')?.value) || 0;
                     const disc = parseFloat(row.querySelector('.discount-input')?.value) || 0;
-                    const taxable = row.querySelector('.gst-toggle')?.checked ?? true;
-
-                    const lineSubtotal = qty * price;
-                    const afterDiscount = lineSubtotal * (1 - disc / 100);
-                    subtotal += afterDiscount;
-                    tax += afterDiscount * ((taxable ? GST_RATE : 0) / 100);
+                    // Three GST modes mirror BillItem::calculateTotals:
+                    // add (GST on top), incl (GST backed out of the paid
+                    // amount) or free.
+                    const incl = row.querySelector('.gst-toggle')?.checked ?? true;
+                    const add = row.querySelector('.gst-add-toggle')?.checked ?? false;
+                    const afterDiscount = qty * price * (1 - disc / 100);
+                    let lineTotal, lineTax;
+                    if (add) {
+                        lineTax = afterDiscount * (GST_RATE / 100);
+                        lineTotal = afterDiscount + lineTax;
+                    } else {
+                        lineTotal = afterDiscount;
+                        lineTax = incl ? lineTotal * (GST_RATE / (100 + GST_RATE)) : 0;
+                    }
+                    subtotal += lineTotal - lineTax;
+                    tax += lineTax;
                 });
 
                 document.getElementById('billSubtotal').textContent = '$' + subtotal.toFixed(2);
@@ -361,91 +372,6 @@
             }
 
             attachEventListeners();
-
-            // Document upload/delete (same flow as invoices)
-            document.addEventListener('DOMContentLoaded', function() {
-                const uploadArea = document.getElementById('documentUploadArea');
-                const fileInput = document.getElementById('documentFile');
-                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-
-                if (uploadArea && fileInput) {
-                    uploadArea.addEventListener('click', () => fileInput.click());
-                    uploadArea.addEventListener('dragover', (e) => {
-                        e.preventDefault();
-                        uploadArea.classList.add('border-indigo-500', 'bg-indigo-50');
-                    });
-                    uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('border-indigo-500', 'bg-indigo-50'));
-                    uploadArea.addEventListener('drop', (e) => {
-                        e.preventDefault();
-                        uploadArea.classList.remove('border-indigo-500', 'bg-indigo-50');
-                        if (e.dataTransfer.files.length) {
-                            uploadFile(e.dataTransfer.files[0]);
-                        }
-                    });
-                    fileInput.addEventListener('change', () => {
-                        if (fileInput.files.length) {
-                            uploadFile(fileInput.files[0]);
-                        }
-                    });
-                }
-
-                function uploadFile(file) {
-                    if (!file) return;
-
-                    const formData = new FormData();
-                    formData.append('file', file);
-                    formData.append('documentable_type', 'Bill');
-                    formData.append('documentable_id', '{{ $bill->id }}');
-
-                    fetch('{{ route('documents.store') }}', {
-                        method: 'POST',
-                        headers: {
-                            'X-CSRF-TOKEN': csrfToken,
-                            'Accept': 'application/json',
-                        },
-                        body: formData
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.id) {
-                            window.location.reload();
-                        } else if (data.errors) {
-                            alert(Object.values(data.errors).flat().join('\n'));
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Upload failed:', error);
-                        alert('Upload failed. Please try again.');
-                    });
-                }
-
-                document.querySelectorAll('.delete-doc-btn').forEach(btn => {
-                    btn.addEventListener('click', function() {
-                        if (!confirm('Delete this document?')) return;
-
-                        const docId = this.dataset.docId;
-                        const docElement = document.getElementById('doc-' + docId);
-
-                        fetch('/documents/' + docId, {
-                            method: 'DELETE',
-                            headers: {
-                                'X-CSRF-TOKEN': csrfToken,
-                                'Accept': 'application/json',
-                            }
-                        })
-                        .then(response => response.json())
-                        .then(() => {
-                            if (docElement) {
-                                docElement.remove();
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Delete failed:', error);
-                            alert('Delete failed. Please try again.');
-                        });
-                    });
-                });
-            });
         </script>
     @endpush
 

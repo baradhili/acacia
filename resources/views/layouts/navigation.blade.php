@@ -2,10 +2,11 @@
 <aside class="w-64 bg-slate-800 text-white shrink-0 flex flex-col min-h-screen sticky top-0 self-start">
     <!-- Logo -->
     <div class="h-16 flex items-center px-6 border-b border-slate-700">
-        <a href="{{ route('dashboard') }}" class="text-xl font-bold">
-            Laravel ERP
-        </a>
-    </div>
+		<a href="{{ route('dashboard') }}" class="flex items-center gap-3">
+			<img src="{{ asset('images/logo.svg') }}" alt="Logo" class="h-8 w-auto">
+			<span class="text-xl font-bold">Laravel ERP</span>
+		</a>
+	</div>
 
     <!-- Navigation -->
     <nav class="mt-6 px-3 overflow-y-auto" style="max-height: calc(100vh - 6rem);">
@@ -259,6 +260,18 @@
             Chart of Accounts
         </a>
 
+        @hasanyrole('admin|accountant')
+            <a href="{{ route('opening-balances.index') }}"
+                class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('opening-balances.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3">
+                    </path>
+                </svg>
+                Opening Balances
+            </a>
+        @endhasanyrole
+
         <!-- Reports -->
         <p class="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Reports</p>
         <a href="{{ route('reports.time-by-client') }}"
@@ -318,14 +331,14 @@
             </svg>
             Account Schedule
         </a>
-        <a href="{{ route('reports.tax-summary') }}"
-            class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('reports.tax-summary') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+        <a href="{{ route('reports.bas') }}"
+            class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('reports.bas') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
             <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
                 </path>
             </svg>
-            Tax Summary
+            BAS (GST)
         </a>
     </nav>
 </aside>

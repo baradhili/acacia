@@ -349,11 +349,103 @@ class PaymentTest extends TestCase
         ]);
 
         $this->assertTrue(method_exists($payment, 'void'));
-        
+
         // Void the payment
         $payment->void();
-        
+
         $this->assertEquals(Payment::STATUS_VOID, $payment->status);
+    }
+
+    public function test_credit_note_refund_payment_is_posted_to_ifrs(): void
+    {
+        $entity = $this->seedIfrs();
+
+        $creditNote = \App\Models\CreditNote::create([
+            'client_id' => $this->client->id,
+            'total' => -60,
+            'remaining_amount' => 60,
+            'status' => \App\Models\CreditNote::STATUS_ISSUED,
+        ]);
+
+        $this->assertTrue($creditNote->applyToInvoice($this->invoice, 55));
+
+        // The negative refund payment created by applyToInvoice() must be
+        // posted (Cr Bank / Dr Revenue / Dr GST) without throwing on the
+        // negative amount.
+        $refund = $creditNote->refresh()->refund;
+        $this->assertNotNull($refund->ifrs_receipt_id);
+        $this->assertEquals(-55, (float) $refund->amount);
+
+        $bank = \IFRS\Models\Account::where('code', 320)->first();
+        $revenue = \IFRS\Models\Account::where('code', 4100)->first();
+        $gst = \IFRS\Models\Account::where('code', 2200)->first();
+
+        // Cr Bank 55, Dr Revenue 50 net, Dr GST 5.
+        $this->assertEquals(55, (float) \IFRS\Models\Ledger::where('post_account', $bank->id)
+            ->where('entry_type', \IFRS\Models\Balance::CREDIT)->sum('amount'));
+        $this->assertEquals(50, (float) \IFRS\Models\Ledger::where('post_account', $revenue->id)
+            ->where('entry_type', \IFRS\Models\Balance::DEBIT)->sum('amount')
+            - \IFRS\Models\Ledger::where('post_account', $revenue->id)
+            ->where('entry_type', \IFRS\Models\Balance::CREDIT)->sum('amount'));
+        $this->assertEquals(5, (float) \IFRS\Models\Ledger::where('post_account', $gst->id)
+            ->where('entry_type', \IFRS\Models\Balance::DEBIT)->sum('amount')
+            - \IFRS\Models\Ledger::where('post_account', $gst->id)
+            ->where('entry_type', \IFRS\Models\Balance::CREDIT)->sum('amount'));
+    }
+
+    /**
+     * Seed the minimum IFRS prerequisites for receipt posting: currency,
+     * entity + reporting period, bank (320), revenue (4100), GST Payable
+     * (2200) and the GST 10% Vat. Mirrors BillPaymentModelTest::seedIfrs().
+     */
+    protected function seedIfrs(): \IFRS\Models\Entity
+    {
+        $entity = \IFRS\Models\Entity::create([
+            'name' => 'Test Entity',
+            'locale' => 'en_AU',
+            'multi_currency' => false,
+            'year_start' => 1,
+        ]);
+
+        $currency = \IFRS\Models\Currency::create([
+            'name' => 'Australian Dollar',
+            'currency_code' => 'AUD',
+            'entity_id' => $entity->id,
+        ]);
+        $entity->update(['currency_id' => $currency->id]);
+        $entity->refresh();
+
+        \IFRS\Models\ReportingPeriod::create([
+            'period_count' => 1,
+            'calendar_year' => (int) date('Y'),
+            'status' => \IFRS\Models\ReportingPeriod::OPEN,
+            'entity_id' => $entity->id,
+        ]);
+
+        foreach ([
+            ['Operating Account', \IFRS\Models\Account::BANK, 320],
+            ['Consulting Revenue', \IFRS\Models\Account::OPERATING_REVENUE, 4100],
+            ['GST Payable', \IFRS\Models\Account::CONTROL, 2200],
+        ] as [$name, $type, $code]) {
+            \IFRS\Models\Account::create([
+                'name' => $name,
+                'account_type' => $type,
+                'code' => $code,
+                'currency_id' => $currency->id,
+                'entity_id' => $entity->id,
+            ]);
+        }
+
+        $gstPayable = \IFRS\Models\Account::where('code', 2200)->first();
+        \IFRS\Models\Vat::create([
+            'name' => 'GST 10%',
+            'code' => 'G',
+            'rate' => 10,
+            'account_id' => $gstPayable->id,
+            'entity_id' => $entity->id,
+        ]);
+
+        return $entity;
     }
 
     public function test_payment_status_constants_are_defined(): void
@@ -393,7 +485,18 @@ class PaymentTest extends TestCase
             'client_id' => $this->client->id,
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
-        ]); // draft — excluded
+        ]);
+        // Balance-carrying drafts are returned too — flagged allocatable =>
+        // false so the form can show them greyed-out with a "mark as sent
+        // first" hint instead of them silently missing from the list.
+        $draft->items()->create([
+            'description' => 'Draft Service',
+            'quantity' => 1,
+            'unit_price' => 50,
+            'tax_rate' => 10,
+        ]);
+        $draft->refresh();
+        $draft->recalculateTotals();
 
         $response = $this->actingAs($this->user)
             ->get(route('payments.client-invoices', $this->client));
@@ -405,7 +508,217 @@ class PaymentTest extends TestCase
         $this->assertEquals(110.0, $invoices[$this->invoice->id]['amount_due']);
         $this->assertEquals(110.0, $invoices[$partial->id]['amount_due']);
         $this->assertEquals(220.0, $invoices[$partial->id]['total']);
-        $this->assertArrayNotHasKey($draft->id, $invoices);
+        // The draft is visible but not selectable.
+        $this->assertArrayHasKey($draft->id, $invoices);
+        $this->assertFalse($invoices[$draft->id]['allocatable']);
+        $this->assertEquals('draft', $invoices[$draft->id]['status']);
+        $this->assertTrue($invoices[$this->invoice->id]['allocatable']);
+        $this->assertTrue($invoices[$partial->id]['allocatable']);
+    }
+
+    public function test_store_with_paired_invoice_allocations_creates_payment_and_allocations(): void
+    {
+        // Regression: the create form used to submit invoice_allocations[][invoice_id]
+        // and [][amount], which PHP never pairs into one row — validation
+        // failed silently for every manual allocation. The form now submits
+        // per-invoice indices; this is exactly that payload shape.
+        $response = $this->actingAs($this->user)->post('/payments', [
+            'client_id' => $this->client->id,
+            'amount' => 110,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+            'allocate_type' => 'manual',
+            'invoice_allocations' => [
+                $this->invoice->id => [
+                    'invoice_id' => $this->invoice->id,
+                    'amount' => 110,
+                ],
+            ],
+        ]);
+
+        $response->assertSessionHas('success');
+        $this->assertDatabaseHas('payments', [
+            'client_id' => $this->client->id,
+            'amount' => 110,
+        ]);
+        $this->assertDatabaseHas('payment_allocations', [
+            'invoice_id' => $this->invoice->id,
+            'amount' => 110,
+        ]);
+        $this->assertEquals(Invoice::STATUS_PAID, $this->invoice->refresh()->status);
+    }
+
+    public function test_store_manual_allocation_requires_at_least_one_invoice(): void
+    {
+        $response = $this->actingAs($this->user)->post('/payments', [
+            'client_id' => $this->client->id,
+            'amount' => 110,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+            'allocate_type' => 'manual',
+        ]);
+
+        $response->assertSessionHas('error');
+        $this->assertDatabaseMissing('payments', ['client_id' => $this->client->id]);
+    }
+
+    public function test_store_rejects_allocation_to_draft_invoice(): void
+    {
+        $draft = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+        ]);
+        $draft->items()->create([
+            'description' => 'Draft Service',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+        $draft->refresh();
+        $draft->recalculateTotals();
+
+        $response = $this->actingAs($this->user)->post('/payments', [
+            'client_id' => $this->client->id,
+            'amount' => 110,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+            'allocate_type' => 'manual',
+            'invoice_allocations' => [
+                $draft->id => ['invoice_id' => $draft->id, 'amount' => 110],
+            ],
+        ]);
+
+        $response->assertSessionHas('error');
+        $this->assertDatabaseMissing('payments', ['client_id' => $this->client->id]);
+        $this->assertEquals(Invoice::STATUS_DRAFT, $draft->refresh()->status);
+    }
+
+    public function test_store_rejects_allocation_to_another_clients_invoice(): void
+    {
+        $otherClient = Client::factory()->create();
+        $otherInvoice = Invoice::create([
+            'client_id' => $otherClient->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_SENT,
+        ]);
+        $otherInvoice->items()->create([
+            'description' => 'Other Client Service',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+        $otherInvoice->refresh();
+        $otherInvoice->recalculateTotals();
+
+        $response = $this->actingAs($this->user)->post('/payments', [
+            'client_id' => $this->client->id,
+            'amount' => 110,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+            'allocate_type' => 'manual',
+            'invoice_allocations' => [
+                $otherInvoice->id => ['invoice_id' => $otherInvoice->id, 'amount' => 110],
+            ],
+        ]);
+
+        $response->assertSessionHas('error');
+        $this->assertDatabaseMissing('payments', ['client_id' => $this->client->id]);
+    }
+
+    public function test_allocate_rejects_draft_invoice(): void
+    {
+        $payment = Payment::create([
+            'client_id' => $this->client->id,
+            'amount' => 110,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+        $draft = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+        ]);
+        $draft->items()->create([
+            'description' => 'Draft Service',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+        $draft->refresh();
+        $draft->recalculateTotals();
+
+        $response = $this->actingAs($this->user)
+            ->post(route('payments.allocate', $payment), [
+                'invoice_id' => $draft->id,
+                'amount' => 110,
+            ]);
+
+        $response->assertSessionHas('error');
+        $this->assertDatabaseMissing('payment_allocations', ['payment_id' => $payment->id]);
+        $this->assertEquals(Invoice::STATUS_DRAFT, $draft->refresh()->status);
+    }
+
+    public function test_allocate_rejects_amount_exceeding_invoice_balance(): void
+    {
+        $payment = Payment::create([
+            'client_id' => $this->client->id,
+            'amount' => 500,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+
+        // Invoice total is 110; allocating 200 must be rejected even though
+        // the payment has plenty unallocated.
+        $response = $this->actingAs($this->user)
+            ->post(route('payments.allocate', $payment), [
+                'invoice_id' => $this->invoice->id,
+                'amount' => 200,
+            ]);
+
+        $response->assertSessionHas('error');
+        $this->assertDatabaseMissing('payment_allocations', ['payment_id' => $payment->id]);
+    }
+
+    public function test_remove_all_allocations_frees_payment_and_reverts_invoice_statuses(): void
+    {
+        $second = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_SENT,
+        ]);
+        $second->items()->create([
+            'description' => 'Second Service',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+        $second->refresh();
+        $second->recalculateTotals();
+
+        $payment = Payment::create([
+            'client_id' => $this->client->id,
+            'amount' => 220,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+        $payment->allocateToInvoice($this->invoice, 110);
+        $payment->allocateToInvoice($second, 110);
+        $payment->refresh();
+
+        $response = $this->actingAs($this->user)
+            ->post(route('payments.removeAllAllocations', $payment));
+
+        $response->assertSessionHas('success');
+        $this->assertDatabaseMissing('payment_allocations', ['payment_id' => $payment->id]);
+        $payment->refresh();
+        $this->assertEquals(0, $payment->allocated_amount);
+        $this->assertEquals(220, $payment->unallocated_amount);
+        // Invoices revert to their payable-but-unpaid status.
+        $this->assertEquals(Invoice::STATUS_SENT, $this->invoice->refresh()->status);
+        $this->assertEquals(Invoice::STATUS_SENT, $second->refresh()->status);
     }
 
     public function test_payment_unallocated_amount_calculated_correctly(): void

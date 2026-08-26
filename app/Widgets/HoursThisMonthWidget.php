@@ -12,9 +12,9 @@ class HoursThisMonthWidget extends AbstractWidget
 
     public function run()
     {
-        $hours = TimeEntry::whereBetween('start_time', [
-            Carbon::now()->startOfMonth(),
-            Carbon::now()->endOfMonth(),
+        $hours = TimeEntry::whereBetween('entry_date', [
+            Carbon::now()->startOfMonth()->toDateString(),
+            Carbon::now()->endOfMonth()->toDateString(),
         ])->sum('hours');
 
         return view('widgets.hours_this_month', [

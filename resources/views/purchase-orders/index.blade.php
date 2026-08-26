@@ -31,6 +31,7 @@
                             <a href="{{ route('purchase-orders.show', $po) }}" class="text-indigo-600 hover:text-indigo-900 font-medium">
                                 {{ $po->po_number }}
                             </a>
+                            <x-document-icon :count="$po->documents_count" />
                         </td>
                         <td class="px-6 py-4 text-gray-900">{{ $po->client->name ?? '-' }}</td>
                         <td class="px-6 py-4 text-gray-900">{{ Str::limit($po->title, 30) }}</td>

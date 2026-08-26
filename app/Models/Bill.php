@@ -159,6 +159,35 @@ class Bill extends Model
             ->all();
     }
 
+    /**
+     * Categories a bill line can be coded to, grouped for the line-item
+     * dropdown: expense accounts, plus non-current-asset accounts for
+     * capital purchases (the BAS G10/G11 split keys off the same
+     * account-type rule).
+     */
+    public static function purchaseAccounts(): array
+    {
+        $format = fn ($account) => $account->code . ' — ' . $account->name;
+
+        return [
+            'Expenses' => Account::whereIn('account_type', [
+                Account::OPERATING_EXPENSE,
+                Account::DIRECT_EXPENSE,
+                Account::OVERHEAD_EXPENSE,
+                Account::OTHER_EXPENSE,
+            ])
+                ->orderBy('code')
+                ->get()
+                ->mapWithKeys(fn ($account) => [$account->id => $format($account)])
+                ->all(),
+            'Capital purchases' => Account::where('account_type', Account::NON_CURRENT_ASSET)
+                ->orderBy('code')
+                ->get()
+                ->mapWithKeys(fn ($account) => [$account->id => $format($account)])
+                ->all(),
+        ];
+    }
+
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);
@@ -201,13 +230,14 @@ class Bill extends Model
             return;
         }
 
-        // BillItem.total is tax-inclusive (calculated in calculateTotals),
-        // so derive subtotal as the pre-tax line amount (quantity * unit_price,
-        // less discount) and rebuild total as subtotal + tax. Storing the
-        // pre-tax value here keeps `subtotal + tax_amount == total` and makes
-        // SUM(subtotal) reports reflect true pre-GST expenses.
+        // BillItem.total is the tax-inclusive amount paid in every GST
+        // mode — inclusive lines back-calculate the tax, Add-GST (ex-GST)
+        // lines put it on top; see BillItem::calculateTotals.
+        // Derive each line's pre-tax value as total - tax_amount so
+        // `subtotal + tax_amount == total` holds and SUM(subtotal) reports
+        // reflect true pre-GST expenses.
         $subtotal = $items->sum(function ($item) {
-            return ($item->quantity * $item->unit_price) - $item->discount_amount;
+            return (float) $item->total - (float) $item->tax_amount;
         });
         $taxAmount = $items->sum('tax_amount');
         $discountAmount = $items->sum('discount_amount');

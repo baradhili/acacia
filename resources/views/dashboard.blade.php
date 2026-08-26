@@ -31,8 +31,7 @@
         <div class="widget-card md:col-span-1 lg:col-span-2" data-widget="OutstandingPOBudgetsWidget">@widget(\App\Widgets\OutstandingPOBudgetsWidget::class)</div>
         <div class="widget-card md:col-span-1 lg:col-span-2" data-widget="UnbilledTimeWidget">@widget(\App\Widgets\UnbilledTimeWidget::class)</div>
         <div class="widget-card md:col-span-1 lg:col-span-2" data-widget="PnLTrendWidget">@widget(\App\Widgets\PnLTrendWidget::class)</div>
-        <div class="widget-card md:col-span-1 lg:col-span-2" data-widget="QuickActionsWidget">@widget(\App\Widgets\QuickActionsWidget::class)</div>
-        <div class="widget-card md:col-span-1 lg:col-span-2" data-widget="WelcomeWidget">@widget(\App\Widgets\WelcomeWidget::class)</div>
+
     </div>
 </div>
 @endsection

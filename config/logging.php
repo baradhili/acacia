@@ -123,6 +123,14 @@ return [
             'handler' => NullHandler::class,
         ],
 
+        // phpunit runs (see LOG_CHANNEL in phpunit.xml) — keeps expected
+        // test noise out of the production laravel.log.
+        'testing' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/testing.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+        ],
+
         'emergency' => [
             'path' => storage_path('logs/laravel.log'),
         ],

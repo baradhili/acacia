@@ -55,5 +55,13 @@
                 </tr>
             </tfoot>
         </table>
+
+        @php($unpostedCount = $unpostedPayments + $unpostedBillPayments)
+        @if ($unpostedCount > 0)
+            <p class="text-sm text-amber-600 mt-3">
+                {{ $unpostedCount }} payment{{ $unpostedCount === 1 ? '' : 's' }} ({{ $unpostedPayments }} client, {{ $unpostedBillPayments }} supplier)
+                not yet posted to the ledger — run <code>php artisan ifrs:post-payments</code>.
+            </p>
+        @endif
     </div>
 @endsection

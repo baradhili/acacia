@@ -10,6 +10,7 @@ use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\EstimateController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\LogoController;
+use App\Http\Controllers\OpeningBalanceController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
@@ -41,6 +42,12 @@ Route::middleware('auth')->group(function () {
     // Users (admin only)
     Route::middleware('role:admin')->group(function () {
         Route::resource('users', UserController::class);
+    });
+
+    // Opening balances (admin or accountant)
+    Route::middleware('role:admin|accountant')->group(function () {
+        Route::get('/opening-balances', [OpeningBalanceController::class, 'index'])->name('opening-balances.index');
+        Route::post('/opening-balances', [OpeningBalanceController::class, 'store'])->name('opening-balances.store');
     });
 
     // Clients
@@ -86,6 +93,7 @@ Route::middleware('auth')->group(function () {
     // Invoices
     Route::resource('invoices', InvoiceController::class);
     Route::post('/invoices/{invoice}/send', [InvoiceController::class, 'send'])->name('invoices.send');
+    Route::post('/invoices/{invoice}/unsend', [InvoiceController::class, 'unsend'])->name('invoices.unsend');
     Route::post('/invoices/{invoice}/cancel', [InvoiceController::class, 'cancel'])->name('invoices.cancel');
     Route::post('/invoices/{invoice}/record-payment', [InvoiceController::class, 'recordPayment'])->name('invoices.recordPayment');
     Route::get('/invoices/{invoice}/pdf', [InvoiceController::class, 'pdf'])->name('invoices.pdf');
@@ -98,6 +106,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/payments/client-invoices/{client}', [PaymentController::class, 'getClientInvoices'])->name('payments.client-invoices');
     Route::post('/payments/{payment}/allocate', [PaymentController::class, 'allocate'])->name('payments.allocate');
     Route::post('/payments/{payment}/remove-allocation/{invoice}', [PaymentController::class, 'removeAllocation'])->name('payments.removeAllocation');
+    Route::post('/payments/{payment}/remove-allocations', [PaymentController::class, 'removeAllAllocations'])->name('payments.removeAllAllocations');
 
     // Credit Notes
     Route::resource('credit-notes', CreditNoteController::class);
@@ -151,11 +160,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/gst', [\App\Http\Controllers\ReportController::class, 'gstReport'])->name('reports.gst');
     Route::get('/reports/account-statement', [\App\Http\Controllers\ReportController::class, 'accountStatement'])->name('reports.account-statement');
     Route::get('/reports/account-schedule', [\App\Http\Controllers\ReportController::class, 'accountSchedule'])->name('reports.account-schedule');
-    Route::get('/reports/tax-summary', [\App\Http\Controllers\ReportController::class, 'taxSummary'])->name('reports.tax-summary');
+    Route::get('/reports/bas', [\App\Http\Controllers\ReportController::class, 'bas'])->name('reports.bas');
     Route::get('/reports/export/account-statement/pdf', [\App\Http\Controllers\ReportController::class, 'exportAccountStatementPdf'])->name('reports.export.account-statement.pdf');
-    Route::get('/reports/export/tax-summary/pdf', [\App\Http\Controllers\ReportController::class, 'exportTaxSummaryPdf'])->name('reports.export.tax-summary.pdf');
+    Route::get('/reports/export/bas/pdf', [\App\Http\Controllers\ReportController::class, 'exportBasPdf'])->name('reports.export.bas.pdf');
     Route::get('/reports/export/account-statement/excel', [\App\Http\Controllers\ReportController::class, 'exportAccountStatementExcel'])->name('reports.export.account-statement.excel');
-    Route::get('/reports/export/tax-summary/excel', [\App\Http\Controllers\ReportController::class, 'exportTaxSummaryExcel'])->name('reports.export.tax-summary.excel');
+    Route::get('/reports/export/bas/excel', [\App\Http\Controllers\ReportController::class, 'exportBasExcel'])->name('reports.export.bas.excel');
 
     // Wise Reconciliation
     Route::get('/reconciliation', [ReconciliationController::class, 'index'])->name('reconciliation.index');

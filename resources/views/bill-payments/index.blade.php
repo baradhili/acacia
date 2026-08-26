@@ -59,6 +59,7 @@
                             <a href="{{ route('bill-payments.show', $payment) }}" class="text-indigo-600 hover:text-indigo-900 font-medium">
                                 {{ $payment->payment_number }}
                             </a>
+                            <x-document-icon :count="$payment->documents_count" />
                         </td>
                         <td class="px-6 py-4 text-gray-900">{{ $payment->supplier->name ?? '-' }}</td>
                         <td class="px-6 py-4 text-gray-900">{{ $payment->payment_date->format('d M Y') }}</td>
