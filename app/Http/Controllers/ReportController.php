@@ -6,6 +6,7 @@ use App\Models\Client;
 use App\Models\Bill;
 use App\Models\BillItem;
 use App\Models\BillPayment;
+use App\Models\CompanyProfile;
 use App\Models\Payment;
 use App\Models\Project;
 use App\Models\TimeEntry;
@@ -1562,8 +1563,9 @@ class ReportController extends Controller
             "fyEndYear" => $fyEnd,
             "entity" => [
                 "name" => $entity?->name ?? "",
-                "abn" => (string) config("australian.abn"),
-                "tfn" => (string) config("australian.tfn"),
+                // Profile first, legacy env config as fallback.
+                "abn" => CompanyProfile::effectiveAbn($entity?->id),
+                "tfn" => CompanyProfile::effectiveTfn($entity?->id),
             ],
             "income" => $incomeRows,
             "expenses" => $expenseRows,

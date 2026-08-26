@@ -4,6 +4,7 @@ use App\Http\Controllers\BillController;
 use App\Http\Controllers\BillPaymentController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ChartOfAccountsController;
+use App\Http\Controllers\CompanyProfileController;
 use App\Http\Controllers\CreditNoteController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentController;
@@ -48,6 +49,10 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:admin|accountant')->group(function () {
         Route::get('/opening-balances', [OpeningBalanceController::class, 'index'])->name('opening-balances.index');
         Route::post('/opening-balances', [OpeningBalanceController::class, 'store'])->name('opening-balances.store');
+
+        // Company identity: ABN/TFN, address, directors, shareholders
+        Route::get('/company-profile', [CompanyProfileController::class, 'index'])->name('company-profile.index');
+        Route::put('/company-profile', [CompanyProfileController::class, 'update'])->name('company-profile.update');
     });
 
     // Clients
