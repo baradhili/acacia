@@ -129,6 +129,7 @@ Built on IFRS reports, extended with project/PO reports:
 - Balance Sheet
 - Cash Flow Statement
 - GST/BAS Report (Australian Tax Office format-ready)
+- Company Tax Report (ATO Company Tax Return NAT 0656 label mapping, cash-basis/GST-exclusive, with PDF/Excel/CSV exports and V01–V13 validation checks — see `ATO_tax_report_spec.md`)
 - Income by Customer
 - Expenses by Category
 - Project Profitability
