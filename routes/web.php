@@ -161,10 +161,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/account-statement', [\App\Http\Controllers\ReportController::class, 'accountStatement'])->name('reports.account-statement');
     Route::get('/reports/account-schedule', [\App\Http\Controllers\ReportController::class, 'accountSchedule'])->name('reports.account-schedule');
     Route::get('/reports/bas', [\App\Http\Controllers\ReportController::class, 'bas'])->name('reports.bas');
+    Route::get('/reports/company-tax', [\App\Http\Controllers\ReportController::class, 'companyTax'])->name('reports.company-tax');
     Route::get('/reports/export/account-statement/pdf', [\App\Http\Controllers\ReportController::class, 'exportAccountStatementPdf'])->name('reports.export.account-statement.pdf');
     Route::get('/reports/export/bas/pdf', [\App\Http\Controllers\ReportController::class, 'exportBasPdf'])->name('reports.export.bas.pdf');
+    Route::get('/reports/export/company-tax/pdf', [\App\Http\Controllers\ReportController::class, 'exportCompanyTaxPdf'])->name('reports.export.company-tax.pdf');
     Route::get('/reports/export/account-statement/excel', [\App\Http\Controllers\ReportController::class, 'exportAccountStatementExcel'])->name('reports.export.account-statement.excel');
     Route::get('/reports/export/bas/excel', [\App\Http\Controllers\ReportController::class, 'exportBasExcel'])->name('reports.export.bas.excel');
+    Route::get('/reports/export/company-tax/excel', [\App\Http\Controllers\ReportController::class, 'exportCompanyTaxExcel'])->name('reports.export.company-tax.excel');
+    Route::get('/reports/export/company-tax/csv', [\App\Http\Controllers\ReportController::class, 'exportCompanyTaxCsv'])->name('reports.export.company-tax.csv');
 
     // Wise Reconciliation
     Route::get('/reconciliation', [ReconciliationController::class, 'index'])->name('reconciliation.index');
