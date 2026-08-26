@@ -20,7 +20,7 @@
 
 - [x] Build a report for Aust BAS
 
-- [ ] Build a report for Aust Company tax
+- [x] Build a report for Aust Company tax
 
 - [x] In teh invoices index view show an icon when invoices have a document attached. - possibly refelct this to all index views of items that can have attached documents.
 
@@ -33,6 +33,8 @@
 - [x] Drop multiple files means all files should be uploaded
 
 - [x] Need a way to identify capital purchases category in bills/chart of accounts (and update bas report)
+
+- [ ] review [Sales Cycle - Eloquent IFRS](https://ekmungai.github.io/ifrs-docs/v5docs/sales-cycle/) , [Purchase Cycle - Eloquent IFRS](https://ekmungai.github.io/ifrs-docs/v5docs/purchase-cycle/) , and [Compound Journal Entries - Eloquent IFRS](https://ekmungai.github.io/ifrs-docs/v5docs/compound-journals/) and check for any deviations done in teh app. update this document with teh proposed plan.
 
 - [ ] ### 0. `createFromTimeEntries` doesn't actually create
   
