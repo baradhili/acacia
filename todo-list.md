@@ -18,9 +18,11 @@
 
 - [x] data is not actually being written to most ifrs tables - they are being written to the tables - invoices, bills, payments etc - just not seeing them in the IFRS_transactions table - plan in .zcode/plans
 
-- [ ] 
+- [x] Build a report for Aust BAS
 
-- [ ] In teh invoices index view show an icon when invoices have a document attached. - possibly refelct this to all index views of items that can have attached documents.
+- [ ] Build a report for Aust Company tax
+
+- [x] In teh invoices index view show an icon when invoices have a document attached. - possibly refelct this to all index views of items that can have attached documents.
 
 - [ ] Update invoice format - if there is a PO - show amount remaining
 
@@ -30,7 +32,7 @@
 
 - [x] Drop multiple files means all files should be uploaded
 
-- [ ] 
+- [x] Need a way to identify capital purchases category in bills/chart of accounts (and update bas report)
 
 - [ ] ### 0. `createFromTimeEntries` doesn't actually create
   
