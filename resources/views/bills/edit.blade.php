@@ -265,47 +265,7 @@
         </div>
     </template>
 
-    <!-- Documents -->
-    <div class="bg-white rounded-lg shadow p-6 mt-6">
-        <h2 class="text-lg font-semibold text-gray-800 mb-4">Documents</h2>
-
-        <!-- Upload Form -->
-        <form id="documentUploadForm" class="mb-4">
-            @csrf
-            <input type="hidden" name="documentable_type" value="Bill">
-            <input type="hidden" name="documentable_id" value="{{ $bill->id }}">
-            <div id="documentUploadArea" class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-indigo-500 transition">
-                <svg class="mx-auto h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-                </svg>
-                <p class="mt-1 text-sm text-gray-600">Drop files or click to upload</p>
-                <p class="text-xs text-gray-500">Attach the supplier's invoice or receipt — PDF, JPG, PNG, DOC up to 20MB</p>
-            </div>
-            <input type="file" name="file" id="documentFile" class="hidden" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar">
-        </form>
-
-        <!-- Document List -->
-        @if($bill->documents->count() > 0)
-            <div class="border rounded-lg divide-y">
-                @foreach($bill->documents as $doc)
-                    <div class="flex items-center justify-between p-3" id="doc-{{ $doc->id }}">
-                        <div class="flex items-center">
-                            <svg class="h-5 w-5 text-gray-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-                            </svg>
-                            <span class="text-sm font-medium text-gray-900">{{ $doc->name }}</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <a href="{{ route('documents.download', $doc) }}" class="text-indigo-600 hover:text-indigo-900 text-sm">Download</a>
-                            <button type="button" class="text-red-600 hover:text-red-900 text-sm delete-doc-btn" data-doc-id="{{ $doc->id }}">Delete</button>
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        @else
-            <p class="text-sm text-gray-500 text-center py-2">No documents attached</p>
-        @endif
-    </div>
+    <x-document-upload :model="$bill" hint="Attach the supplier's invoice or receipt — PDF, JPG, PNG, DOC up to 20MB" />
 
     @push('scripts')
         <script>
@@ -404,91 +364,6 @@
             }
 
             attachEventListeners();
-
-            // Document upload/delete (same flow as invoices)
-            document.addEventListener('DOMContentLoaded', function() {
-                const uploadArea = document.getElementById('documentUploadArea');
-                const fileInput = document.getElementById('documentFile');
-                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-
-                if (uploadArea && fileInput) {
-                    uploadArea.addEventListener('click', () => fileInput.click());
-                    uploadArea.addEventListener('dragover', (e) => {
-                        e.preventDefault();
-                        uploadArea.classList.add('border-indigo-500', 'bg-indigo-50');
-                    });
-                    uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('border-indigo-500', 'bg-indigo-50'));
-                    uploadArea.addEventListener('drop', (e) => {
-                        e.preventDefault();
-                        uploadArea.classList.remove('border-indigo-500', 'bg-indigo-50');
-                        if (e.dataTransfer.files.length) {
-                            uploadFile(e.dataTransfer.files[0]);
-                        }
-                    });
-                    fileInput.addEventListener('change', () => {
-                        if (fileInput.files.length) {
-                            uploadFile(fileInput.files[0]);
-                        }
-                    });
-                }
-
-                function uploadFile(file) {
-                    if (!file) return;
-
-                    const formData = new FormData();
-                    formData.append('file', file);
-                    formData.append('documentable_type', 'Bill');
-                    formData.append('documentable_id', '{{ $bill->id }}');
-
-                    fetch('{{ route('documents.store') }}', {
-                        method: 'POST',
-                        headers: {
-                            'X-CSRF-TOKEN': csrfToken,
-                            'Accept': 'application/json',
-                        },
-                        body: formData
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.id) {
-                            window.location.reload();
-                        } else if (data.errors) {
-                            alert(Object.values(data.errors).flat().join('\n'));
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Upload failed:', error);
-                        alert('Upload failed. Please try again.');
-                    });
-                }
-
-                document.querySelectorAll('.delete-doc-btn').forEach(btn => {
-                    btn.addEventListener('click', function() {
-                        if (!confirm('Delete this document?')) return;
-
-                        const docId = this.dataset.docId;
-                        const docElement = document.getElementById('doc-' + docId);
-
-                        fetch('/documents/' + docId, {
-                            method: 'DELETE',
-                            headers: {
-                                'X-CSRF-TOKEN': csrfToken,
-                                'Accept': 'application/json',
-                            }
-                        })
-                        .then(response => response.json())
-                        .then(() => {
-                            if (docElement) {
-                                docElement.remove();
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Delete failed:', error);
-                            alert('Delete failed. Please try again.');
-                        });
-                    });
-                });
-            });
         </script>
     @endpush
 

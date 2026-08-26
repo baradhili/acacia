@@ -28,7 +28,7 @@
 
 - [x] Country fields should be a dropdown - configurable "pinned countries" at top. use teh ISO country list.
 
-- [ ] Drop multiple files means all files should be uploaded
+- [x] Drop multiple files means all files should be uploaded
 
 - [ ] 
 
