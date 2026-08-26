@@ -317,7 +317,7 @@ class IfrsReportsFinancialTest extends TestCase
         $response->assertSee('60.00'); // outstanding: 110 total less 50 paid
     }
 
-    public function test_tax_summary_uses_stored_line_amounts(): void
+    public function test_bas_uses_stored_line_amounts(): void
     {
         $client = Client::factory()->create();
         $invoice = Invoice::create([
@@ -350,7 +350,7 @@ class IfrsReportsFinancialTest extends TestCase
         ]);
         $bill->recalculateTotals();
 
-        $response = $this->get(route('reports.tax-summary'));
+        $response = $this->get(route('reports.bas'));
 
         $response->assertStatus(200);
         // GST collected and GST paid both 10.00; net payable zero

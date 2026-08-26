@@ -872,93 +872,106 @@ class ReportController extends Controller
     }
 
     /**
-     * Tax Summary Report
+     * BAS (Business Activity Statement) Report — all four quarters of
+     * an Australian financial year (1 July – 30 June).
      */
-    public function taxSummary(Request $request)
+    public function bas(Request $request)
     {
-        $startDate = $request->get("start_date")
-            ? Carbon::parse($request->start_date)->startOfDay()
-            : Carbon::now()->startOfMonth();
+        // FY named by its June year-end: FY2026 = Jul 2025 – Jun 2026.
+        $currentFyEnd = now()->month >= 7 ? now()->year + 1 : now()->year;
+        $fyEnd = (int) $request->get("fy", $currentFyEnd);
 
-        $endDate = $request->get("end_date")
-            ? Carbon::parse($request->end_date)->endOfDay()
-            : Carbon::now()->endOfDay();
+        $statement = $this->buildBasStatement($fyEnd);
+        $availableFys = range($currentFyEnd, $currentFyEnd - 5);
 
-        // Get invoices with tax by rate
-        $invoices = \App\Models\Invoice::whereBetween("issue_date", [$startDate, $endDate])
-            ->where("status", "!=", "cancelled")
+        return view("reports.bas", compact(
+            "fyEnd", "currentFyEnd", "availableFys", "statement"
+        ));
+    }
+
+    /**
+     * Quarterly BAS figures for the financial year ending 30 June
+     * $fyEnd. Sales and purchase values come from the stored line
+     * amounts (item tax_amount is authoritative; invoice/bill totals
+     * are GST-inclusive) — the same amounts the GST ledger accounts
+     * are posted from. G13 assumes no capital purchases (bill lines
+     * only carry expense accounts), and credit notes are excluded
+     * because their schema stores no GST split.
+     */
+    protected function buildBasStatement(int $fyEnd): array
+    {
+        $fyStart = Carbon::create($fyEnd - 1, 7, 1)->startOfDay();
+        $fyEndDate = Carbon::create($fyEnd, 6, 30)->endOfDay();
+
+        $invoices = \App\Models\Invoice::whereBetween("issue_date", [$fyStart, $fyEndDate])
+            ->whereNotIn("status", [\App\Models\Invoice::STATUS_DRAFT, \App\Models\Invoice::STATUS_CANCELLED])
             ->with("items")
             ->get();
 
-        $salesByTaxRate = $invoices->flatMap(function ($invoice) {
-            return $invoice->items->map(function ($item) use ($invoice) {
-                // Use the stored line amounts: tax_amount is authoritative
-                // (recomputing qty x price x rate ignores discounts), and
-                // InvoiceItem.total is tax-inclusive.
-                return [
-                    "tax_rate" => $item->tax_rate ?? 0,
-                    "net_amount" => (float) $item->total - (float) $item->tax_amount,
-                    "tax_amount" => (float) $item->tax_amount,
-                    "gross_amount" => (float) $item->total,
-                    "invoice_number" => $invoice->invoice_number,
-                    "client_name" => $invoice->client->name ?? "N/A",
-                ];
-            });
-        })->groupBy("tax_rate")
-          ->map(function ($items, $rate) {
-              return [
-                  "tax_rate" => (float) $rate,
-                  "transaction_count" => count($items),
-                  "net_amount" => collect($items)->sum("net_amount"),
-                  "tax_amount" => collect($items)->sum("tax_amount"),
-                  "gross_amount" => collect($items)->sum("gross_amount"),
-              ];
-          })->sortByDesc("tax_rate");
-
-        // Get bill line items with tax by rate (per-line GST treatment:
-        // GST-free lines have tax_rate 0 and are naturally excluded by the
-        // tax_rate > 0 filter below).
-        $bills = Bill::whereBetween("bill_date", [$startDate, $endDate])
+        $bills = Bill::whereBetween("bill_date", [$fyStart, $fyEndDate])
             ->whereNotIn("status", [Bill::STATUS_DRAFT, Bill::STATUS_CANCELLED])
-            ->with(["supplier", "items"])
+            ->with("items")
             ->get();
 
-        // Bill items are entered GST-inclusive: total is the amount paid,
-        // tax_amount the back-calculated GST portion.
-        $purchasesByTaxRate = $bills->flatMap(function ($bill) {
-            return $bill->items->map(function ($item) use ($bill) {
-                return [
-                    "tax_rate" => (float) ($item->tax_rate ?? 0),
-                    "net_amount" => (float) $item->total - (float) $item->tax_amount,
-                    "tax_amount" => (float) $item->tax_amount,
-                    "gross_amount" => (float) $item->total,
-                    "reference" => $bill->reference ?? $bill->bill_number,
-                    "supplier_name" => $bill->supplier->name ?? "N/A",
-                ];
-            });
-        })->filter(function ($item) {
-            return $item["tax_rate"] > 0;
-        })->groupBy("tax_rate")
-          ->map(function ($items, $rate) {
-              return [
-                  "tax_rate" => (float) $rate,
-                  "transaction_count" => count($items),
-                  "net_amount" => collect($items)->sum("net_amount"),
-                  "tax_amount" => collect($items)->sum("tax_amount"),
-                  "gross_amount" => collect($items)->sum("gross_amount"),
-              ];
-          })->sortByDesc("tax_rate");
+        // BAS quarters: Q1 Jul-Sep, Q2 Oct-Dec, Q3 Jan-Mar, Q4 Apr-Jun.
+        $quarterOf = fn ($date) => match (true) {
+            $date->month >= 7 && $date->month <= 9 => 0,
+            $date->month >= 10 => 1,
+            $date->month <= 3 => 2,
+            default => 3,
+        };
 
-        // Summary totals
-        $totalSalesTax = $salesByTaxRate->sum("tax_amount");
-        $totalPurchaseTax = $purchasesByTaxRate->sum("tax_amount");
-        $netTaxPayable = $totalSalesTax - $totalPurchaseTax;
+        $quarters = [];
+        foreach ([0, 1, 2, 3] as $i) {
+            $start = Carbon::create($fyEnd - 1, 7 + $i * 3, 1)->startOfDay();
+            $quarters[$i] = [
+                "label" => sprintf("Q%d (%s)", $i + 1, ["Jul-Sep", "Oct-Dec", "Jan-Mar", "Apr-Jun"][$i]),
+                "start" => $start,
+                "end" => $start->copy()->addMonths(3)->subDay()->endOfDay(),
+                "g1" => 0.0,
+                "gst_sales" => 0.0,
+                "g11" => 0.0,
+                "gst_purchases" => 0.0,
+            ];
+        }
 
-        return view("reports.tax-summary", compact(
-            "startDate", "endDate",
-            "salesByTaxRate", "purchasesByTaxRate",
-            "totalSalesTax", "totalPurchaseTax", "netTaxPayable"
-        ));
+        foreach ($invoices as $invoice) {
+            $i = $quarterOf($invoice->issue_date);
+            $quarters[$i]["g1"] += (float) $invoice->total;
+            $quarters[$i]["gst_sales"] += (float) $invoice->items->sum("tax_amount");
+        }
+
+        foreach ($bills as $bill) {
+            $i = $quarterOf($bill->bill_date);
+            $quarters[$i]["g11"] += (float) $bill->total;
+            $quarters[$i]["gst_purchases"] += (float) $bill->items
+                ->filter(fn ($item) => (float) ($item->tax_rate ?? 0) > 0)
+                ->sum("tax_amount");
+        }
+
+        foreach ($quarters as &$q) {
+            // G13 non-capital purchases: capital purchases cannot be
+            // identified from bill data, so G10 = 0 and G13 = G11.
+            $q["g13"] = $q["g11"];
+            $q["net"] = $q["gst_sales"] - $q["gst_purchases"];
+        }
+        unset($q);
+
+        $totals = [
+            "g1" => array_sum(array_column($quarters, "g1")),
+            "gst_sales" => array_sum(array_column($quarters, "gst_sales")),
+            "g11" => array_sum(array_column($quarters, "g11")),
+            "g13" => array_sum(array_column($quarters, "g13")),
+            "gst_purchases" => array_sum(array_column($quarters, "gst_purchases")),
+        ];
+        $totals["net"] = $totals["gst_sales"] - $totals["gst_purchases"];
+
+        return [
+            "fyStart" => $fyStart,
+            "fyEnd" => $fyEndDate,
+            "quarters" => $quarters,
+            "totals" => $totals,
+        ];
     }
 
     /**
@@ -1000,81 +1013,20 @@ class ReportController extends Controller
     }
 
     /**
-     * Export Tax Summary to PDF
+     * Export BAS to PDF
      */
-    public function exportTaxSummaryPdf(Request $request)
+    public function exportBasPdf(Request $request)
     {
-        $startDate = $request->get("start_date")
-            ? Carbon::parse($request->start_date)->startOfDay()
-            : Carbon::now()->startOfMonth();
+        $currentFyEnd = now()->month >= 7 ? now()->year + 1 : now()->year;
+        $fyEnd = (int) $request->get("fy", $currentFyEnd);
+        $statement = $this->buildBasStatement($fyEnd);
 
-        $endDate = $request->get("end_date")
-            ? Carbon::parse($request->end_date)->endOfDay()
-            : Carbon::now()->endOfDay();
-
-        $invoices = \App\Models\Invoice::whereBetween("issue_date", [$startDate, $endDate])
-            ->where("status", "!=", "cancelled")
-            ->with("items")
-            ->get();
-
-        $salesByTaxRate = $invoices->flatMap(function ($invoice) {
-            return $invoice->items->map(function ($item) use ($invoice) {
-                // Stored line amounts: tax_amount is authoritative and
-                // InvoiceItem.total is tax-inclusive.
-                return [
-                    "tax_rate" => $item->tax_rate ?? 0,
-                    "net_amount" => (float) $item->total - (float) $item->tax_amount,
-                    "tax_amount" => (float) $item->tax_amount,
-                ];
-            });
-        })->groupBy("tax_rate")
-          ->map(function ($items, $rate) {
-              return [
-                  "tax_rate" => (float) $rate,
-                  "net_amount" => collect($items)->sum("net_amount"),
-                  "tax_amount" => collect($items)->sum("tax_amount"),
-              ];
-          })->sortByDesc("tax_rate");
-
-        $bills = Bill::whereBetween("bill_date", [$startDate, $endDate])
-            ->whereNotIn("status", [Bill::STATUS_DRAFT, Bill::STATUS_CANCELLED])
-            ->with("items")
-            ->get();
-
-        $purchasesByTaxRate = $bills->flatMap(function ($bill) {
-            return $bill->items->map(function ($item) {
-                return [
-                    "tax_rate" => (float) ($item->tax_rate ?? 0),
-                    "net_amount" => (float) $item->total - (float) $item->tax_amount,
-                    "tax_amount" => (float) $item->tax_amount,
-                ];
-            });
-        })->filter(fn($item) => $item["tax_rate"] > 0)
-          ->groupBy("tax_rate")
-          ->map(function ($items, $rate) {
-              return [
-                  "tax_rate" => (float) $rate,
-                  "net_amount" => collect($items)->sum("net_amount"),
-                  "tax_amount" => collect($items)->sum("tax_amount"),
-              ];
-          })->sortByDesc("tax_rate");
-
-        $totalSalesTax = $salesByTaxRate->sum("tax_amount");
-        $totalPurchaseTax = $purchasesByTaxRate->sum("tax_amount");
-        $netTaxPayable = $totalSalesTax - $totalPurchaseTax;
-
-        $pdf = Pdf::loadView("reports.pdf.tax-summary", [
-            "startDate" => $startDate,
-            "endDate" => $endDate,
-            "salesByTaxRate" => $salesByTaxRate,
-            "purchasesByTaxRate" => $purchasesByTaxRate,
-            "totalSalesTax" => $totalSalesTax,
-            "totalPurchaseTax" => $totalPurchaseTax,
-            "netTaxPayable" => $netTaxPayable,
+        $pdf = Pdf::loadView("reports.pdf.bas", [
+            "fyEnd" => $fyEnd,
+            "statement" => $statement,
         ]);
 
-        $filename = "Tax_Summary_{$startDate->format('Ymd')}_{$endDate->format('Ymd')}.pdf";
-        return $pdf->download($filename);
+        return $pdf->download("BAS_FY{$fyEnd}.pdf");
     }
     /**
      * Export Account Statement to Excel
@@ -1115,80 +1067,16 @@ class ReportController extends Controller
     }
 
     /**
-     * Export Tax Summary to Excel
+     * Export BAS to Excel
      */
-    public function exportTaxSummaryExcel(Request $request)
+    public function exportBasExcel(Request $request)
     {
-        $startDate = $request->get("start_date")
-            ? Carbon::parse($request->start_date)->startOfDay()
-            : Carbon::now()->startOfMonth();
+        $currentFyEnd = now()->month >= 7 ? now()->year + 1 : now()->year;
+        $fyEnd = (int) $request->get("fy", $currentFyEnd);
+        $statement = $this->buildBasStatement($fyEnd);
 
-        $endDate = $request->get("end_date")
-            ? Carbon::parse($request->end_date)->endOfDay()
-            : Carbon::now()->endOfDay();
+        $export = new \App\Exports\BasExport($fyEnd, $statement);
 
-        $invoices = \App\Models\Invoice::whereBetween("issue_date", [$startDate, $endDate])
-            ->where("status", "!=", "cancelled")
-            ->with("items")
-            ->get();
-
-        $salesByTaxRate = $invoices->flatMap(function ($invoice) {
-            return $invoice->items->map(function ($item) {
-                // Stored line amounts: tax_amount is authoritative and
-                // InvoiceItem.total is tax-inclusive.
-                return [
-                    "tax_rate" => $item->tax_rate ?? 0,
-                    "net_amount" => (float) $item->total - (float) $item->tax_amount,
-                    "tax_amount" => (float) $item->tax_amount,
-                ];
-            });
-        })->groupBy("tax_rate")
-          ->map(function ($items, $rate) {
-              return [
-                  "tax_rate" => (float) $rate,
-                  "net_amount" => collect($items)->sum("net_amount"),
-                  "tax_amount" => collect($items)->sum("tax_amount"),
-              ];
-          })->sortByDesc("tax_rate");
-
-        $bills = Bill::whereBetween("bill_date", [$startDate, $endDate])
-            ->whereNotIn("status", [Bill::STATUS_DRAFT, Bill::STATUS_CANCELLED])
-            ->with("items")
-            ->get();
-
-        $purchasesByTaxRate = $bills->flatMap(function ($bill) {
-            return $bill->items->map(function ($item) {
-                return [
-                    "tax_rate" => (float) ($item->tax_rate ?? 0),
-                    "net_amount" => (float) $item->total - (float) $item->tax_amount,
-                    "tax_amount" => (float) $item->tax_amount,
-                ];
-            });
-        })->filter(fn($item) => $item["tax_rate"] > 0)
-          ->groupBy("tax_rate")
-          ->map(function ($items, $rate) {
-              return [
-                  "tax_rate" => (float) $rate,
-                  "net_amount" => collect($items)->sum("net_amount"),
-                  "tax_amount" => collect($items)->sum("tax_amount"),
-              ];
-          })->sortByDesc("tax_rate");
-
-        $totalSalesTax = $salesByTaxRate->sum("tax_amount");
-        $totalPurchaseTax = $purchasesByTaxRate->sum("tax_amount");
-        $netTaxPayable = $totalSalesTax - $totalPurchaseTax;
-
-        $export = new \App\Exports\TaxSummaryExport(
-            $startDate,
-            $endDate,
-            $salesByTaxRate,
-            $purchasesByTaxRate,
-            $totalSalesTax,
-            $totalPurchaseTax,
-            $netTaxPayable
-        );
-
-        $filename = "Tax_Summary_{$startDate->format('Ymd')}_{$endDate->format('Ymd')}.xlsx";
-        return Excel::download($export, $filename);
+        return Excel::download($export, "BAS_FY{$fyEnd}.xlsx");
     }
 }
