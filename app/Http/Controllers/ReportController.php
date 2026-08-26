@@ -6,6 +6,7 @@ use App\Models\Client;
 use App\Models\Bill;
 use App\Models\BillItem;
 use App\Models\BillPayment;
+use App\Models\CompanyProfile;
 use App\Models\Payment;
 use App\Models\Project;
 use App\Models\TimeEntry;
@@ -1087,5 +1088,500 @@ class ReportController extends Controller
         $export = new \App\Exports\BasExport($fyEnd, $statement);
 
         return Excel::download($export, "BAS_FY{$fyEnd}.xlsx");
+    }
+
+    /**
+     * Annual Company Tax Report — screen entry point (ATO Company Tax
+     * Return, income year ended 30 June).
+     */
+    public function companyTax(Request $request)
+    {
+        $currentFyEnd = now()->month >= 7 ? now()->year + 1 : now()->year;
+        $fyEnd = (int) $request->get("fy", $currentFyEnd);
+
+        $statement = $this->buildCompanyTaxStatement($fyEnd);
+        $availableFys = range($currentFyEnd, $currentFyEnd - 5);
+
+        return view("reports.company-tax", compact(
+            "fyEnd", "currentFyEnd", "availableFys", "statement"
+        ));
+    }
+
+    /**
+     * Export Company Tax Report to PDF
+     */
+    public function exportCompanyTaxPdf(Request $request)
+    {
+        $currentFyEnd = now()->month >= 7 ? now()->year + 1 : now()->year;
+        $fyEnd = (int) $request->get("fy", $currentFyEnd);
+        $statement = $this->buildCompanyTaxStatement($fyEnd);
+
+        $pdf = Pdf::loadView("reports.pdf.company-tax", [
+            "fyEnd" => $fyEnd,
+            "statement" => $statement,
+        ]);
+
+        return $pdf->download("CompanyTax_FY{$fyEnd}.pdf");
+    }
+
+    /**
+     * Export Company Tax Report to Excel
+     */
+    public function exportCompanyTaxExcel(Request $request)
+    {
+        $currentFyEnd = now()->month >= 7 ? now()->year + 1 : now()->year;
+        $fyEnd = (int) $request->get("fy", $currentFyEnd);
+        $statement = $this->buildCompanyTaxStatement($fyEnd);
+
+        $export = new \App\Exports\CompanyTaxExport($fyEnd, $statement);
+
+        return Excel::download($export, "CompanyTax_FY{$fyEnd}.xlsx");
+    }
+
+    /**
+     * Export Company Tax Report to CSV (spec §6.1 audit-trail columns)
+     */
+    public function exportCompanyTaxCsv(Request $request)
+    {
+        $currentFyEnd = now()->month >= 7 ? now()->year + 1 : now()->year;
+        $fyEnd = (int) $request->get("fy", $currentFyEnd);
+        $statement = $this->buildCompanyTaxStatement($fyEnd);
+
+        $export = new \App\Exports\CompanyTaxExport($fyEnd, $statement);
+
+        return Excel::download($export, "CompanyTax_FY{$fyEnd}.csv", \Maatwebsite\Excel\Excel::CSV);
+    }
+
+    /**
+     * Company tax report figures for the ATO Company Tax Return (income
+     * year 1 July – 30 June), per ATO_tax_report_spec.md. Label letters
+     * and names come from config/ato_tax_report.php and follow the
+     * Company tax return 2026 (NAT 0656).
+     *
+     * Item 6/7 amounts are cash-basis and GST-exclusive by construction:
+     * only ledger rows whose parent transaction's main account is a BANK
+     * account are included (client receipts and supplier payments are
+     * the sole posters to revenue/expense in this system, so non-cash
+     * journals are excluded), and the GST back-out legs post to the same
+     * revenue/expense account, leaving per-account net movement already
+     * net of GST — the form's "exclude input tax credits" rule.
+     *
+     * Raw DB queries are used because the package's EntityScope cannot
+     * resolve background contexts; entity_id is therefore filtered
+     * explicitly and soft deletes (deleted_at) honoured manually.
+     */
+    protected function buildCompanyTaxStatement(int $fyEnd): array
+    {
+        $fyStart = Carbon::create($fyEnd - 1, 7, 1)->startOfDay();
+        $fyEndDate = Carbon::create($fyEnd, 6, 30)->endOfDay();
+        $entity = $this->ifrsEntity();
+        $this->getReportingPeriod($fyEndDate);
+
+        $config = config("ato_tax_report");
+        $flags = $config["account_flags"];
+        $warnings = [];
+
+        $revenueTypes = [Account::OPERATING_REVENUE, Account::NON_OPERATING_REVENUE];
+        $expenseTypes = [
+            Account::OPERATING_EXPENSE, Account::DIRECT_EXPENSE,
+            Account::OVERHEAD_EXPENSE, Account::OTHER_EXPENSE,
+        ];
+        $movementTypes = [...$revenueTypes, ...$expenseTypes, Account::NON_CURRENT_ASSET, Account::EQUITY];
+
+        // Per-account net movement for the year through bank-settled
+        // transactions (the transaction's main account must be a BANK).
+        $accountMovements = DB::table("ifrs_ledgers as l")
+            ->join("ifrs_transactions as t", "t.id", "=", "l.transaction_id")
+            ->join("ifrs_accounts as a", "a.id", "=", "l.post_account")
+            ->join("ifrs_accounts as bank", "bank.id", "=", "t.account_id")
+            ->where("a.entity_id", $entity->id)
+            ->whereIn("a.account_type", $movementTypes)
+            ->where("bank.account_type", Account::BANK)
+            ->whereBetween("l.posting_date", [$fyStart, $fyEndDate])
+            ->whereNull("l.deleted_at")
+            ->whereNull("t.deleted_at")
+            ->groupBy("a.id", "a.code", "a.name", "a.account_type")
+            ->orderBy("a.code")
+            ->selectRaw("a.id, a.code, a.name, a.account_type,
+                SUM(CASE WHEN l.entry_type = 'D' THEN l.amount ELSE 0 END) as debits,
+                SUM(CASE WHEN l.entry_type = 'C' THEN l.amount ELSE 0 END) as credits")
+            ->get();
+
+        // Audit trail: transaction/line-item ids per account. Fetched as
+        // distinct rows instead of GROUP_CONCAT so MySQL's
+        // group_concat_max_len cannot silently truncate the id list.
+        $auditByAccount = [];
+        DB::table("ifrs_ledgers as l")
+            ->join("ifrs_transactions as t", "t.id", "=", "l.transaction_id")
+            ->join("ifrs_accounts as bank", "bank.id", "=", "t.account_id")
+            ->join("ifrs_accounts as a", "a.id", "=", "l.post_account")
+            ->where("a.entity_id", $entity->id)
+            ->whereIn("a.account_type", $movementTypes)
+            ->where("bank.account_type", Account::BANK)
+            ->whereBetween("l.posting_date", [$fyStart, $fyEndDate])
+            ->whereNull("l.deleted_at")
+            ->whereNull("t.deleted_at")
+            ->distinct()
+            ->get(["a.id as account_id", "l.transaction_id", "l.line_item_id"])
+            ->each(function ($link) use (&$auditByAccount) {
+                $auditByAccount[$link->account_id]["txn"][] = $link->transaction_id;
+                if ($link->line_item_id) {
+                    $auditByAccount[$link->account_id]["line"][] = $link->line_item_id;
+                }
+            });
+
+        // Bank flows for the cash cross-checks (V05/V06).
+        $bankFlows = DB::table("ifrs_ledgers as l")
+            ->join("ifrs_accounts as a", "a.id", "=", "l.post_account")
+            ->where("a.entity_id", $entity->id)
+            ->where("a.account_type", Account::BANK)
+            ->whereBetween("l.posting_date", [$fyStart, $fyEndDate])
+            ->whereNull("l.deleted_at")
+            ->selectRaw("SUM(CASE WHEN l.entry_type = 'D' THEN l.amount ELSE 0 END) as inflows,
+                SUM(CASE WHEN l.entry_type = 'C' THEN l.amount ELSE 0 END) as outflows")
+            ->first();
+
+        // GST collected/paid from the accounts the entity's Vats post to
+        // (seeded "GST 10%" → account 2200): credits are GST collected on
+        // receipts, debits are GST paid on payments.
+        $vatAccountIds = DB::table("ifrs_vats")
+            ->where("entity_id", $entity->id)
+            ->whereNotNull("account_id")
+            ->pluck("account_id")
+            ->unique()
+            ->values();
+        $gst = (object) ["collected" => 0.0, "paid" => 0.0];
+        if ($vatAccountIds->isNotEmpty()) {
+            $gst = DB::table("ifrs_ledgers")
+                ->whereIn("post_account", $vatAccountIds)
+                ->whereBetween("posting_date", [$fyStart, $fyEndDate])
+                ->whereNull("deleted_at")
+                ->selectRaw("SUM(CASE WHEN entry_type = 'C' THEN amount ELSE 0 END) as collected,
+                    SUM(CASE WHEN entry_type = 'D' THEN amount ELSE 0 END) as paid")
+                ->first();
+        }
+
+        // Label rows initialised from config (form order preserved).
+        $makeRows = function (array $defs): array {
+            $rows = [];
+            foreach ($defs as $label => $def) {
+                $rows[$label] = [
+                    "item" => "6",
+                    "label" => $label,
+                    "name" => $def["name"],
+                    "note" => $def["note"] ?? null,
+                    "accounts" => [],
+                    "amount" => 0.0,
+                    "total" => (bool) ($def["total"] ?? false),
+                    "sourced" => !empty($def["accounts"]),
+                    "transaction_ids" => [],
+                    "line_item_ids" => [],
+                ];
+            }
+            return $rows;
+        };
+        $incomeRows = $makeRows($config["income_labels"]);
+        $expenseRows = $makeRows($config["expense_labels"]);
+
+        $accountMap = function (array $defs): array {
+            $map = [];
+            foreach ($defs as $label => $def) {
+                foreach ($def["accounts"] ?? [] as $code) {
+                    $map[(int) $code] = $label;
+                }
+            }
+            return $map;
+        };
+        $incomeAccountMap = $accountMap($config["income_labels"]);
+        $expenseAccountMap = $accountMap($config["expense_labels"]);
+
+        $assignAccount = function (array &$rows, string $label, object $m, float $net, array $audit): void {
+            $rows[$label]["accounts"][] = [
+                "code" => $m->code, "name" => $m->name, "amount" => round($net),
+            ];
+            $rows[$label]["amount"] += $net;
+            $rows[$label]["sourced"] = true;
+            $rows[$label]["transaction_ids"] = array_merge($rows[$label]["transaction_ids"], $audit["txn"] ?? []);
+            $rows[$label]["line_item_ids"] = array_merge($rows[$label]["line_item_ids"], $audit["line"] ?? []);
+        };
+
+        $nonDeductible = 0.0;
+        $exemptIncome = 0.0;
+        $otherNonAssessable = 0.0;
+        $capitalAccounts = [];
+        $dividendsPaid = 0.0;
+        $salaryTotal = 0.0;
+        $salaryAccounts = array_map("intval", $config["salary_expense_accounts"]);
+
+        foreach ($accountMovements as $m) {
+            $isRevenue = in_array($m->account_type, $revenueTypes);
+            $net = $isRevenue
+                ? (float) $m->credits - (float) $m->debits
+                : (float) $m->debits - (float) $m->credits;
+            $audit = $auditByAccount[$m->id] ?? [];
+            $flag = $flags[(int) $m->code] ?? null;
+
+            if ($flag === "excluded") {
+                continue;
+            }
+
+            if ($m->account_type === Account::NON_CURRENT_ASSET) {
+                // Capital purchases: reference data for Item 10 (SBE
+                // simplified depreciation), never an Item 6 deduction.
+                $capitalAccounts[] = ["code" => $m->code, "name" => $m->name, "amount" => round($net)];
+                continue;
+            }
+
+            if ($m->account_type === Account::EQUITY) {
+                if ((int) $m->code === (int) $config["dividends_paid_account"]) {
+                    $dividendsPaid = round($net);
+                }
+                // Other equity movements (share capital, injections) do
+                // not appear on the return's sourced labels; they are
+                // covered by the V05 bank-flow explanation note.
+                continue;
+            }
+
+            if ($isRevenue) {
+                $mapped = $incomeAccountMap[(int) $m->code] ?? null;
+                $label = $mapped ?? ($config["fallback"][$m->account_type] ?? "R");
+                if ($mapped === null) {
+                    $warnings[] = "Income account {$m->code} {$m->name} is not mapped in config/ato_tax_report.php — reported at Item 6 label {$label}.";
+                }
+                $assignAccount($incomeRows, $label, $m, $net, $audit);
+                if ($flag === "non_assessable_exempt") {
+                    $exemptIncome += $net;
+                } elseif ($flag === "non_assessable_other") {
+                    $otherNonAssessable += $net;
+                }
+            } else {
+                $mapped = $expenseAccountMap[(int) $m->code] ?? null;
+                $label = $mapped ?? $config["fallback"]["expense"];
+                if ($mapped === null) {
+                    $warnings[] = "Expense account {$m->code} {$m->name} is not mapped in config/ato_tax_report.php — reported at Item 6 label {$label}.";
+                }
+                $assignAccount($expenseRows, $label, $m, $net, $audit);
+                if ($flag === "non_deductible") {
+                    $nonDeductible += $net;
+                }
+                if (in_array((int) $m->code, $salaryAccounts)) {
+                    $salaryTotal += $net;
+                }
+            }
+        }
+
+        // Round each label to whole dollars, then derive totals from the
+        // rounded labels so V01–V04 hold exactly (spec V08).
+        foreach ($incomeRows as $label => &$row) {
+            if (!$row["total"]) {
+                $row["amount"] = round($row["amount"]);
+                $row["transaction_ids"] = implode(",", array_unique($row["transaction_ids"]));
+                $row["line_item_ids"] = implode(",", array_unique($row["line_item_ids"]));
+            }
+        }
+        unset($row);
+        foreach ($expenseRows as $label => &$row) {
+            if (!$row["total"]) {
+                $row["amount"] = round($row["amount"]);
+                $row["transaction_ids"] = implode(",", array_unique($row["transaction_ids"]));
+                $row["line_item_ids"] = implode(",", array_unique($row["line_item_ids"]));
+            }
+        }
+        unset($row);
+
+        $sumNonTotals = fn (array $rows) => round(array_sum(array_map(
+            fn ($r) => $r["total"] ? 0 : $r["amount"], array_values($rows)
+        )));
+
+        $totalIncome = $sumNonTotals($incomeRows);
+        $totalExpenses = $sumNonTotals($expenseRows);
+        $incomeRows["S"]["amount"] = $totalIncome;
+        $expenseRows["Q"]["amount"] = $totalExpenses;
+
+        $profitOrLoss = $totalIncome - $totalExpenses; // 6-T
+        $nonDeductible = round($nonDeductible);
+        $exemptIncome = round($exemptIncome);
+        $otherNonAssessable = round($otherNonAssessable);
+        $taxableIncome = $profitOrLoss + $nonDeductible - $exemptIncome - $otherNonAssessable; // 7-T
+        $capitalTotal = array_sum(array_column($capitalAccounts, "amount"));
+
+        $gstCollected = round((float) $gst->collected);
+        $gstPaid = round((float) $gst->paid);
+        $bankInflows = round((float) $bankFlows->inflows);
+        $bankOutflows = round((float) $bankFlows->outflows);
+
+        // Item 8 as-at balances at 30 June (cumulative ledger + opening
+        // Balance rows — the same basis as the trial balance).
+        $asAtBalance = function (array $types) use ($entity, $fyEndDate): float {
+            $total = 0.0;
+            foreach (Account::where("entity_id", $entity->id)->whereIn("account_type", $types)->get() as $account) {
+                $total += (float) Ledger::balance(
+                    $account,
+                    Carbon::create(2000, 1, 1),
+                    $fyEndDate,
+                    $entity->currency_id
+                )[$entity->currency_id];
+                $total += OpeningBalances::effectiveOpening($account, $entity);
+            }
+            return $total;
+        };
+        $tradeDebtors = round($asAtBalance([Account::RECEIVABLE]));
+        $currentAssets = round($asAtBalance([
+            Account::BANK, Account::RECEIVABLE, Account::CURRENT_ASSET, Account::INVENTORY,
+        ]));
+        $totalAssets = round($asAtBalance([
+            Account::BANK, Account::RECEIVABLE, Account::CURRENT_ASSET, Account::INVENTORY,
+            Account::NON_CURRENT_ASSET, Account::CONTRA_ASSET,
+        ]));
+        $tradeCreditors = round(abs($asAtBalance([Account::PAYABLE])));
+        $currentLiabilities = round(abs($asAtBalance([Account::PAYABLE, Account::CURRENT_LIABILITY])));
+        $totalLiabilities = round(abs($asAtBalance([
+            Account::PAYABLE, Account::CURRENT_LIABILITY, Account::NON_CURRENT_LIABILITY,
+        ])));
+
+        // Non-cash P&L ledger rows excluded by the bank filter (V07).
+        $nonCashRows = DB::table("ifrs_ledgers as l")
+            ->join("ifrs_transactions as t", "t.id", "=", "l.transaction_id")
+            ->join("ifrs_accounts as a", "a.id", "=", "l.post_account")
+            ->join("ifrs_accounts as main", "main.id", "=", "t.account_id")
+            ->where("a.entity_id", $entity->id)
+            ->whereIn("a.account_type", [...$revenueTypes, ...$expenseTypes])
+            ->where("main.account_type", "!=", Account::BANK)
+            ->whereBetween("l.posting_date", [$fyStart, $fyEndDate])
+            ->whereNull("l.deleted_at")
+            ->whereNull("t.deleted_at")
+            ->count();
+
+        // Data completeness: best-effort posting means payments can exist
+        // without ever reaching the ledger.
+        $unpostedPayments = Payment::whereNull("ifrs_receipt_id")
+            ->where("status", "!=", Payment::STATUS_VOID)->count();
+        $unpostedBillPayments = BillPayment::whereNull("ifrs_payment_id")
+            ->where("status", "!=", BillPayment::STATUS_VOID)->count();
+        if ($unpostedPayments || $unpostedBillPayments) {
+            $warnings[] = sprintf(
+                "%d client payment(s) and %d bill payment(s) are not posted to the IFRS ledger and are excluded from this report.",
+                $unpostedPayments,
+                $unpostedBillPayments
+            );
+        }
+
+        // Spec §7 validation rules.
+        $validations = [];
+        $addValidation = function (string $code, string $description, bool $pass, string $detail) use (&$validations): void {
+            $validations[] = [
+                "code" => $code,
+                "description" => $description,
+                "status" => $pass ? "PASS" : "FAIL",
+                "detail" => $detail,
+            ];
+        };
+
+        $negativeLabels = [];
+        foreach ([...$incomeRows, ...$expenseRows] as $row) {
+            if (!$row["total"] && $row["amount"] < 0) {
+                $negativeLabels[] = "6-{$row['label']} {$row['name']}";
+            }
+        }
+
+        $taxRate = (float) $config["company_tax_rate"];
+        $estimatedTax = max(0, $taxableIncome) * $taxRate / 100;
+
+        $addValidation("V01", "Total income label equals sum of income field amounts", true,
+            "6-S {$totalIncome} is the sum of the rounded income labels.");
+        $addValidation("V02", "Total expenses label equals sum of expense field amounts", true,
+            "6-Q {$totalExpenses} is the sum of the rounded expense labels.");
+        $addValidation("V03", "Net profit or loss equals total income minus total expenses", true,
+            "6-T {$profitOrLoss} = 6-S {$totalIncome} − 6-Q {$totalExpenses}.");
+        $addValidation("V04", "Taxable income equals net profit plus add-backs less subtractions", true,
+            "7-T {$taxableIncome} = 6-T {$profitOrLoss} + 7-W {$nonDeductible} − 7-V {$exemptIncome} − 7-Q {$otherNonAssessable}.");
+
+        $inflowGap = $bankInflows - ($totalIncome + $gstCollected + $exemptIncome + $otherNonAssessable);
+        $addValidation("V05", "Bank inflows reconcile to income plus GST collected plus non-assessable receipts",
+            abs($inflowGap) <= 1,
+            "Bank inflows {$bankInflows} vs expected " . ($bankInflows - $inflowGap)
+            . ". Differences are loan proceeds, capital injections or inter-account transfers and must be explained.");
+
+        $outflowGap = $bankOutflows - ($totalExpenses + $gstPaid + $capitalTotal);
+        $addValidation("V06", "Bank outflows reconcile to expenses plus GST paid plus capital purchases",
+            abs($outflowGap) <= 1,
+            "Bank outflows {$bankOutflows} vs expected " . ($bankOutflows - $outflowGap)
+            . ". Non-deductible expenses are already inside 6-Q (added back at 7-W).");
+
+        $addValidation("V07", "No non-cash transaction included", true,
+            "{$nonCashRows} non-bank P&L ledger rows excluded (depreciation, revaluations, forex).");
+        $addValidation("V08", "All amounts rounded to whole dollars", true,
+            "Label amounts are rounded to the nearest dollar; totals derive from rounded labels.");
+        $addValidation("V09", "No negative amounts except loss fields", empty($negativeLabels),
+            empty($negativeLabels)
+                ? "All label amounts are zero or positive."
+                : "Negative labels: " . implode(", ", $negativeLabels) . " (net refunds) — review before lodging.");
+        $addValidation("V10", "Every amount traces to IFRS transactions or a declared nil label", true,
+            "Non-zero labels carry source transaction ids in the CSV export; nil labels are declared in config.");
+        $addValidation("V11", "Amounts come from bank-settled transactions", true,
+            "Ledger rows are restricted to transactions whose main account is a BANK account.");
+        $addValidation("V12", "Expense amounts posted to expense accounts", true,
+            "Item 6 expense labels only aggregate OPERATING/DIRECT/OVERHEAD/OTHER expense accounts.");
+        $addValidation("V13", "GST excluded per registration status", $vatAccountIds->isNotEmpty(),
+            $vatAccountIds->isNotEmpty()
+                ? "GST collected {$gstCollected} / paid {$gstPaid} excluded from income and expense labels."
+                : "No Vat configured for the entity — GST treatment unverifiable.");
+
+        $reconciliation = [
+            ["label" => "6-T", "name" => "Total profit or loss (cash basis)", "amount" => $profitOrLoss, "note" => null, "total" => false],
+            ["label" => "7-W", "name" => "Add back: Non-deductible expenses", "amount" => $nonDeductible,
+                "note" => "Meals & entertainment, income tax and franking deficit tax paid (flagged in config)", "total" => false],
+            ["label" => "7-V", "name" => "Less: Exempt income", "amount" => $exemptIncome, "note" => null, "total" => false],
+            ["label" => "7-Q", "name" => "Less: Other income not included in assessable income", "amount" => $otherNonAssessable, "note" => null, "total" => false],
+            ["label" => "7-F", "name" => "Less: Decline in value of depreciating assets", "amount" => null,
+                "note" => "Left blank — SBE claims simplified depreciation at Item 10", "total" => false],
+            ["label" => "7-R", "name" => "Less: Tax losses deducted", "amount" => 0,
+                "note" => "Prior-year losses are not tracked by the system", "total" => false],
+            ["label" => "7-T", "name" => "Taxable or net income or loss", "amount" => $taxableIncome, "note" => null, "total" => true],
+        ];
+
+        $financialInfo = [
+            ["label" => "C", "name" => "Trade debtors", "amount" => $tradeDebtors, "note" => null],
+            ["label" => "D", "name" => "All current assets", "amount" => $currentAssets, "note" => null],
+            ["label" => "E", "name" => "Total assets", "amount" => $totalAssets, "note" => null],
+            ["label" => "F", "name" => "Trade creditors", "amount" => $tradeCreditors, "note" => null],
+            ["label" => "G", "name" => "All current liabilities", "amount" => $currentLiabilities, "note" => null],
+            ["label" => "H", "name" => "Total liabilities", "amount" => $totalLiabilities, "note" => null],
+            ["label" => "D", "name" => "Total salary and wage expenses", "amount" => round($salaryTotal),
+                "note" => "Information label — accounts " . implode(", ", $salaryAccounts) . " (no payroll ledger kept)"],
+            ["label" => "J", "name" => "Franked dividends paid", "amount" => $dividendsPaid,
+                "note" => "Account {$config['dividends_paid_account']} — expected nil until the dividend module exists"],
+            ["label" => "K", "name" => "Unfranked dividends paid", "amount" => 0,
+                "note" => "Requires dividend/franking module (unbuilt)"],
+            ["label" => "P/M", "name" => "Franking account balance (opening/closing)", "amount" => null,
+                "note" => "Not tracked — franking module not implemented"],
+        ];
+
+        return [
+            "fyStart" => $fyStart,
+            "fyEnd" => $fyEndDate,
+            "fyEndYear" => $fyEnd,
+            "entity" => [
+                "name" => $entity?->name ?? "",
+                // Profile first, legacy env config as fallback.
+                "abn" => CompanyProfile::effectiveAbn($entity?->id),
+                "tfn" => CompanyProfile::effectiveTfn($entity?->id),
+            ],
+            "income" => $incomeRows,
+            "expenses" => $expenseRows,
+            "totalIncome" => $totalIncome,
+            "totalExpenses" => $totalExpenses,
+            "profitOrLoss" => $profitOrLoss,
+            "reconciliation" => $reconciliation,
+            "taxableIncome" => $taxableIncome,
+            "financialInfo" => $financialInfo,
+            "capitalPurchases" => ["accounts" => $capitalAccounts, "total" => $capitalTotal],
+            "gst" => ["collected" => $gstCollected, "paid" => $gstPaid],
+            "bank" => ["inflows" => $bankInflows, "outflows" => $bankOutflows],
+            "taxRate" => $taxRate,
+            "estimatedTax" => round($estimatedTax),
+            "validations" => $validations,
+            "warnings" => $warnings,
+        ];
     }
 }

@@ -33,6 +33,10 @@
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
+        <!-- Dedicated compiled-view path: the shared storage cache is owned
+             by the web user, and Blade's cache-refresh touch() on those
+             files fails (utime) when tests run as a different user. -->
+        <env name="VIEW_COMPILED_PATH" value="/tmp/erp-phpunit-views"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>

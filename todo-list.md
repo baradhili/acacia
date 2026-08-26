@@ -20,7 +20,7 @@
 
 - [x] Build a report for Aust BAS
 
-- [ ] Build a report for Aust Company tax
+- [x] Build a report for Aust Company tax
 
 - [x] In teh invoices index view show an icon when invoices have a document attached. - possibly refelct this to all index views of items that can have attached documents.
 
