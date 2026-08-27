@@ -4,9 +4,13 @@ namespace App\Services;
 
 use App\Models\BillPayment;
 use App\Models\Prepayment;
+use App\Models\PrepaymentAmortisation;
+use App\Services\IfrsPosting;
 use Carbon\Carbon;
 use IFRS\Models\Account;
 use IFRS\Models\Entity;
+use IFRS\Models\LineItem;
+use IFRS\Transactions\JournalEntry;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -123,5 +127,158 @@ class PrepaymentService
         }
 
         return max(1, (int) round($start->floatDiffInMonths($end)));
+    }
+
+    /**
+     * Post the monthly amortisation entries that have fallen due, as at
+     * $asOf (defaults to today). A catch-up loop rather than a single
+     * cursor step, so missed runs recover; each month posts its own
+     * JournalEntry dated at that month's end, landing in whichever
+     * financial year the month falls (todo-list #9 proration).
+     *
+     *      Dr expense_account   (e.g. 7500 Subscriptions & Licenses)
+     *      Cr asset_account     (e.g. 460 Prepaid Subscriptions)
+     *
+     * The cursor only advances after a successful post, so a closed IFRS
+     * reporting period stops that prepayment for now and retries on the
+     * next run. Throws on the first failure — callers continue with
+     * other prepayments.
+     *
+     * @return int the number of months posted (or that would post, dry run)
+     */
+    public static function amortise(Prepayment $prepayment, ?Carbon $asOf = null, bool $dryRun = false): int
+    {
+        if ($prepayment->status !== Prepayment::STATUS_ACTIVE) {
+            return 0;
+        }
+
+        $entity = IfrsPosting::resolveEntity();
+        abort_unless((bool) $entity, 503, 'No IFRS entity available for amortisation.');
+
+        $asOf = Carbon::parse($asOf ?? today())->endOfDay();
+        $limit = $asOf->min($prepayment->service_end->copy()->endOfMonth());
+
+        $lockService = app(\App\Services\PeriodLockService::class);
+        $posted = 0;
+
+        $prepayment->refresh();
+        while ($prepayment->next_period_date->lte($limit)) {
+            $periodDate = $prepayment->next_period_date->copy();
+
+            // A row for this month already existing means the cursor is
+            // behind the schedule (e.g. after a manual data fix) — catch
+            // the cursor up without posting twice.
+            $exists = $prepayment->amortisations()
+                ->where('period_date', $periodDate->toDateString())
+                ->exists();
+            if ($exists) {
+                $prepayment->forceFill([
+                    'next_period_date' => self::nextMonthEnd($periodDate),
+                ])->save();
+                continue;
+            }
+
+            // The final period absorbs the rounding remainder so the
+            // schedule sums exactly to the funded amount.
+            $position = $prepayment->amortisations()->count() + 1;
+            $amount = $position >= $prepayment->periods
+                ? round((float) $prepayment->total_amount - ($prepayment->monthly_amount * ($prepayment->periods - 1)), 2)
+                : (float) $prepayment->monthly_amount;
+
+            if ($dryRun) {
+                $posted++;
+                $prepayment->next_period_date = Carbon::parse(self::nextMonthEnd($periodDate));
+                continue;
+            }
+
+            // Voluntary app-level lock check (nothing else enforces it
+            // for console posting).
+            if ($lockService->isDateLocked($periodDate)) {
+                Log::warning('Prepayment amortisation skipped — app period lock', [
+                    'prepayment_id' => $prepayment->id,
+                    'period_date' => $periodDate->toDateString(),
+                ]);
+                break;
+            }
+
+            IfrsPosting::ensureReportingPeriod($periodDate, $entity);
+
+            // Mirror of BillPayment::postToIFRS(): main account credited
+            // (Cr prepaid asset) with the expense line flipped to Dr.
+            $journalEntry = new JournalEntry([
+                'transaction_date' => IfrsPosting::transactionDate($periodDate, $entity),
+                'account_id' => $prepayment->asset_account_id,
+                'credited' => true,
+                'entity_id' => $entity->id,
+                'narration' => "Prepayment amortisation: {$prepayment->description}",
+                'reference' => 'PREPAY-' . $prepayment->id,
+            ]);
+
+            // Persisted before addLineItem() — unsaved items share a
+            // null id and the package silently drops all but the first.
+            $line = LineItem::create([
+                'account_id' => $prepayment->expense_account_id,
+                'amount' => $amount,
+                'quantity' => 1,
+                'entity_id' => $entity->id,
+            ]);
+            $journalEntry->addLineItem($line);
+            $journalEntry->post();
+
+            $prepayment->amortisations()->create([
+                'period_date' => $periodDate->toDateString(),
+                'amount' => $amount,
+                'ifrs_transaction_id' => $journalEntry->id,
+            ]);
+
+            $posted++;
+            $prepayment->forceFill([
+                'next_period_date' => self::nextMonthEnd($periodDate),
+            ])->save();
+        }
+
+        if (!$dryRun) {
+            $remainingPeriods = $prepayment->periods - $prepayment->amortisations()->count();
+            if ($remainingPeriods <= 0) {
+                $prepayment->forceFill(['status' => Prepayment::STATUS_COMPLETED])->save();
+            }
+        }
+
+        return $posted;
+    }
+
+    /**
+     * Reverse one posted amortisation entry with a same-date mirrored
+     * JournalEntry (posted entries are never mutated or deleted). The
+     * month stays consumed — post a correcting entry if the amount was
+     * wrong.
+     */
+    public static function reverseAmortisation(PrepaymentAmortisation $entry): ?int
+    {
+        if (!$entry->isPosted() || $entry->isReversed()) {
+            return null;
+        }
+
+        $reversalId = IfrsPosting::reverseTransaction(
+            (int) $entry->ifrs_transaction_id,
+            'Reversal of prepayment amortisation: ' . $entry->prepayment?->description,
+            'PREPAY-' . $entry->prepayment_id,
+        );
+
+        if ($reversalId) {
+            $entry->update([
+                'reversal_transaction_id' => $reversalId,
+                'reversed_at' => now(),
+            ]);
+        }
+
+        return $reversalId;
+    }
+
+    private static function nextMonthEnd(Carbon $periodDate): string
+    {
+        // startOfMonth first: adding a month to a 31st would overflow
+        // (31 Aug + 1 month = 1 Oct in Carbon) and skip short months.
+        return $periodDate->copy()->startOfMonth()->addMonth()->endOfMonth()->toDateString();
     }
 }
