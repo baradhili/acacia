@@ -7,7 +7,9 @@ use App\Models\FiscalYearClose;
 use App\Models\Payment;
 use App\Models\Prepayment;
 use Carbon\Carbon;
+use IFRS\Models\Account;
 use IFRS\Models\Entity;
+use IFRS\Models\Ledger;
 use IFRS\Models\ReportingPeriod;
 use IFRS\Models\Transaction;
 use IFRS\Scopes\EntityScope;
@@ -226,5 +228,150 @@ class FiscalYearService
         }
 
         return true;
+    }
+
+    /**
+     * P&L account types closed out to Retained Earnings at year end.
+     */
+    public const PNL_ACCOUNT_TYPES = [
+        Account::OPERATING_REVENUE,
+        Account::NON_OPERATING_REVENUE,
+        Account::DIRECT_EXPENSE,
+        Account::OPERATING_EXPENSE,
+        Account::OVERHEAD_EXPENSE,
+        Account::OTHER_EXPENSE,
+    ];
+
+    /**
+     * The equity account closing entries post to (seeded code 3200).
+     */
+    public function retainedEarningsAccount(Entity $entity): ?Account
+    {
+        return Account::withoutGlobalScope(EntityScope::class)
+            ->where('entity_id', $entity->id)
+            ->where('account_type', Account::EQUITY)
+            ->where('code', '3200')
+            ->first();
+    }
+
+    /**
+     * Trial close for a ended financial year — pure computation, no
+     * ledger writes. Produces the checklist plus the proposed closing
+     * entries: every P&L account's cumulative balance as at year end
+     * (epoch-to-date ledger movement plus opening Balance rows — the
+     * same convention the financial statements use), split into this
+     * year's movement and the carry-in from years never closed before.
+     *
+     * Closing to cumulative (not just the year's movement) makes the
+     * first-ever close a catch-up that moves all historic profit into
+     * Retained Earnings; once every prior year has been closed the
+     * carry-in is zero and the two conventions coincide.
+     *
+     * Balances are debit-positive: revenue accounts are negative, so a
+     * profitable year yields a positive net_to_retained_earnings.
+     */
+    public function trialClose(Entity $entity, int $year): array
+    {
+        $this->assertClosable($entity, $year);
+
+        ['start' => $start, 'end' => $end] = $this->bounds($entity, $year);
+        $endOfDay = $end->copy()->endOfDay();
+        $epoch = Carbon::create(2000, 1, 1);
+        $checklist = $this->checklist($entity, $year);
+
+        $re = $this->retainedEarningsAccount($entity);
+        if (!$re) {
+            throw new \RuntimeException(
+                'Retained Earnings account (code 3200) not found for entity — required by the year-end close.'
+            );
+        }
+
+        $lines = [];
+        $sumTotal = 0.0;
+        $sumMovement = 0.0;
+        $sumPrior = 0.0;
+
+        $accounts = Account::withoutGlobalScope(EntityScope::class)
+            ->where('entity_id', $entity->id)
+            ->whereIn('account_type', self::PNL_ACCOUNT_TYPES)
+            ->orderBy('code')
+            ->get();
+
+        foreach ($accounts as $account) {
+            // Cumulative as-at balance, opening Balance rows included —
+            // closing entries from earlier year-ends already net out of
+            // this figure, which is what makes repeated closes correct.
+            $total = (float) Ledger::balance($account, $epoch, $endOfDay, $entity->currency_id)[$entity->currency_id]
+                + OpeningBalances::effectiveOpening($account, $entity);
+
+            if (abs($total) < 0.005) {
+                continue;
+            }
+
+            $movement = (float) Ledger::balance($account, $start, $endOfDay, $entity->currency_id)[$entity->currency_id];
+            $prior = round($total - $movement, 2);
+
+            $lines[] = [
+                'account_id' => $account->id,
+                'code' => $account->code,
+                'name' => $account->name,
+                'type' => $account->account_type,
+                'balance' => round($total, 2),
+                'fy_movement' => round($movement, 2),
+                'prior_years' => $prior,
+                // A credit balance (negative) is closed by debiting the
+                // account; a debit balance by crediting it.
+                'close_side' => $total < 0 ? 'debit' : 'credit',
+                'amount' => round(abs($total), 2),
+            ];
+
+            $sumTotal += round($total, 2);
+            $sumMovement += round($movement, 2);
+            $sumPrior += $prior;
+        }
+
+        return [
+            'year' => $year,
+            'start' => $start,
+            'end' => $end,
+            'checklist' => $checklist,
+            'checklist_passes' => $this->checklistPasses($checklist),
+            'lines' => $lines,
+            // P&L credit balances are profit: negate the debit-positive sums.
+            'fy_net_profit' => round(-$sumMovement, 2),
+            'prior_years_catch_up' => round(-$sumPrior, 2),
+            'net_to_retained_earnings' => round(-$sumTotal, 2),
+            'retained_earnings' => ['id' => $re->id, 'code' => $re->code, 'name' => $re->name],
+        ];
+    }
+
+    /**
+     * Persist a trial close onto the workflow row (creating it in trial
+     * status when absent). Ledger untouched; an existing approval
+     * request keeps its status — the refreshed snapshot is what the
+     * approver reviews.
+     */
+    public function storeTrial(Entity $entity, int $year, ?int $userId = null): array
+    {
+        $trial = $this->trialClose($entity, $year);
+        $record = $this->ensureCloseRecord($entity, $year);
+
+        $record->fill([
+            'checklist' => $trial['checklist'],
+            'trial_totals' => [
+                'fy_net_profit' => $trial['fy_net_profit'],
+                'prior_years_catch_up' => $trial['prior_years_catch_up'],
+                'net_to_retained_earnings' => $trial['net_to_retained_earnings'],
+                'line_count' => count($trial['lines']),
+            ],
+        ]);
+        if ($userId && !$record->requested_by) {
+            $record->requested_by = $userId;
+        }
+        $record->save();
+
+        $trial['record'] = $record;
+
+        return $trial;
     }
 }
