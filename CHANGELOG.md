@@ -3,6 +3,33 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] — 2026-08-27
+
+### Added — prepaid subscriptions, domain names and licence fees (AASB/IFRS)
+
+- Bill lines gain a **Prepaid** tick with a service period (start/end) and an
+  amortise-to account; paying the bill debits the prepaid asset (460) and spawns an
+  amortisation schedule. The `prepayments:amortise` runner (scheduled daily 03:30)
+  posts one entry per due month-end (Dr expense / Cr prepaid, final month absorbs the
+  rounding remainder), crossing financial years as needed — closes the todo-list item
+  about subscriptions spanning FYs.
+- Idempotency by `unique(prepayment_id, period_date)`; per-month same-date reversals;
+  void reverses every posted month. `/prepayments` review screens plus a Prepayment
+  Amortisation Schedule report (screen + PDF).
+- **Domain name registry** (`/domains`): initial purchases capitalise to intangible
+  170 via a capital bill line; indefinite life by default (no amortisation); finite
+  life creates a schedule (Cr 170 / Dr 7910); renewals are guided to 7510 and warned
+  against on the bills forms.
+- New seeded accounts: 460 Prepaid Subscriptions, 170 Domain Names, 7510 Domain
+  Renewal Expense, 7910 Amortisation Expense. Existing databases run
+  `php artisan db:seed --class=IFRSSeeder` (idempotent).
+
+### Changed — purchase GST now debits GST Receivable (430)
+
+- New seeded Vat `I "GST Input 10%"` → account 430; `BillPayment::postToIFRS()`
+  prefers it for supplier-payment GST legs and falls back to `G`/2200 when not
+  seeded. **Closes the long-standing follow-up from #22.**
+
 ## [Unreleased] — 2026-08-16
 
 ### Changed — migrations squashed (50 files → 9)

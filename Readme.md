@@ -104,7 +104,10 @@ A **Laravel 13** accounting platform tailored for an Australian small profession
 ### 2.9 Bills & Expenses (Suppliers)
 
 - Record supplier bills and expense payments
-- Categorise expenses (travel, software, subcontractors, etc.)
+- Categorise expenses (travel, software, subcontractors, etc.) — expense, capital-purchase and prepaid-asset categories
+- Per-line GST treatment (inclusive, ex-GST add-on, GST-free); purchase GST posts to GST Receivable (430)
+- Prepaid subscriptions/licences: per-line service period; payment sits in Prepaid Subscriptions (460) and is amortised monthly by the scheduled `prepayments:amortise` runner (crosses financial years; final month absorbs rounding)
+- Domain names: initial purchases capitalise to the intangible (170) with an indefinite/finite-life registry (`/domains`); renewals expense to Domain Renewal (7510)
 - Attach receipts
 - Pay bill → IFRS cash payment entry on date paid (cash basis)
 
@@ -131,6 +134,7 @@ Built on IFRS reports, extended with project/PO reports:
 - GST/BAS Report (Australian Tax Office format-ready)
 - Company Tax Report (ATO Company Tax Return NAT 0656 label mapping, cash-basis/GST-exclusive, with PDF/Excel/CSV exports and V01–V13 validation checks — see `ATO_tax_report_spec.md`)
 - Company Details (ABN/TFN/ACN, registered address, directors and shareholder registry — admin/accountant maintained at `/company-profile`)
+- Prepayment Amortisation Schedule (prepaid subscriptions/licences, posted/planned months, PDF export)
 - Income by Customer
 - Expenses by Category
 - Project Profitability
