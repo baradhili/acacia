@@ -98,29 +98,28 @@ class BillLifecycleService
                 }
             }
 
-            // Prepayment schedules funded by this bill's items that are
-            // still active (their funding allocation was just unapplied,
-            // or predates an earlier manual allocation removal): reverse
-            // their posted amortisations, then detach from the items so
-            // the bill_items cascade delete doesn't erase the audit rows.
+            // Prepayment schedules tied to this bill's items: still-active
+            // ones get their posted amortisations reversed and are marked
+            // void (unapplyAllocation usually did this already); ANY one
+            // still pointing at the items must be detached before the
+            // bill_items cascade delete erases the audit rows.
             $itemIds = $bill->items()->pluck('id');
-            $prepayments = Prepayment::whereIn('bill_item_id', $itemIds)
-                ->where('status', Prepayment::STATUS_ACTIVE)
-                ->get();
+            $prepayments = Prepayment::whereIn('bill_item_id', $itemIds)->get();
 
             foreach ($prepayments as $prepayment) {
-                foreach ($prepayment->amortisations()
-                    ->whereNotNull('ifrs_transaction_id')
-                    ->whereNull('reversed_at')
-                    ->get() as $entry
-                ) {
-                    PrepaymentService::reverseAmortisation($entry, throw: true);
+                if ($prepayment->status === Prepayment::STATUS_ACTIVE) {
+                    foreach ($prepayment->amortisations()
+                        ->whereNotNull('ifrs_transaction_id')
+                        ->whereNull('reversed_at')
+                        ->get() as $entry
+                    ) {
+                        PrepaymentService::reverseAmortisation($entry, throw: true);
+                    }
+
+                    $prepayment->forceFill(['status' => Prepayment::STATUS_VOID]);
                 }
 
-                $prepayment->forceFill([
-                    'status' => Prepayment::STATUS_VOID,
-                    'bill_item_id' => null,
-                ])->save();
+                $prepayment->forceFill(['bill_item_id' => null])->save();
             }
 
             // The documentable morph has no FK cascade — remove the

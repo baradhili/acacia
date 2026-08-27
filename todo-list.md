@@ -10,7 +10,9 @@
 
 - [x] Time entries need to have date and then amount of hours as default - optional they can have start and end time for the date as well as zero or more breaks 
 
-- [ ] No way to edit or delete bill
+- [x] No way to edit or delete bill - (Aug 2026) Unpaid bills (draft/open/overdue with $0 paid) are fully editable; any bill can be deleted from any status — payments are voided and their ledger shares reversed via BillLifecycleService (mirrored Dr Bank / Cr Expense / Cr GST entries); paid bills are corrected by unapplying the payment first (bills/{bill}/payments/{payment}/unapply) which reverts the bill to editable; supplier payments got a Void action and posted payments can no longer be hard-deleted (which used to orphan their journal entries).
+
+- [ ] How to handle "end/start of financial year"
 
 - [ ] THINK THROUGH - time entry - can only go to a project - project is linked to po
 

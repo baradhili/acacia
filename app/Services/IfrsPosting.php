@@ -109,6 +109,12 @@ class IfrsPosting
     public static function reverseTransaction(int $transactionId, string $narration, string $reference, bool $throw = false): ?int
     {
         try {
+            // Lend the authed user the fallback entity before any IFRS
+            // model query: EntityScope dereferences Auth::user()->entity->id
+            // and fatals for authed users without an entity (same guard
+            // as the posting paths; no-op for unauthenticated callers).
+            self::resolveEntity();
+
             $original = Transaction::with('lineItems.appliedVats.vat')->find($transactionId);
             if (!$original) {
                 throw new \RuntimeException("IFRS transaction {$transactionId} not found for reversal.");
