@@ -133,15 +133,29 @@ class FiscalPeriod extends Model
     }
 
     /**
-     * Create monthly periods for a year
+     * Fiscal-year month for an offset (0 = first month of the FY): FY 2025
+     * with a July start runs Jul 2025 – Jun 2026, so offset 6 is Jan 2026.
      */
-    public static function createMonthlyPeriodsForYear(int $year): array
+    protected static function fiscalMonth(int $year, int $offset, int $startMonth): Carbon
+    {
+        $monthIndex = ($startMonth - 1) + $offset;
+
+        return Carbon::create($year + intdiv($monthIndex, 12), $monthIndex % 12 + 1, 1);
+    }
+
+    /**
+     * Create monthly periods for a fiscal year. $year is the FY label
+     * (matching ifrs_reporting_periods.calendar_year): FY 2025 with the
+     * default July start spans 1 Jul 2025 – 30 Jun 2026 across 12 monthly
+     * rows.
+     */
+    public static function createMonthlyPeriodsForYear(int $year, int $startMonth = 7): array
     {
         $periods = [];
 
-        for ($month = 1; $month <= 12; $month++) {
-            $startDate = Carbon::create($year, $month, 1)->startOfMonth();
-            $endDate = Carbon::create($year, $month, 1)->endOfMonth();
+        for ($offset = 0; $offset < 12; $offset++) {
+            $startDate = self::fiscalMonth($year, $offset, $startMonth);
+            $endDate = $startDate->copy()->endOfMonth();
 
             $periods[] = self::create([
                 'name' => $startDate->format('F Y'),
@@ -156,25 +170,19 @@ class FiscalPeriod extends Model
     }
 
     /**
-     * Create quarterly periods for a year
+     * Create quarterly periods for a fiscal year (Q1 = first three months
+     * of the FY, e.g. Jul–Sep for a July start).
      */
-    public static function createQuarterlyPeriodsForYear(int $year): array
+    public static function createQuarterlyPeriodsForYear(int $year, int $startMonth = 7): array
     {
         $periods = [];
 
-        $quarters = [
-            1 => ['Q1', 1, 3],
-            2 => ['Q2', 4, 6],
-            3 => ['Q3', 7, 9],
-            4 => ['Q4', 10, 12],
-        ];
-
-        foreach ($quarters as $q => [$name, $startMonth, $endMonth]) {
-            $startDate = Carbon::create($year, $startMonth, 1)->startOfMonth();
-            $endDate = Carbon::create($year, $endMonth, 1)->endOfMonth();
+        for ($q = 1; $q <= 4; $q++) {
+            $startDate = self::fiscalMonth($year, ($q - 1) * 3, $startMonth);
+            $endDate = self::fiscalMonth($year, ($q - 1) * 3 + 2, $startMonth)->endOfMonth();
 
             $periods[] = self::create([
-                'name' => "{$name} {$year}",
+                'name' => "Q{$q} FY {$year}",
                 'year' => $year,
                 'period_type' => self::TYPE_QUARTERLY,
                 'start_date' => $startDate,
@@ -186,12 +194,13 @@ class FiscalPeriod extends Model
     }
 
     /**
-     * Create annual period for a year
+     * Create the annual period for a fiscal year (FY 2025 = 1 Jul 2025 –
+     * 30 Jun 2026 for a July start).
      */
-    public static function createAnnualPeriodForYear(int $year): self
+    public static function createAnnualPeriodForYear(int $year, int $startMonth = 7): self
     {
-        $startDate = Carbon::create($year, 1, 1)->startOfYear();
-        $endDate = Carbon::create($year, 12, 31)->endOfYear();
+        $startDate = Carbon::create($year, $startMonth, 1);
+        $endDate = Carbon::create($year + 1, $startMonth, 1)->subDay()->endOfDay();
 
         return self::create([
             'name' => "FY {$year}",
