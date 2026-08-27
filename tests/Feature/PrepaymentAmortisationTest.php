@@ -65,7 +65,10 @@ class PrepaymentAmortisationTest extends TestCase
             ['GST Payable', Account::CONTROL, 2200],
             ['GST Receivable', Account::CONTROL, 430],
             ['Prepaid Subscriptions', Account::CURRENT_ASSET, 460],
+            ['Domain Names', Account::NON_CURRENT_ASSET, 170],
             ['Subscriptions & Licenses', Account::OVERHEAD_EXPENSE, 7500],
+            ['Domain Renewal Expense', Account::OVERHEAD_EXPENSE, 7510],
+            ['Amortisation Expense', Account::OVERHEAD_EXPENSE, 7910],
             ['Insurance', Account::OVERHEAD_EXPENSE, 7300],
             ['Other Expenses', Account::OTHER_EXPENSE, 8900],
         ];
@@ -306,5 +309,111 @@ class PrepaymentAmortisationTest extends TestCase
         $this->actingAs($user)->get(route('reports.export.prepayment-schedule.pdf'))
             ->assertStatus(200)
             ->assertHeader('content-type', 'application/pdf');
+    }
+
+    /**
+     * Pay a single-line (non-prepaid) bill coded to an arbitrary account.
+     */
+    protected function payBillLine(float $unitPriceInclGst, Account $account): void
+    {
+        $bill = Bill::create([
+            'supplier_id' => $this->supplier->id,
+            'bill_date' => '2025-07-01',
+            'due_date' => '2025-07-01',
+        ]);
+        $bill->items()->create([
+            'description' => 'Bill line to ' . $account->code,
+            'quantity' => 1,
+            'unit_price' => $unitPriceInclGst,
+            'tax_rate' => 10,
+            'gst_added' => false,
+            'expense_account_id' => $account->id,
+        ]);
+        $bill->recalculateTotals();
+        $bill->markAsOpen();
+
+        $payment = BillPayment::createWithUniqueNumber([
+            'supplier_id' => $this->supplier->id,
+            'amount' => $bill->total,
+            'payment_date' => '2025-07-01',
+            'payment_method' => BillPayment::METHOD_BANK_TRANSFER,
+        ]);
+        $payment->allocateToBill($bill, (float) $bill->total);
+        $this->assertNotNull($payment->postToIFRS(), $payment->lastPostingError ?? 'posting failed');
+    }
+
+    public function test_domain_purchase_capitalises_and_renewal_leaves_asset_unchanged(): void
+    {
+        $domain = Account::where('code', 170)->first();
+        $renewal = Account::where('code', 7510)->first();
+
+        // Acceptance 5.2 (cash-basis form): $5,000 + $500 GST purchase.
+        $this->payBillLine(5500.0, $domain);
+        $this->assertSame(5000.0, $this->netSum($domain));
+        $this->assertSame(500.0, $this->netSum($this->gstReceivable));
+
+        // Acceptance 5.3: $50 + $5 GST renewal is expensed immediately
+        // and the intangible carrying amount is untouched.
+        $this->payBillLine(55.0, $renewal);
+        $this->assertSame(50.0, $this->netSum($renewal));
+        $this->assertSame(505.0, $this->netSum($this->gstReceivable));
+        $this->assertSame(5000.0, $this->netSum($domain));
+    }
+
+    public function test_finite_life_domain_amortises_from_the_registry(): void
+    {
+        $user = \App\Models\User::factory()->create();
+        $user->entity_id = $this->entity->id;
+        $user->save();
+        \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'admin']);
+        $user->assignRole('admin');
+
+        $domain = \App\Models\Domain::create([
+            'entity_id' => $this->entity->id,
+            'name' => 'example.com.au',
+            'cost' => 2400,
+            'indefinite_life' => false,
+            'useful_life_months' => 24,
+            'purchased_at' => '2025-07-01',
+        ]);
+
+        $response = $this->actingAs($user)
+            ->post(route('domains.amortisation', $domain));
+        $response->assertRedirect(route('prepayments.index'));
+
+        $prepayment = $domain->prepayments()->firstOrFail();
+        $this->assertSame(2400.0, (float) $prepayment->total_amount);
+        $this->assertSame(24, $prepayment->periods);
+        $this->assertSame(100.0, (float) $prepayment->monthly_amount);
+        $this->assertSame(170, (int) $prepayment->assetAccount->code);
+        $this->assertSame(7910, (int) $prepayment->expenseAccount->code);
+
+        Artisan::call('prepayments:amortise', ['--as-of' => '2025-07-31']);
+        $this->assertSame(100.0, $this->netSum(Account::where('code', 7910)->first())); // Dr amortisation
+        $this->assertSame(-100.0, $this->netSum(Account::where('code', 170)->first())); // Cr intangible
+    }
+
+    public function test_indefinite_life_domain_rejects_amortisation(): void
+    {
+        $user = \App\Models\User::factory()->create();
+        $user->entity_id = $this->entity->id;
+        $user->save();
+        \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'admin']);
+        $user->assignRole('admin');
+
+        $domain = \App\Models\Domain::create([
+            'entity_id' => $this->entity->id,
+            'name' => 'forever.example.com',
+            'cost' => 5000,
+            'indefinite_life' => true,
+            'purchased_at' => '2025-07-01',
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('domains.amortisation', $domain))
+            ->assertRedirect(route('domains.show', $domain))
+            ->assertSessionHas('error');
+
+        $this->assertSame(0, \App\Models\Prepayment::count());
     }
 }

@@ -7,6 +7,7 @@ use App\Http\Controllers\ChartOfAccountsController;
 use App\Http\Controllers\CompanyProfileController;
 use App\Http\Controllers\CreditNoteController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DomainController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\EstimateController;
 use App\Http\Controllers\InvoiceController;
@@ -61,6 +62,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/prepayments/{prepayment}/run', [PrepaymentController::class, 'runNow'])->name('prepayments.run');
         Route::post('/prepayments/{prepayment}/void', [PrepaymentController::class, 'void'])->name('prepayments.void');
         Route::post('/prepayments/amortisations/{amortisation}/reverse', [PrepaymentController::class, 'reverseAmortisation'])->name('prepayments.amortisations.reverse');
+
+        // Domain name registry (intangibles)
+        Route::resource('domains', DomainController::class);
+        Route::post('/domains/{domain}/amortisation', [DomainController::class, 'createAmortisation'])->name('domains.amortisation');
     });
 
     // Clients

@@ -19,8 +19,9 @@ return new class extends Migration
         Schema::create('prepayments', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('entity_id');
-            $table->unsignedBigInteger('bill_payment_id');
-            $table->unsignedBigInteger('bill_item_id');
+            $table->unsignedBigInteger('bill_payment_id')->nullable();
+            $table->unsignedBigInteger('bill_item_id')->nullable();
+            $table->unsignedBigInteger('domain_id')->nullable();  // finite-life domain schedules
             $table->string('description', 255);
             $table->unsignedBigInteger('asset_account_id');     // Cr side (460 Prepaid Subscriptions / 170 intangible)
             $table->unsignedBigInteger('expense_account_id');   // Dr side (7500 / 7510 / 7910)
@@ -35,6 +36,10 @@ return new class extends Migration
 
             $table->foreign('bill_payment_id')->references('id')->on('bill_payments')->cascadeOnDelete();
             $table->foreign('bill_item_id')->references('id')->on('bill_items')->cascadeOnDelete();
+            // domain_id is a plain indexed column (the domains table is
+            // created by a later migration, so no hard FK — same
+            // convention as bill_items.expense_account_id).
+            $table->index('domain_id');
             $table->index(['entity_id', 'status']);
         });
 

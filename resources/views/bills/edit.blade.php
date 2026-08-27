@@ -97,6 +97,10 @@
                 what you pay and already includes GST (portion calculated: $110 → $100 + $10);
                 Add GST for suppliers who quote ex-GST lines and add GST at the subtotal
                 ($100 → $110); neither for GST-free supplies (bank fees, rego, basic food…).
+                <span class="block mt-1 text-amber-700">
+                    Capitalise only INITIAL domain purchases ({{ config('subscriptions.domain_intangible_code') }} Domain Names) —
+                    domain renewals must be expensed to {{ config('subscriptions.domain_renewal_expense_code') }} Domain Renewal Expense.
+                </span>
             </p>
 
             <div id="itemsContainer">

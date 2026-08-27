@@ -22,6 +22,7 @@ class Prepayment extends Model
         'entity_id',
         'bill_payment_id',
         'bill_item_id',
+        'domain_id',
         'description',
         'asset_account_id',
         'expense_account_id',
@@ -51,6 +52,15 @@ class Prepayment extends Model
     public function billItem(): BelongsTo
     {
         return $this->belongsTo(BillItem::class);
+    }
+
+    /**
+     * Set for finite-life domain schedules created from the registry
+     * (no bill payment behind them).
+     */
+    public function domain(): BelongsTo
+    {
+        return $this->belongsTo(Domain::class);
     }
 
     public function assetAccount(): BelongsTo

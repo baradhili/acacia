@@ -279,6 +279,18 @@
                 </svg>
                 Prepayments
             </a>
+            <a href="{{ route('domains.index') }}"
+                class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('domains.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                    </path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18M12 3a15 15 0 000 18">
+                    </path>
+                </svg>
+                Domain Names
+            </a>
             <a href="{{ route('opening-balances.index') }}"
                 class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('opening-balances.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
                 <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
