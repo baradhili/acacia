@@ -161,15 +161,16 @@ class Bill extends Model
 
     /**
      * Categories a bill line can be coded to, grouped for the line-item
-     * dropdown: expense accounts, plus non-current-asset accounts for
-     * capital purchases (the BAS G10/G11 split keys off the same
-     * account-type rule).
+     * dropdown: expense accounts, non-current-asset accounts for capital
+     * purchases (the BAS G10/G11 split keys off the same account-type
+     * rule), and the configured prepaid asset accounts whose payments
+     * are amortised over a service period.
      */
     public static function purchaseAccounts(): array
     {
         $format = fn ($account) => $account->code . ' — ' . $account->name;
 
-        return [
+        $groups = [
             'Expenses' => Account::whereIn('account_type', [
                 Account::OPERATING_EXPENSE,
                 Account::DIRECT_EXPENSE,
@@ -185,7 +186,15 @@ class Bill extends Model
                 ->get()
                 ->mapWithKeys(fn ($account) => [$account->id => $format($account)])
                 ->all(),
+            'Prepaid assets' => Account::where('account_type', Account::CURRENT_ASSET)
+                ->whereIn('code', config('subscriptions.prepaid_account_codes', []))
+                ->orderBy('code')
+                ->get()
+                ->mapWithKeys(fn ($account) => [$account->id => $format($account)])
+                ->all(),
         ];
+
+        return array_filter($groups);
     }
 
     public function supplier(): BelongsTo

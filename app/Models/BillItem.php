@@ -22,6 +22,10 @@ class BillItem extends Model
         'discount_amount',
         'total',
         'expense_account_id',
+        'is_prepaid',
+        'service_start',
+        'service_end',
+        'amortise_to_account_id',
         'sort_order',
     ];
 
@@ -34,6 +38,9 @@ class BillItem extends Model
         'discount_percent' => 'decimal:2',
         'discount_amount' => 'decimal:2',
         'total' => 'decimal:2',
+        'is_prepaid' => 'boolean',
+        'service_start' => 'date',
+        'service_end' => 'date',
     ];
 
     protected static function boot()
@@ -70,6 +77,23 @@ class BillItem extends Model
     public function expenseAccount(): BelongsTo
     {
         return $this->belongsTo(\IFRS\Models\Account::class, 'expense_account_id');
+    }
+
+    /**
+     * The account prepaid amounts are amortised to (defaults to the
+     * subscription expense account when null).
+     */
+    public function amortiseAccount(): BelongsTo
+    {
+        return $this->belongsTo(\IFRS\Models\Account::class, 'amortise_to_account_id');
+    }
+
+    /**
+     * Ex-GST funded amount for this line (what a prepayment carries).
+     */
+    public function getNetAmountAttribute(): float
+    {
+        return round((float) $this->total - (float) $this->tax_amount, 2);
     }
 
     /**

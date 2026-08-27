@@ -140,6 +140,11 @@
                                 <input type="checkbox" name="items[{{ $index }}][gst_add]" value="1"
                                     class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 gst-add-toggle"> Add
                             </label>
+                            <label class="flex items-center justify-center gap-1 text-xs text-indigo-700 mt-1"
+                                title="Paid in advance for a service period — held as a prepaid asset and expensed monthly">
+                                <input type="checkbox" name="items[{{ $index }}][is_prepaid]" value="1"
+                                    class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 prepaid-toggle"> Prepaid
+                            </label>
                         </div>
                         <div class="col-span-2">
                             <label class="block text-xs font-medium text-gray-700 mb-1">Category</label>
@@ -159,6 +164,35 @@
                         <div class="col-span-2">
                             <label class="block text-xs font-medium text-gray-700 mb-1">Total</label>
                             <div class="text-sm font-medium text-gray-900 pt-4 line-total">$0.00</div>
+                        </div>
+                        <div class="col-span-12 prepaid-fields hidden bg-indigo-50 border border-indigo-100 rounded-md p-3 grid grid-cols-1 md:grid-cols-4 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Service period start *</label>
+                                <input type="date" name="items[{{ $index }}][service_start]"
+                                    value="{{ $item['service_start'] ?? '' }}"
+                                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Service period end *</label>
+                                <input type="date" name="items[{{ $index }}][service_end]"
+                                    value="{{ $item['service_end'] ?? '' }}"
+                                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Amortise to</label>
+                                <select name="items[{{ $index }}][amortise_to_account_id]"
+                                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
+                                    <option value="">— Default (Subscriptions &amp; Licenses) —</option>
+                                    @foreach ($expenseAccounts as $accountId => $label)
+                                        <option value="{{ $accountId }}"
+                                            {{ ($item['amortise_to_account_id'] ?? '') == $accountId ? 'selected' : '' }}>{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <p class="text-xs text-indigo-700 self-center">
+                                Payment sits in the prepaid asset account and is expensed monthly over the service
+                                period (entries post at each month-end, spanning financial years as needed).
+                            </p>
                         </div>
                     </div>
                 @endforeach
@@ -293,6 +327,11 @@
                     <input type="checkbox" name="items[__INDEX__][gst_add]" value="1"
                         class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 gst-add-toggle"> Add
                 </label>
+                <label class="flex items-center justify-center gap-1 text-xs text-indigo-700 mt-1"
+                    title="Paid in advance for a service period — held as a prepaid asset and expensed monthly">
+                    <input type="checkbox" name="items[__INDEX__][is_prepaid]" value="1"
+                        class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 prepaid-toggle"> Prepaid
+                </label>
             </div>
             <div class="col-span-2">
                 <label class="block text-xs font-medium text-gray-700 mb-1">Category</label>
@@ -312,6 +351,32 @@
                 <label class="block text-xs font-medium text-gray-700 mb-1">Total</label>
                 <div class="text-sm font-medium text-gray-900 pt-4 line-total">$0.00</div>
                 <button type="button" class="remove-item text-red-600 hover:text-red-800 text-xs mt-1">Remove</button>
+            </div>
+            <div class="col-span-12 prepaid-fields hidden bg-indigo-50 border border-indigo-100 rounded-md p-3 grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Service period start *</label>
+                    <input type="date" name="items[__INDEX__][service_start]"
+                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Service period end *</label>
+                    <input type="date" name="items[__INDEX__][service_end]"
+                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Amortise to</label>
+                    <select name="items[__INDEX__][amortise_to_account_id]"
+                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
+                        <option value="">— Default (Subscriptions &amp; Licenses) —</option>
+                        @foreach ($expenseAccounts as $accountId => $label)
+                            <option value="{{ $accountId }}">{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <p class="text-xs text-indigo-700 self-center">
+                    Payment sits in the prepaid asset account and is expensed monthly over the service
+                    period (entries post at each month-end, spanning financial years as needed).
+                </p>
             </div>
         </div>
     </template>
@@ -367,6 +432,15 @@
                         if (this.checked) gstToggle.checked = false;
                         updateTotal();
                     });
+
+                    // Prepaid service-period panel
+                    const prepaidToggle = row.querySelector('.prepaid-toggle');
+                    const prepaidFields = row.querySelector('.prepaid-fields');
+                    if (prepaidToggle && prepaidFields) {
+                        const syncPrepaid = () => prepaidFields.classList.toggle('hidden', !prepaidToggle.checked);
+                        prepaidToggle.addEventListener('change', syncPrepaid);
+                        syncPrepaid();
+                    }
 
                     [qtyInput, priceInput, gstToggle, discInput].forEach(input => {
                         if (input) input.addEventListener('input', updateTotal);
