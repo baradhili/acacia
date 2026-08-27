@@ -3,6 +3,20 @@
 
 @section('content')
 <div x-data="widgetManager()" @toggle-widget-edit.window="toggleEdit()">
+    @if ($unclosedPriorYear ?? null)
+        <!-- Year-end close nudge -->
+        <div class="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg flex justify-between items-center">
+            <p class="text-amber-800 text-sm">
+                <strong>Action needed:</strong> financial year {{ $unclosedPriorYear }} has ended but hasn't been
+                closed. Run the year-end close to move its profit into Retained Earnings and lock the year.
+            </p>
+            <a href="{{ route('financial-years.trial', $unclosedPriorYear) }}"
+                class="ml-4 shrink-0 px-3 py-1.5 bg-amber-600 text-white text-sm rounded hover:bg-amber-700">
+                Run trial close
+            </a>
+        </div>
+    @endif
+
     <!-- Edit Mode Instructions -->
     <div x-show="isEditing" class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex justify-between items-center">
         <p class="text-blue-800 text-sm">
