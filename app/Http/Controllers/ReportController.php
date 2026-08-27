@@ -924,7 +924,9 @@ class ReportController extends Controller
     public function bas(Request $request)
     {
         // FY named by its June year-end: FY2026 = Jul 2025 – Jun 2026.
-        $currentFyEnd = now()->month >= 7 ? now()->year + 1 : now()->year;
+        // Derived from the entity's year_start so a non-July FY (or a
+        // later change to year_start) cannot drift from the ledger.
+        $currentFyEnd = ReportingPeriod::year(now(), $this->ifrsEntity()) + 1;
         $fyEnd = (int) $request->get("fy", $currentFyEnd);
 
         $statement = $this->buildBasStatement($fyEnd);
@@ -947,8 +949,13 @@ class ReportController extends Controller
      */
     protected function buildBasStatement(int $fyEnd): array
     {
-        $fyStart = Carbon::create($fyEnd - 1, 7, 1)->startOfDay();
-        $fyEndDate = Carbon::create($fyEnd, 6, 30)->endOfDay();
+        // FY boundaries from the entity's year_start ($fyEnd is the FY's
+        // ending calendar year; the FY label is one less). Identical to
+        // the previous hard-coded Jul–Jun for the default July start.
+        $entity = $this->ifrsEntity();
+        ['start' => $fyStart, 'end' => $fyEndDate] = (new FiscalYearService())->bounds($entity, $fyEnd - 1);
+        $fyStart = $fyStart->startOfDay();
+        $fyEndDate = $fyEndDate->copy()->endOfDay();
 
         $invoices = \App\Models\Invoice::whereBetween("issue_date", [$fyStart, $fyEndDate])
             ->whereNotIn("status", [\App\Models\Invoice::STATUS_DRAFT, \App\Models\Invoice::STATUS_CANCELLED])
@@ -960,19 +967,19 @@ class ReportController extends Controller
             ->with("items.expenseAccount")
             ->get();
 
-        // BAS quarters: Q1 Jul-Sep, Q2 Oct-Dec, Q3 Jan-Mar, Q4 Apr-Jun.
-        $quarterOf = fn ($date) => match (true) {
-            $date->month >= 7 && $date->month <= 9 => 0,
-            $date->month >= 10 => 1,
-            $date->month <= 3 => 2,
-            default => 3,
-        };
+        // BAS quarters: consecutive three-month blocks of the FY, in
+        // whatever month it starts (Q1 Jul-Sep, Q2 Oct-Dec, Q3 Jan-Mar,
+        // Q4 Apr-Jun for the default July start).
+        $quarterOf = fn ($date) => intdiv(
+            $fyStart->copy()->startOfMonth()->diffInMonths(Carbon::parse($date)->startOfMonth()),
+            3
+        );
 
         $quarters = [];
         foreach ([0, 1, 2, 3] as $i) {
-            $start = Carbon::create($fyEnd - 1, 7 + $i * 3, 1)->startOfDay();
+            $start = $fyStart->copy()->addMonths($i * 3)->startOfDay();
             $quarters[$i] = [
-                "label" => sprintf("Q%d (%s)", $i + 1, ["Jul-Sep", "Oct-Dec", "Jan-Mar", "Apr-Jun"][$i]),
+                "label" => sprintf("Q%d (%s-%s)", $i + 1, $start->format("M"), $start->copy()->addMonths(2)->format("M")),
                 "start" => $start,
                 "end" => $start->copy()->addMonths(3)->subDay()->endOfDay(),
                 "g1" => 0.0,
@@ -1141,7 +1148,9 @@ class ReportController extends Controller
      */
     public function companyTax(Request $request)
     {
-        $currentFyEnd = now()->month >= 7 ? now()->year + 1 : now()->year;
+        // FY named by its June year-end, derived from the entity's
+        // year_start so it cannot drift from the ledger's FY boundaries.
+        $currentFyEnd = ReportingPeriod::year(now(), $this->ifrsEntity()) + 1;
         $fyEnd = (int) $request->get("fy", $currentFyEnd);
 
         $statement = $this->buildCompanyTaxStatement($fyEnd);
@@ -1261,9 +1270,12 @@ class ReportController extends Controller
      */
     protected function buildCompanyTaxStatement(int $fyEnd): array
     {
-        $fyStart = Carbon::create($fyEnd - 1, 7, 1)->startOfDay();
-        $fyEndDate = Carbon::create($fyEnd, 6, 30)->endOfDay();
+        // FY boundaries from the entity's year_start ($fyEnd is the FY's
+        // ending calendar year; the FY label is one less).
         $entity = $this->ifrsEntity();
+        ['start' => $fyStart, 'end' => $fyEndDate] = (new FiscalYearService())->bounds($entity, $fyEnd - 1);
+        $fyStart = $fyStart->startOfDay();
+        $fyEndDate = $fyEndDate->copy()->endOfDay();
         $this->getReportingPeriod($fyEndDate);
 
         $config = config("ato_tax_report");
