@@ -89,7 +89,15 @@
                     <tbody class="divide-y">
                         @foreach($bill->items as $item)
                             <tr>
-                                <td class="py-3">{{ $item->description }}</td>
+                                <td class="py-3">
+                                    {{ $item->description }}
+                                    @if($item->is_prepaid)
+                                        <span class="block text-xs text-indigo-600"
+                                            title="Held as a prepaid asset and expensed monthly over the service period">
+                                            Prepaid — service period {{ optional($item->service_start)->format('d/m/Y') }} – {{ optional($item->service_end)->format('d/m/Y') }}
+                                        </span>
+                                    @endif
+                                </td>
                                 <td class="py-3 text-right">{{ number_format($item->quantity, 2) }}</td>
                                 <td class="py-3 text-right">${{ number_format($item->unit_price, 2) }}</td>
                                 <td class="py-3 text-right">

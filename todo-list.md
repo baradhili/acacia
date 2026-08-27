@@ -6,7 +6,7 @@
 
 - [x] Need to be able to edit opening balances as admin or accountant.
 
-- [ ] NOT YET - handle journaling subscriptions that run for a time period overlapping financial years (ie. prorate for the year) - have it as an flag  for a bill
+- [x] NOT YET - handle journaling subscriptions that run for a time period overlapping financial years (ie. prorate for the year) - have it as an flag  for a bill (Prepaid tick + service period on bill lines; prepayments:amortise posts per month-end across FYs)
 
 - [x] Time entries need to have date and then amount of hours as default - optional they can have start and end time for the date as well as zero or more breaks 
 

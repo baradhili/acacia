@@ -41,6 +41,7 @@ class BillController extends Controller
         $suppliers = Supplier::orderBy('name')->pluck('name', 'id');
         $projects = Project::orderBy('name')->get();
         $purchaseAccounts = Bill::purchaseAccounts();
+        $expenseAccounts = Bill::expenseAccounts();
         $paymentMethods = BillPayment::paymentMethods();
 
         $selectedSupplier = $request->supplier_id ? Supplier::find($request->supplier_id) : null;
@@ -50,6 +51,7 @@ class BillController extends Controller
             'suppliers',
             'projects',
             'purchaseAccounts',
+            'expenseAccounts',
             'paymentMethods',
             'selectedSupplier',
             'selectedProject'
@@ -81,6 +83,12 @@ class BillController extends Controller
             'items.*.gst_add' => 'nullable|boolean',
             'items.*.discount_percent' => 'nullable|numeric|min:0|max:100',
             'items.*.expense_account_id' => 'nullable|integer|exists:ifrs_accounts,id',
+            // Prepaid service contracts: the payment debits the prepaid
+            // asset account and amortises monthly over the service period.
+            'items.*.is_prepaid' => 'nullable|boolean',
+            'items.*.service_start' => 'required_with:items.*.is_prepaid|nullable|date',
+            'items.*.service_end' => 'required_with:items.*.is_prepaid|nullable|date|after_or_equal:items.*.service_start',
+            'items.*.amortise_to_account_id' => 'nullable|integer|exists:ifrs_accounts,id',
             'paid_now' => 'nullable|boolean',
             'payment_date' => 'required_if:paid_now,1|nullable|date',
             'payment_method' => 'required_if:paid_now,1|nullable|in:' . implode(',', array_keys(BillPayment::paymentMethods())),
@@ -112,6 +120,10 @@ class BillController extends Controller
                     'gst_added' => empty($item['gst']) && !empty($item['gst_add']),
                     'discount_percent' => $item['discount_percent'] ?? 0,
                     'expense_account_id' => $item['expense_account_id'] ?? null,
+                    'is_prepaid' => !empty($item['is_prepaid']),
+                    'service_start' => !empty($item['is_prepaid']) ? $item['service_start'] : null,
+                    'service_end' => !empty($item['is_prepaid']) ? $item['service_end'] : null,
+                    'amortise_to_account_id' => $item['amortise_to_account_id'] ?? null,
                     'sort_order' => $index,
                 ]);
             }
@@ -183,8 +195,9 @@ class BillController extends Controller
         $suppliers = Supplier::orderBy('name')->pluck('name', 'id');
         $projects = Project::orderBy('name')->get();
         $purchaseAccounts = Bill::purchaseAccounts();
+        $expenseAccounts = Bill::expenseAccounts();
 
-        return view('bills.edit', compact('bill', 'suppliers', 'projects', 'purchaseAccounts'));
+        return view('bills.edit', compact('bill', 'suppliers', 'projects', 'purchaseAccounts', 'expenseAccounts'));
     }
 
     public function update(Request $request, Bill $bill)
@@ -211,6 +224,11 @@ class BillController extends Controller
             'items.*.gst_add' => 'nullable|boolean',
             'items.*.discount_percent' => 'nullable|numeric|min:0|max:100',
             'items.*.expense_account_id' => 'nullable|integer|exists:ifrs_accounts,id',
+            // Same prepaid service-contract fields as store()
+            'items.*.is_prepaid' => 'nullable|boolean',
+            'items.*.service_start' => 'required_with:items.*.is_prepaid|nullable|date',
+            'items.*.service_end' => 'required_with:items.*.is_prepaid|nullable|date|after_or_equal:items.*.service_start',
+            'items.*.amortise_to_account_id' => 'nullable|integer|exists:ifrs_accounts,id',
         ]);
 
         DB::beginTransaction();
@@ -253,6 +271,10 @@ class BillController extends Controller
                     'gst_added' => empty($item['gst']) && !empty($item['gst_add']),
                     'discount_percent' => $item['discount_percent'] ?? 0,
                     'expense_account_id' => $item['expense_account_id'] ?? null,
+                    'is_prepaid' => !empty($item['is_prepaid']),
+                    'service_start' => !empty($item['is_prepaid']) ? $item['service_start'] : null,
+                    'service_end' => !empty($item['is_prepaid']) ? $item['service_end'] : null,
+                    'amortise_to_account_id' => $item['amortise_to_account_id'] ?? null,
                     'sort_order' => $index,
                 ];
 

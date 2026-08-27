@@ -7,12 +7,14 @@ use App\Http\Controllers\ChartOfAccountsController;
 use App\Http\Controllers\CompanyProfileController;
 use App\Http\Controllers\CreditNoteController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DomainController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\EstimateController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\LogoController;
 use App\Http\Controllers\OpeningBalanceController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\PrepaymentController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\PurchaseOrderController;
@@ -53,6 +55,17 @@ Route::middleware('auth')->group(function () {
         // Company identity: ABN/TFN, address, directors, shareholders
         Route::get('/company-profile', [CompanyProfileController::class, 'index'])->name('company-profile.index');
         Route::put('/company-profile', [CompanyProfileController::class, 'update'])->name('company-profile.update');
+
+        // Prepaid subscriptions / licences (ledger-posting actions)
+        Route::get('/prepayments', [PrepaymentController::class, 'index'])->name('prepayments.index');
+        Route::get('/prepayments/{prepayment}', [PrepaymentController::class, 'show'])->name('prepayments.show');
+        Route::post('/prepayments/{prepayment}/run', [PrepaymentController::class, 'runNow'])->name('prepayments.run');
+        Route::post('/prepayments/{prepayment}/void', [PrepaymentController::class, 'void'])->name('prepayments.void');
+        Route::post('/prepayments/amortisations/{amortisation}/reverse', [PrepaymentController::class, 'reverseAmortisation'])->name('prepayments.amortisations.reverse');
+
+        // Domain name registry (intangibles)
+        Route::resource('domains', DomainController::class);
+        Route::post('/domains/{domain}/amortisation', [DomainController::class, 'createAmortisation'])->name('domains.amortisation');
     });
 
     // Clients
@@ -174,6 +187,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/export/bas/excel', [\App\Http\Controllers\ReportController::class, 'exportBasExcel'])->name('reports.export.bas.excel');
     Route::get('/reports/export/company-tax/excel', [\App\Http\Controllers\ReportController::class, 'exportCompanyTaxExcel'])->name('reports.export.company-tax.excel');
     Route::get('/reports/export/company-tax/csv', [\App\Http\Controllers\ReportController::class, 'exportCompanyTaxCsv'])->name('reports.export.company-tax.csv');
+    Route::get('/reports/prepayment-schedule', [\App\Http\Controllers\ReportController::class, 'prepaymentSchedule'])->name('reports.prepayment-schedule');
+    Route::get('/reports/export/prepayment-schedule/pdf', [\App\Http\Controllers\ReportController::class, 'exportPrepaymentSchedulePdf'])->name('reports.export.prepayment-schedule.pdf');
 
     // Wise Reconciliation
     Route::get('/reconciliation', [ReconciliationController::class, 'index'])->name('reconciliation.index');

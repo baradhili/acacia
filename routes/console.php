@@ -44,3 +44,10 @@ Schedule::command('statements:send')
     ->monthlyOn(1, '09:00')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/client-statements.log'));
+
+// Post due prepayment amortisation entries daily — the runner is a
+// catch-up loop, so a missed run simply catches up the next day.
+Schedule::command('prepayments:amortise')
+    ->dailyAt('03:30')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/prepayment-amortisation.log'));

@@ -151,6 +151,9 @@ class IFRSSeeder extends Seeder
         $this->createAccount('Motor Vehicles', Account::NON_CURRENT_ASSET, 140, $entity);
         $this->createAccount('Tools & Equipment', Account::NON_CURRENT_ASSET, 150, $entity);
         $this->createAccount('Software', Account::NON_CURRENT_ASSET, 160, $entity);
+        // Intangible asset — initial domain purchases are capitalised here
+        // (renewals are expensed, see 7510). Indefinite life by default.
+        $this->createAccount('Domain Names', Account::NON_CURRENT_ASSET, 170, $entity);
         $this->createAccount('Accumulated Depreciation', Account::CONTRA_ASSET, 190, $entity);
 
         // Bank Accounts (Codes 300-399)
@@ -164,6 +167,9 @@ class IFRSSeeder extends Seeder
         $this->createAccount('GST Receivable', Account::CURRENT_ASSET, 430, $entity);
         $this->createAccount('Undeposited Funds', Account::CURRENT_ASSET, 440, $entity);
         $this->createAccount('Director Loan Receivable', Account::CURRENT_ASSET, 450, $entity);
+        // Subscriptions/licences paid in advance sit here until amortised
+        // to 7500 by the prepayments:amortise runner.
+        $this->createAccount('Prepaid Subscriptions', Account::CURRENT_ASSET, 460, $entity);
 
         // ============================================
         // LIABILITY ACCOUNTS (Codes 2000-2999)
@@ -236,10 +242,13 @@ class IFRSSeeder extends Seeder
         $this->createAccount('Insurance', Account::OVERHEAD_EXPENSE, 7300, $entity);
         $this->createAccount('Office Supplies', Account::OVERHEAD_EXPENSE, 7400, $entity);
         $this->createAccount('Subscriptions & Licenses', Account::OVERHEAD_EXPENSE, 7500, $entity);
+        $this->createAccount('Domain Renewal Expense', Account::OVERHEAD_EXPENSE, 7510, $entity);
         $this->createAccount('Professional Fees', Account::OVERHEAD_EXPENSE, 7600, $entity);
         $this->createAccount('Marketing & Advertising', Account::OVERHEAD_EXPENSE, 7700, $entity);
         $this->createAccount('Bank Charges', Account::OVERHEAD_EXPENSE, 7800, $entity);
         $this->createAccount('Depreciation Expense', Account::OVERHEAD_EXPENSE, 7900, $entity);
+        // Amortisation of finite-life intangibles (e.g. finite-life domains).
+        $this->createAccount('Amortisation Expense', Account::OVERHEAD_EXPENSE, 7910, $entity);
 
         // Other Expenses (Codes 8000-8999)
         $this->createAccount('Bad Debts', Account::OTHER_EXPENSE, 8100, $entity);
@@ -284,6 +293,28 @@ class IFRSSeeder extends Seeder
                 'rate' => 10,
                 'entity_id' => $entity->id,
                 'account_id' => $gstPayableAccount ? $gstPayableAccount->id : null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        // Purchase-side GST: input tax credits are receivable (an asset),
+        // so supplier-payment GST legs post to 430 GST Receivable instead
+        // of netting against 2200. Inserted via the query builder because
+        // the package's Vat::save() insists on a CONTROL-type account.
+        $gstInputExists = DB::table('ifrs_vats')->where('code', 'I')->where('entity_id', $entity->id)->exists();
+        if (!$gstInputExists) {
+            $gstReceivableAccount = DB::table('ifrs_accounts')
+                ->where('entity_id', $entity->id)
+                ->where('code', 430)
+                ->first();
+
+            DB::table('ifrs_vats')->insert([
+                'name' => 'GST Input 10%',
+                'code' => 'I',
+                'rate' => 10,
+                'entity_id' => $entity->id,
+                'account_id' => $gstReceivableAccount ? $gstReceivableAccount->id : null,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
