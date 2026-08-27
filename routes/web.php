@@ -137,12 +137,14 @@ Route::middleware('auth')->group(function () {
     Route::post('/bills/{bill}/open', [BillController::class, 'open'])->name('bills.open');
     Route::post('/bills/{bill}/cancel', [BillController::class, 'cancel'])->name('bills.cancel');
     Route::post('/bills/{bill}/record-payment', [BillController::class, 'recordPayment'])->name('bills.recordPayment');
+    Route::post('/bills/{bill}/payments/{billPayment}/unapply', [BillController::class, 'unapplyPayment'])->name('bills.unapplyPayment');
 
     // Bill Payments (supplier payments)
     Route::resource('bill-payments', BillPaymentController::class);
     Route::get('/bill-payments/supplier-bills/{supplier}', [BillPaymentController::class, 'getSupplierBills'])->name('bill-payments.supplier-bills');
     Route::post('/bill-payments/{billPayment}/allocate', [BillPaymentController::class, 'allocate'])->name('bill-payments.allocate');
     Route::post('/bill-payments/{billPayment}/remove-allocation/{bill}', [BillPaymentController::class, 'removeAllocation'])->name('bill-payments.removeAllocation');
+    Route::post('/bill-payments/{billPayment}/void', [BillPaymentController::class, 'void'])->name('bill-payments.void');
 
     // Documents (API)
     Route::get('/documents', [DocumentController::class, 'index'])->name('documents.index');

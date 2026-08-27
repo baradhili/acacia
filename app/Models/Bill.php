@@ -375,11 +375,32 @@ class Bill extends Model
     }
 
     /**
-     * Check if bill can be edited
+     * Check if bill can be edited: any unpaid, non-final bill. Drafts are
+     * always unpaid; open/overdue bills are editable until the first
+     * payment lands (payments post Dr Expense / Cr Bank to IFRS
+     * apportioned from the current items, so item edits after posting
+     * would desync the ledger). Paid bills are corrected by unapplying
+     * the payment (which reverses its ledger share) first.
      */
     public function canBeEdited(): bool
     {
-        return $this->status === self::STATUS_DRAFT;
+        return !in_array($this->status, [
+            self::STATUS_CANCELLED,
+            self::STATUS_PAID,
+            self::STATUS_PARTIALLY_PAID,
+        ]) && (float) $this->amount_paid === 0.0;
+    }
+
+    /**
+     * Check if bill can be deleted. Any status qualifies: unpaid bills
+     * have nothing in the ledger; bills with payments are deleted via
+     * BillLifecycleService::deleteBill(), which voids the payments and
+     * posts mirrored IFRS reversals first. A closed reporting period
+     * blocks that reversal (and thus the delete) with an explicit error.
+     */
+    public function canBeDeleted(): bool
+    {
+        return true;
     }
 
     /**

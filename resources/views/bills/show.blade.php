@@ -24,6 +24,8 @@
                         Mark as Open
                     </button>
                 </form>
+            @endif
+            @if($bill->canBeEdited())
                 <a href="{{ route('bills.edit', $bill) }}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg">
                     Edit
                 </a>
@@ -37,6 +39,20 @@
                     </button>
                 </form>
             @endif
+            @php
+                $confirmText = $bill->amount_paid > 0
+                    ? 'Delete bill ' . $bill->bill_number . '? Its payments ($' . number_format($bill->amount_paid, 2)
+                        . ' paid) will be voided and their ledger entries reversed.'
+                    : 'Delete bill ' . $bill->bill_number . '? This cannot be undone.';
+            @endphp
+            <form action="{{ route('bills.destroy', $bill) }}" method="POST" class="inline"
+                onsubmit="return confirm(@js($confirmText));">
+                @csrf
+                @method('DELETE')
+                <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg">
+                    Delete
+                </button>
+            </form>
         </div>
     </div>
 
@@ -151,6 +167,7 @@
                                 <th class="text-left py-2 text-xs font-medium text-gray-500 uppercase">Payment #</th>
                                 <th class="text-left py-2 text-xs font-medium text-gray-500 uppercase">Date</th>
                                 <th class="text-right py-2 text-xs font-medium text-gray-500 uppercase">Amount</th>
+                                <th class="text-right py-2 text-xs font-medium text-gray-500 uppercase">Actions</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y">
@@ -163,6 +180,25 @@
                                     </td>
                                     <td class="py-2">{{ $allocation->billPayment->payment_date->format('d M Y') }}</td>
                                     <td class="py-2 text-right">${{ number_format($allocation->amount, 2) }}</td>
+                                    <td class="py-2 text-right">
+                                        @if($allocation->billPayment->status !== \App\Models\BillPayment::STATUS_VOID)
+                                            @php
+                                                $isShared = $allocation->billPayment->allocations->count() > 1;
+                                                $unapplyText = $isShared
+                                                    ? 'Remove this bill\'s share of payment ' . $allocation->billPayment->payment_number
+                                                        . '? Only this bill\'s share of the ledger entry is reversed; the payment stays active for its other bills.'
+                                                    : 'Remove payment ' . $allocation->billPayment->payment_number
+                                                        . '? The payment will be voided and its ledger entry fully reversed, making this bill editable again.';
+                                            @endphp
+                                            <form action="{{ route('bills.unapplyPayment', [$bill, $allocation->billPayment]) }}" method="POST" class="inline"
+                                                onsubmit="return confirm(@js($unapplyText));">
+                                                @csrf
+                                                <button type="submit" class="text-red-600 hover:text-red-900 text-sm">
+                                                    {{ $isShared ? 'Unapply' : 'Remove' }}
+                                                </button>
+                                            </form>
+                                        @endif
+                                    </td>
                                 </tr>
                             @endforeach
                         </tbody>
@@ -206,7 +242,7 @@
             <div class="bg-white rounded-lg shadow p-6">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-lg font-semibold text-gray-800">Documents</h2>
-                    @if($bill->status === 'draft')
+                    @if($bill->canBeEdited())
                         <a href="{{ route('bills.edit', $bill) }}" class="text-sm text-indigo-600 hover:text-indigo-800">
                             Upload in Edit View →
                         </a>

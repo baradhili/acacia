@@ -341,22 +341,48 @@ class BillTest extends TestCase
         $this->assertFalse($openBill->markAsOpen());
     }
 
-    public function test_only_draft_bills_can_be_edited_or_deleted(): void
+    public function test_edit_and_delete_permissions_follow_payment_state(): void
     {
+        // Draft: editable
         $bill = Bill::create(['supplier_id' => $this->supplier->id]);
         $this->assertTrue($bill->canBeEdited());
 
+        // Unpaid open bill: editable and deletable. (No view-render
+        // assertion here — BillTest seeds no IFRS entity, and the edit
+        // form's account dropdowns query the IFRS chart.)
         $bill->markAsOpen();
-        $this->assertFalse($bill->canBeEdited());
+        $this->assertTrue($bill->canBeEdited());
 
-        $response = $this->actingAs($this->user)
-            ->get(route('bills.edit', $bill));
-        $response->assertRedirect(route('bills.show', $bill));
+        $this->actingAs($this->user)->delete(route('bills.destroy', $bill))
+            ->assertRedirect(route('bills.index'));
+        $this->assertDatabaseMissing('bills', ['id' => $bill->id]);
 
-        $response = $this->actingAs($this->user)
-            ->delete(route('bills.destroy', $bill));
-        $response->assertRedirect(route('bills.index'));
-        $this->assertDatabaseHas('bills', ['id' => $bill->id]);
+        // Paid bill: NOT editable (unpay or delete it instead), but the
+        // delete route stays available via the reversal cascade.
+        $paid = Bill::create(['supplier_id' => $this->supplier->id]);
+        $paid->markAsOpen();
+        $paid->update(['status' => Bill::STATUS_PAID, 'paid_at' => now()]);
+        $this->assertFalse($paid->canBeEdited());
+
+        $this->actingAs($this->user)->get(route('bills.edit', $paid))
+            ->assertRedirect(route('bills.show', $paid));
+
+        // A paid bill with no ledger behind it (status only) just deletes.
+        $this->actingAs($this->user)->delete(route('bills.destroy', $paid))
+            ->assertRedirect(route('bills.index'));
+        $this->assertDatabaseMissing('bills', ['id' => $paid->id]);
+
+        // Partially paid bill (allocation exists): not editable
+        $partial = Bill::create(['supplier_id' => $this->supplier->id]);
+        $partial->markAsOpen();
+        $payment = BillPayment::createWithUniqueNumber([
+            'supplier_id' => $this->supplier->id,
+            'amount' => 10,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'cash',
+        ]);
+        $payment->allocateToBill($partial, 10);
+        $this->assertFalse($partial->refresh()->canBeEdited());
     }
 
     public function test_edit_upserts_items_preserving_ids(): void

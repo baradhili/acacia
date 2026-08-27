@@ -251,19 +251,34 @@ class PrepaymentService
      * Reverse one posted amortisation entry with a same-date mirrored
      * JournalEntry (posted entries are never mutated or deleted). The
      * month stays consumed — post a correcting entry if the amount was
-     * wrong.
+     * wrong. With $throw = true a reversal failure propagates instead of
+     * being logged-and-skipped, for flows (bill deletion) that must not
+     * continue with a partially reversed ledger.
      */
-    public static function reverseAmortisation(PrepaymentAmortisation $entry): ?int
+    public static function reverseAmortisation(PrepaymentAmortisation $entry, bool $throw = false): ?int
     {
         if (!$entry->isPosted() || $entry->isReversed()) {
             return null;
         }
 
-        $reversalId = IfrsPosting::reverseTransaction(
-            (int) $entry->ifrs_transaction_id,
-            'Reversal of prepayment amortisation: ' . $entry->prepayment?->description,
-            'PREPAY-' . $entry->prepayment_id,
-        );
+        try {
+            $reversalId = IfrsPosting::reverseTransaction(
+                (int) $entry->ifrs_transaction_id,
+                'Reversal of prepayment amortisation: ' . $entry->prepayment?->description,
+                'PREPAY-' . $entry->prepayment_id,
+                throw: true,
+            );
+        } catch (\Throwable $e) {
+            if ($throw) {
+                throw $e;
+            }
+            \Illuminate\Support\Facades\Log::error('Failed to reverse prepayment amortisation', [
+                'prepayment_amortisation_id' => $entry->id,
+                'error' => $e->getMessage(),
+                'exception' => get_class($e),
+            ]);
+            return null;
+        }
 
         if ($reversalId) {
             $entry->update([

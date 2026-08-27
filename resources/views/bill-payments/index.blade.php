@@ -59,6 +59,11 @@
                             <a href="{{ route('bill-payments.show', $payment) }}" class="text-indigo-600 hover:text-indigo-900 font-medium">
                                 {{ $payment->payment_number }}
                             </a>
+                            @if($payment->status === 'void')
+                                <span class="ml-1 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-500">
+                                    Void
+                                </span>
+                            @endif
                             <x-document-icon :count="$payment->documents_count" />
                         </td>
                         <td class="px-6 py-4 text-gray-900">{{ $payment->supplier->name ?? '-' }}</td>
@@ -74,7 +79,9 @@
                         <td class="px-6 py-4 text-gray-900">{{ Str::limit($payment->reference ?? '-', 20) }}</td>
                         <td class="px-6 py-4 text-right">
                             <a href="{{ route('bill-payments.show', $payment) }}" class="text-indigo-600 hover:text-indigo-900 mr-3">View</a>
-                            <a href="{{ route('bill-payments.edit', $payment) }}" class="text-gray-600 hover:text-gray-900">Edit</a>
+                            @if($payment->status !== 'void')
+                                <a href="{{ route('bill-payments.edit', $payment) }}" class="text-gray-600 hover:text-gray-900">Edit</a>
+                            @endif
                         </td>
                     </tr>
                 @empty

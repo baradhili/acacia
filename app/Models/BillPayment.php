@@ -61,7 +61,7 @@ class BillPayment extends Model
      * the output Vat (G / 2200) when it is not seeded (unmigrated
      * databases).
      */
-    protected static function purchaseGstVat(Entity $entity): ?Vat
+    public static function purchaseGstVat(Entity $entity): ?Vat
     {
         return Vat::where('code', config('subscriptions.purchase_gst_vat_code', 'I'))
                 ->where('entity_id', $entity->id)
@@ -387,49 +387,16 @@ class BillPayment extends Model
             // Transaction::save() throws MissingReportingPeriod otherwise.
             IfrsPosting::ensureReportingPeriod($this->payment_date, $entity);
 
-            // Apportion each allocation across its bill's line items, then
-            // aggregate by (expense account, GST treatment). Amounts are
-            // computed in cents so the per-allocation shares sum exactly.
-            // Key: "{accountId}-{taxable?}" → cents (tax-inclusive share).
+            // Apportion each allocation across its bill's line items,
+            // aggregated by (expense account, GST treatment).
             $groups = [];
             foreach ($this->allocations as $allocation) {
                 $bill = $allocation->bill()->with('items')->first();
                 if (!$bill) {
                     continue;
                 }
-                $items = $bill->items;
-                if ($items->isEmpty()) {
-                    continue;
-                }
-
-                $billTotalCents = (int) round(((float) $bill->total) * 100);
-                $allocationCents = (int) round(((float) $allocation->amount) * 100);
-                if ($billTotalCents <= 0 || $allocationCents <= 0) {
-                    continue;
-                }
-
-                $distributed = 0;
-                $lastIndex = $items->count() - 1;
-                foreach ($items->values() as $index => $item) {
-                    if ($index === $lastIndex) {
-                        // Last item takes the remainder so shares sum exactly.
-                        $shareCents = $allocationCents - $distributed;
-                    } else {
-                        $shareCents = (int) round($allocationCents * ((float) $item->total * 100) / $billTotalCents);
-                        $distributed += $shareCents;
-                    }
-
-                    if ($shareCents <= 0) {
-                        continue;
-                    }
-
-                    $accountId = $item->expense_account_id ?: $defaultExpenseAccount->id;
-                    $taxable = (float) $item->tax_rate > 0;
-                    // gst = inclusive amount (vat_inclusive posting backs the
-                    // GST out); gstadd = ex-GST amount (package adds GST on
-                    // top); free = no GST.
-                    $key = $accountId . '-' . ($taxable ? ($item->gst_added ? 'gstadd' : 'gst') : 'free');
-                    $groups[$key] = ($groups[$key] ?? 0) + $shareCents;
+                foreach (self::allocationGroups($bill, (float) $allocation->amount, $defaultExpenseAccount) as $key => $cents) {
+                    $groups[$key] = ($groups[$key] ?? 0) + $cents;
                 }
             }
 
@@ -535,11 +502,123 @@ class BillPayment extends Model
     }
 
     /**
+     * Apportion one allocation across a bill's line items, aggregated by
+     * (expense account, GST treatment) — the shared building block of
+     * postToIFRS() and the per-bill share reversal in
+     * BillLifecycleService. Amounts are computed in cents so the shares
+     * sum exactly to the allocation; the last item takes the remainder.
+     *
+     * Key: "{accountId}-{gst|gstadd|free}" → tax-inclusive cents.
+     * Returns [] when there is nothing allocatable (no items, or zero
+     * bill/allocation totals).
+     */
+    public static function allocationGroups(Bill $bill, float $allocationAmount, ?Account $defaultExpenseAccount): array
+    {
+        $items = $bill->items;
+        if ($items->isEmpty()) {
+            return [];
+        }
+
+        $billTotalCents = (int) round(((float) $bill->total) * 100);
+        $allocationCents = (int) round($allocationAmount * 100);
+        if ($billTotalCents <= 0 || $allocationCents <= 0) {
+            return [];
+        }
+
+        $groups = [];
+        $distributed = 0;
+        $lastIndex = $items->count() - 1;
+        foreach ($items->values() as $index => $item) {
+            if ($index === $lastIndex) {
+                // Last item takes the remainder so shares sum exactly.
+                $shareCents = $allocationCents - $distributed;
+            } else {
+                $shareCents = (int) round($allocationCents * ((float) $item->total * 100) / $billTotalCents);
+                $distributed += $shareCents;
+            }
+
+            if ($shareCents <= 0) {
+                continue;
+            }
+
+            $accountId = $item->expense_account_id ?: $defaultExpenseAccount?->id;
+            if (!$accountId) {
+                continue;
+            }
+
+            $taxable = (float) $item->tax_rate > 0;
+            // gst = inclusive amount (vat_inclusive posting backs the
+            // GST out); gstadd = ex-GST amount (package adds GST on
+            // top); free = no GST.
+            $key = $accountId . '-' . ($taxable ? ($item->gst_added ? 'gstadd' : 'gst') : 'free');
+            $groups[$key] = ($groups[$key] ?? 0) + $shareCents;
+        }
+
+        return $groups;
+    }
+
+    /**
      * Check if payment has been posted to IFRS
      */
     public function getIsPostedToIFRSAttribute(): bool
     {
         return $this->ifrs_payment_id !== null;
+    }
+
+    /**
+     * Neutralise the prepayment schedules this payment funded: reverse
+     * every posted, un-reversed amortisation (posted entries are never
+     * deleted — mirrored reversals net them to zero) and mark each
+     * prepayment void so the amortisation runner stops picking it up.
+     *
+     * Pass $billItemIds to neutralise only the schedules tied to those
+     * bill items — used when unapplying one bill's share of a payment
+     * allocated across several bills, where the other bills' schedules
+     * must keep running. Empty (default) = all of the payment's
+     * schedules, used by full void().
+     *
+     * Best-effort by default like the posting itself: a failed
+     * amortisation reversal is logged and skipped. With $throw = true it
+     * propagates instead, for flows (bill deletion, unapply) that must
+     * not continue with a partially reversed ledger. Returns the number
+     * of amortisation reversals posted.
+     */
+    public function voidPrepayments(array $billItemIds = [], bool $throw = false): int
+    {
+        $reversed = 0;
+
+        $prepayments = $this->prepayments()
+            ->where('status', Prepayment::STATUS_ACTIVE)
+            ->when($billItemIds, fn ($query) => $query->whereIn('bill_item_id', $billItemIds))
+            ->get();
+
+        foreach ($prepayments as $prepayment) {
+            foreach ($prepayment->amortisations()
+                ->whereNotNull('ifrs_transaction_id')
+                ->whereNull('reversed_at')
+                ->get() as $entry
+            ) {
+                try {
+                    if (\App\Services\PrepaymentService::reverseAmortisation($entry, throw: $throw)) {
+                        $reversed++;
+                    }
+                } catch (\Throwable $e) {
+                    if ($throw) {
+                        throw $e;
+                    }
+                    \Illuminate\Support\Facades\Log::error('Failed to reverse prepayment amortisation', [
+                        'bill_payment_id' => $this->id,
+                        'prepayment_amortisation_id' => $entry->id,
+                        'error' => $e->getMessage(),
+                        'exception' => get_class($e),
+                    ]);
+                }
+            }
+
+            $prepayment->forceFill(['status' => Prepayment::STATUS_VOID])->save();
+        }
+
+        return $reversed;
     }
 
     /**
@@ -550,6 +629,12 @@ class BillPayment extends Model
         if ($this->status === self::STATUS_VOID) {
             return false;
         }
+
+        // Prepayment schedules funded by this payment stop amortising:
+        // their posted entries get mirrored reversals and the schedule
+        // rows are kept (void) for audit. Runs before the allocations
+        // are deleted so the bill items are still resolvable.
+        $this->voidPrepayments();
 
         // Capture affected bills, then delete allocations BEFORE
         // recomputing status — otherwise updateStatusFromPayments() still
