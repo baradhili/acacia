@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Bill;
 use App\Models\BillPayment;
 use App\Models\Supplier;
+use App\Services\BillLifecycleService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -306,14 +307,29 @@ class BillPaymentController extends Controller
     }
 
     /**
-     * Remove allocation from bill
+     * Remove this payment's allocation to a bill. Reverses the bill's
+     * ledger share (mirrored journal entry) and voids the payment when
+     * it has no allocations left — same semantics as the bill-side
+     * Unapply action, so the ledger never diverges from the allocations
+     * regardless of which screen the removal happens from.
      */
     public function removeAllocation(BillPayment $billPayment, Bill $bill)
     {
-        if ($billPayment->removeAllocation($bill)) {
-            return back()->with('success', 'Allocation removed successfully.');
+        if ($billPayment->status === BillPayment::STATUS_VOID) {
+            return back()->with('error', 'This payment is void.');
         }
 
-        return back()->with('error', 'Could not remove allocation.');
+        if (!$billPayment->allocations()->where('bill_id', $bill->id)->exists()) {
+            return back()->with('error', 'Could not remove allocation.');
+        }
+
+        try {
+            BillLifecycleService::unapplyPayment($bill, $billPayment);
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Could not remove allocation: ' . $e->getMessage());
+        }
+
+        return back()->with('success',
+            "Allocation removed and the bill's share of the ledger entry reversed.");
     }
 }

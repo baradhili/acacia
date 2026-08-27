@@ -5,19 +5,40 @@
     <div class="mb-6 flex justify-between items-center">
         <div>
             <h1 class="text-2xl font-bold text-gray-800">Supplier Payment {{ $billPayment->payment_number }}</h1>
-            <p class="text-gray-600">Paid on {{ $billPayment->payment_date->format('d M Y') }}</p>
+            <p class="text-gray-600">
+                Paid on {{ $billPayment->payment_date->format('d M Y') }}
+                @if ($billPayment->status === 'void')
+                    <span class="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-500">
+                        Void
+                    </span>
+                @endif
+            </p>
         </div>
         <div class="flex gap-2">
-            @if ($billPayment->unallocated_amount > 0)
-                <button type="button" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg"
-                    onclick="document.getElementById('allocateModal').classList.remove('hidden')">
-                    Allocate to Bill
-                </button>
+            @if ($billPayment->status !== 'void')
+                @if ($billPayment->unallocated_amount > 0)
+                    <button type="button" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg"
+                        onclick="document.getElementById('allocateModal').classList.remove('hidden')">
+                        Allocate to Bill
+                    </button>
+                @endif
+                <a href="{{ route('bill-payments.edit', $billPayment) }}"
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+                    Edit
+                </a>
+                @php
+                    $voidText = 'Void payment ' . $billPayment->payment_number . '? All its bill allocations are removed,'
+                        . ' its ledger entry is reversed and any prepayment schedules are cancelled.'
+                        . ' The payment row is kept (void) for audit.';
+                @endphp
+                <form action="{{ route('bill-payments.void', $billPayment) }}" method="POST" class="inline"
+                    onsubmit="return confirm(@js($voidText));">
+                    @csrf
+                    <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg">
+                        Void Payment
+                    </button>
+                </form>
             @endif
-            <a href="{{ route('bill-payments.edit', $billPayment) }}"
-                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
-                Edit
-            </a>
         </div>
     </div>
 
@@ -67,7 +88,7 @@
                                             method="POST" class="inline">
                                             @csrf
                                             <button type="submit" class="text-red-600 hover:text-red-800 text-sm"
-                                                onclick="return confirm('Remove this allocation?');">
+                                                onclick="return confirm('Remove this allocation? The bill\'s share of the ledger entry is reversed and the bill becomes payable again.');">
                                                 Remove
                                             </button>
                                         </form>
@@ -150,6 +171,12 @@
                     <div>
                         <dt class="text-sm text-gray-500">Payment Date</dt>
                         <dd class="font-medium">{{ $billPayment->payment_date->format('d M Y') }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-sm text-gray-500">Status</dt>
+                        <dd class="font-medium {{ $billPayment->status === 'void' ? 'text-gray-500' : 'text-green-600' }}">
+                            {{ ucfirst($billPayment->status) }}
+                        </dd>
                     </div>
                     <div>
                         <dt class="text-sm text-gray-500">Payment Method</dt>

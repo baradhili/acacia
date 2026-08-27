@@ -98,9 +98,21 @@
                         </td>
                         <td class="px-6 py-4 text-right">
                             <a href="{{ route('bills.show', $bill) }}" class="text-indigo-600 hover:text-indigo-900 mr-3">View</a>
-                            @if($bill->status === 'draft')
+                            @if($bill->canBeEdited())
                                 <a href="{{ route('bills.edit', $bill) }}" class="text-gray-600 hover:text-gray-900 mr-3">Edit</a>
                             @endif
+                            @php
+                                $confirmText = $bill->amount_paid > 0
+                                    ? 'Delete bill ' . $bill->bill_number . '? Its payments ($' . number_format($bill->amount_paid, 2)
+                                        . ' paid) will be voided and their ledger entries reversed.'
+                                    : 'Delete bill ' . $bill->bill_number . '? This cannot be undone.';
+                            @endphp
+                            <form action="{{ route('bills.destroy', $bill) }}" method="POST" class="inline"
+                                onsubmit="return confirm(@js($confirmText));">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="text-red-600 hover:text-red-900">Delete</button>
+                            </form>
                         </td>
                     </tr>
                 @empty

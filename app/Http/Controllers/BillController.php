@@ -181,7 +181,9 @@ class BillController extends Controller
 
     public function show(Bill $bill)
     {
-        $bill->load(['supplier', 'project', 'creator', 'items', 'allocations.billPayment', 'documents']);
+        // allocations.billPayment.allocations drives the per-payment
+        // "shared with other bills?" check in the Unapply action.
+        $bill->load(['supplier', 'project', 'creator', 'items', 'allocations.billPayment.allocations', 'documents']);
         $paymentMethods = BillPayment::paymentMethods();
 
         return view('bills.show', compact('bill', 'paymentMethods'));
