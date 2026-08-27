@@ -100,25 +100,23 @@ class IfrsPosting
      * transaction_date so the period it was reported in stays clean.
      *
      * Used by Payment::void() / BillPayment::void() to undo posted ledgers.
-     * Best-effort: returns the reversal transaction id, or null on failure
-     * (original missing or any Throwable — logged, not thrown).
+     * Best-effort by default: returns the reversal transaction id, or null
+     * on failure (original missing or any Throwable — logged, not thrown).
+     * With $throw = true the Throwable propagates instead, for callers
+     * (bill deletion, payment unapplication) that must NOT continue with
+     * a silently un-reversed ledger.
      */
-    public static function reverseTransaction(int $transactionId, string $narration, string $reference): ?int
+    public static function reverseTransaction(int $transactionId, string $narration, string $reference, bool $throw = false): ?int
     {
         try {
             $original = Transaction::with('lineItems.appliedVats.vat')->find($transactionId);
             if (!$original) {
-                Log::error('IFRS transaction not found for reversal', ['transaction_id' => $transactionId]);
-                return null;
+                throw new \RuntimeException("IFRS transaction {$transactionId} not found for reversal.");
             }
 
             $entity = Entity::find($original->entity_id);
             if (!$entity) {
-                Log::error('IFRS entity not found for reversal', [
-                    'transaction_id' => $transactionId,
-                    'entity_id' => $original->entity_id,
-                ]);
-                return null;
+                throw new \RuntimeException("IFRS entity {$original->entity_id} not found for reversal of transaction {$transactionId}.");
             }
 
             self::ensureReportingPeriod($original->transaction_date, $entity);
@@ -166,6 +164,9 @@ class IfrsPosting
                 'error' => $e->getMessage(),
                 'exception' => get_class($e),
             ]);
+            if ($throw) {
+                throw $e;
+            }
             return null;
         }
     }
