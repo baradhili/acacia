@@ -3,16 +3,22 @@
 namespace App\Services;
 
 use App\Models\BillPayment;
+use App\Models\FiscalPeriod;
 use App\Models\FiscalYearClose;
 use App\Models\Payment;
 use App\Models\Prepayment;
+use App\Models\User;
 use Carbon\Carbon;
 use IFRS\Models\Account;
 use IFRS\Models\Entity;
 use IFRS\Models\Ledger;
+use IFRS\Models\LineItem;
 use IFRS\Models\ReportingPeriod;
 use IFRS\Models\Transaction;
 use IFRS\Scopes\EntityScope;
+use IFRS\Transactions\JournalEntry;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Financial year end/start handling.
@@ -373,5 +379,253 @@ class FiscalYearService
         $trial['record'] = $record;
 
         return $trial;
+    }
+
+    /**
+     * Request approval for the stored trial close. The snapshot is
+     * refreshed first so the approver always reviews current numbers.
+     */
+    public function submit(Entity $entity, int $year, ?int $userId = null): FiscalYearClose
+    {
+        $this->assertClosable($entity, $year);
+        $record = $this->ensureCloseRecord($entity, $year);
+
+        if (!$record->canSubmit()) {
+            throw new \InvalidArgumentException(
+                "FY {$year} cannot be submitted for approval from status '{$record->status}'."
+            );
+        }
+
+        $this->storeTrial($entity, $year, $userId);
+
+        $record->status = FiscalYearClose::STATUS_PENDING_APPROVAL;
+        if ($userId) {
+            $record->requested_by = $userId;
+        }
+        $record->save();
+
+        return $record;
+    }
+
+    /**
+     * Approve a pending close request. The approver must hold the
+     * accountant or admin role and — unless forced — must not be the
+     * requester: the four-eyes hand-off is the point of the workflow.
+     */
+    public function approve(Entity $entity, int $year, User $approver, bool $force = false): FiscalYearClose
+    {
+        $record = $this->closeRecord($entity, $year);
+
+        if (!$record || !$record->canApprove()) {
+            throw new \InvalidArgumentException("FY {$year} has no close request pending approval.");
+        }
+
+        if (!$approver->hasAnyRole('admin', 'accountant')) {
+            throw new \InvalidArgumentException(
+                'Only an accountant or an admin can approve a financial year close.'
+            );
+        }
+
+        if (!$force && $record->requested_by === $approver->id) {
+            throw new \InvalidArgumentException(
+                "The requester cannot approve their own FY {$year} close request."
+            );
+        }
+
+        $record->fill([
+            'status' => FiscalYearClose::STATUS_APPROVED,
+            'approved_by' => $approver->id,
+            'approved_at' => now(),
+        ])->save();
+
+        return $record;
+    }
+
+    /**
+     * Execute the year-end close: post the closing JournalEntries that
+     * transfer every P&L balance to Retained Earnings, mark the IFRS
+     * ReportingPeriod CLOSED (the package then rejects any new posting
+     * dated in the year), lock the app's FiscalPeriods for the year and
+     * snapshot everything on the workflow row. Requires an approved row —
+     * or $force, the documented CLI escape hatch that also skips failed
+     * blocking checklist items.
+     */
+    public function close(Entity $entity, int $year, bool $force = false): FiscalYearClose
+    {
+        $this->assertClosable($entity, $year);
+
+        $record = $this->closeRecord($entity, $year);
+        if ((!$record || !$record->canClose()) && !$force) {
+            throw new \InvalidArgumentException(
+                "FY {$year} has no approved close request. Submit and approve it first "
+                . '(or pass --force to bypass the workflow).'
+            );
+        }
+        $record ??= $this->ensureCloseRecord($entity, $year);
+
+        return DB::transaction(function () use ($entity, $year, $force, $record) {
+            $trial = $this->trialClose($entity, $year);
+
+            if (!$trial['checklist_passes'] && !$force) {
+                $failed = collect($trial['checklist'])
+                    ->filter(fn ($item) => $item['blocking'] && !$item['pass'])
+                    ->map(fn ($item) => $item['label'])
+                    ->implode('; ');
+
+                throw new \InvalidArgumentException(
+                    "FY {$year} cannot be closed — blocking checklist items failed: {$failed}."
+                );
+            }
+
+            ['end' => $end] = $this->bounds($entity, $year);
+            $re = Account::withoutGlobalScope(EntityScope::class)->find($trial['retained_earnings']['id']);
+
+            $transactionIds = [];
+            foreach ([true, false] as $credited) {
+                // JE with RE credited debits the P&L accounts holding
+                // credit balances (revenue); RE debited credits those
+                // holding debit balances (expenses). Routing by balance
+                // sign keeps every line amount positive whatever the
+                // account type. Line items take the side opposite the
+                // main account — the package convention.
+                $side = $credited ? 'debit' : 'credit';
+                $lines = array_values(array_filter(
+                    $trial['lines'],
+                    fn ($line) => $line['close_side'] === $side
+                ));
+
+                if ($lines === []) {
+                    continue;
+                }
+
+                $je = new JournalEntry([
+                    'transaction_date' => IfrsPosting::transactionDate($end, $entity),
+                    'account_id' => $re->id,
+                    'credited' => $credited,
+                    'entity_id' => $entity->id,
+                    'narration' => "FY {$year} year-end close: "
+                        . ($credited ? 'revenue' : 'expense')
+                        . ' accounts closed to Retained Earnings',
+                    'reference' => $record->closingReference(),
+                ]);
+
+                foreach ($lines as $line) {
+                    // Persisted before addLineItem() — unsaved items share
+                    // a null id and the package silently drops all but the
+                    // first (same constraint as the posting paths).
+                    $je->addLineItem(LineItem::create([
+                        'account_id' => $line['account_id'],
+                        'amount' => $line['amount'],
+                        'quantity' => 1,
+                        'vat_inclusive' => true,
+                        'entity_id' => $entity->id,
+                    ]));
+                }
+
+                $je->post();
+                $transactionIds[] = $je->id;
+            }
+
+            // The closing entries are in; seal the period. The package
+            // now rejects any further transaction dated in the year.
+            $period = $this->reportingPeriod($entity, $year);
+            $period->status = ReportingPeriod::CLOSED;
+            $period->save();
+
+            // Next FY must exist OPEN so day-1 postings of the new year
+            // don't hit MissingReportingPeriod.
+            $this->reportingPeriod($entity, $year + 1);
+
+            // App-level lock: create the FY's monthly periods when absent
+            // (idempotent across reopen/re-close cycles) then lock them.
+            if (FiscalPeriod::where('year', $year)->doesntExist()) {
+                FiscalPeriod::createMonthlyPeriodsForYear($year, $entity->year_start);
+            }
+            foreach (FiscalPeriod::where('year', $year)->get() as $fiscalPeriod) {
+                if (!$fiscalPeriod->isLocked()) {
+                    $fiscalPeriod->lock("FY {$year} closed");
+                }
+            }
+
+            $record->fill([
+                'status' => FiscalYearClose::STATUS_CLOSED,
+                'closed_at' => now(),
+                'closing_transaction_ids' => $transactionIds,
+                'checklist' => $trial['checklist'],
+                'trial_totals' => [
+                    'fy_net_profit' => $trial['fy_net_profit'],
+                    'prior_years_catch_up' => $trial['prior_years_catch_up'],
+                    'net_to_retained_earnings' => $trial['net_to_retained_earnings'],
+                    'line_count' => count($trial['lines']),
+                ],
+            ])->save();
+
+            Log::info('Financial year closed', [
+                'entity_id' => $entity->id,
+                'year' => $year,
+                'closing_transaction_ids' => $transactionIds,
+                'net_to_retained_earnings' => $trial['net_to_retained_earnings'],
+                'forced' => $force,
+            ]);
+
+            return $record;
+        });
+    }
+
+    /**
+     * Mirror a closed year back open: reverse both closing entries
+     * (reference FY-CLOSE-{year}-REV), reopen the IFRS ReportingPeriod
+     * and unlock the app's FiscalPeriods. The closing entries and their
+     * reversals both stay in the ledger (net zero) and both are excluded
+     * from report movement by the FY-CLOSE- prefix.
+     */
+    public function reopen(Entity $entity, int $year): FiscalYearClose
+    {
+        $record = $this->closeRecord($entity, $year);
+
+        if (!$record || !$record->canReopen()) {
+            throw new \InvalidArgumentException("FY {$year} has no executed close to reopen.");
+        }
+
+        if (!$this->isClosed($entity, $year)) {
+            throw new \InvalidArgumentException(
+                "FY {$year}'s reporting period is not CLOSED — nothing to reopen."
+            );
+        }
+
+        return DB::transaction(function () use ($entity, $year, $record) {
+            // Reopen the period first: the mirrored reversals keep the
+            // original closing-entry dates, and posting into a CLOSED
+            // period is what the package throws ClosedReportingPeriod for.
+            $period = $this->reportingPeriod($entity, $year);
+            $period->status = ReportingPeriod::OPEN;
+            $period->save();
+
+            foreach ($record->closing_transaction_ids ?? [] as $transactionId) {
+                IfrsPosting::reverseTransaction(
+                    (int) $transactionId,
+                    "FY {$year} reopened: reversal of year-end closing entry",
+                    $record->closingReference() . '-REV',
+                    throw: true,
+                );
+            }
+
+            foreach (FiscalPeriod::where('year', $year)->locked()->get() as $fiscalPeriod) {
+                $fiscalPeriod->unlock();
+            }
+
+            $record->fill([
+                'status' => FiscalYearClose::STATUS_REOPENED,
+                'reopened_at' => now(),
+            ])->save();
+
+            Log::info('Financial year reopened', [
+                'entity_id' => $entity->id,
+                'year' => $year,
+                'closing_transaction_ids' => $record->closing_transaction_ids,
+            ]);
+
+            return $record;
+        });
     }
 }

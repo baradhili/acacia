@@ -3,10 +3,14 @@
 namespace App\Console\Commands;
 
 use App\Models\FiscalPeriod;
-use App\Services\PeriodLockService;
-use Carbon\Carbon;
+use App\Services\IfrsPosting;
 use Illuminate\Console\Command;
 
+/**
+ * Lock-only period locking kept for backward compatibility. The full
+ * year-end close (closing entries, reporting-period status, workflow)
+ * lives in fiscal-year:close — this delegate only ever locks rows.
+ */
 class CloseFiscalYear extends Command
 {
     protected $signature = 'period:close-fiscal-year
@@ -14,25 +18,26 @@ class CloseFiscalYear extends Command
                             {--reason= : Reason for closing the period}
                             {--dry-run : Show what would be done without making changes}';
 
-    protected $description = 'Lock all periods for a fiscal year';
+    protected $description = 'Lock all periods for a fiscal year (deprecated: use fiscal-year:close for the full year-end close)';
 
     public function handle(): int
     {
+        $this->warn('Deprecated: this command only locks periods. Use "fiscal-year:close" for the full year-end close (closing entries to Retained Earnings, reporting-period CLOSED, locks).');
+
         $year = (int) $this->argument('year');
         $reason = $this->option('reason') ?? "Fiscal year {$year} closed for year-end";
-        $dryRun = $this->option('dry-run');
+        $dryRun = (bool) $this->option('dry-run');
 
-        $service = new PeriodLockService();
+        $entity = IfrsPosting::resolveEntity();
+        $startMonth = $entity->year_start ?? 7;
 
-        // Get or create periods for the year
         $periods = FiscalPeriod::where('year', $year)->get();
 
         if ($periods->isEmpty()) {
             $this->info("No periods found for year {$year}. Creating monthly periods...");
-            
+
             if (!$dryRun) {
-                $periods = FiscalPeriod::createMonthlyPeriodsForYear($year);
-                $periods = collect($periods);
+                $periods = collect(FiscalPeriod::createMonthlyPeriodsForYear($year, $startMonth));
             }
         }
 
@@ -57,12 +62,12 @@ class CloseFiscalYear extends Command
         }
 
         $this->newLine();
-        $this->info("Summary:");
+        $this->info('Summary:');
         $this->info("  Locked: {$locked}");
         $this->info("  Already locked: {$alreadyLocked}");
 
         if ($dryRun) {
-            $this->warn("  (Dry run - no changes made)");
+            $this->warn('  (Dry run - no changes made)');
         }
 
         return Command::SUCCESS;
