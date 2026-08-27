@@ -1153,6 +1153,50 @@ class ReportController extends Controller
     }
 
     /**
+     * Prepaid Subscriptions — Amortisation Schedule: every schedule with
+     * its posted, reversed and planned months, plus entity totals for
+     * year-end prepaid-asset review (task spec §3.4).
+     */
+    public function prepaymentSchedule(Request $request)
+    {
+        $prepayments = \App\Models\Prepayment::with(['assetAccount', 'expenseAccount', 'billPayment', 'billItem.bill'])
+            ->orderBy('service_start')
+            ->get();
+
+        $schedules = $prepayments->mapWithKeys(fn ($p) => [$p->id => \App\Services\PrepaymentService::scheduleWithPlanned($p)]);
+
+        $totals = [
+            'funded' => round($prepayments->where('status', '!=', \App\Models\Prepayment::STATUS_VOID)->sum('total_amount'), 2),
+            'amortised' => round($prepayments->sum(fn ($p) => $p->amortisedAmount()), 2),
+            'remaining' => round($prepayments->where('status', '!=', \App\Models\Prepayment::STATUS_VOID)->sum(fn ($p) => $p->remainingAmount()), 2),
+        ];
+
+        return view('reports.prepayment-schedule', compact('prepayments', 'schedules', 'totals'));
+    }
+
+    /**
+     * Export Prepayment Amortisation Schedule to PDF
+     */
+    public function exportPrepaymentSchedulePdf(Request $request)
+    {
+        $prepayments = \App\Models\Prepayment::with(['assetAccount', 'expenseAccount', 'billPayment', 'billItem.bill'])
+            ->orderBy('service_start')
+            ->get();
+
+        $schedules = $prepayments->mapWithKeys(fn ($p) => [$p->id => \App\Services\PrepaymentService::scheduleWithPlanned($p)]);
+
+        $totals = [
+            'funded' => round($prepayments->where('status', '!=', \App\Models\Prepayment::STATUS_VOID)->sum('total_amount'), 2),
+            'amortised' => round($prepayments->sum(fn ($p) => $p->amortisedAmount()), 2),
+            'remaining' => round($prepayments->where('status', '!=', \App\Models\Prepayment::STATUS_VOID)->sum(fn ($p) => $p->remainingAmount()), 2),
+        ];
+
+        $pdf = Pdf::loadView('reports.pdf.prepayment-schedule', compact('prepayments', 'schedules', 'totals'));
+
+        return $pdf->download('Prepayment_Amortisation_Schedule.pdf');
+    }
+
+    /**
      * Company tax report figures for the ATO Company Tax Return (income
      * year 1 July – 30 June), per ATO_tax_report_spec.md. Label letters
      * and names come from config/ato_tax_report.php and follow the

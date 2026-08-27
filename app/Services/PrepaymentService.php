@@ -275,7 +275,50 @@ class PrepaymentService
         return $reversalId;
     }
 
-    private static function nextMonthEnd(Carbon $periodDate): string
+    /**
+     * The full schedule for a prepayment: posted entries (with any
+     * reversals) plus the still-planned months up to the service end —
+     * used by the review screen and the schedule report.
+     */
+    public static function scheduleWithPlanned(Prepayment $prepayment): array
+    {
+        $rows = $prepayment->amortisations->map(fn ($entry) => [
+            'period_date' => $entry->period_date,
+            'amount' => (float) $entry->amount,
+            'posted' => true,
+            'reversed' => $entry->isReversed(),
+            'transaction_id' => $entry->ifrs_transaction_id,
+            'entry' => $entry,
+        ])->all();
+
+        $position = count($rows);
+        $cursor = $prepayment->status === Prepayment::STATUS_ACTIVE
+            ? $prepayment->next_period_date->copy()
+            : null;
+        $finalEnd = $prepayment->service_end->copy()->endOfMonth();
+
+        while ($cursor && $cursor->lte($finalEnd) && $position < $prepayment->periods) {
+            $position++;
+            $amount = $position >= $prepayment->periods
+                ? round((float) $prepayment->total_amount - ((float) $prepayment->monthly_amount * ($prepayment->periods - 1)), 2)
+                : (float) $prepayment->monthly_amount;
+
+            $rows[] = [
+                'period_date' => $cursor->copy(),
+                'amount' => $amount,
+                'posted' => false,
+                'reversed' => false,
+                'transaction_id' => null,
+                'entry' => null,
+            ];
+
+            $cursor = Carbon::parse(self::nextMonthEnd($cursor));
+        }
+
+        return $rows;
+    }
+
+    public static function nextMonthEnd(Carbon $periodDate): string
     {
         // startOfMonth first: adding a month to a 31st would overflow
         // (31 Aug + 1 month = 1 Oct in Carbon) and skip short months.

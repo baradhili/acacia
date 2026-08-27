@@ -275,4 +275,36 @@ class PrepaymentAmortisationTest extends TestCase
         $this->assertSame(1200.0, $this->netSum($this->prepaid));
         $this->assertTrue($entry->refresh()->isReversed());
     }
+
+    public function test_prepayment_screens_and_schedule_report_render(): void
+    {
+        $user = \App\Models\User::factory()->create();
+        $user->entity_id = $this->entity->id;
+        $user->save();
+        \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'admin']);
+        $user->assignRole('admin');
+
+        $prepayment = $this->payPrepaidBill(1320.0, '2025-07-01', '2026-06-30');
+        Artisan::call('prepayments:amortise', ['--as-of' => '2025-08-31']);
+
+        $this->actingAs($user)->get(route('prepayments.index'))
+            ->assertStatus(200)
+            ->assertSee('Annual SaaS subscription')
+            ->assertSee('$1,200.00');
+
+        $this->actingAs($user)->get(route('prepayments.show', $prepayment))
+            ->assertStatus(200)
+            ->assertSee('Posted')
+            ->assertSee('Planned')
+            ->assertSee('Run amortisation to date');
+
+        $this->actingAs($user)->get(route('reports.prepayment-schedule'))
+            ->assertStatus(200)
+            ->assertSee('Amortisation Schedule')
+            ->assertSee('JE #');
+
+        $this->actingAs($user)->get(route('reports.export.prepayment-schedule.pdf'))
+            ->assertStatus(200)
+            ->assertHeader('content-type', 'application/pdf');
+    }
 }
