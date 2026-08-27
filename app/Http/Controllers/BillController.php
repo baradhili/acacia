@@ -6,6 +6,7 @@ use App\Models\Bill;
 use App\Models\BillPayment;
 use App\Models\Project;
 use App\Models\Supplier;
+use App\Services\BillLifecycleService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -131,8 +132,9 @@ class BillController extends Controller
             $bill->recalculateTotals();
 
             // Attach any receipt documents uploaded with the bill (paid-at-
-            // entry expenses can never be edited afterwards, so the receipt
-            // rides along with creation)
+            // entry expenses can only be corrected by unapplying the payment
+            // or deleting the bill — both reverse the ledger — so the
+            // receipt rides along with creation)
             foreach ($request->file('documents', []) as $file) {
                 $bill->documents()->create([
                     'name' => $file->getClientOriginalName(),
@@ -189,7 +191,7 @@ class BillController extends Controller
     {
         if (!$bill->canBeEdited()) {
             return redirect()->route('bills.show', $bill)
-                ->with('error', 'Only draft bills can be edited.');
+                ->with('error', 'Only unpaid bills can be edited. Remove the payments first (each removal reverses its ledger entry).');
         }
 
         $suppliers = Supplier::orderBy('name')->pluck('name', 'id');
@@ -204,7 +206,7 @@ class BillController extends Controller
     {
         if (!$bill->canBeEdited()) {
             return redirect()->route('bills.show', $bill)
-                ->with('error', 'Only draft bills can be edited.');
+                ->with('error', 'Only unpaid bills can be edited. Remove the payments first (each removal reverses its ledger entry).');
         }
 
         $validated = $request->validate([
@@ -297,17 +299,53 @@ class BillController extends Controller
         }
     }
 
+    /**
+     * Delete a bill from any status. Bills with payments run the
+     * reversal cascade first: each payment's ledger share for this bill
+     * is reversed (mirrored Dr Bank / Cr Expense / Cr GST entry) and
+     * payments left with no allocations are voided. A closed IFRS
+     * reporting period aborts the delete with an error instead of
+     * leaving the ledger out of sync.
+     */
     public function destroy(Bill $bill)
     {
-        if (!$bill->canBeEdited()) {
-            return redirect()->route('bills.index')
-                ->with('error', 'Only draft bills can be deleted.');
+        try {
+            $voidedPayments = BillLifecycleService::deleteBill($bill);
+        } catch (\Throwable $e) {
+            return redirect()->route('bills.show', $bill)
+                ->with('error', 'Could not delete bill: ' . $e->getMessage());
         }
 
-        $bill->delete();
+        $message = 'Bill deleted successfully.';
+        if ($voidedPayments > 0) {
+            $message .= " {$voidedPayments} payment" . ($voidedPayments === 1 ? ' was' : 's were')
+                . ' voided and the related ledger entries reversed.';
+        }
 
-        return redirect()->route('bills.index')
-            ->with('success', 'Bill deleted successfully.');
+        return redirect()->route('bills.index')->with('success', $message);
+    }
+
+    /**
+     * Remove a payment's allocation to this bill, reversing that
+     * allocation's ledger share — the "unpay, then edit" entry point
+     * for correcting a paid bill. The payment itself is voided when
+     * this was its last allocation; shared payments stay active for
+     * their other bills.
+     */
+    public function unapplyPayment(Bill $bill, BillPayment $billPayment)
+    {
+        if ($billPayment->status === BillPayment::STATUS_VOID) {
+            return back()->with('error', 'This payment is already void.');
+        }
+
+        try {
+            BillLifecycleService::unapplyPayment($bill, $billPayment);
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Could not remove payment: ' . $e->getMessage());
+        }
+
+        return redirect()->route('bills.show', $bill)
+            ->with('success', "Payment {$billPayment->payment_number} removed from this bill and its ledger entry reversed.");
     }
 
     /**

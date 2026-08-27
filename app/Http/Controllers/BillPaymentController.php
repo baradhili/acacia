@@ -114,6 +114,11 @@ class BillPaymentController extends Controller
 
     public function edit(BillPayment $billPayment)
     {
+        if ($billPayment->status === BillPayment::STATUS_VOID) {
+            return redirect()->route('bill-payments.show', $billPayment)
+                ->with('error', 'Void payments cannot be edited.');
+        }
+
         $billPayment->load(['supplier', 'allocations.bill']);
         $suppliers = Supplier::orderBy('name')->pluck('name', 'id');
         $paymentMethods = BillPayment::paymentMethods();
@@ -123,6 +128,10 @@ class BillPaymentController extends Controller
 
     public function update(Request $request, BillPayment $billPayment)
     {
+        if ($billPayment->status === BillPayment::STATUS_VOID) {
+            return redirect()->route('bill-payments.show', $billPayment)
+                ->with('error', 'Void payments cannot be edited.');
+        }
         $validated = $request->validate([
             'supplier_id' => 'required|exists:suppliers,id',
             'amount' => 'required|numeric|min:0.01',
@@ -180,6 +189,14 @@ class BillPaymentController extends Controller
 
     public function destroy(BillPayment $billPayment)
     {
+        // Posted payments must keep their audit trail: the journal entry
+        // (and its hash-chained ledger rows) reference this payment.
+        // Voiding reverses the ledger instead of orphaning it.
+        if ($billPayment->ifrs_payment_id) {
+            return back()->with('error',
+                'This payment has been posted to the ledger and cannot be deleted. Void it instead — that reverses its ledger entry and any prepayment schedules.');
+        }
+
         DB::beginTransaction();
         try {
             // Capture bills, delete allocations, THEN recompute status
@@ -204,6 +221,27 @@ class BillPaymentController extends Controller
             DB::rollBack();
             return back()->with('error', 'Error deleting payment: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Void a payment: remove all its allocations, restore the bills'
+     * statuses, reverse its ledger entry (mirrored journal) and
+     * neutralise any prepayment schedules it funded. The row is kept
+     * (status void) for audit.
+     */
+    public function void(BillPayment $billPayment)
+    {
+        if ($billPayment->status === BillPayment::STATUS_VOID) {
+            return back()->with('error', 'This payment is already void.');
+        }
+
+        try {
+            $billPayment->void();
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Error voiding payment: ' . $e->getMessage());
+        }
+
+        return back()->with('success', "Payment {$billPayment->payment_number} voided and its ledger entry reversed.");
     }
 
     /**
