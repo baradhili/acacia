@@ -261,6 +261,81 @@ class FiscalYearService
     }
 
     /**
+     * Add the "exclude year-end closing entries" clause to a query
+     * already joined to ifrs_transactions as t. NULL references (most
+     * transactions) must survive: SQL NOT over a NULL LIKE evaluates to
+     * NULL, which drops the row from the WHERE entirely.
+     */
+    public static function excludeClosingEntries($query)
+    {
+        return $query->where(function ($q) {
+            $q->whereNull('t.reference')
+                ->orWhereNot('t.reference', 'like', FiscalYearClose::CLOSING_REFERENCE_PREFIX . '%');
+        });
+    }
+
+    /**
+     * Ledger movement for $account between $start and $end (debit-
+     * positive, same convention as Ledger::balance()) excluding the
+     * year-end closing entries — transactions whose reference starts
+     * with FY-CLOSE-, including their -REV reversals. This is what lets
+     * P&L statements for a closed year keep reporting the year's real
+     * trading results instead of the zeroed post-close balances.
+     *
+     * Raw table query because reference lives on the transaction, which
+     * Ledger::balance() cannot filter by.
+     */
+    public static function movementExcludingClosures(Account $account, Carbon $start, Carbon $end, Entity $entity): float
+    {
+        return round((float) self::excludeClosingEntries(
+            DB::table('ifrs_ledgers as l')
+                ->join('ifrs_transactions as t', 't.id', '=', 'l.transaction_id')
+                ->where('l.post_account', $account->id)
+                ->whereBetween('l.posting_date', [$start, $end])
+                ->where('l.currency_id', $entity->currency_id)
+                ->whereNull('l.deleted_at')
+                ->whereNull('t.deleted_at')
+        )
+            ->selectRaw("COALESCE(SUM(CASE WHEN l.entry_type = 'D' THEN l.amount / l.rate ELSE -l.amount / l.rate END), 0) as movement")
+            ->value('movement'), 4);
+    }
+
+    /**
+     * Net profit over [$start, $end] from P&L movement excluding closing
+     * entries (see movementExcludingClosures()). The balance sheet uses
+     * this for its on-the-fly equity figure.
+     */
+    public function netProfitExcludingClosures(Entity $entity, Carbon $start, Carbon $end): float
+    {
+        $movements = self::excludeClosingEntries(
+            DB::table('ifrs_ledgers as l')
+                ->join('ifrs_transactions as t', 't.id', '=', 'l.transaction_id')
+                ->join('ifrs_accounts as a', 'a.id', '=', 'l.post_account')
+                ->where('a.entity_id', $entity->id)
+                ->whereIn('a.account_type', self::PNL_ACCOUNT_TYPES)
+                ->where('l.currency_id', $entity->currency_id)
+                ->whereBetween('l.posting_date', [$start, $end])
+                ->whereNull('l.deleted_at')
+                ->whereNull('t.deleted_at')
+        )
+            ->groupBy('a.account_type')
+            ->selectRaw("a.account_type,
+                COALESCE(SUM(CASE WHEN l.entry_type = 'D' THEN l.amount / l.rate ELSE -l.amount / l.rate END), 0) as movement")
+            ->pluck('movement', 'a.account_type');
+
+        // Revenue movements are credit-negative: negate them, then net
+        // off the (debit-positive) expense movements.
+        $revenue = (float) ($movements[Account::OPERATING_REVENUE] ?? 0)
+            + (float) ($movements[Account::NON_OPERATING_REVENUE] ?? 0);
+        $expenses = (float) ($movements[Account::DIRECT_EXPENSE] ?? 0)
+            + (float) ($movements[Account::OPERATING_EXPENSE] ?? 0)
+            + (float) ($movements[Account::OVERHEAD_EXPENSE] ?? 0)
+            + (float) ($movements[Account::OTHER_EXPENSE] ?? 0);
+
+        return round(-$revenue - $expenses, 2);
+    }
+
+    /**
      * Trial close for a ended financial year — pure computation, no
      * ledger writes. Produces the checklist plus the proposed closing
      * entries: every P&L account's cumulative balance as at year end

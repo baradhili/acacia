@@ -60,9 +60,11 @@ class FiscalYearClose extends Model
      * reports exclude transactions whose reference starts with this
      * prefix from P&L movement so historical statements survive the close.
      */
+    public const CLOSING_REFERENCE_PREFIX = 'FY-CLOSE-';
+
     public function closingReference(): string
     {
-        return 'FY-CLOSE-' . $this->year;
+        return self::CLOSING_REFERENCE_PREFIX . $this->year;
     }
 
     public function entity(): BelongsTo
