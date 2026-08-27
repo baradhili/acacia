@@ -173,6 +173,15 @@ class BillPayment extends Model
     }
 
     /**
+     * Prepaid schedules funded by this payment (one per prepaid bill
+     * line it paid for).
+     */
+    public function prepayments(): HasMany
+    {
+        return $this->hasMany(\App\Models\Prepayment::class);
+    }
+
+    /**
      * Get the documents attached to this payment
      */
     public function documents(): MorphMany
@@ -490,6 +499,19 @@ class BillPayment extends Model
 
             // Store the IFRS transaction id.
             $this->update(['ifrs_payment_id' => $journalEntry->id]);
+
+            // Prepaid bill lines funded by this payment spawn amortisation
+            // schedules. Best-effort like the posting itself: a failure
+            // here never invalidates the ledger entry.
+            try {
+                \App\Services\PrepaymentService::createFromPayment($this, $entity);
+            } catch (\Throwable $e) {
+                Log::error('Failed to create prepayments for bill payment', [
+                    'bill_payment_id' => $this->id,
+                    'error' => $e->getMessage(),
+                    'exception' => get_class($e),
+                ]);
+            }
 
             Log::info("Bill payment {$this->id} posted to IFRS", [
                 'ifrs_payment_id' => $journalEntry->id,
