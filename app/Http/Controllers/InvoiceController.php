@@ -11,6 +11,7 @@ use App\Models\PaymentAllocation;
 use App\Models\Project;
 use App\Models\PurchaseOrder;
 use App\Models\TimeEntry;
+use App\Rules\NotInClosedPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -409,7 +410,7 @@ class InvoiceController extends Controller
         $amountDue = (float) $invoice->amount_due;
         $validated = $request->validate([
             'amount' => 'required|numeric|min:0.01|max:' . $amountDue,
-            'payment_date' => 'required|date',
+            'payment_date' => ['required', 'date', new NotInClosedPeriod],
             'payment_method' => 'required|string',
             'reference' => 'nullable|string',
             'notes' => 'nullable|string',

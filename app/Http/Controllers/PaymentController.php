@@ -7,6 +7,7 @@ use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PaymentAllocation;
+use App\Rules\NotInClosedPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -56,7 +57,7 @@ class PaymentController extends Controller
         $validated = $request->validate([
             'client_id' => 'required|exists:clients,id',
             'amount' => 'required|numeric|min:0.01',
-            'payment_date' => 'required|date',
+            'payment_date' => ['required', 'date', new NotInClosedPeriod],
             'payment_method' => 'required|string',
             'reference' => 'nullable|string',
             'notes' => 'nullable|string',
@@ -197,7 +198,7 @@ class PaymentController extends Controller
         $validated = $request->validate([
             'client_id' => 'required|exists:clients,id',
             'amount' => 'required|numeric|min:0.01',
-            'payment_date' => 'required|date',
+            'payment_date' => ['required', 'date', new NotInClosedPeriod],
             'payment_method' => 'required|string',
             'reference' => 'nullable|string',
             'notes' => 'nullable|string',

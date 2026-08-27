@@ -5,7 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\Bill;
 use App\Models\BillPayment;
 use App\Models\Supplier;
+use App\Rules\NotInClosedPeriod;
 use App\Services\BillLifecycleService;
+use App\Services\PeriodLockService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -50,7 +53,7 @@ class BillPaymentController extends Controller
         $validated = $request->validate([
             'supplier_id' => 'required|exists:suppliers,id',
             'amount' => 'required|numeric|min:0.01',
-            'payment_date' => 'required|date',
+            'payment_date' => ['required', 'date', new NotInClosedPeriod],
             'payment_method' => 'required|in:' . implode(',', array_keys(BillPayment::paymentMethods())),
             'reference' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
@@ -136,7 +139,7 @@ class BillPaymentController extends Controller
         $validated = $request->validate([
             'supplier_id' => 'required|exists:suppliers,id',
             'amount' => 'required|numeric|min:0.01',
-            'payment_date' => 'required|date',
+            'payment_date' => ['required', 'date', new NotInClosedPeriod],
             'payment_method' => 'required|in:' . implode(',', array_keys(BillPayment::paymentMethods())),
             'reference' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
@@ -236,6 +239,15 @@ class BillPaymentController extends Controller
             return back()->with('error', 'This payment is already void.');
         }
 
+        // Voiding reverses the ledger entry at its original date — a
+        // closed financial year cannot take the reversal.
+        $lockService = app(PeriodLockService::class);
+        $paymentDate = Carbon::parse($billPayment->payment_date);
+        if ($lockService->isDateBlocked($paymentDate)) {
+            return back()->with('error', $lockService->dateBlockedMessage($paymentDate)
+                . ' The payment cannot be voided while its year is closed.');
+        }
+
         try {
             $billPayment->void();
         } catch (\Throwable $e) {
@@ -321,6 +333,15 @@ class BillPaymentController extends Controller
 
         if (!$billPayment->allocations()->where('bill_id', $bill->id)->exists()) {
             return back()->with('error', 'Could not remove allocation.');
+        }
+
+        // Unapplying reverses the bill's ledger share at the payment's
+        // original date — a closed financial year cannot take it.
+        $lockService = app(PeriodLockService::class);
+        $paymentDate = Carbon::parse($billPayment->payment_date);
+        if ($lockService->isDateBlocked($paymentDate)) {
+            return back()->with('error', $lockService->dateBlockedMessage($paymentDate)
+                . ' The allocation cannot be removed while the year is closed.');
         }
 
         try {

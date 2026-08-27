@@ -191,14 +191,23 @@ class PrepaymentService
                 continue;
             }
 
-            // Voluntary app-level lock check (nothing else enforces it
-            // for console posting).
+            // Voluntary lock checks (nothing else enforces them for
+            // console posting): a locked app period skips this month and
+            // retries next run, while a financial year closed by the
+            // year-end close fails loudly — the cursor stays put and the
+            // command reports the prepayment as FAILED rather than
+            // silently falling behind.
             if ($lockService->isDateLocked($periodDate)) {
                 Log::warning('Prepayment amortisation skipped — app period lock', [
                     'prepayment_id' => $prepayment->id,
                     'period_date' => $periodDate->toDateString(),
                 ]);
                 break;
+            }
+
+            if ($lockService->isDateBlocked($periodDate, $entity)) {
+                throw new \RuntimeException($lockService->dateBlockedMessage($periodDate, $entity)
+                    ?? "Financial year is closed for {$periodDate->toDateString()} — amortisation cannot post.");
             }
 
             IfrsPosting::ensureReportingPeriod($periodDate, $entity);
