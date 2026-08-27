@@ -14,7 +14,9 @@
 
 - [ ] How to handle "end/start of financial year"
 
-- [ ] THINK THROUGH - time entry - can only go to a project - project is linked to po
+- [ ] 
+
+- [ ] time entry - can only go to a project 
 
 - [ ] Find where dates are in US m/d/y format and make them use the browser/system format
 
