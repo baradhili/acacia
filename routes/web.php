@@ -10,6 +10,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DomainController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\EstimateController;
+use App\Http\Controllers\FinancialYearController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\LogoController;
 use App\Http\Controllers\OpeningBalanceController;
@@ -66,6 +67,14 @@ Route::middleware('auth')->group(function () {
         // Domain name registry (intangibles)
         Route::resource('domains', DomainController::class);
         Route::post('/domains/{domain}/amortisation', [DomainController::class, 'createAmortisation'])->name('domains.amortisation');
+
+        // Year-end close workflow (four-eyes hand-off enforced in the service)
+        Route::get('/financial-years', [FinancialYearController::class, 'index'])->name('financial-years.index');
+        Route::get('/financial-years/{year}/trial', [FinancialYearController::class, 'trial'])->name('financial-years.trial');
+        Route::post('/financial-years/{year}/submit', [FinancialYearController::class, 'submit'])->name('financial-years.submit');
+        Route::post('/financial-years/{year}/approve', [FinancialYearController::class, 'approve'])->name('financial-years.approve');
+        Route::post('/financial-years/{year}/close', [FinancialYearController::class, 'close'])->name('financial-years.close');
+        Route::post('/financial-years/{year}/reopen', [FinancialYearController::class, 'reopen'])->name('financial-years.reopen');
     });
 
     // Clients

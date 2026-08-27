@@ -6,6 +6,8 @@ use App\Models\FiscalPeriod;
 use App\Models\Invoice;
 use App\Models\Payment;
 use Carbon\Carbon;
+use IFRS\Models\Entity;
+use IFRS\Models\ReportingPeriod;
 use Illuminate\Support\Collection;
 
 class PeriodLockService
@@ -18,6 +20,68 @@ class PeriodLockService
         $period = FiscalPeriod::containingDate($date)->first();
 
         return $period && $period->isLocked();
+    }
+
+    /**
+     * Whether ledger postings are blocked for a date: either the app's
+     * FiscalPeriod covering it is locked, or the IFRS ReportingPeriod for
+     * its financial year has been CLOSED (the year-end close sets this —
+     * the package then rejects any new transaction in that year).
+     *
+     * Absent period rows mean open/unlocked, mirroring the firstOrCreate
+     * convention used across the posting paths; this never creates rows.
+     */
+    public function isDateBlocked(Carbon $date, ?Entity $entity = null): bool
+    {
+        if ($this->isDateLocked($date)) {
+            return true;
+        }
+
+        $entity ??= \App\Services\IfrsPosting::resolveEntity();
+        if (!$entity) {
+            return false;
+        }
+
+        $year = ReportingPeriod::year($date, $entity);
+        $period = ReportingPeriod::withoutGlobalScope(\IFRS\Scopes\EntityScope::class)
+            ->where('entity_id', $entity->id)
+            ->where('calendar_year', $year)
+            ->first();
+
+        return $period && $period->status === ReportingPeriod::CLOSED;
+    }
+
+    /**
+     * Friendly explanation for why a date is blocked (null when it isn't).
+     */
+    public function dateBlockedMessage(Carbon $date, ?Entity $entity = null): ?string
+    {
+        $locked = $this->getLockedPeriodForDate($date);
+        if ($locked) {
+            return "Period '{$locked->name}' is locked"
+                . ($locked->lock_reason ? " ({$locked->lock_reason})" : '')
+                . '. Contact an administrator to unlock.';
+        }
+
+        $entity ??= \App\Services\IfrsPosting::resolveEntity();
+        if (!$entity) {
+            return null;
+        }
+
+        $year = ReportingPeriod::year($date, $entity);
+        $period = ReportingPeriod::withoutGlobalScope(\IFRS\Scopes\EntityScope::class)
+            ->where('entity_id', $entity->id)
+            ->where('calendar_year', $year)
+            ->first();
+
+        if ($period && $period->status === ReportingPeriod::CLOSED) {
+            $end = ReportingPeriod::periodEnd($date, $entity)->format('d M Y');
+
+            return "Financial year {$year} is closed (ended {$end}). "
+                . 'Reopen the year from the Financial Years page or use a later date.';
+        }
+
+        return null;
     }
 
     /**

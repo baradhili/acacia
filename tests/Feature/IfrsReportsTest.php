@@ -34,7 +34,11 @@ class IfrsReportsTest extends TestCase
         $this->entity = Entity::create([
             'name' => 'Test Entity',
             'currency_id' => 1,
-            'year_start' => 1,
+            // July FY start — matches the test data below (Aug = Q1,
+            // May = Q4, fy=2026 meaning Jul 2025 – Jun 2026) and the
+            // production seeder; BAS/company-tax FY boundaries are
+            // entity-derived.
+            'year_start' => 7,
             'multi_currency' => false,
         ]);
 

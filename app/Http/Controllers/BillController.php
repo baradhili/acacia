@@ -6,7 +6,10 @@ use App\Models\Bill;
 use App\Models\BillPayment;
 use App\Models\Project;
 use App\Models\Supplier;
+use App\Rules\NotInClosedPeriod;
 use App\Services\BillLifecycleService;
+use App\Services\PeriodLockService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -91,7 +94,7 @@ class BillController extends Controller
             'items.*.service_end' => 'required_with:items.*.is_prepaid|nullable|date|after_or_equal:items.*.service_start',
             'items.*.amortise_to_account_id' => 'nullable|integer|exists:ifrs_accounts,id',
             'paid_now' => 'nullable|boolean',
-            'payment_date' => 'required_if:paid_now,1|nullable|date',
+            'payment_date' => ['required_if:paid_now,1', 'nullable', 'date', new NotInClosedPeriod],
             'payment_method' => 'required_if:paid_now,1|nullable|in:' . implode(',', array_keys(BillPayment::paymentMethods())),
             'payment_reference' => 'nullable|string|max:255',
             // Receipts uploaded alongside a bill paid at entry
@@ -340,6 +343,15 @@ class BillController extends Controller
             return back()->with('error', 'This payment is already void.');
         }
 
+        // Unapplying reverses the bill's ledger share at the payment's
+        // original date — a closed financial year cannot take it.
+        $lockService = app(PeriodLockService::class);
+        $paymentDate = Carbon::parse($billPayment->payment_date);
+        if ($lockService->isDateBlocked($paymentDate)) {
+            return back()->with('error', $lockService->dateBlockedMessage($paymentDate)
+                . ' The payment cannot be unapplied while its year is closed.');
+        }
+
         try {
             BillLifecycleService::unapplyPayment($bill, $billPayment);
         } catch (\Throwable $e) {
@@ -389,7 +401,7 @@ class BillController extends Controller
         $amountDue = (float) $bill->amount_due;
         $validated = $request->validate([
             'amount' => 'required|numeric|min:0.01|max:' . $amountDue,
-            'payment_date' => 'required|date',
+            'payment_date' => ['required', 'date', new NotInClosedPeriod],
             'payment_method' => 'required|in:' . implode(',', array_keys(BillPayment::paymentMethods())),
             'reference' => 'nullable|string|max:255',
             'notes' => 'nullable|string',

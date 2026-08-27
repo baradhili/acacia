@@ -7,10 +7,12 @@ use App\Models\Bill;
 use App\Models\BillItem;
 use App\Models\BillPayment;
 use App\Models\CompanyProfile;
+use App\Models\FiscalYearClose;
 use App\Models\Payment;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Services\FiscalYearService;
 use App\Services\OpeningBalances;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -22,7 +24,6 @@ use IFRS\Models\Entity;
 use IFRS\Models\Ledger;
 use IFRS\Models\LineItem;
 use IFRS\Models\ReportingPeriod;
-use IFRS\Reports\IncomeStatement;
 use IFRS\Reports\CashFlowStatement;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Maatwebsite\Excel\Facades\Excel;
@@ -266,6 +267,39 @@ class ReportController extends Controller
         return $rows;
     }
 
+    /**
+     * Row builder for the income-statement sections: one row per P&L
+     * account of the given types, with the account's movement over the
+     * period EXCLUDING year-end closing entries (reference FY-CLOSE-*).
+     * The closing entries exist to zero those accounts at year end —
+     * without the exclusion a closed year's statement collapses to zero.
+     * Balances are magnitudes, matching statementAccountRows().
+     */
+    protected function pnlAccountRows(array $accountTypes, Carbon $startDate, Carbon $endDate): array
+    {
+        $entity = $this->ifrsEntity();
+        $rows = [];
+
+        foreach (Account::where('entity_id', $entity->id)
+            ->whereIn('account_type', $accountTypes)
+            ->orderBy('code')
+            ->get() as $account
+        ) {
+            $movement = FiscalYearService::movementExcludingClosures($account, $startDate, $endDate, $entity);
+
+            if (abs($movement) < 0.005) {
+                continue;
+            }
+
+            $rows[] = [
+                'account' => ['name' => $account->name, 'code' => $account->code],
+                'balance' => round(abs($movement), 2),
+            ];
+        }
+
+        return $rows;
+    }
+
     public function trialBalance(Request $request)
     {
         $endDate = $request->get('end_date')
@@ -342,32 +376,36 @@ class ReportController extends Controller
 
         $this->getReportingPeriod($endDate);
 
-        // Authoritative totals from the package; detail rows per account
-        $statement = new IncomeStatement($startDate->toDateString(), $endDate->toDateString(), $entity);
-        $sections = $statement->getSections();
-
-        $revenue = $this->statementAccountRows(
+        // P&L rows and totals from closing-aware movement: the year-end
+        // closing entries (FY-CLOSE-*) are excluded so a closed year's
+        // statement keeps reporting its real trading results. Totals are
+        // sums of the detail rows, so the two can never disagree.
+        $revenue = $this->pnlAccountRows(
             [Account::OPERATING_REVENUE, Account::NON_OPERATING_REVENUE],
             $startDate, $endDate
         );
-        $directCosts = $this->statementAccountRows(
+        $directCosts = $this->pnlAccountRows(
             [Account::DIRECT_EXPENSE],
             $startDate, $endDate
         );
-        $expenses = $this->statementAccountRows(
+        $expenses = $this->pnlAccountRows(
             [Account::OPERATING_EXPENSE, Account::OVERHEAD_EXPENSE, Account::OTHER_EXPENSE],
             $startDate, $endDate
         );
 
+        $revenueTotal = round(array_sum(array_column($revenue, 'balance')), 2);
+        $directCostsTotal = round(array_sum(array_column($directCosts, 'balance')), 2);
+        $expenseTotal = round(array_sum(array_column($expenses, 'balance')), 2);
+
         $lines = ['statement' => [
             'revenue' => $revenue,
-            'revenueTotal' => (float) $sections['results'][IncomeStatement::TOTAL_REVENUE],
+            'revenueTotal' => $revenueTotal,
             'direct_costs' => $directCosts,
-            'directCostsTotal' => array_sum(array_column($directCosts, 'balance')),
-            'grossProfit' => (float) $sections['results'][IncomeStatement::GROSS_PROFIT],
+            'directCostsTotal' => $directCostsTotal,
+            'grossProfit' => round($revenueTotal - $directCostsTotal, 2),
             'expense' => $expenses,
-            'expenseTotal' => array_sum(array_column($expenses, 'balance')),
-            'netProfit' => (float) $sections['results'][IncomeStatement::NET_PROFIT],
+            'expenseTotal' => $expenseTotal,
+            'netProfit' => round($revenueTotal - $directCostsTotal - $expenseTotal, 2),
         ]];
 
         return view('reports.income-statement', compact(
@@ -399,9 +437,16 @@ class ReportController extends Controller
             $fyStart, $endDate, true
         );
 
-        // The period's profit adds to equity before it is closed
-        $incomeStatement = new IncomeStatement($fyStart->toDateString(), $endDate->toDateString(), $entity);
-        $netProfit = (float) $incomeStatement->getSections()['results'][IncomeStatement::NET_PROFIT];
+        // The period's profit adds to equity before it is closed — but
+        // only while the FY is still open. Once CLOSED, the closing
+        // entries have already moved the profit into Retained Earnings
+        // (part of the equity rows above), so adding the on-the-fly
+        // figure again would double count it. Computed from
+        // closing-aware movement either way.
+        $fyService = new FiscalYearService();
+        $netProfit = $fyService->isClosed($entity, ReportingPeriod::year($endDate, $entity))
+            ? 0.0
+            : $fyService->netProfitExcludingClosures($entity, $fyStart, $endDate);
 
         $lines = ['statement' => [
             'assets' => $assets,
@@ -879,7 +924,9 @@ class ReportController extends Controller
     public function bas(Request $request)
     {
         // FY named by its June year-end: FY2026 = Jul 2025 – Jun 2026.
-        $currentFyEnd = now()->month >= 7 ? now()->year + 1 : now()->year;
+        // Derived from the entity's year_start so a non-July FY (or a
+        // later change to year_start) cannot drift from the ledger.
+        $currentFyEnd = ReportingPeriod::year(now(), $this->ifrsEntity()) + 1;
         $fyEnd = (int) $request->get("fy", $currentFyEnd);
 
         $statement = $this->buildBasStatement($fyEnd);
@@ -902,8 +949,13 @@ class ReportController extends Controller
      */
     protected function buildBasStatement(int $fyEnd): array
     {
-        $fyStart = Carbon::create($fyEnd - 1, 7, 1)->startOfDay();
-        $fyEndDate = Carbon::create($fyEnd, 6, 30)->endOfDay();
+        // FY boundaries from the entity's year_start ($fyEnd is the FY's
+        // ending calendar year; the FY label is one less). Identical to
+        // the previous hard-coded Jul–Jun for the default July start.
+        $entity = $this->ifrsEntity();
+        ['start' => $fyStart, 'end' => $fyEndDate] = (new FiscalYearService())->bounds($entity, $fyEnd - 1);
+        $fyStart = $fyStart->startOfDay();
+        $fyEndDate = $fyEndDate->copy()->endOfDay();
 
         $invoices = \App\Models\Invoice::whereBetween("issue_date", [$fyStart, $fyEndDate])
             ->whereNotIn("status", [\App\Models\Invoice::STATUS_DRAFT, \App\Models\Invoice::STATUS_CANCELLED])
@@ -915,19 +967,19 @@ class ReportController extends Controller
             ->with("items.expenseAccount")
             ->get();
 
-        // BAS quarters: Q1 Jul-Sep, Q2 Oct-Dec, Q3 Jan-Mar, Q4 Apr-Jun.
-        $quarterOf = fn ($date) => match (true) {
-            $date->month >= 7 && $date->month <= 9 => 0,
-            $date->month >= 10 => 1,
-            $date->month <= 3 => 2,
-            default => 3,
-        };
+        // BAS quarters: consecutive three-month blocks of the FY, in
+        // whatever month it starts (Q1 Jul-Sep, Q2 Oct-Dec, Q3 Jan-Mar,
+        // Q4 Apr-Jun for the default July start).
+        $quarterOf = fn ($date) => intdiv(
+            $fyStart->copy()->startOfMonth()->diffInMonths(Carbon::parse($date)->startOfMonth()),
+            3
+        );
 
         $quarters = [];
         foreach ([0, 1, 2, 3] as $i) {
-            $start = Carbon::create($fyEnd - 1, 7 + $i * 3, 1)->startOfDay();
+            $start = $fyStart->copy()->addMonths($i * 3)->startOfDay();
             $quarters[$i] = [
-                "label" => sprintf("Q%d (%s)", $i + 1, ["Jul-Sep", "Oct-Dec", "Jan-Mar", "Apr-Jun"][$i]),
+                "label" => sprintf("Q%d (%s-%s)", $i + 1, $start->format("M"), $start->copy()->addMonths(2)->format("M")),
                 "start" => $start,
                 "end" => $start->copy()->addMonths(3)->subDay()->endOfDay(),
                 "g1" => 0.0,
@@ -1096,7 +1148,9 @@ class ReportController extends Controller
      */
     public function companyTax(Request $request)
     {
-        $currentFyEnd = now()->month >= 7 ? now()->year + 1 : now()->year;
+        // FY named by its June year-end, derived from the entity's
+        // year_start so it cannot drift from the ledger's FY boundaries.
+        $currentFyEnd = ReportingPeriod::year(now(), $this->ifrsEntity()) + 1;
         $fyEnd = (int) $request->get("fy", $currentFyEnd);
 
         $statement = $this->buildCompanyTaxStatement($fyEnd);
@@ -1216,9 +1270,12 @@ class ReportController extends Controller
      */
     protected function buildCompanyTaxStatement(int $fyEnd): array
     {
-        $fyStart = Carbon::create($fyEnd - 1, 7, 1)->startOfDay();
-        $fyEndDate = Carbon::create($fyEnd, 6, 30)->endOfDay();
+        // FY boundaries from the entity's year_start ($fyEnd is the FY's
+        // ending calendar year; the FY label is one less).
         $entity = $this->ifrsEntity();
+        ['start' => $fyStart, 'end' => $fyEndDate] = (new FiscalYearService())->bounds($entity, $fyEnd - 1);
+        $fyStart = $fyStart->startOfDay();
+        $fyEndDate = $fyEndDate->copy()->endOfDay();
         $this->getReportingPeriod($fyEndDate);
 
         $config = config("ato_tax_report");
@@ -1234,6 +1291,9 @@ class ReportController extends Controller
 
         // Per-account net movement for the year through bank-settled
         // transactions (the transaction's main account must be a BANK).
+        // Year-end closing entries are never trading activity — excluded
+        // by reference prefix (belt-and-braces: their main account is
+        // Retained Earnings, so the bank filter already drops them).
         $accountMovements = DB::table("ifrs_ledgers as l")
             ->join("ifrs_transactions as t", "t.id", "=", "l.transaction_id")
             ->join("ifrs_accounts as a", "a.id", "=", "l.post_account")
@@ -1244,6 +1304,7 @@ class ReportController extends Controller
             ->whereBetween("l.posting_date", [$fyStart, $fyEndDate])
             ->whereNull("l.deleted_at")
             ->whereNull("t.deleted_at")
+            ->where(fn ($q) => $q->whereNull("t.reference")->orWhereNot("t.reference", "like", FiscalYearClose::CLOSING_REFERENCE_PREFIX . "%"))
             ->groupBy("a.id", "a.code", "a.name", "a.account_type")
             ->orderBy("a.code")
             ->selectRaw("a.id, a.code, a.name, a.account_type,
@@ -1265,6 +1326,7 @@ class ReportController extends Controller
             ->whereBetween("l.posting_date", [$fyStart, $fyEndDate])
             ->whereNull("l.deleted_at")
             ->whereNull("t.deleted_at")
+            ->where(fn ($q) => $q->whereNull("t.reference")->orWhereNot("t.reference", "like", FiscalYearClose::CLOSING_REFERENCE_PREFIX . "%"))
             ->distinct()
             ->get(["a.id as account_id", "l.transaction_id", "l.line_item_id"])
             ->each(function ($link) use (&$auditByAccount) {
@@ -1484,6 +1546,8 @@ class ReportController extends Controller
         ])));
 
         // Non-cash P&L ledger rows excluded by the bank filter (V07).
+        // Closing entries would otherwise dominate this count: they are
+        // non-bank transactions hitting P&L accounts by design.
         $nonCashRows = DB::table("ifrs_ledgers as l")
             ->join("ifrs_transactions as t", "t.id", "=", "l.transaction_id")
             ->join("ifrs_accounts as a", "a.id", "=", "l.post_account")
@@ -1494,6 +1558,7 @@ class ReportController extends Controller
             ->whereBetween("l.posting_date", [$fyStart, $fyEndDate])
             ->whereNull("l.deleted_at")
             ->whereNull("t.deleted_at")
+            ->where(fn ($q) => $q->whereNull("t.reference")->orWhereNot("t.reference", "like", FiscalYearClose::CLOSING_REFERENCE_PREFIX . "%"))
             ->count();
 
         // Data completeness: best-effort posting means payments can exist
