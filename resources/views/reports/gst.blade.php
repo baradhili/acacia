@@ -34,8 +34,8 @@
                 <h3 class="text-lg font-semibold text-green-800 mb-4">GST Collected (Output Tax)</h3>
                 <table class="w-full">
                     <tr>
-                        <td class="py-2">Total Sales (ex. GST)</td>
-                        <td class="text-right">${{ number_format($totalInvoices, 2) }}</td>
+                        <td class="py-2">Total Receipts (incl. GST)</td>
+                        <td class="text-right">${{ number_format($totalReceipts, 2) }}</td>
                     </tr>
                     <tr class="border-t">
                         <td class="py-2 font-semibold">GST on Sales (G1)</td>
@@ -49,8 +49,8 @@
                 <h3 class="text-lg font-semibold text-red-800 mb-4">GST Paid (Input Tax)</h3>
                 <table class="w-full">
                     <tr>
-                        <td class="py-2">Total Purchases (ex. GST)</td>
-                        <td class="text-right">${{ number_format($totalExpenses, 2) }}</td>
+                        <td class="py-2">Total Payments (incl. GST)</td>
+                        <td class="text-right">${{ number_format($totalPayments, 2) }}</td>
                     </tr>
                     <tr class="border-t">
                         <td class="py-2 font-semibold">GST on Purchases (G2)</td>
@@ -80,7 +80,10 @@
         </div>
 
         <div class="mt-6 text-sm text-gray-500">
-            <p><strong>Note:</strong> This is a simplified GST/BAS report. For actual BAS lodgement, 
+            <p><strong>Note:</strong> Cash basis — GST is recognised when payments are received or made (the posted
+            ledger legs), not when invoices or bills are issued. Unposted payments appear once backfilled
+            (<code>ifrs:post-payments</code>).</p>
+            <p class="mt-1">This is a simplified GST/BAS report. For actual BAS lodgement,
             please refer to ATO guidelines and ensure all transactions are correctly classified.</p>
         </div>
     </div>

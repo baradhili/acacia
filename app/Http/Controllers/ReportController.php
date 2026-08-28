@@ -31,6 +31,7 @@ use IFRS\Models\Ledger;
 use IFRS\Models\LineItem;
 use IFRS\Models\ReportingPeriod;
 use IFRS\Reports\CashFlowStatement;
+use IFRS\Scopes\EntityScope;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -699,6 +700,41 @@ class ReportController extends Controller
         ));
     }
 
+    /**
+     * GST collected/paid from the accounts the entity's Vats post to
+     * (seeded "GST 10%" → 2200 GST Payable, "GST Input 10%" → 430 GST
+     * Receivable): ledger credits are GST collected on receipts, debits
+     * are GST paid on supplier payments. Cash basis — the exact legs the
+     * payment postings write, so the GST, BAS and company tax reports
+     * all tie to the ledger.
+     */
+    protected function ledgerGst(Entity $entity, Carbon $startDate, Carbon $endDate): object
+    {
+        $vatAccountIds = DB::table('ifrs_vats')
+            ->where('entity_id', $entity->id)
+            ->whereNotNull('account_id')
+            ->pluck('account_id')
+            ->unique()
+            ->values();
+
+        if ($vatAccountIds->isEmpty()) {
+            return (object) ['collected' => 0.0, 'paid' => 0.0];
+        }
+
+        $gst = DB::table('ifrs_ledgers')
+            ->whereIn('post_account', $vatAccountIds)
+            ->whereBetween('posting_date', [$startDate, $endDate])
+            ->whereNull('deleted_at')
+            ->selectRaw("SUM(CASE WHEN entry_type = '".Balance::CREDIT."' THEN amount ELSE 0 END) as collected,
+                SUM(CASE WHEN entry_type = '".Balance::DEBIT."' THEN amount ELSE 0 END) as paid")
+            ->first();
+
+        return (object) [
+            'collected' => (float) ($gst->collected ?? 0),
+            'paid' => (float) ($gst->paid ?? 0),
+        ];
+    }
+
     public function gstReport(Request $request)
     {
         $startDate = $request->get('start_date')
@@ -709,29 +745,37 @@ class ReportController extends Controller
             ? Carbon::parse($request->end_date)->endOfDay()
             : Carbon::now()->endOfDay();
 
-        // Get GST collected from invoices (output tax)
-        $invoices = Invoice::whereBetween('issue_date', [$startDate, $endDate])
-            ->where('status', '!=', 'cancelled')
-            ->get();
+        $entity = $this->ifrsEntity();
 
-        $gstCollected = $invoices->sum('tax_amount');
-        $totalInvoices = $invoices->sum('subtotal');
+        // Cash basis: GST figures come from the Vat account ledger legs
+        // the payment postings write — the same basis as the ATO company
+        // tax report — not from the invoice/bill subledger by issue date,
+        // which recognised GST on issuance and diverged from the ledger
+        // whenever invoices/bills were unpaid at period end.
+        $gst = $this->ledgerGst($entity, $startDate, $endDate);
+        $gstCollected = $gst->collected;
+        $gstPaid = $gst->paid;
 
-        // Get GST paid from bills (input tax) — per-line GST treatment means
-        // GST-free lines simply contribute no tax_amount.
-        $bills = Bill::whereBetween('bill_date', [$startDate, $endDate])
-            ->whereNotIn('status', [Bill::STATUS_DRAFT, Bill::STATUS_CANCELLED])
-            ->get();
-
-        $gstPaid = $bills->sum('tax_amount');
-        $totalExpenses = $bills->sum('subtotal');
+        // Money actually banked/paid out behind those legs. Only posted
+        // payments count, so the report always ties to the ledger;
+        // unposted ones appear once ifrs:post-payments backfills them,
+        // refunds net through their negative amounts and voided payments
+        // never posted.
+        $totalReceipts = (float) Payment::whereBetween('payment_date', [$startDate, $endDate])
+            ->where('status', '!=', Payment::STATUS_VOID)
+            ->whereNotNull('ifrs_receipt_id')
+            ->sum('amount');
+        $totalPayments = (float) BillPayment::whereBetween('payment_date', [$startDate, $endDate])
+            ->where('status', '!=', BillPayment::STATUS_VOID)
+            ->whereNotNull('ifrs_payment_id')
+            ->sum('amount');
 
         $netGst = $gstCollected - $gstPaid;
 
         return view('reports.gst', compact(
             'startDate', 'endDate',
-            'gstCollected', 'totalInvoices',
-            'gstPaid', 'totalExpenses',
+            'gstCollected', 'totalReceipts',
+            'gstPaid', 'totalPayments',
             'netGst'
         ));
     }
@@ -949,13 +993,15 @@ class ReportController extends Controller
 
     /**
      * Quarterly BAS figures for the financial year ending 30 June
-     * $fyEnd. Sales and purchase values come from the stored line
-     * amounts (item tax_amount is authoritative; invoice/bill totals
-     * are GST-inclusive) — the same amounts the GST ledger accounts
-     * are posted from. Bill lines categorised to non-current-asset
-     * accounts are capital purchases (G10); other lines are G11.
-     * Credit notes are excluded because their schema stores no GST
-     * split.
+     * $fyEnd, on the cash basis the ledger keeps: G1 is posted client
+     * payments (GST-inclusive, refunds netting via negative amounts),
+     * 1A/1B are the Vat account ledger legs (ledgerGst()), and G10/G11
+     * are bill payment allocations apportioned across bill lines via
+     * BillPayment::allocationGroups() — the same shares the postings
+     * use — split into capital (non-current-asset accounts) and
+     * non-capital. Every figure ties to the ledger because only posted
+     * payments count; unposted ones appear once ifrs:post-payments
+     * backfills them.
      */
     protected function buildBasStatement(int $fyEnd): array
     {
@@ -966,16 +1012,6 @@ class ReportController extends Controller
         ['start' => $fyStart, 'end' => $fyEndDate] = (new FiscalYearService)->bounds($entity, $fyEnd - 1);
         $fyStart = $fyStart->startOfDay();
         $fyEndDate = $fyEndDate->copy()->endOfDay();
-
-        $invoices = Invoice::whereBetween('issue_date', [$fyStart, $fyEndDate])
-            ->whereNotIn('status', [Invoice::STATUS_DRAFT, Invoice::STATUS_CANCELLED])
-            ->with('items')
-            ->get();
-
-        $bills = Bill::whereBetween('bill_date', [$fyStart, $fyEndDate])
-            ->whereNotIn('status', [Bill::STATUS_DRAFT, Bill::STATUS_CANCELLED])
-            ->with('items.expenseAccount')
-            ->get();
 
         // BAS quarters: consecutive three-month blocks of the FY, in
         // whatever month it starts (Q1 Jul-Sep, Q2 Oct-Dec, Q3 Jan-Mar,
@@ -1000,26 +1036,50 @@ class ReportController extends Controller
             ];
         }
 
-        foreach ($invoices as $invoice) {
-            $i = $quarterOf($invoice->issue_date);
-            $quarters[$i]['g1'] += (float) $invoice->total;
-            $quarters[$i]['gst_sales'] += (float) $invoice->items->sum('tax_amount');
+        // G1 — posted client payments, GST-inclusive (refunds subtract).
+        $payments = Payment::whereBetween('payment_date', [$fyStart, $fyEndDate])
+            ->where('status', '!=', Payment::STATUS_VOID)
+            ->whereNotNull('ifrs_receipt_id')
+            ->get();
+        foreach ($payments as $payment) {
+            $quarters[$quarterOf($payment->payment_date)]['g1'] += (float) $payment->amount;
         }
 
-        foreach ($bills as $bill) {
-            $i = $quarterOf($bill->bill_date);
-            foreach ($bill->items as $item) {
-                // A line categorised to a non-current-asset account is a
-                // capital purchase (G10); everything else is non-capital
-                // (G11). GST credits (1B) cover both kinds.
-                $isCapital = ($item->expenseAccount->account_type ?? null) === Account::NON_CURRENT_ASSET;
-                if ($isCapital) {
-                    $quarters[$i]['g10'] += (float) $item->total;
-                } else {
-                    $quarters[$i]['g11'] += (float) $item->total;
+        // 1A/1B — the GST ledger legs the postings wrote, per quarter.
+        foreach ($quarters as $i => $quarter) {
+            $gst = $this->ledgerGst($entity, $quarter['start'], $quarter['end']);
+            $quarters[$i]['gst_sales'] = $gst->collected;
+            $quarters[$i]['gst_purchases'] = $gst->paid;
+        }
+
+        // G10/G11 — supplier payments apportioned across their bills'
+        // lines. A line categorised to a non-current-asset account is a
+        // capital purchase; everything else is non-capital (GST credits
+        // in 1B cover both kinds).
+        $accountTypes = DB::table('ifrs_accounts')
+            ->where('entity_id', $entity->id)
+            ->pluck('account_type', 'id');
+        $defaultExpenseAccount = Account::withoutGlobalScope(EntityScope::class)
+            ->where('entity_id', $entity->id)
+            ->where('code', BillPayment::IFRS_DEFAULT_EXPENSE_ACCOUNT_CODE)
+            ->first();
+
+        $billPayments = BillPayment::whereBetween('payment_date', [$fyStart, $fyEndDate])
+            ->where('status', '!=', BillPayment::STATUS_VOID)
+            ->whereNotNull('ifrs_payment_id')
+            ->with('allocations.bill.items')
+            ->get();
+        foreach ($billPayments as $billPayment) {
+            $i = $quarterOf($billPayment->payment_date);
+            foreach ($billPayment->allocations as $allocation) {
+                $bill = $allocation->bill;
+                if (! $bill) {
+                    continue;
                 }
-                if ((float) ($item->tax_rate ?? 0) > 0) {
-                    $quarters[$i]['gst_purchases'] += (float) $item->tax_amount;
+                foreach (BillPayment::allocationGroups($bill, (float) $allocation->amount, $defaultExpenseAccount) as $key => $cents) {
+                    [$accountId] = explode('-', $key);
+                    $column = ($accountTypes[$accountId] ?? null) === Account::NON_CURRENT_ASSET ? 'g10' : 'g11';
+                    $quarters[$i][$column] += $cents / 100;
                 }
             }
         }
@@ -1362,23 +1422,9 @@ class ReportController extends Controller
 
         // GST collected/paid from the accounts the entity's Vats post to
         // (seeded "GST 10%" → account 2200): credits are GST collected on
-        // receipts, debits are GST paid on payments.
-        $vatAccountIds = DB::table('ifrs_vats')
-            ->where('entity_id', $entity->id)
-            ->whereNotNull('account_id')
-            ->pluck('account_id')
-            ->unique()
-            ->values();
-        $gst = (object) ['collected' => 0.0, 'paid' => 0.0];
-        if ($vatAccountIds->isNotEmpty()) {
-            $gst = DB::table('ifrs_ledgers')
-                ->whereIn('post_account', $vatAccountIds)
-                ->whereBetween('posting_date', [$fyStart, $fyEndDate])
-                ->whereNull('deleted_at')
-                ->selectRaw("SUM(CASE WHEN entry_type = 'C' THEN amount ELSE 0 END) as collected,
-                    SUM(CASE WHEN entry_type = 'D' THEN amount ELSE 0 END) as paid")
-                ->first();
-        }
+        // receipts, debits are GST paid on payments. Shared with the
+        // GST/BAS reports so every GST figure uses the same cash basis.
+        $gst = $this->ledgerGst($entity, $fyStart, $fyEndDate);
 
         // Label rows initialised from config (form order preserved).
         $makeRows = function (array $defs): array {
@@ -1653,8 +1699,12 @@ class ReportController extends Controller
             'Ledger rows are restricted to transactions whose main account is a BANK account.');
         $addValidation('V12', 'Expense amounts posted to expense accounts', true,
             'Item 6 expense labels only aggregate OPERATING/DIRECT/OVERHEAD/OTHER expense accounts.');
-        $addValidation('V13', 'GST excluded per registration status', $vatAccountIds->isNotEmpty(),
-            $vatAccountIds->isNotEmpty()
+        $hasVats = DB::table('ifrs_vats')
+            ->where('entity_id', $entity->id)
+            ->whereNotNull('account_id')
+            ->exists();
+        $addValidation('V13', 'GST excluded per registration status', $hasVats,
+            $hasVats
                 ? "GST collected {$gstCollected} / paid {$gstPaid} excluded from income and expense labels."
                 : 'No Vat configured for the entity — GST treatment unverifiable.');
 

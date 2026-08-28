@@ -98,7 +98,7 @@
 
     <div class="notes">
         <p>Capital purchases (G10) are bill lines categorised to a non-current-asset account; all other bill lines are non-capital (G11).</p>
-        <p>Credit notes are excluded (no GST split is stored for them). Draft and cancelled invoices/bills are excluded.</p>
+        <p>Cash basis — only posted payments count: G1 is client receipts (GST-inclusive, refunds netting), 1A/1B are the GST ledger legs, and G10/G11 apportion supplier payments across their bills' lines. Unposted payments appear once backfilled (ifrs:post-payments).</p>
     </div>
 
     <div class="footer">
