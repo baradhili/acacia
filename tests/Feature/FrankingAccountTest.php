@@ -5,8 +5,6 @@ namespace Tests\Feature;
 use App\Models\CompanyProfile;
 use App\Models\DividendDeclaration;
 use App\Models\FrankingAccountEntry;
-use App\Models\ShareClass;
-use App\Models\Shareholding;
 use App\Models\User;
 use App\Services\FrankingService;
 use Carbon\Carbon;
@@ -15,7 +13,6 @@ use IFRS\Models\Currency;
 use IFRS\Models\Entity;
 use IFRS\Models\ExchangeRate;
 use IFRS\Models\ReportingPeriod;
-use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -27,6 +24,7 @@ use Tests\TestCase;
 class FrankingAccountTest extends TestCase
 {
     protected Entity $entity;
+
     protected User $admin;
 
     protected function setUp(): void
@@ -68,9 +66,9 @@ class FrankingAccountTest extends TestCase
             'entity_id' => $this->entity->id,
         ]);
 
-        $this->admin = new User();
+        $this->admin = new User;
         $this->admin->name = 'Accountant';
-        $this->admin->email = 'accountant' . uniqid() . '@example.com';
+        $this->admin->email = 'accountant'.uniqid().'@example.com';
         $this->admin->email_verified_at = now();
         $this->admin->password = Hash::make('password');
         $this->admin->entity_id = $this->entity->id;

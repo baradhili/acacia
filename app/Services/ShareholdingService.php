@@ -90,7 +90,7 @@ class ShareholdingService
         if ($attributes['quantity'] === 0) {
             throw new \InvalidArgumentException('Quantity must not be zero.');
         }
-        if (!in_array($attributes['transaction_type'] ?? '', array_keys(Shareholding::types()), true)) {
+        if (! in_array($attributes['transaction_type'] ?? '', array_keys(Shareholding::types()), true)) {
             throw new \InvalidArgumentException('Invalid transaction type.');
         }
 

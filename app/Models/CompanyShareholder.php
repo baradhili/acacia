@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class CompanyShareholder extends Model
 {
     public const STATUS_ACTIVE = 'A';
+
     public const STATUS_INACTIVE = 'I';
 
     protected $fillable = [

@@ -33,8 +33,8 @@ class DividendStatementMail extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Dividend Statement ' . $this->distribution->declaration->declaration_number
-                . ' from ' . config('app.name'),
+            subject: 'Dividend Statement '.$this->distribution->declaration->declaration_number
+                .' from '.config('app.name'),
         );
     }
 
@@ -58,8 +58,8 @@ class DividendStatementMail extends Mailable implements ShouldQueue
             'companyAbn' => CompanyProfile::effectiveAbn($this->distribution->declaration->entity_id),
         ]);
 
-        $filename = 'Dividend-Statement-' . $this->distribution->declaration->declaration_number
-            . '-' . $this->distribution->company_shareholder_id . '.pdf';
+        $filename = 'Dividend-Statement-'.$this->distribution->declaration->declaration_number
+            .'-'.$this->distribution->company_shareholder_id.'.pdf';
 
         Storage::put("tmp/{$filename}", $pdf->output());
 

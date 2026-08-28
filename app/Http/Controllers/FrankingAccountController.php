@@ -20,7 +20,7 @@ class FrankingAccountController extends Controller
     {
         $years = FrankingService::years();
         $year = (int) ($request->query('year', $years[0] ?? now()->year));
-        if (!in_array($year, $years, true)) {
+        if (! in_array($year, $years, true)) {
             $year = (int) ($years[0] ?? now()->year);
         }
 
@@ -56,7 +56,7 @@ class FrankingAccountController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'entry_type' => ['required', 'in:' . implode(',', FrankingAccountEntry::MANUAL_TYPES)],
+            'entry_type' => ['required', 'in:'.implode(',', FrankingAccountEntry::MANUAL_TYPES)],
             'entry_date' => ['required', 'date'],
             'reference' => ['nullable', 'string', 'max:20'],
             'description' => ['nullable', 'string', 'max:100'],
@@ -77,7 +77,7 @@ class FrankingAccountController extends Controller
 
     public function destroy(FrankingAccountEntry $entry)
     {
-        if (!in_array($entry->entry_type, FrankingAccountEntry::MANUAL_TYPES, true)) {
+        if (! in_array($entry->entry_type, FrankingAccountEntry::MANUAL_TYPES, true)) {
             return redirect()->route('franking-account.index')
                 ->with('error', 'System-generated franking entries cannot be deleted.');
         }

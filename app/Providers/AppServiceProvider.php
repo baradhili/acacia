@@ -37,7 +37,7 @@ class AppServiceProvider extends ServiceProvider
     {
         TimeEntry::observe(TimeEntryObserver::class);
         Invoice::observe(InvoiceObserver::class);
-        
+
         // Register audit observer for all financial models
         Invoice::observe(AuditObserver::class);
         Payment::observe(AuditObserver::class);

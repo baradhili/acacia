@@ -14,7 +14,9 @@ class NavigationTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected User $staff;
+
     protected Client $client;
 
     protected function setUp(): void

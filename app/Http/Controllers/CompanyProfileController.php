@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\CompanyDirector;
 use App\Models\CompanyProfile;
 use App\Models\CompanyShareholder;
 use App\Models\ShareClass;
@@ -88,7 +87,7 @@ class CompanyProfileController extends Controller
         DB::transaction(function () use ($validated, $entity) {
             $profile = CompanyProfile::updateOrCreate(
                 ['entity_id' => $entity->id],
-                collect($validated)->only((new CompanyProfile())->getFillable())
+                collect($validated)->only((new CompanyProfile)->getFillable())
                     ->except('entity_id')
                     ->map(fn ($value) => $value === '' ? null : $value)
                     ->put('country', $validated['country'] ?? 'AU')
@@ -98,7 +97,7 @@ class CompanyProfileController extends Controller
             // Registry rows are small lists — replace them wholesale from
             // the submission rather than diffing ids row by row.
             $profile->directors()->delete();
-            foreach (array_filter($validated['directors'] ?? [], fn ($row) => !empty(trim($row['name'] ?? ''))) as $row) {
+            foreach (array_filter($validated['directors'] ?? [], fn ($row) => ! empty(trim($row['name'] ?? ''))) as $row) {
                 $profile->directors()->create([
                     'name' => trim($row['name']),
                     'appointment_date' => $row['appointment_date'] ?? null,
@@ -113,7 +112,7 @@ class CompanyProfileController extends Controller
             // reference these rows and must survive a profile save. New
             // rows with a share count get an opening issue transaction.
             $submittedIds = [];
-            foreach (array_filter($validated['shareholders'] ?? [], fn ($row) => !empty(trim($row['name'] ?? ''))) as $row) {
+            foreach (array_filter($validated['shareholders'] ?? [], fn ($row) => ! empty(trim($row['name'] ?? ''))) as $row) {
                 $attributes = [
                     'name' => trim($row['name']),
                     'abn' => $row['abn'] ?? null,
@@ -134,7 +133,7 @@ class CompanyProfileController extends Controller
                     'status' => $row['status'] ?? CompanyShareholder::STATUS_ACTIVE,
                 ];
 
-                $existing = !empty($row['id'])
+                $existing = ! empty($row['id'])
                     ? $profile->allShareholders()->find($row['id'])
                     : null;
 
@@ -143,6 +142,7 @@ class CompanyProfileController extends Controller
                     // by ShareholdingService — never written from this form.
                     $existing->update($attributes);
                     $submittedIds[] = $existing->id;
+
                     continue;
                 }
 
@@ -172,6 +172,7 @@ class CompanyProfileController extends Controller
                 ->each(function (CompanyShareholder $removed) {
                     if ($removed->shareholdings()->exists() || $removed->dividendDistributions()->exists()) {
                         $removed->update(['status' => CompanyShareholder::STATUS_INACTIVE]);
+
                         return;
                     }
                     $removed->delete();

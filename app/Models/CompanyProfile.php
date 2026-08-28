@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
+use IFRS\Models\Entity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use IFRS\Models\Entity;
 
 /**
  * Company identity for the reporting entity — ABN/TFN/ACN, registered
@@ -94,7 +94,7 @@ class CompanyProfile extends Model
      */
     public static function forEntity(?int $entityId): self
     {
-        return static::where('entity_id', $entityId)->first() ?? new static();
+        return static::where('entity_id', $entityId)->first() ?? new static;
     }
 
     /**

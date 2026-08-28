@@ -37,6 +37,7 @@ class SendDividendStatements extends Command
 
         if ($declarations->isEmpty()) {
             $this->info('No declarations with unsent statements.');
+
             return Command::SUCCESS;
         }
 

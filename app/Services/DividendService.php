@@ -4,12 +4,17 @@ namespace App\Services;
 
 use App\Mail\DividendStatementMail;
 use App\Models\CompanyProfile;
+use App\Models\CompanyShareholder;
 use App\Models\DividendDeclaration;
 use App\Models\DividendDistribution;
+use App\Models\FrankingAccountEntry;
+use App\Models\Shareholding;
+use Carbon\Carbon;
 use IFRS\Models\Account;
 use IFRS\Models\Entity;
 use IFRS\Models\LineItem;
 use IFRS\Transactions\JournalEntry;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -64,12 +69,12 @@ class DividendService
         }
 
         $class = $declaration->shareClass;
-        if (!$class?->dividend_rights) {
+        if (! $class?->dividend_rights) {
             throw new \InvalidArgumentException('The share class does not carry dividend rights.');
         }
 
         $profile = CompanyProfile::where('entity_id', $declaration->entity_id)->first();
-        if (!$profile) {
+        if (! $profile) {
             throw new \InvalidArgumentException('No company profile exists for this entity — maintain shareholders first.');
         }
 
@@ -77,11 +82,11 @@ class DividendService
         // the declaration asks for them.
         $frankingPct = $class->franking_entitlement ? (float) $declaration->franking_percentage : 0.0;
 
-        $eligible = \App\Models\Shareholding::query()
+        $eligible = Shareholding::query()
             ->join('company_shareholders', 'company_shareholders.id', '=', 'shareholdings.company_shareholder_id')
             ->where('company_shareholders.company_profile_id', $profile->id)
-            ->where('company_shareholders.status', \App\Models\CompanyShareholder::STATUS_ACTIVE)
-            ->where('shareholdings.status', \App\Models\Shareholding::STATUS_ACTIVE)
+            ->where('company_shareholders.status', CompanyShareholder::STATUS_ACTIVE)
+            ->where('shareholdings.status', Shareholding::STATUS_ACTIVE)
             ->where('shareholdings.share_class_id', $declaration->share_class_id)
             ->whereDate('shareholdings.transaction_date', '<=', $declaration->books_close_date->toDateString())
             ->groupBy('shareholdings.company_shareholder_id')
@@ -89,7 +94,7 @@ class DividendService
             ->havingRaw('SUM(shareholdings.quantity) > 0')
             ->get();
 
-        return \Illuminate\Support\Facades\DB::transaction(function () use ($declaration, $eligible, $frankingPct) {
+        return DB::transaction(function () use ($declaration, $eligible, $frankingPct) {
             $declaration->distributions()->delete();
 
             $totalShares = 0;
@@ -97,7 +102,7 @@ class DividendService
             $totalFranking = 0.0;
 
             foreach ($eligible as $row) {
-                $shareholder = \App\Models\CompanyShareholder::find($row->company_shareholder_id);
+                $shareholder = CompanyShareholder::find($row->company_shareholder_id);
                 $shares = (int) $row->shares;
 
                 $cash = round($shares * (float) $declaration->amount_per_share, 2);
@@ -161,15 +166,15 @@ class DividendService
             if ($required > $available) {
                 throw new \InvalidArgumentException(sprintf(
                     'Insufficient franking credits: this dividend attaches %s but only %s is available '
-                    . '(after approved-but-unpaid declarations and estimated entries). '
-                    . 'Reduce the franking percentage or record franking credits first.',
+                    .'(after approved-but-unpaid declarations and estimated entries). '
+                    .'Reduce the franking percentage or record franking credits first.',
                     number_format($required, 2),
                     number_format($available, 2),
                 ));
             }
         }
 
-        \Illuminate\Support\Facades\DB::transaction(function () use ($declaration, $entity) {
+        DB::transaction(function () use ($declaration, $entity) {
             $journalEntry = self::postJournal(
                 $declaration->declaration_date,
                 $entity,
@@ -204,7 +209,7 @@ class DividendService
         abort_unless((bool) $entity, 503, 'No IFRS entity available for dividend posting.');
         self::assertDatePostable($declaration->payment_date, $entity, 'payment date');
 
-        \Illuminate\Support\Facades\DB::transaction(function () use ($declaration, $entity) {
+        DB::transaction(function () use ($declaration, $entity) {
             $journalEntry = self::postJournal(
                 $declaration->payment_date,
                 $entity,
@@ -217,13 +222,13 @@ class DividendService
 
             // The franking debit arises when the franked dividend is paid.
             if ((float) $declaration->total_franking_credit > 0) {
-                \App\Models\FrankingAccountEntry::create([
+                FrankingAccountEntry::create([
                     'entity_id' => $declaration->entity_id ?: $entity->id,
                     'financial_year' => $declaration->financial_year,
                     'entry_date' => $declaration->payment_date->toDateString(),
-                    'entry_type' => \App\Models\FrankingAccountEntry::TYPE_FRANKED_DIVIDEND_PAID,
+                    'entry_type' => FrankingAccountEntry::TYPE_FRANKED_DIVIDEND_PAID,
                     'reference' => $declaration->declaration_number,
-                    'description' => 'Franked dividend paid ' . $declaration->declaration_number,
+                    'description' => 'Franked dividend paid '.$declaration->declaration_number,
                     'debit_amount' => (float) $declaration->total_franking_credit,
                     'is_estimated' => false,
                     'dividend_declaration_id' => $declaration->id,
@@ -250,11 +255,11 @@ class DividendService
      */
     public static function cancel(DividendDeclaration $declaration): void
     {
-        if (!$declaration->canTransitionTo(DividendDeclaration::STATUS_CANCELLED)) {
+        if (! $declaration->canTransitionTo(DividendDeclaration::STATUS_CANCELLED)) {
             throw new \InvalidArgumentException("A {$declaration->status} declaration cannot be cancelled.");
         }
 
-        \Illuminate\Support\Facades\DB::transaction(function () use ($declaration) {
+        DB::transaction(function () use ($declaration) {
             if ($declaration->ifrs_declaration_transaction_id) {
                 IfrsPosting::reverseTransaction(
                     (int) $declaration->ifrs_declaration_transaction_id,
@@ -288,24 +293,26 @@ class DividendService
 
         $distributions = $declaration->distributions()
             ->where('status', DividendDistribution::STATUS_PAID)
-            ->when(!$force, fn ($q) => $q->where('statement_sent', false))
+            ->when(! $force, fn ($q) => $q->where('statement_sent', false))
             ->with('shareholder')
             ->get();
 
         foreach ($distributions as $distribution) {
             $email = $distribution->shareholder?->email;
 
-            if (!$email) {
+            if (! $email) {
                 $results['missing_email']++;
                 Log::warning('Dividend statement not sent — shareholder has no email', [
                     'distribution_id' => $distribution->id,
                     'declaration' => $declaration->declaration_number,
                 ]);
+
                 continue;
             }
 
             if ($dryRun) {
                 $results['sent']++;
+
                 continue;
             }
 
@@ -337,7 +344,7 @@ class DividendService
      */
     public static function paymentReference(DividendDeclaration $declaration, int $shareholderId): string
     {
-        return $declaration->declaration_number . '-' . str_pad((string) $shareholderId, 3, '0', STR_PAD_LEFT);
+        return $declaration->declaration_number.'-'.str_pad((string) $shareholderId, 3, '0', STR_PAD_LEFT);
     }
 
     /**
@@ -349,7 +356,7 @@ class DividendService
     {
         $mainAccount = Account::where('entity_id', $entity->id)->where('code', $mainCode)->first();
         $lineAccount = Account::where('entity_id', $entity->id)->where('code', $lineCode)->first();
-        if (!$mainAccount || !$lineAccount) {
+        if (! $mainAccount || ! $lineAccount) {
             throw new \RuntimeException("IFRS accounts not found for dividend posting (codes {$mainCode}/{$lineCode}).");
         }
 
@@ -386,8 +393,8 @@ class DividendService
      */
     protected static function assertDatePostable($date, Entity $entity, string $label): void
     {
-        $date = \Carbon\Carbon::parse($date);
-        $locks = app(\App\Services\PeriodLockService::class);
+        $date = Carbon::parse($date);
+        $locks = app(PeriodLockService::class);
 
         if ($locks->isDateLocked($date)) {
             throw new \InvalidArgumentException("The {$label} falls in a locked period ({$date->toDateString()}).");

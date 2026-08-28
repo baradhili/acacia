@@ -21,10 +21,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class FrankingAccountEntry extends Model
 {
     public const TYPE_TAX_PAYMENT = 'TC';
+
     public const TYPE_DIVIDEND_RECEIVED = 'DR';
+
     public const TYPE_FRANKED_DIVIDEND_PAID = 'FD';
+
     public const TYPE_REFUND_RECEIVED = 'RF';
+
     public const TYPE_FDT_PAID = 'FT';
+
     public const TYPE_ADJUSTMENT = 'AJ';
 
     /** Types that can be created manually from the franking account screen. */

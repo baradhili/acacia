@@ -109,7 +109,7 @@ class FrankingService
         return self::baseQuery($entityId)
             ->whereDate('entry_date', '>=', $start->toDateString())
             ->whereDate('entry_date', '<=', $end->toDateString())
-            ->when(!$includeEstimated, fn ($q) => $q->where('is_estimated', false))
+            ->when(! $includeEstimated, fn ($q) => $q->where('is_estimated', false))
             ->groupBy('entry_type')
             ->selectRaw('entry_type, SUM(credit_amount - debit_amount) as net')
             ->pluck('net', 'entry_type')
@@ -141,7 +141,7 @@ class FrankingService
 
         $entity = IfrsPosting::resolveEntity();
         $current = $entity ? (int) ReportingPeriod::year(now(), $entity) : (int) now()->year;
-        if (!in_array($current, $years, true)) {
+        if (! in_array($current, $years, true)) {
             $years[] = $current;
             rsort($years);
         }
@@ -185,7 +185,7 @@ class FrankingService
     public static function recordEntry(array $attributes): FrankingAccountEntry
     {
         $type = $attributes['entry_type'] ?? '';
-        if (!in_array($type, FrankingAccountEntry::MANUAL_TYPES, true)) {
+        if (! in_array($type, FrankingAccountEntry::MANUAL_TYPES, true)) {
             throw new \InvalidArgumentException('Invalid or system-reserved franking entry type.');
         }
 

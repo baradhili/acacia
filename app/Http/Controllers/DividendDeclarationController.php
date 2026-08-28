@@ -9,6 +9,7 @@ use App\Services\DividendService;
 use App\Services\FrankingService;
 use App\Services\IfrsPosting;
 use Barryvdh\DomPDF\Facade\Pdf;
+use IFRS\Models\Entity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response;
 
@@ -58,7 +59,7 @@ class DividendDeclarationController extends Controller
         $validated = $request->validate([
             'declaration_date' => ['required', 'date'],
             'share_class_id' => ['required', 'integer', 'exists:share_classes,id'],
-            'dividend_type' => ['required', 'in:' . implode(',', array_keys(DividendDeclaration::dividendTypes()))],
+            'dividend_type' => ['required', 'in:'.implode(',', array_keys(DividendDeclaration::dividendTypes()))],
             'amount_per_share' => ['required', 'numeric', 'min:0', 'not_in:0'],
             'franking_percentage' => ['required', 'numeric', 'between:0,100'],
             'franking_credit_rate' => ['required', 'numeric', 'between:0.01,99.99'],
@@ -116,7 +117,7 @@ class DividendDeclarationController extends Controller
         $validated = $request->validate([
             'declaration_date' => ['required', 'date'],
             'share_class_id' => ['required', 'integer', 'exists:share_classes,id'],
-            'dividend_type' => ['required', 'in:' . implode(',', array_keys(DividendDeclaration::dividendTypes()))],
+            'dividend_type' => ['required', 'in:'.implode(',', array_keys(DividendDeclaration::dividendTypes()))],
             'amount_per_share' => ['required', 'numeric', 'min:0', 'not_in:0'],
             'franking_percentage' => ['required', 'numeric', 'between:0,100'],
             'franking_credit_rate' => ['required', 'numeric', 'between:0.01,99.99'],
@@ -177,7 +178,7 @@ class DividendDeclarationController extends Controller
 
         $statements = DividendService::sendStatements($declaration);
         $message = 'Payment recorded: Dr Dividends Payable / Cr Bank posted and franking debit created. '
-            . "Statements emailed: {$statements['sent']}.";
+            ."Statements emailed: {$statements['sent']}.";
         if ($statements['missing_email'] || $statements['failed']) {
             $message .= " Skipped (no email): {$statements['missing_email']}, failed: {$statements['failed']}.";
         }
@@ -207,7 +208,7 @@ class DividendDeclarationController extends Controller
         }
 
         return redirect()->route('dividends.show', $declaration)
-            ->with('success', 'Declaration cancelled' .
+            ->with('success', 'Declaration cancelled'.
                 ($declaration->ifrs_declaration_transaction_id ? ' and the ledger entry reversed.' : '.'));
     }
 
@@ -258,12 +259,12 @@ class DividendDeclarationController extends Controller
     {
         $pdf = Pdf::loadView('reports.pdf.dividend-statement', [
             'distribution' => $distribution->load('declaration.shareClass', 'shareholder'),
-            'companyName' => \IFRS\Models\Entity::find($distribution->declaration->entity_id)?->name ?? config('app.name'),
+            'companyName' => Entity::find($distribution->declaration->entity_id)?->name ?? config('app.name'),
             'companyAbn' => CompanyProfile::effectiveAbn($distribution->declaration->entity_id),
         ]);
 
-        return $pdf->download('Dividend-Statement-' . $distribution->declaration->declaration_number
-            . '-' . $distribution->company_shareholder_id . '.pdf');
+        return $pdf->download('Dividend-Statement-'.$distribution->declaration->declaration_number
+            .'-'.$distribution->company_shareholder_id.'.pdf');
     }
 
     protected function entityAndProfile(): array

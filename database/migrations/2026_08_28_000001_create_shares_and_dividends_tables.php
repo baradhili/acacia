@@ -1,5 +1,6 @@
 <?php
 
+use Carbon\Carbon;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -135,7 +136,7 @@ return new class extends Migration
             $table->integer('financial_year'); // FY label, e.g. 2025 = 1 Jul 2025 - 30 Jun 2026
             $table->date('entry_date');
             $table->char('entry_type', 2); // TC=Tax Payment, DR=Dividend Received, FD=Franked Dividend Paid,
-                                           // RF=Refund Received, FT=Franking Deficit Tax, AJ=Adjustment
+            // RF=Refund Received, FT=Franking Deficit Tax, AJ=Adjustment
             $table->string('reference', 20)->nullable();
             $table->string('description', 100)->nullable();
             $table->decimal('credit_amount', 14, 2)->default(0); // increases balance
@@ -156,8 +157,8 @@ return new class extends Migration
         // Seed an ORD share class per company profile and backfill each
         // shareholder's shares_held as an opening issue transaction so the
         // ledger is authoritative from day one.
-        foreach (\DB::table('company_profiles')->get() as $profile) {
-            $classId = \DB::table('share_classes')->insertGetId([
+        foreach (DB::table('company_profiles')->get() as $profile) {
+            $classId = DB::table('share_classes')->insertGetId([
                 'company_profile_id' => $profile->id,
                 'code' => 'ORD',
                 'description' => 'Ordinary Shares',
@@ -170,16 +171,16 @@ return new class extends Migration
                 'updated_at' => now(),
             ]);
 
-            foreach (\DB::table('company_shareholders')->where('company_profile_id', $profile->id)->get() as $shareholder) {
+            foreach (DB::table('company_shareholders')->where('company_profile_id', $profile->id)->get() as $shareholder) {
                 if ((int) $shareholder->shares_held <= 0) {
                     continue;
                 }
 
-                \DB::table('shareholdings')->insert([
+                DB::table('shareholdings')->insert([
                     'company_shareholder_id' => $shareholder->id,
                     'share_class_id' => $classId,
                     'transaction_type' => 'I',
-                    'transaction_date' => $profile->created_at ? \Carbon\Carbon::parse($profile->created_at)->toDateString() : now()->toDateString(),
+                    'transaction_date' => $profile->created_at ? Carbon::parse($profile->created_at)->toDateString() : now()->toDateString(),
                     'quantity' => (int) $shareholder->shares_held,
                     'reference' => 'OPENING',
                     'status' => 'A',

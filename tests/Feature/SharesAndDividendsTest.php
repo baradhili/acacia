@@ -11,7 +11,6 @@ use App\Models\FrankingAccountEntry;
 use App\Models\ShareClass;
 use App\Models\Shareholding;
 use App\Models\User;
-use App\Services\DividendService;
 use App\Services\FrankingService;
 use App\Services\ShareholdingService;
 use Carbon\Carbon;
@@ -36,12 +35,19 @@ use Tests\TestCase;
 class SharesAndDividendsTest extends TestCase
 {
     protected Entity $entity;
+
     protected User $admin;
+
     protected Account $bank;
+
     protected Account $dividendsPayable;
+
     protected Account $dividendsPaid;
+
     protected CompanyShareholder $alice;
+
     protected CompanyShareholder $bob;
+
     protected ShareClass $ord;
 
     protected function setUp(): void
@@ -105,9 +111,9 @@ class SharesAndDividendsTest extends TestCase
             'entity_id' => $this->entity->id,
         ]);
 
-        $this->admin = new User();
+        $this->admin = new User;
         $this->admin->name = 'Controller';
-        $this->admin->email = 'controller' . uniqid() . '@example.com';
+        $this->admin->email = 'controller'.uniqid().'@example.com';
         $this->admin->email_verified_at = now();
         $this->admin->password = Hash::make('password');
         $this->admin->entity_id = $this->entity->id;

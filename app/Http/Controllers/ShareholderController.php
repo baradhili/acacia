@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\CompanyProfile;
 use App\Models\CompanyShareholder;
-use App\Models\ShareClass;
 use App\Models\Shareholding;
 use App\Services\IfrsPosting;
 use App\Services\ShareholdingService;
@@ -64,7 +63,7 @@ class ShareholderController extends Controller
     {
         $validated = $request->validate([
             'share_class_id' => ['required', 'integer', 'exists:share_classes,id'],
-            'transaction_type' => ['required', 'in:' . implode(',', array_keys(Shareholding::types()))],
+            'transaction_type' => ['required', 'in:'.implode(',', array_keys(Shareholding::types()))],
             'transaction_date' => ['required', 'date'],
             'quantity' => ['required', 'integer', 'not_in:0'],
             'unit_price' => ['nullable', 'numeric', 'min:0'],
@@ -99,7 +98,7 @@ class ShareholderController extends Controller
     protected function profile(): ?CompanyProfile
     {
         $entity = IfrsPosting::resolveEntity();
-        if (!$entity) {
+        if (! $entity) {
             return null;
         }
 

@@ -24,7 +24,7 @@ class ShareClassController extends Controller
 
     public function create()
     {
-        return view('share-classes.form', ['shareClass' => new ShareClass(), 'profile' => $this->profile()]);
+        return view('share-classes.form', ['shareClass' => new ShareClass, 'profile' => $this->profile()]);
     }
 
     public function store(Request $request)
@@ -109,7 +109,7 @@ class ShareClassController extends Controller
     protected function profile(): ?CompanyProfile
     {
         $entity = IfrsPosting::resolveEntity();
-        if (!$entity) {
+        if (! $entity) {
             return null;
         }
 

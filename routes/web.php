@@ -1,15 +1,16 @@
 <?php
 
+use App\Http\Controllers\Api\WidgetPreferenceController;
 use App\Http\Controllers\BillController;
 use App\Http\Controllers\BillPaymentController;
-use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ChartOfAccountsController;
+use App\Http\Controllers\ClientController;
 use App\Http\Controllers\CompanyProfileController;
 use App\Http\Controllers\CreditNoteController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DividendDeclarationController;
-use App\Http\Controllers\DomainController;
 use App\Http\Controllers\DocumentController;
+use App\Http\Controllers\DomainController;
 use App\Http\Controllers\EstimateController;
 use App\Http\Controllers\FinancialYearController;
 use App\Http\Controllers\FrankingAccountController;
@@ -22,6 +23,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\ReconciliationController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ShareClassController;
 use App\Http\Controllers\ShareholderController;
 use App\Http\Controllers\SupplierController;
@@ -111,7 +113,7 @@ Route::middleware('auth')->group(function () {
 
     // Clients
     Route::resource('clients', ClientController::class);
-    
+
     // Client Logo
     Route::post('/clients/{client}/logo', [LogoController::class, 'storeClient'])->name('clients.logo.store');
     Route::delete('/clients/{client}/logo', [LogoController::class, 'destroyClient'])->name('clients.logo.destroy');
@@ -121,7 +123,7 @@ Route::middleware('auth')->group(function () {
 
     // Suppliers (includes vendors via type filter)
     Route::resource('suppliers', SupplierController::class);
-    
+
     // Supplier Logo
     Route::post('/suppliers/{supplier}/logo', [LogoController::class, 'storeSupplier'])->name('suppliers.logo.store');
     Route::delete('/suppliers/{supplier}/logo', [LogoController::class, 'destroySupplier'])->name('suppliers.logo.destroy');
@@ -204,34 +206,34 @@ Route::middleware('auth')->group(function () {
     Route::post('/estimates/{estimate}/duplicate', [EstimateController::class, 'duplicate'])->name('estimates.duplicate');
 
     // Reports
-    Route::get('/reports/time-by-client', [\App\Http\Controllers\ReportController::class, 'timeByClient'])->name('reports.time-by-client');
-    Route::get('/reports/time-by-staff', [\App\Http\Controllers\ReportController::class, 'timeByStaff'])->name('reports.time-by-staff');
-    Route::get('/reports/time-by-project', [\App\Http\Controllers\ReportController::class, 'timeByProject'])->name('reports.time-by-project');
+    Route::get('/reports/time-by-client', [ReportController::class, 'timeByClient'])->name('reports.time-by-client');
+    Route::get('/reports/time-by-staff', [ReportController::class, 'timeByStaff'])->name('reports.time-by-staff');
+    Route::get('/reports/time-by-project', [ReportController::class, 'timeByProject'])->name('reports.time-by-project');
 
     // Financial Reports
-    Route::get('/reports/trial-balance', [\App\Http\Controllers\ReportController::class, 'trialBalance'])->name('reports.trial-balance');
-    Route::get('/reports/income-statement', [\App\Http\Controllers\ReportController::class, 'incomeStatement'])->name('reports.income-statement');
-    Route::get('/reports/balance-sheet', [\App\Http\Controllers\ReportController::class, 'balanceSheet'])->name('reports.balance-sheet');
-    Route::get('/reports/cash-flow', [\App\Http\Controllers\ReportController::class, 'cashFlowStatement'])->name('reports.cash-flow');
+    Route::get('/reports/trial-balance', [ReportController::class, 'trialBalance'])->name('reports.trial-balance');
+    Route::get('/reports/income-statement', [ReportController::class, 'incomeStatement'])->name('reports.income-statement');
+    Route::get('/reports/balance-sheet', [ReportController::class, 'balanceSheet'])->name('reports.balance-sheet');
+    Route::get('/reports/cash-flow', [ReportController::class, 'cashFlowStatement'])->name('reports.cash-flow');
 
     // Business Reports
-    Route::get('/reports/income-by-customer', [\App\Http\Controllers\ReportController::class, 'incomeByCustomer'])->name('reports.income-by-customer');
-    Route::get('/reports/expenses-by-category', [\App\Http\Controllers\ReportController::class, 'expensesByCategory'])->name('reports.expenses-by-category');
-    Route::get('/reports/aging', [\App\Http\Controllers\ReportController::class, 'agingReport'])->name('reports.aging');
-    Route::get('/reports/gst', [\App\Http\Controllers\ReportController::class, 'gstReport'])->name('reports.gst');
-    Route::get('/reports/account-statement', [\App\Http\Controllers\ReportController::class, 'accountStatement'])->name('reports.account-statement');
-    Route::get('/reports/account-schedule', [\App\Http\Controllers\ReportController::class, 'accountSchedule'])->name('reports.account-schedule');
-    Route::get('/reports/bas', [\App\Http\Controllers\ReportController::class, 'bas'])->name('reports.bas');
-    Route::get('/reports/company-tax', [\App\Http\Controllers\ReportController::class, 'companyTax'])->name('reports.company-tax');
-    Route::get('/reports/export/account-statement/pdf', [\App\Http\Controllers\ReportController::class, 'exportAccountStatementPdf'])->name('reports.export.account-statement.pdf');
-    Route::get('/reports/export/bas/pdf', [\App\Http\Controllers\ReportController::class, 'exportBasPdf'])->name('reports.export.bas.pdf');
-    Route::get('/reports/export/company-tax/pdf', [\App\Http\Controllers\ReportController::class, 'exportCompanyTaxPdf'])->name('reports.export.company-tax.pdf');
-    Route::get('/reports/export/account-statement/excel', [\App\Http\Controllers\ReportController::class, 'exportAccountStatementExcel'])->name('reports.export.account-statement.excel');
-    Route::get('/reports/export/bas/excel', [\App\Http\Controllers\ReportController::class, 'exportBasExcel'])->name('reports.export.bas.excel');
-    Route::get('/reports/export/company-tax/excel', [\App\Http\Controllers\ReportController::class, 'exportCompanyTaxExcel'])->name('reports.export.company-tax.excel');
-    Route::get('/reports/export/company-tax/csv', [\App\Http\Controllers\ReportController::class, 'exportCompanyTaxCsv'])->name('reports.export.company-tax.csv');
-    Route::get('/reports/prepayment-schedule', [\App\Http\Controllers\ReportController::class, 'prepaymentSchedule'])->name('reports.prepayment-schedule');
-    Route::get('/reports/export/prepayment-schedule/pdf', [\App\Http\Controllers\ReportController::class, 'exportPrepaymentSchedulePdf'])->name('reports.export.prepayment-schedule.pdf');
+    Route::get('/reports/income-by-customer', [ReportController::class, 'incomeByCustomer'])->name('reports.income-by-customer');
+    Route::get('/reports/expenses-by-category', [ReportController::class, 'expensesByCategory'])->name('reports.expenses-by-category');
+    Route::get('/reports/aging', [ReportController::class, 'agingReport'])->name('reports.aging');
+    Route::get('/reports/gst', [ReportController::class, 'gstReport'])->name('reports.gst');
+    Route::get('/reports/account-statement', [ReportController::class, 'accountStatement'])->name('reports.account-statement');
+    Route::get('/reports/account-schedule', [ReportController::class, 'accountSchedule'])->name('reports.account-schedule');
+    Route::get('/reports/bas', [ReportController::class, 'bas'])->name('reports.bas');
+    Route::get('/reports/company-tax', [ReportController::class, 'companyTax'])->name('reports.company-tax');
+    Route::get('/reports/export/account-statement/pdf', [ReportController::class, 'exportAccountStatementPdf'])->name('reports.export.account-statement.pdf');
+    Route::get('/reports/export/bas/pdf', [ReportController::class, 'exportBasPdf'])->name('reports.export.bas.pdf');
+    Route::get('/reports/export/company-tax/pdf', [ReportController::class, 'exportCompanyTaxPdf'])->name('reports.export.company-tax.pdf');
+    Route::get('/reports/export/account-statement/excel', [ReportController::class, 'exportAccountStatementExcel'])->name('reports.export.account-statement.excel');
+    Route::get('/reports/export/bas/excel', [ReportController::class, 'exportBasExcel'])->name('reports.export.bas.excel');
+    Route::get('/reports/export/company-tax/excel', [ReportController::class, 'exportCompanyTaxExcel'])->name('reports.export.company-tax.excel');
+    Route::get('/reports/export/company-tax/csv', [ReportController::class, 'exportCompanyTaxCsv'])->name('reports.export.company-tax.csv');
+    Route::get('/reports/prepayment-schedule', [ReportController::class, 'prepaymentSchedule'])->name('reports.prepayment-schedule');
+    Route::get('/reports/export/prepayment-schedule/pdf', [ReportController::class, 'exportPrepaymentSchedulePdf'])->name('reports.export.prepayment-schedule.pdf');
 
     // Wise Reconciliation
     Route::get('/reconciliation', [ReconciliationController::class, 'index'])->name('reconciliation.index');
@@ -246,8 +248,8 @@ require __DIR__.'/auth.php';
 
 // Widget Preferences
 Route::middleware(['auth'])->prefix('api/widget-preferences')->group(function () {
-    Route::get('/', [App\Http\Controllers\Api\WidgetPreferenceController::class, 'index']);
-    Route::post('/', [App\Http\Controllers\Api\WidgetPreferenceController::class, 'saveAll']);
-    Route::put('/', [App\Http\Controllers\Api\WidgetPreferenceController::class, 'update']);
-    Route::delete('/reset', [App\Http\Controllers\Api\WidgetPreferenceController::class, 'reset']);
+    Route::get('/', [WidgetPreferenceController::class, 'index']);
+    Route::post('/', [WidgetPreferenceController::class, 'saveAll']);
+    Route::put('/', [WidgetPreferenceController::class, 'update']);
+    Route::delete('/reset', [WidgetPreferenceController::class, 'reset']);
 });

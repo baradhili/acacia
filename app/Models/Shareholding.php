@@ -15,11 +15,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Shareholding extends Model
 {
     public const TYPE_ISSUE = 'I';
+
     public const TYPE_TRANSFER = 'T';
+
     public const TYPE_BUYBACK = 'B';
+
     public const TYPE_CONSOLIDATION = 'C';
 
     public const STATUS_ACTIVE = 'A';
+
     public const STATUS_CANCELLED = 'C';
 
     protected $fillable = [

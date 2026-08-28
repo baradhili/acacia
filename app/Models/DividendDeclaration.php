@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\QueryException;
 
 /**
  * A declared dividend for one share class. Draft declarations are freely
@@ -17,12 +18,17 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class DividendDeclaration extends Model
 {
     public const STATUS_DRAFT = 'draft';
+
     public const STATUS_APPROVED = 'approved';
+
     public const STATUS_COMPLETED = 'completed';
+
     public const STATUS_CANCELLED = 'cancelled';
 
     public const DIVIDEND_TYPE_INTERIM = 'I';
+
     public const DIVIDEND_TYPE_FINAL = 'F';
+
     public const DIVIDEND_TYPE_SPECIAL = 'S';
 
     protected $fillable = [
@@ -94,7 +100,7 @@ class DividendDeclaration extends Model
         $last = self::whereYear('created_at', $year)->orderByDesc('id')->first();
 
         if ($last) {
-            preg_match('/DIV-' . $year . '-(\d+)/', $last->declaration_number, $matches);
+            preg_match('/DIV-'.$year.'-(\d+)/', $last->declaration_number, $matches);
             $nextNumber = isset($matches[1]) ? ((int) $matches[1]) + 1 : 1;
         } else {
             $nextNumber = 1;
@@ -112,10 +118,10 @@ class DividendDeclaration extends Model
         for ($i = 1; $i <= $attempts; $i++) {
             try {
                 return self::create($attributes);
-            } catch (\Illuminate\Database\QueryException $e) {
+            } catch (QueryException $e) {
                 $errorInfo = $e->errorInfo ?? [];
                 $isUniqueViolation = ($errorInfo[0] ?? null) === '23000' || ($errorInfo[1] ?? null) === 1062;
-                if (!$isUniqueViolation || $i === $attempts) {
+                if (! $isUniqueViolation || $i === $attempts) {
                     throw $e;
                 }
             }
@@ -150,7 +156,7 @@ class DividendDeclaration extends Model
 
     public function transitionTo(string $status): void
     {
-        if (!$this->canTransitionTo($status)) {
+        if (! $this->canTransitionTo($status)) {
             throw new \InvalidArgumentException(
                 "A {$this->status} dividend declaration cannot move to {$status}."
             );

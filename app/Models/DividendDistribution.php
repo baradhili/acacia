@@ -17,7 +17,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class DividendDistribution extends Model
 {
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_PAID = 'paid';
+
     public const STATUS_CANCELLED = 'cancelled';
 
     protected $fillable = [
