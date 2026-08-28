@@ -125,7 +125,8 @@ return new class extends Migration
             $table->foreign('company_shareholder_id')->references('id')->on('company_shareholders')->nullOnDelete();
             $table->foreign('share_class_id')->references('id')->on('share_classes')->restrictOnDelete();
             $table->foreign('created_by')->references('id')->on('users')->nullOnDelete();
-            $table->unique(['dividend_declaration_id', 'company_shareholder_id']);
+            // MySQL caps index names at 64 chars; the default name would be 79
+            $table->unique(['dividend_declaration_id', 'company_shareholder_id'], 'dd_declaration_shareholder_unique');
             $table->index(['company_shareholder_id', 'status']);
         });
 
