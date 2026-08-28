@@ -51,3 +51,10 @@ Schedule::command('prepayments:amortise')
     ->dailyAt('03:30')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/prepayment-amortisation.log'));
+
+// Sweep completed dividend runs for unsent shareholder statements
+// (retries failures and shareholders whose email arrived later).
+Schedule::command('dividends:send-statements')
+    ->dailyAt('09:30')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/dividend-statements.log'));
