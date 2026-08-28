@@ -140,6 +140,12 @@
                         <span>Total</span>
                         <span>${{ number_format($invoice->total, 2) }}</span>
                     </div>
+                    @if($invoice->purchaseOrder)
+                        <div class="flex justify-between text-sm mt-2 text-gray-500">
+                            <span>PO {{ $invoice->purchaseOrder->po_number }} — remaining after this invoice</span>
+                            <span>${{ number_format($invoice->po_remaining_after, 2) }}</span>
+                        </div>
+                    @endif
                 </div>
             </div>
 

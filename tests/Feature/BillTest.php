@@ -651,4 +651,30 @@ class BillTest extends TestCase
         $bill->updateStatusFromPayments();
         $this->assertEquals(Bill::STATUS_OVERDUE, $bill->status);
     }
+
+    public function test_quick_supplier_store_creates_supplier_and_returns_json(): void
+    {
+        $response = $this->actingAs($this->user)->postJson('/suppliers/quick-store', [
+            'name' => 'Quick Add Co',
+            'email' => 'quick@test.com',
+            'abn' => '12 345 678 901',
+        ]);
+
+        $supplier = Supplier::where('name', 'Quick Add Co')->first();
+
+        $response->assertOk()
+            ->assertJson(['id' => $supplier->id, 'name' => 'Quick Add Co']);
+        $this->assertDatabaseHas('suppliers', ['email' => 'quick@test.com']);
+    }
+
+    public function test_quick_supplier_store_requires_a_name(): void
+    {
+        $response = $this->actingAs($this->user)->postJson('/suppliers/quick-store', [
+            'email' => 'quick@test.com',
+        ]);
+
+        $response->assertUnprocessable()
+            ->assertJsonValidationErrors('name');
+        $this->assertDatabaseMissing('suppliers', ['email' => 'quick@test.com']);
+    }
 }

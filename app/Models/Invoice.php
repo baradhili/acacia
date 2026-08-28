@@ -7,8 +7,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\QueryException;
 
 class Invoice extends Model
 {
@@ -55,16 +55,24 @@ class Invoice extends Model
 
     // Status constants
     const STATUS_DRAFT = 'draft';
+
     const STATUS_SENT = 'sent';
+
     const STATUS_PARTIALLY_PAID = 'partially_paid';
+
     const STATUS_PAID = 'paid';
+
     const STATUS_OVERDUE = 'overdue';
+
     const STATUS_CANCELLED = 'cancelled';
 
     // Recurring frequencies
     const RECURRING_DAILY = 'daily';
+
     const RECURRING_WEEKLY = 'weekly';
+
     const RECURRING_MONTHLY = 'monthly';
+
     const RECURRING_YEARLY = 'yearly';
 
     // Valid state transitions
@@ -117,7 +125,7 @@ class Invoice extends Model
             ->first();
 
         if ($lastInvoice) {
-            preg_match('/INV-' . $year . '-(\d+)/', $lastInvoice->invoice_number, $matches);
+            preg_match('/INV-'.$year.'-(\d+)/', $lastInvoice->invoice_number, $matches);
             $nextNumber = isset($matches[1]) ? ((int) $matches[1]) + 1 : 1;
         } else {
             $nextNumber = 1;
@@ -141,8 +149,8 @@ class Invoice extends Model
         for ($i = 1; $i <= $attempts; $i++) {
             try {
                 return self::create($attributes);
-            } catch (\Illuminate\Database\QueryException $e) {
-                if (!self::isUniqueViolation($e) || $i === $attempts) {
+            } catch (QueryException $e) {
+                if (! self::isUniqueViolation($e) || $i === $attempts) {
                     throw $e;
                 }
             }
@@ -156,9 +164,10 @@ class Invoice extends Model
      * MySQL (SQLSTATE 23000 / driver code 1062) and SQLite (SQLSTATE 23000 /
      * driver codes 19, 2067) via the shared SQLSTATE.
      */
-    protected static function isUniqueViolation(\Illuminate\Database\QueryException $e): bool
+    protected static function isUniqueViolation(QueryException $e): bool
     {
         $errorInfo = $e->errorInfo ?? [];
+
         // errorInfo[0] is the SQLSTATE; errorInfo[1] is the driver-specific code.
         return ($errorInfo[0] ?? null) === '23000'
             || ($errorInfo[1] ?? null) === 1062;
@@ -292,7 +301,28 @@ class Invoice extends Model
         if ($this->total == 0) {
             return 0;
         }
+
         return ($this->amount_paid / (float) $this->total) * 100;
+    }
+
+    /**
+     * Budget remaining on the linked client PO once this invoice is applied.
+     *
+     * Draft and cancelled invoices are excluded from the PO's used_amount
+     * (PurchaseOrder::recalculateUsedAmount), so their total is subtracted
+     * here; every other status is already counted in it.
+     */
+    public function getPoRemainingAfterAttribute(): ?float
+    {
+        if (! $this->purchaseOrder) {
+            return null;
+        }
+
+        $remaining = $this->purchaseOrder->remaining;
+
+        return in_array($this->status, [self::STATUS_DRAFT, self::STATUS_CANCELLED])
+            ? $remaining - (float) $this->total
+            : $remaining;
     }
 
     /**
@@ -303,6 +333,7 @@ class Invoice extends Model
         if (in_array($this->status, [self::STATUS_PAID, self::STATUS_CANCELLED])) {
             return false;
         }
+
         // Compare Carbon-to-Carbon at day granularity: due_date is before the
         // start of today means the invoice is overdue.
         return $this->due_date && $this->due_date->isBefore(now()->startOfDay());
@@ -314,6 +345,7 @@ class Invoice extends Model
     public function canTransitionTo(string $status): bool
     {
         $allowedTransitions = self::$transitions[$this->status] ?? [];
+
         return in_array($status, $allowedTransitions);
     }
 
@@ -330,7 +362,7 @@ class Invoice extends Model
      */
     public function transitionTo(string $status): bool
     {
-        if (!$this->canTransitionTo($status)) {
+        if (! $this->canTransitionTo($status)) {
             return false;
         }
 
@@ -350,10 +382,11 @@ class Invoice extends Model
      */
     public function markAsSent(): bool
     {
-        if (!$this->transitionTo(self::STATUS_SENT)) {
+        if (! $this->transitionTo(self::STATUS_SENT)) {
             return false;
         }
         $this->update(['sent_at' => now()]);
+
         return true;
     }
 
@@ -367,15 +400,16 @@ class Invoice extends Model
     public function revertToDraft(): bool
     {
         if ($this->amount_paid > 0
-            || !in_array($this->status, [self::STATUS_SENT, self::STATUS_OVERDUE])) {
+            || ! in_array($this->status, [self::STATUS_SENT, self::STATUS_OVERDUE])) {
             return false;
         }
 
-        if (!$this->transitionTo(self::STATUS_DRAFT)) {
+        if (! $this->transitionTo(self::STATUS_DRAFT)) {
             return false;
         }
 
         $this->update(['sent_at' => null, 'viewed_at' => null]);
+
         return true;
     }
 
@@ -444,19 +478,19 @@ class Invoice extends Model
         return $query->where('status', self::STATUS_OVERDUE)
             ->orWhere(function ($q) {
                 $q->whereIn('status', [self::STATUS_SENT, self::STATUS_PARTIALLY_PAID])
-                  ->where('due_date', '<', now()->toDateString())
+                    ->where('due_date', '<', now()->toDateString())
                   // For invoices with a positive total, require an outstanding
                   // balance (total > sum of allocations). Zero-total invoices
                   // fall through (the status/due_date checks alone apply).
-                  ->where(function ($q) {
-                      $q->where('total', '<=', 0)
-                        ->orWhereRaw(
-                            'invoices.total - COALESCE(('
-                            . 'SELECT SUM(amount) FROM payment_allocations'
-                            . ' WHERE payment_allocations.invoice_id = invoices.id'
-                            . '), 0) > 0'
-                        );
-                  });
+                    ->where(function ($q) {
+                        $q->where('total', '<=', 0)
+                            ->orWhereRaw(
+                                'invoices.total - COALESCE(('
+                                .'SELECT SUM(amount) FROM payment_allocations'
+                                .' WHERE payment_allocations.invoice_id = invoices.id'
+                                .'), 0) > 0'
+                            );
+                    });
             });
     }
 
@@ -473,7 +507,7 @@ class Invoice extends Model
      */
     public function getFormattedTotalAttribute(): string
     {
-        return config('australian.currency.symbol', 'A$') . number_format($this->total, 2);
+        return config('australian.currency.symbol', 'A$').number_format($this->total, 2);
     }
 
     /**
@@ -481,9 +515,10 @@ class Invoice extends Model
      */
     public function getDaysUntilDueAttribute(): int
     {
-        if (!$this->due_date) {
+        if (! $this->due_date) {
             return 0;
         }
+
         return now()->diffInDays($this->due_date, false);
     }
 
@@ -530,7 +565,7 @@ class Invoice extends Model
             // directly, not via is_overdue — that accessor returns false
             // while the model is still marked paid, which we are about to
             // revert from.
-            if (!in_array($this->status, [self::STATUS_DRAFT, self::STATUS_CANCELLED])) {
+            if (! in_array($this->status, [self::STATUS_DRAFT, self::STATUS_CANCELLED])) {
                 $overdue = $this->due_date && $this->due_date->isBefore(now()->startOfDay());
                 $this->update([
                     'status' => $overdue ? self::STATUS_OVERDUE : self::STATUS_SENT,

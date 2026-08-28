@@ -24,9 +24,9 @@
 
 - [x] In teh invoices index view show an icon when invoices have a document attached. - possibly refelct this to all index views of items that can have attached documents.
 
-- [ ] Update invoice format - if there is a client PO linked - show amount remaining after this invoice
+- [x] Update invoice format - if there is a client PO linked - show amount remaining after this invoice
 
-- [ ] Have "+" button on "Create Bill" to be able to add supplier in 
+- [x] Have "+" button on "Create Bill" to be able to add supplier in 
 
 - [x] Country fields should be a dropdown - configurable "pinned countries" at top. use teh ISO country list.
 

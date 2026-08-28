@@ -6,7 +6,6 @@ use App\Models\Invoice;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
-use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -25,8 +24,8 @@ class InvoiceMail extends Mailable
 
     public function envelope(): Envelope
     {
-        $subject = $this->customSubject ?? "Invoice {$this->invoice->invoice_number} from " . config('app.name');
-        
+        $subject = $this->customSubject ?? "Invoice {$this->invoice->invoice_number} from ".config('app.name');
+
         return new Envelope(
             subject: $subject,
         );
@@ -51,11 +50,11 @@ class InvoiceMail extends Mailable
 
         // Generate PDF
         $pdf = Pdf::loadView('invoices.pdf', [
-            'invoice' => $this->invoice,
+            'invoice' => $this->invoice->loadMissing(['client', 'project', 'items', 'purchaseOrder']),
         ]);
 
         $filename = "Invoice-{$this->invoice->invoice_number}.pdf";
-        
+
         // Save to temporary storage
         Storage::put("tmp/{$filename}", $pdf->output());
 

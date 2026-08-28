@@ -124,6 +124,9 @@ Route::middleware('auth')->group(function () {
     // Suppliers (includes vendors via type filter)
     Route::resource('suppliers', SupplierController::class);
 
+    // Supplier quick-add (JSON, from the + button on the bill forms)
+    Route::post('/suppliers/quick-store', [SupplierController::class, 'quickStore'])->name('suppliers.quick-store');
+
     // Supplier Logo
     Route::post('/suppliers/{supplier}/logo', [LogoController::class, 'storeSupplier'])->name('suppliers.logo.store');
     Route::delete('/suppliers/{supplier}/logo', [LogoController::class, 'destroySupplier'])->name('suppliers.logo.destroy');
