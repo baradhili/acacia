@@ -7,10 +7,12 @@ use App\Http\Controllers\ChartOfAccountsController;
 use App\Http\Controllers\CompanyProfileController;
 use App\Http\Controllers\CreditNoteController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DividendDeclarationController;
 use App\Http\Controllers\DomainController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\EstimateController;
 use App\Http\Controllers\FinancialYearController;
+use App\Http\Controllers\FrankingAccountController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\LogoController;
 use App\Http\Controllers\OpeningBalanceController;
@@ -20,6 +22,8 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\ReconciliationController;
+use App\Http\Controllers\ShareClassController;
+use App\Http\Controllers\ShareholderController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TimeEntryController;
 use App\Http\Controllers\UserController;
@@ -75,6 +79,34 @@ Route::middleware('auth')->group(function () {
         Route::post('/financial-years/{year}/approve', [FinancialYearController::class, 'approve'])->name('financial-years.approve');
         Route::post('/financial-years/{year}/close', [FinancialYearController::class, 'close'])->name('financial-years.close');
         Route::post('/financial-years/{year}/reopen', [FinancialYearController::class, 'reopen'])->name('financial-years.reopen');
+
+        // Shares, franking account & dividends (franking/dividend spec)
+        Route::get('/shareholders', [ShareholderController::class, 'index'])->name('shareholders.index');
+        Route::get('/shareholders/{shareholder}', [ShareholderController::class, 'show'])->name('shareholders.show');
+        Route::post('/shareholders/{shareholder}/shareholdings', [ShareholderController::class, 'storeShareholding'])->name('shareholders.shareholdings.store');
+        Route::post('/shareholders/{shareholder}/shareholdings/{shareholding}/cancel', [ShareholderController::class, 'cancelShareholding'])->name('shareholders.shareholdings.cancel');
+
+        Route::resource('share-classes', ShareClassController::class)->except('show');
+
+        Route::get('/franking-account', [FrankingAccountController::class, 'index'])->name('franking-account.index');
+        Route::post('/franking-account', [FrankingAccountController::class, 'store'])->name('franking-account.store');
+        Route::delete('/franking-account/{entry}', [FrankingAccountController::class, 'destroy'])->name('franking-account.destroy');
+        Route::get('/franking-account/disclosure', [FrankingAccountController::class, 'disclosure'])->name('franking-account.disclosure');
+        Route::get('/franking-account/disclosure/pdf', [FrankingAccountController::class, 'disclosurePdf'])->name('franking-account.disclosure.pdf');
+
+        Route::get('/dividends', [DividendDeclarationController::class, 'index'])->name('dividends.index');
+        Route::get('/dividends/create', [DividendDeclarationController::class, 'create'])->name('dividends.create');
+        Route::post('/dividends', [DividendDeclarationController::class, 'store'])->name('dividends.store');
+        Route::get('/dividends/{declaration}', [DividendDeclarationController::class, 'show'])->name('dividends.show');
+        Route::get('/dividends/{declaration}/edit', [DividendDeclarationController::class, 'edit'])->name('dividends.edit');
+        Route::put('/dividends/{declaration}', [DividendDeclarationController::class, 'update'])->name('dividends.update');
+        Route::post('/dividends/{declaration}/calculate', [DividendDeclarationController::class, 'calculate'])->name('dividends.calculate');
+        Route::post('/dividends/{declaration}/approve', [DividendDeclarationController::class, 'approve'])->name('dividends.approve');
+        Route::post('/dividends/{declaration}/record-payment', [DividendDeclarationController::class, 'recordPayment'])->name('dividends.record-payment');
+        Route::post('/dividends/{declaration}/send-statements', [DividendDeclarationController::class, 'sendStatements'])->name('dividends.send-statements');
+        Route::post('/dividends/{declaration}/cancel', [DividendDeclarationController::class, 'cancel'])->name('dividends.cancel');
+        Route::get('/dividends/{declaration}/payment-schedule.csv', [DividendDeclarationController::class, 'paymentScheduleCsv'])->name('dividends.payment-schedule.csv');
+        Route::get('/dividends/statements/{distribution}/pdf', [DividendDeclarationController::class, 'statementPdf'])->name('dividends.statements.pdf');
     });
 
     // Clients

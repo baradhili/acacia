@@ -187,14 +187,17 @@
                             <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">ABN / TFN</th>
                             <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
                             <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Address</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Contact / Bank</th>
                             <th class="px-3 py-2"></th>
                         </tr>
                     </thead>
                     <tbody id="shareholder-rows" class="divide-y divide-gray-100">
                         @foreach (old('shareholders', $profile->allShareholders) as $shareholder)
                             <tr>
-                                <td class="px-3 py-2"><input name="shareholders[{{ $loop->index }}][name]" type="text" value="{{ $shareholder['name'] ?? $shareholder->name }}"
-                                    class="w-full rounded-md border-gray-300 shadow-sm"></td>
+                                <td class="px-3 py-2">
+                                    @if(!is_array($shareholder))<input type="hidden" name="shareholders[{{ $loop->index }}][id]" value="{{ $shareholder->id }}">@endif
+                                    <input name="shareholders[{{ $loop->index }}][name]" type="text" value="{{ $shareholder['name'] ?? $shareholder->name }}"
+                                        class="w-full rounded-md border-gray-300 shadow-sm"></td>
                                 <td class="px-3 py-2"><input name="shareholders[{{ $loop->index }}][share_class]" type="text" maxlength="10" value="{{ $shareholder['share_class'] ?? $shareholder->share_class }}"
                                     class="w-20 rounded-md border-gray-300 shadow-sm"></td>
                                 <td class="px-3 py-2"><input name="shareholders[{{ $loop->index }}][shares_held]" type="number" min="0" value="{{ $shareholder['shares_held'] ?? $shareholder->shares_held }}"
@@ -218,6 +221,8 @@
                                 <td class="px-3 py-2">
                                     <input name="shareholders[{{ $loop->index }}][address_line1]" type="text" value="{{ $shareholder['address_line1'] ?? $shareholder->address_line1 }}" placeholder="Street"
                                         class="w-40 rounded-md border-gray-300 shadow-sm mb-1">
+                                    <input name="shareholders[{{ $loop->index }}][address_line2]" type="text" value="{{ $shareholder['address_line2'] ?? $shareholder->address_line2 }}" placeholder=""
+                                        class="w-40 rounded-md border-gray-300 shadow-sm mb-1">
                                     <input name="shareholders[{{ $loop->index }}][suburb]" type="text" value="{{ $shareholder['suburb'] ?? $shareholder->suburb }}" placeholder="Suburb"
                                         class="w-40 rounded-md border-gray-300 shadow-sm mb-1">
                                     <div class="flex gap-1">
@@ -229,6 +234,16 @@
                                             class="w-12 rounded-md border-gray-300 shadow-sm">
                                     </div>
                                 </td>
+                                <td class="px-3 py-2">
+                                    <input name="shareholders[{{ $loop->index }}][contact_name]" type="text" maxlength="60" value="{{ $shareholder['contact_name'] ?? $shareholder->contact_name }}" placeholder="Contact"
+                                        class="w-32 rounded-md border-gray-300 shadow-sm mb-1">
+                                    <input name="shareholders[{{ $loop->index }}][bank_bsb]" type="text" maxlength="7" value="{{ $shareholder['bank_bsb'] ?? $shareholder->bank_bsb }}" placeholder="BSB"
+                                        class="w-20 rounded-md border-gray-300 shadow-sm mb-1">
+                                    <input name="shareholders[{{ $loop->index }}][bank_account_number]" type="text" maxlength="9" value="{{ $shareholder['bank_account_number'] ?? $shareholder->bank_account_number }}" placeholder="Account"
+                                        class="w-24 rounded-md border-gray-300 shadow-sm mb-1">
+                                    <input name="shareholders[{{ $loop->index }}][bank_account_name]" type="text" maxlength="60" value="{{ $shareholder['bank_account_name'] ?? $shareholder->bank_account_name }}" placeholder="Account name"
+                                        class="w-40 rounded-md border-gray-300 shadow-sm">
+                                </td>
                                 <td class="px-3 py-2 text-center">
                                     <button type="button" data-remove-row class="text-red-600 hover:text-red-800" title="Remove">&times;</button>
                                 </td>
@@ -238,8 +253,9 @@
                 </table>
             </div>
             <p class="text-xs text-gray-500 mt-3">
-                Shareholder records here are master data for the future dividend/franking module; the share counts
-                feed the shareholding registry, not the ledger.
+                Share counts and class are derived from the shareholding ledger (see Shareholders under
+                Shares &amp; Dividends) — they are only settable when adding a new shareholder here, which
+                records an opening issue transaction. Bank details feed the manual dividend payment run.
             </p>
             <template id="shareholder-template">
                 <tr>
@@ -260,12 +276,19 @@
                     <td class="px-3 py-2"><input name="shareholders[__INDEX__][email]" type="email" class="w-40 rounded-md border-gray-300 shadow-sm"></td>
                     <td class="px-3 py-2">
                         <input name="shareholders[__INDEX__][address_line1]" type="text" placeholder="Street" class="w-40 rounded-md border-gray-300 shadow-sm mb-1">
+                        <input name="shareholders[__INDEX__][address_line2]" type="text" placeholder="" class="w-40 rounded-md border-gray-300 shadow-sm mb-1">
                         <input name="shareholders[__INDEX__][suburb]" type="text" placeholder="Suburb" class="w-40 rounded-md border-gray-300 shadow-sm mb-1">
                         <div class="flex gap-1">
                             <input name="shareholders[__INDEX__][state]" type="text" maxlength="3" placeholder="State" class="w-14 rounded-md border-gray-300 shadow-sm">
                             <input name="shareholders[__INDEX__][postcode]" type="text" maxlength="4" placeholder="Postcode" class="w-20 rounded-md border-gray-300 shadow-sm">
                             <input name="shareholders[__INDEX__][country]" type="text" maxlength="2" placeholder="AU" class="w-12 rounded-md border-gray-300 shadow-sm">
                         </div>
+                    </td>
+                    <td class="px-3 py-2">
+                        <input name="shareholders[__INDEX__][contact_name]" type="text" maxlength="60" placeholder="Contact" class="w-32 rounded-md border-gray-300 shadow-sm mb-1">
+                        <input name="shareholders[__INDEX__][bank_bsb]" type="text" maxlength="7" placeholder="BSB" class="w-20 rounded-md border-gray-300 shadow-sm mb-1">
+                        <input name="shareholders[__INDEX__][bank_account_number]" type="text" maxlength="9" placeholder="Account" class="w-24 rounded-md border-gray-300 shadow-sm mb-1">
+                        <input name="shareholders[__INDEX__][bank_account_name]" type="text" maxlength="60" placeholder="Account name" class="w-40 rounded-md border-gray-300 shadow-sm">
                     </td>
                     <td class="px-3 py-2 text-center">
                         <button type="button" data-remove-row class="text-red-600 hover:text-red-800" title="Remove">&times;</button>
