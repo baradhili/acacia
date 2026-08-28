@@ -7,12 +7,14 @@ use App\Models\Bill;
 use App\Models\BillItem;
 use App\Models\BillPayment;
 use App\Models\CompanyProfile;
+use App\Models\DividendDeclaration;
 use App\Models\FiscalYearClose;
 use App\Models\Payment;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\User;
 use App\Services\FiscalYearService;
+use App\Services\FrankingService;
 use App\Services\OpeningBalances;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -1649,6 +1651,27 @@ class ReportController extends Controller
             ["label" => "7-T", "name" => "Taxable or net income or loss", "amount" => $taxableIncome, "note" => null, "total" => true],
         ];
 
+        // Item 8 J/K: the franked/unfranked split of dividends paid, from
+        // the runs settled in the year (the ledger's account 3400 movement
+        // is the total; the declarations' franking percentages split it).
+        $dividendRuns = DividendDeclaration::query()
+            ->where("entity_id", $entity->id)
+            ->where("status", DividendDeclaration::STATUS_COMPLETED)
+            ->whereBetween("payment_date", [$fyStart->toDateString(), $fyEndDate->toDateString()])
+            ->get();
+        $frankedDividends = round($dividendRuns->sum(fn ($d) => $d->frankedCashPortion()));
+        $unfrankedDividends = round($dividendRuns->sum(fn ($d) => $d->unfrankedCashPortion()));
+        if (($frankedDividends + $unfrankedDividends) > 0 && abs($frankedDividends + $unfrankedDividends - $dividendsPaid) > 1) {
+            $warnings[] = sprintf(
+                "Dividends settled per the dividend module (%d) differ from ledger account %d movement (%d) — manual journals to that account are not reflected in the 8-J/8-K split.",
+                $frankedDividends + $unfrankedDividends,
+                $config["dividends_paid_account"],
+                $dividendsPaid,
+            );
+        }
+        $frankingOpening = round(FrankingService::openingBalance($fyEnd - 1, $entity->id));
+        $frankingClosing = round(FrankingService::closingBalance($fyEnd - 1, $entity->id));
+
         $financialInfo = [
             ["label" => "C", "name" => "Trade debtors", "amount" => $tradeDebtors, "note" => null],
             ["label" => "D", "name" => "All current assets", "amount" => $currentAssets, "note" => null],
@@ -1658,12 +1681,14 @@ class ReportController extends Controller
             ["label" => "H", "name" => "Total liabilities", "amount" => $totalLiabilities, "note" => null],
             ["label" => "D", "name" => "Total salary and wage expenses", "amount" => round($salaryTotal),
                 "note" => "Information label — accounts " . implode(", ", $salaryAccounts) . " (no payroll ledger kept)"],
-            ["label" => "J", "name" => "Franked dividends paid", "amount" => $dividendsPaid,
-                "note" => "Account {$config['dividends_paid_account']} — expected nil until the dividend module exists"],
-            ["label" => "K", "name" => "Unfranked dividends paid", "amount" => 0,
-                "note" => "Requires dividend/franking module (unbuilt)"],
-            ["label" => "P/M", "name" => "Franking account balance (opening/closing)", "amount" => null,
-                "note" => "Not tracked — franking module not implemented"],
+            ["label" => "J", "name" => "Franked dividends paid", "amount" => $frankedDividends,
+                "note" => "Franked portion of the dividend runs settled in the year"],
+            ["label" => "K", "name" => "Unfranked dividends paid", "amount" => $unfrankedDividends,
+                "note" => "Unfranked portion of the dividend runs settled in the year"],
+            ["label" => "P", "name" => "Franking account balance — opening", "amount" => $frankingOpening,
+                "note" => "Per the franking account ledger"],
+            ["label" => "M", "name" => "Franking account balance — closing", "amount" => $frankingClosing,
+                "note" => "Per the franking account ledger"],
         ];
 
         return [

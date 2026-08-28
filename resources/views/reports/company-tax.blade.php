@@ -304,7 +304,7 @@
                     <p>Amounts are cash-basis (recognised when received/paid) and exclude GST, per the small business entity rules; label letters follow the Company tax return 2026 (NAT 0656).</p>
                     <p>Only bank-settled ledger transactions are included; non-cash journals (depreciation, revaluations, forex) are excluded — see validation V07.</p>
                     <p>Unlike the BAS report (which uses invoice/bill dates), this report reads cash ledger posting dates.</p>
-                    <p>Franking account balances (labels 8-P/8-M) are not tracked — the franking module is not implemented.</p>
+                    <p>Franking account balances (labels 8-P/8-M) and the 8-J/8-K franked/unfranked split come from the dividend and franking modules.</p>
                     <p>Motor vehicle private-use reductions (6-Y) and instant asset write-off eligibility (Item 10) are manual judgements outside this system.</p>
                     <p>The tax estimate is informational — the Calculation statement must be completed against the applicable company tax rate (25% base rate entity / 30%).</p>
                 </div>
