@@ -4,11 +4,12 @@ namespace Tests\Feature;
 
 use App\Models\Client;
 use App\Models\Invoice;
-use App\Models\InvoiceItem;
 use App\Models\Payment;
 use App\Models\Project;
+use App\Models\PurchaseOrder;
 use App\Models\TimeEntry;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -17,12 +18,13 @@ class InvoiceTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected Client $client;
 
     protected function setUp(): void
     {
         parent::setUp();
-        
+
         $this->user = User::factory()->create();
         $this->client = Client::factory()->create([
             'name' => 'Test Client',
@@ -67,7 +69,7 @@ class InvoiceTest extends TestCase
             'due_date' => now()->addDays(30)->toDateString(),
         ]);
 
-        $this->assertMatchesRegularExpression('/^INV-' . date('Y') . '-\d{4}$/', $invoice->invoice_number);
+        $this->assertMatchesRegularExpression('/^INV-'.date('Y').'-\d{4}$/', $invoice->invoice_number);
     }
 
     public function test_invoice_calculates_totals_correctly(): void
@@ -93,7 +95,7 @@ class InvoiceTest extends TestCase
         ]);
 
         $invoice->refresh();
-        
+
         // 2*100 + 1*50 = 250 subtotal
         // Tax = 250 * 0.10 = 25
         // Total = 250 + 25 = 275
@@ -246,7 +248,7 @@ class InvoiceTest extends TestCase
         ]);
         $invoice->refresh();
 
-        $payment = \App\Models\Payment::create([
+        $payment = Payment::create([
             'client_id' => $this->client->id,
             'amount' => 55,
             'payment_date' => now()->toDateString(),
@@ -256,7 +258,7 @@ class InvoiceTest extends TestCase
         $invoice->refresh();
         $this->assertEquals(Invoice::STATUS_PARTIALLY_PAID, $invoice->status);
 
-        $payment2 = \App\Models\Payment::create([
+        $payment2 = Payment::create([
             'client_id' => $this->client->id,
             'amount' => 55,
             'payment_date' => now()->toDateString(),
@@ -278,7 +280,7 @@ class InvoiceTest extends TestCase
 
         // Must explicitly call markAsOverdue
         $invoice->markAsOverdue();
-        
+
         $this->assertTrue($invoice->is_overdue);
         $this->assertEquals(Invoice::STATUS_OVERDUE, $invoice->status);
     }
@@ -478,15 +480,15 @@ class InvoiceTest extends TestCase
     public function test_invoice_status_transitions_list_is_complete(): void
     {
         // Verify all expected transitions are defined via getValidTransitions
-        $draftInvoice = new Invoice();
+        $draftInvoice = new Invoice;
         $draftInvoice->status = 'draft';
-        
+
         // Test that draft can transition to sent and cancelled
         $draftTransitions = $draftInvoice->getValidTransitions();
         $this->assertContains('sent', $draftTransitions);
-        
+
         // Test that sent can transition to partially_paid, paid, overdue, cancelled
-        $sentInvoice = new Invoice();
+        $sentInvoice = new Invoice;
         $sentInvoice->status = Invoice::STATUS_SENT;
         $sentTransitions = $sentInvoice->getValidTransitions();
         $this->assertContains('partially_paid', $sentTransitions);
@@ -497,15 +499,15 @@ class InvoiceTest extends TestCase
         // Sent and overdue can be un-sent (reverted to draft) while unpaid
         $this->assertContains('draft', $sentTransitions);
 
-        $overdueInvoice = new Invoice();
+        $overdueInvoice = new Invoice;
         $overdueInvoice->status = Invoice::STATUS_OVERDUE;
         $this->assertContains('draft', $overdueInvoice->getValidTransitions());
 
         // But invoices with payments can never go back to draft
-        $partiallyPaidInvoice = new Invoice();
+        $partiallyPaidInvoice = new Invoice;
         $partiallyPaidInvoice->status = Invoice::STATUS_PARTIALLY_PAID;
         $this->assertNotContains('draft', $partiallyPaidInvoice->getValidTransitions());
-        $paidInvoice = new Invoice();
+        $paidInvoice = new Invoice;
         $paidInvoice->status = Invoice::STATUS_PAID;
         $this->assertNotContains('draft', $paidInvoice->getValidTransitions());
     }
@@ -718,7 +720,7 @@ class InvoiceTest extends TestCase
             'due_date' => '2024-02-15',
         ]);
 
-        $this->assertInstanceOf(\Carbon\Carbon::class, $invoice->due_date);
+        $this->assertInstanceOf(Carbon::class, $invoice->due_date);
         $this->assertEquals('2024-02-15', $invoice->due_date->toDateString());
     }
 
@@ -863,7 +865,7 @@ class InvoiceTest extends TestCase
         ]);
         $invoice->refresh();
         // Fully pay the invoice first.
-        $payment = \App\Models\Payment::create([
+        $payment = Payment::create([
             'client_id' => $this->client->id,
             'amount' => $invoice->total,
             'payment_date' => now()->toDateString(),
@@ -881,7 +883,7 @@ class InvoiceTest extends TestCase
 
         $response->assertSessionHas('error');
         // Only the original payment should exist — the second attempt rejected.
-        $this->assertEquals(1, \App\Models\Payment::where('client_id', $this->client->id)->count());
+        $this->assertEquals(1, Payment::where('client_id', $this->client->id)->count());
     }
 
     public function test_record_payment_accepts_sent_invoice(): void
@@ -1053,5 +1055,89 @@ class InvoiceTest extends TestCase
         $invoice->refresh();
         $this->assertEquals(275.00, (float) $invoice->total, 'total must be unchanged by a plain save');
         $this->assertSame('Updated note', $invoice->notes);
+    }
+
+    private function poLinkedInvoice(PurchaseOrder $po, string $status = 'draft'): Invoice
+    {
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'purchase_order_id' => $po->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+        ]);
+        $invoice->items()->create([
+            'description' => 'Test Service',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+        $invoice->recalculateTotals();
+        $invoice->refresh();
+
+        if ($status !== 'draft') {
+            $invoice->update(['status' => $status]);
+            // The status change recalculated the PO's used_amount on a
+            // separate instance; reload so the memoized relation is fresh.
+            $invoice->refresh();
+        }
+
+        return $invoice;
+    }
+
+    public function test_po_remaining_after_subtracts_draft_invoice_total(): void
+    {
+        $po = PurchaseOrder::create([
+            'client_id' => $this->client->id,
+            'title' => 'PO Work',
+            'budgeted_amount' => 10000,
+            'used_amount' => 0,
+            'status' => 'open',
+        ]);
+
+        // A previously sent invoice counts against the budget...
+        $this->poLinkedInvoice($po, 'sent');
+        $this->poLinkedInvoice($po, 'sent');
+        $po->refresh();
+        $this->assertEquals(220.00, (float) $po->used_amount);
+
+        // ...a draft one does not, so its total is subtracted on top.
+        $draft = $this->poLinkedInvoice($po, 'draft');
+        $this->assertEquals(9670.00, $draft->po_remaining_after);
+    }
+
+    public function test_po_remaining_after_counts_sent_invoice_via_used_amount(): void
+    {
+        $po = PurchaseOrder::create([
+            'client_id' => $this->client->id,
+            'title' => 'PO Work',
+            'budgeted_amount' => 10000,
+            'used_amount' => 0,
+            'status' => 'open',
+        ]);
+
+        $sent = $this->poLinkedInvoice($po, 'sent');
+        $po->refresh();
+        $this->assertEquals(110.00, (float) $po->used_amount);
+
+        // Already counted in used_amount — must not be subtracted twice.
+        $this->assertEquals(9890.00, $sent->po_remaining_after);
+    }
+
+    public function test_po_remaining_after_is_null_without_linked_po(): void
+    {
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+        ]);
+        $invoice->items()->create([
+            'description' => 'Test Service',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+        $invoice->recalculateTotals();
+
+        $this->assertNull($invoice->po_remaining_after);
     }
 }

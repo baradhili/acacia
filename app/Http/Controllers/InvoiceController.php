@@ -5,13 +5,12 @@ namespace App\Http\Controllers;
 use App\Mail\InvoiceMail;
 use App\Models\Client;
 use App\Models\Invoice;
-use App\Models\InvoiceItem;
 use App\Models\Payment;
-use App\Models\PaymentAllocation;
 use App\Models\Project;
 use App\Models\PurchaseOrder;
 use App\Models\TimeEntry;
 use App\Rules\NotInClosedPeriod;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -48,19 +47,19 @@ class InvoiceController extends Controller
     {
         $clients = Client::orderBy('name')->pluck('name', 'id');
         $projects = Project::with('client')->get()->groupBy('client_id');
-        
+
         // Pre-select client/project if coming from PO or time entries
         $selectedClient = $request->client_id ? Client::find($request->client_id) : null;
         $selectedProject = $request->project_id ? Project::find($request->project_id) : null;
         $selectedPO = $request->purchase_order_id ? PurchaseOrder::find($request->purchase_order_id) : null;
-        
+
         // Get unbilled time entries for selected client/project
         $timeEntries = collect();
         if ($selectedClient) {
             $timeEntriesQuery = TimeEntry::where('billable', true)
                 ->where('status', TimeEntry::STATUS_APPROVED)
                 ->whereDoesntHave('invoiceItem');
-            
+
             if ($selectedProject) {
                 $timeEntriesQuery->where('project_id', $selectedProject->id);
             } else {
@@ -68,7 +67,7 @@ class InvoiceController extends Controller
                     $q->where('client_id', $selectedClient->id);
                 });
             }
-            
+
             $timeEntries = $timeEntriesQuery->get();
         }
 
@@ -128,7 +127,7 @@ class InvoiceController extends Controller
             }
 
             // Mark time entries as invoiced if provided
-            if (!empty($validated['time_entry_ids'])) {
+            if (! empty($validated['time_entry_ids'])) {
                 TimeEntry::whereIn('id', $validated['time_entry_ids'])
                     ->update(['invoiced' => true]);
             }
@@ -141,20 +140,21 @@ class InvoiceController extends Controller
                 ->with('success', 'Invoice created successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->withInput()->with('error', 'Error creating invoice: ' . $e->getMessage());
+
+            return back()->withInput()->with('error', 'Error creating invoice: '.$e->getMessage());
         }
     }
 
     public function show(Invoice $invoice)
     {
         $invoice->load(['client', 'project', 'creator', 'items', 'allocations.payment', 'documents']);
-        
+
         return view('invoices.show', compact('invoice'));
     }
 
     public function edit(Invoice $invoice)
     {
-        if (!$invoice->canBeEdited()) {
+        if (! $invoice->canBeEdited()) {
             return redirect()->route('invoices.show', $invoice)
                 ->with('error', 'Only draft invoices can be edited.');
         }
@@ -167,7 +167,7 @@ class InvoiceController extends Controller
 
     public function update(Request $request, Invoice $invoice)
     {
-        if (!$invoice->canBeEdited()) {
+        if (! $invoice->canBeEdited()) {
             return redirect()->route('invoices.show', $invoice)
                 ->with('error', 'Only draft invoices can be edited.');
         }
@@ -251,13 +251,14 @@ class InvoiceController extends Controller
                 ->with('success', 'Invoice updated successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->withInput()->with('error', 'Error updating invoice: ' . $e->getMessage());
+
+            return back()->withInput()->with('error', 'Error updating invoice: '.$e->getMessage());
         }
     }
 
     public function destroy(Invoice $invoice)
     {
-        if (!$invoice->canBeEdited()) {
+        if (! $invoice->canBeEdited()) {
             return redirect()->route('invoices.index')
                 ->with('error', 'Only draft invoices can be deleted.');
         }
@@ -315,7 +316,7 @@ class InvoiceController extends Controller
 
     public function cancel(Invoice $invoice)
     {
-        if (!$invoice->canBeCancelled()) {
+        if (! $invoice->canBeCancelled()) {
             return back()->with('error', 'This invoice cannot be cancelled.');
         }
 
@@ -336,15 +337,15 @@ class InvoiceController extends Controller
         ]);
 
         $timeEntries = TimeEntry::with('project')->find($request->time_entry_ids);
-        
+
         // Determine client
         $clientId = $request->client_id;
-        if (!$clientId && $timeEntries->isNotEmpty()) {
+        if (! $clientId && $timeEntries->isNotEmpty()) {
             $firstProject = $timeEntries->first()->project;
             $clientId = $firstProject->client_id ?? null;
         }
 
-        if (!$clientId) {
+        if (! $clientId) {
             return back()->with('error', 'Could not determine client.');
         }
 
@@ -404,12 +405,13 @@ class InvoiceController extends Controller
                 Invoice::STATUS_PAID => 'This invoice is already fully paid.',
                 default => 'Cancelled invoices cannot receive payments.',
             };
+
             return back()->with('error', $reason);
         }
 
         $amountDue = (float) $invoice->amount_due;
         $validated = $request->validate([
-            'amount' => 'required|numeric|min:0.01|max:' . $amountDue,
+            'amount' => 'required|numeric|min:0.01|max:'.$amountDue,
             'payment_date' => ['required', 'date', new NotInClosedPeriod],
             'payment_method' => 'required|string',
             'reference' => 'nullable|string',
@@ -442,7 +444,8 @@ class InvoiceController extends Controller
                 ->with('success', 'Payment recorded successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', 'Error recording payment: ' . $e->getMessage());
+
+            return back()->with('error', 'Error recording payment: '.$e->getMessage());
         }
     }
 
@@ -451,8 +454,8 @@ class InvoiceController extends Controller
      */
     public function pdf(Invoice $invoice)
     {
-        $invoice->load(['client', 'project', 'items']);
-        
+        $invoice->load(['client', 'project', 'items', 'purchaseOrder']);
+
         return view('invoices.pdf', compact('invoice'));
     }
 
@@ -461,11 +464,11 @@ class InvoiceController extends Controller
      */
     public function downloadPdf(Invoice $invoice)
     {
-        $invoice->load(['client', 'project', 'items']);
-        
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('invoices.pdf', compact('invoice'));
+        $invoice->load(['client', 'project', 'items', 'purchaseOrder']);
+
+        $pdf = Pdf::loadView('invoices.pdf', compact('invoice'));
         $pdf->setPaper('a4', 'portrait');
-        
-        return $pdf->download('invoice-' . $invoice->invoice_number . '.pdf');
+
+        return $pdf->download('invoice-'.$invoice->invoice_number.'.pdf');
     }
 }

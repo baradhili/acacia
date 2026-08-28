@@ -218,7 +218,10 @@
                 @if($invoice->purchaseOrder)
                     <div class="address-label" style="margin-top: 15px;">Purchase Order</div>
                     <div class="address-content">
-                        {{ $invoice->purchaseOrder->po_number }}
+                        {{ $invoice->purchaseOrder->po_number }}<br>
+                        <span style="font-size: 10px; color: #6b7280;">
+                            Remaining after this invoice: ${{ number_format($invoice->po_remaining_after, 2) }}
+                        </span>
                     </div>
                 @endif
             </div>
