@@ -14,7 +14,9 @@ class NavigationTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected User $staff;
+
     protected Client $client;
 
     protected function setUp(): void
@@ -62,6 +64,19 @@ class NavigationTest extends TestCase
         $response->assertSee('Supplier Payments');
         $response->assertSee('Time Entries');
         $response->assertSee('Purchase Orders');
+        // Shares & dividends group
+        $response->assertSee('Shareholders');
+        $response->assertSee('Share Classes');
+        $response->assertSee('Franking Account');
+        $response->assertSee('Dividends');
+    }
+
+    public function test_staff_does_not_see_shares_and_dividends_navigation(): void
+    {
+        $response = $this->actingAs($this->staff)->get('/dashboard');
+
+        $response->assertStatus(200);
+        $response->assertDontSee('Franking Account');
     }
 
     public function test_staff_sees_limited_navigation_menu_items(): void

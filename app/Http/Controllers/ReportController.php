@@ -2,32 +2,39 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Client;
+use App\Exports\AccountStatementExport;
+use App\Exports\BasExport;
+use App\Exports\CompanyTaxExport;
 use App\Models\Bill;
 use App\Models\BillItem;
 use App\Models\BillPayment;
+use App\Models\Client;
 use App\Models\CompanyProfile;
+use App\Models\DividendDeclaration;
 use App\Models\FiscalYearClose;
+use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\Prepayment;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\User;
 use App\Services\FiscalYearService;
+use App\Services\FrankingService;
 use App\Services\OpeningBalances;
+use App\Services\PrepaymentService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use IFRS\Models\Account;
 use IFRS\Models\Balance;
-use IFRS\Models\Currency;
 use IFRS\Models\Entity;
 use IFRS\Models\Ledger;
 use IFRS\Models\LineItem;
 use IFRS\Models\ReportingPeriod;
 use IFRS\Reports\CashFlowStatement;
-use Barryvdh\DomPDF\Facade\Pdf;
-use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Facades\Excel;
 
 class ReportController extends Controller
 {
@@ -91,15 +98,16 @@ class ReportController extends Controller
             ->approved();
 
         if ($clientId) {
-            $query->whereHas('project', fn($q) => $q->where('client_id', $clientId));
+            $query->whereHas('project', fn ($q) => $q->where('client_id', $clientId));
         }
 
         $timeEntries = $query->get();
 
         // Group by client
-        $byClient = $timeEntries->groupBy(fn($e) => $e->project?->client?->id ?? 'unassigned')
+        $byClient = $timeEntries->groupBy(fn ($e) => $e->project?->client?->id ?? 'unassigned')
             ->map(function ($entries, $clientId) {
                 $client = $entries->first()->project?->client?->name ?? 'Unassigned';
+
                 return [
                     'client' => $client,
                     'total_hours' => $entries->sum('hours'),
@@ -146,6 +154,7 @@ class ReportController extends Controller
         $byStaff = $timeEntries->groupBy('user_id')
             ->map(function ($entries, $userId) {
                 $user = $entries->first()->user;
+
                 return [
                     'user' => $user,
                     'total_hours' => $entries->sum('hours'),
@@ -193,6 +202,7 @@ class ReportController extends Controller
         $byProject = $timeEntries->groupBy('project_id')
             ->map(function ($entries, $projectId) {
                 $project = $entries->first()->project;
+
                 return [
                     'project' => $project,
                     'client' => $project?->client?->name ?? 'N/A',
@@ -202,8 +212,8 @@ class ReportController extends Controller
                     'non_billable_hours' => $entries->where('billable', false)->sum('hours'),
                     'entry_count' => $entries->count(),
                     'budget_hours' => $project?->budget_hours,
-                    'utilization' => $project?->budget_hours 
-                        ? round(($entries->sum('hours') / $project->budget_hours) * 100, 1) 
+                    'utilization' => $project?->budget_hours
+                        ? round(($entries->sum('hours') / $project->budget_hours) * 100, 1)
                         : null,
                 ];
             })->sortByDesc('total_hours');
@@ -443,7 +453,7 @@ class ReportController extends Controller
         // (part of the equity rows above), so adding the on-the-fly
         // figure again would double count it. Computed from
         // closing-aware movement either way.
-        $fyService = new FiscalYearService();
+        $fyService = new FiscalYearService;
         $netProfit = $fyService->isClosed($entity, ReportingPeriod::year($endDate, $entity))
             ? 0.0
             : $fyService->netProfitExcludingClosures($entity, $fyStart, $endDate);
@@ -524,7 +534,7 @@ class ReportController extends Controller
 
         $clientId = $request->get('client_id');
 
-        $query = \App\Models\Invoice::with(['client', 'allocations'])
+        $query = Invoice::with(['client', 'allocations'])
             ->whereBetween('issue_date', [$startDate, $endDate])
             ->where('status', '!=', 'cancelled');
 
@@ -537,6 +547,7 @@ class ReportController extends Controller
         $byCustomer = $invoices->groupBy('client_id')
             ->map(function ($invoices, $clientId) {
                 $client = $invoices->first()->client;
+
                 return [
                     'client' => $client,
                     'invoice_count' => $invoices->count(),
@@ -632,7 +643,7 @@ class ReportController extends Controller
                 ->get();
         } else {
             $partyLabel = 'Client';
-            $documents = \App\Models\Invoice::with(['client', 'allocations'])
+            $documents = Invoice::with(['client', 'allocations'])
                 ->where('status', '!=', 'cancelled')
                 ->get();
         }
@@ -699,10 +710,10 @@ class ReportController extends Controller
             : Carbon::now()->endOfDay();
 
         // Get GST collected from invoices (output tax)
-        $invoices = \App\Models\Invoice::whereBetween('issue_date', [$startDate, $endDate])
+        $invoices = Invoice::whereBetween('issue_date', [$startDate, $endDate])
             ->where('status', '!=', 'cancelled')
             ->get();
-        
+
         $gstCollected = $invoices->sum('tax_amount');
         $totalInvoices = $invoices->sum('subtotal');
 
@@ -724,7 +735,6 @@ class ReportController extends Controller
             'netGst'
         ));
     }
-
 
     /**
      * Build an account statement from the ledger (v6 schema: post_account,
@@ -807,18 +817,18 @@ class ReportController extends Controller
      */
     public function accountStatement(Request $request)
     {
-        $startDate = $request->get("start_date")
+        $startDate = $request->get('start_date')
             ? Carbon::parse($request->start_date)->startOfDay()
             : Carbon::now()->startOfMonth();
 
-        $endDate = $request->get("end_date")
+        $endDate = $request->get('end_date')
             ? Carbon::parse($request->end_date)->endOfDay()
             : Carbon::now()->endOfDay();
 
-        $accountId = $request->get("account_id");
+        $accountId = $request->get('account_id');
 
-        $accounts = Account::orderBy("code")
-            ->get(["id", "code", "name", "account_type"]);
+        $accounts = Account::orderBy('code')
+            ->get(['id', 'code', 'name', 'account_type']);
 
         $statementData = null;
 
@@ -827,8 +837,8 @@ class ReportController extends Controller
             $statementData = $this->buildAccountStatement(Account::find($accountId), $startDate, $endDate);
         }
 
-        return view("reports.account-statement", compact(
-            "statementData", "accounts", "startDate", "endDate", "accountId"
+        return view('reports.account-statement', compact(
+            'statementData', 'accounts', 'startDate', 'endDate', 'accountId'
         ));
     }
 
@@ -837,18 +847,18 @@ class ReportController extends Controller
      */
     public function accountSchedule(Request $request)
     {
-        $startDate = $request->get("start_date")
+        $startDate = $request->get('start_date')
             ? Carbon::parse($request->start_date)->startOfDay()
             : Carbon::now()->startOfMonth();
 
-        $endDate = $request->get("end_date")
+        $endDate = $request->get('end_date')
             ? Carbon::parse($request->end_date)->endOfDay()
             : Carbon::now()->endOfDay();
 
-        $accountId = $request->get("account_id");
+        $accountId = $request->get('account_id');
 
-        $accounts = Account::orderBy("code")
-            ->get(["id", "code", "name", "account_type"]);
+        $accounts = Account::orderBy('code')
+            ->get(['id', 'code', 'name', 'account_type']);
 
         $scheduleData = null;
 
@@ -860,16 +870,16 @@ class ReportController extends Controller
             // (not `date`), and debit/credit is determined by the line item's
             // `credited` boolean (false = debit, true = credit) — there is no
             // `type` column and `LineItem::DEBIT`/`::CREDIT` do not exist.
-            $lineItems = LineItem::where("account_id", $accountId)
-                ->whereHas("transaction", function ($query) use ($startDate, $endDate) {
-                    $query->whereBetween("transaction_date", [$startDate, $endDate]);
+            $lineItems = LineItem::where('account_id', $accountId)
+                ->whereHas('transaction', function ($query) use ($startDate, $endDate) {
+                    $query->whereBetween('transaction_date', [$startDate, $endDate]);
                 })
-                ->with(["transaction", "transaction.lineItems"])
+                ->with(['transaction', 'transaction.lineItems'])
                 ->get();
 
             // Group by transaction (sorting by a related column in SQL would
             // need a join; sort the grouped collection instead)
-            $groupedByTransaction = $lineItems->groupBy("transaction_id")
+            $groupedByTransaction = $lineItems->groupBy('transaction_id')
                 ->sortBy(fn ($items) => $items->first()->transaction->transaction_date);
 
             $scheduleLines = collect();
@@ -883,37 +893,37 @@ class ReportController extends Controller
                 $allItems = $transaction->lineItems ?? collect();
 
                 // credited=false -> debit, credited=true -> credit
-                $debitTotal = $allItems->where("credited", false)->sum("amount");
-                $creditTotal = $allItems->where("credited", true)->sum("amount");
+                $debitTotal = $allItems->where('credited', false)->sum('amount');
+                $creditTotal = $allItems->where('credited', true)->sum('amount');
 
                 $totalDebit += $debitTotal;
                 $totalCredit += $creditTotal;
 
                 $scheduleLines->push([
-                    "date" => Carbon::parse($transaction->transaction_date),
-                    "transaction_id" => $transactionId,
-                    "transaction_type" => class_basename($transaction),
-                    "narration" => $transaction->narration ?? "",
-                    "reference" => $transaction->reference ?? "",
-                    "line_items" => $allItems,
-                    "debit" => $debitTotal,
-                    "credit" => $creditTotal,
+                    'date' => Carbon::parse($transaction->transaction_date),
+                    'transaction_id' => $transactionId,
+                    'transaction_type' => class_basename($transaction),
+                    'narration' => $transaction->narration ?? '',
+                    'reference' => $transaction->reference ?? '',
+                    'line_items' => $allItems,
+                    'debit' => $debitTotal,
+                    'credit' => $creditTotal,
                 ]);
             }
 
             $scheduleData = [
-                "account" => $account,
-                "start_date" => $startDate,
-                "end_date" => $endDate,
-                "total_debit" => $totalDebit,
-                "total_credit" => $totalCredit,
-                "line_count" => $scheduleLines->count(),
-                "lines" => $scheduleLines,
+                'account' => $account,
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'total_debit' => $totalDebit,
+                'total_credit' => $totalCredit,
+                'line_count' => $scheduleLines->count(),
+                'lines' => $scheduleLines,
             ];
         }
 
-        return view("reports.account-schedule", compact(
-            "scheduleData", "accounts", "startDate", "endDate", "accountId"
+        return view('reports.account-schedule', compact(
+            'scheduleData', 'accounts', 'startDate', 'endDate', 'accountId'
         ));
     }
 
@@ -927,13 +937,13 @@ class ReportController extends Controller
         // Derived from the entity's year_start so a non-July FY (or a
         // later change to year_start) cannot drift from the ledger.
         $currentFyEnd = ReportingPeriod::year(now(), $this->ifrsEntity()) + 1;
-        $fyEnd = (int) $request->get("fy", $currentFyEnd);
+        $fyEnd = (int) $request->get('fy', $currentFyEnd);
 
         $statement = $this->buildBasStatement($fyEnd);
         $availableFys = range($currentFyEnd, $currentFyEnd - 5);
 
-        return view("reports.bas", compact(
-            "fyEnd", "currentFyEnd", "availableFys", "statement"
+        return view('reports.bas', compact(
+            'fyEnd', 'currentFyEnd', 'availableFys', 'statement'
         ));
     }
 
@@ -953,18 +963,18 @@ class ReportController extends Controller
         // ending calendar year; the FY label is one less). Identical to
         // the previous hard-coded Jul–Jun for the default July start.
         $entity = $this->ifrsEntity();
-        ['start' => $fyStart, 'end' => $fyEndDate] = (new FiscalYearService())->bounds($entity, $fyEnd - 1);
+        ['start' => $fyStart, 'end' => $fyEndDate] = (new FiscalYearService)->bounds($entity, $fyEnd - 1);
         $fyStart = $fyStart->startOfDay();
         $fyEndDate = $fyEndDate->copy()->endOfDay();
 
-        $invoices = \App\Models\Invoice::whereBetween("issue_date", [$fyStart, $fyEndDate])
-            ->whereNotIn("status", [\App\Models\Invoice::STATUS_DRAFT, \App\Models\Invoice::STATUS_CANCELLED])
-            ->with("items")
+        $invoices = Invoice::whereBetween('issue_date', [$fyStart, $fyEndDate])
+            ->whereNotIn('status', [Invoice::STATUS_DRAFT, Invoice::STATUS_CANCELLED])
+            ->with('items')
             ->get();
 
-        $bills = Bill::whereBetween("bill_date", [$fyStart, $fyEndDate])
-            ->whereNotIn("status", [Bill::STATUS_DRAFT, Bill::STATUS_CANCELLED])
-            ->with("items.expenseAccount")
+        $bills = Bill::whereBetween('bill_date', [$fyStart, $fyEndDate])
+            ->whereNotIn('status', [Bill::STATUS_DRAFT, Bill::STATUS_CANCELLED])
+            ->with('items.expenseAccount')
             ->get();
 
         // BAS quarters: consecutive three-month blocks of the FY, in
@@ -979,21 +989,21 @@ class ReportController extends Controller
         foreach ([0, 1, 2, 3] as $i) {
             $start = $fyStart->copy()->addMonths($i * 3)->startOfDay();
             $quarters[$i] = [
-                "label" => sprintf("Q%d (%s-%s)", $i + 1, $start->format("M"), $start->copy()->addMonths(2)->format("M")),
-                "start" => $start,
-                "end" => $start->copy()->addMonths(3)->subDay()->endOfDay(),
-                "g1" => 0.0,
-                "gst_sales" => 0.0,
-                "g10" => 0.0,
-                "g11" => 0.0,
-                "gst_purchases" => 0.0,
+                'label' => sprintf('Q%d (%s-%s)', $i + 1, $start->format('M'), $start->copy()->addMonths(2)->format('M')),
+                'start' => $start,
+                'end' => $start->copy()->addMonths(3)->subDay()->endOfDay(),
+                'g1' => 0.0,
+                'gst_sales' => 0.0,
+                'g10' => 0.0,
+                'g11' => 0.0,
+                'gst_purchases' => 0.0,
             ];
         }
 
         foreach ($invoices as $invoice) {
             $i = $quarterOf($invoice->issue_date);
-            $quarters[$i]["g1"] += (float) $invoice->total;
-            $quarters[$i]["gst_sales"] += (float) $invoice->items->sum("tax_amount");
+            $quarters[$i]['g1'] += (float) $invoice->total;
+            $quarters[$i]['gst_sales'] += (float) $invoice->items->sum('tax_amount');
         }
 
         foreach ($bills as $bill) {
@@ -1004,35 +1014,35 @@ class ReportController extends Controller
                 // (G11). GST credits (1B) cover both kinds.
                 $isCapital = ($item->expenseAccount->account_type ?? null) === Account::NON_CURRENT_ASSET;
                 if ($isCapital) {
-                    $quarters[$i]["g10"] += (float) $item->total;
+                    $quarters[$i]['g10'] += (float) $item->total;
                 } else {
-                    $quarters[$i]["g11"] += (float) $item->total;
+                    $quarters[$i]['g11'] += (float) $item->total;
                 }
                 if ((float) ($item->tax_rate ?? 0) > 0) {
-                    $quarters[$i]["gst_purchases"] += (float) $item->tax_amount;
+                    $quarters[$i]['gst_purchases'] += (float) $item->tax_amount;
                 }
             }
         }
 
         foreach ($quarters as &$q) {
-            $q["net"] = $q["gst_sales"] - $q["gst_purchases"];
+            $q['net'] = $q['gst_sales'] - $q['gst_purchases'];
         }
         unset($q);
 
         $totals = [
-            "g1" => array_sum(array_column($quarters, "g1")),
-            "gst_sales" => array_sum(array_column($quarters, "gst_sales")),
-            "g10" => array_sum(array_column($quarters, "g10")),
-            "g11" => array_sum(array_column($quarters, "g11")),
-            "gst_purchases" => array_sum(array_column($quarters, "gst_purchases")),
+            'g1' => array_sum(array_column($quarters, 'g1')),
+            'gst_sales' => array_sum(array_column($quarters, 'gst_sales')),
+            'g10' => array_sum(array_column($quarters, 'g10')),
+            'g11' => array_sum(array_column($quarters, 'g11')),
+            'gst_purchases' => array_sum(array_column($quarters, 'gst_purchases')),
         ];
-        $totals["net"] = $totals["gst_sales"] - $totals["gst_purchases"];
+        $totals['net'] = $totals['gst_sales'] - $totals['gst_purchases'];
 
         return [
-            "fyStart" => $fyStart,
-            "fyEnd" => $fyEndDate,
-            "quarters" => $quarters,
-            "totals" => $totals,
+            'fyStart' => $fyStart,
+            'fyEnd' => $fyEndDate,
+            'quarters' => $quarters,
+            'totals' => $totals,
         ];
     }
 
@@ -1041,36 +1051,37 @@ class ReportController extends Controller
      */
     public function exportAccountStatementPdf(Request $request)
     {
-        $startDate = $request->get("start_date")
+        $startDate = $request->get('start_date')
             ? Carbon::parse($request->start_date)->startOfDay()
             : Carbon::now()->startOfMonth();
 
-        $endDate = $request->get("end_date")
+        $endDate = $request->get('end_date')
             ? Carbon::parse($request->end_date)->endOfDay()
             : Carbon::now()->endOfDay();
 
-        $accountId = $request->get("account_id");
+        $accountId = $request->get('account_id');
 
-        if (!$accountId) {
-            return back()->with("error", "Please select an account");
+        if (! $accountId) {
+            return back()->with('error', 'Please select an account');
         }
 
         $account = Account::find($accountId);
         $this->getReportingPeriod($endDate);
         $statement = $this->buildAccountStatement($account, $startDate, $endDate);
 
-        $pdf = Pdf::loadView("reports.pdf.account-statement", [
-            "account" => $account,
-            "startDate" => $startDate,
-            "endDate" => $endDate,
-            "openingBalance" => $statement['opening_balance'],
-            "closingBalance" => $statement['closing_balance'],
-            "totalDebit" => $statement['total_debit'],
-            "totalCredit" => $statement['total_credit'],
-            "transactions" => $statement['transactions'],
+        $pdf = Pdf::loadView('reports.pdf.account-statement', [
+            'account' => $account,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'openingBalance' => $statement['opening_balance'],
+            'closingBalance' => $statement['closing_balance'],
+            'totalDebit' => $statement['total_debit'],
+            'totalCredit' => $statement['total_credit'],
+            'transactions' => $statement['transactions'],
         ]);
 
         $filename = "Account_Statement_{$account->code}_{$startDate->format('Ymd')}_{$endDate->format('Ymd')}.pdf";
+
         return $pdf->download($filename);
     }
 
@@ -1080,40 +1091,41 @@ class ReportController extends Controller
     public function exportBasPdf(Request $request)
     {
         $currentFyEnd = now()->month >= 7 ? now()->year + 1 : now()->year;
-        $fyEnd = (int) $request->get("fy", $currentFyEnd);
+        $fyEnd = (int) $request->get('fy', $currentFyEnd);
         $statement = $this->buildBasStatement($fyEnd);
 
-        $pdf = Pdf::loadView("reports.pdf.bas", [
-            "fyEnd" => $fyEnd,
-            "statement" => $statement,
+        $pdf = Pdf::loadView('reports.pdf.bas', [
+            'fyEnd' => $fyEnd,
+            'statement' => $statement,
         ]);
 
         return $pdf->download("BAS_FY{$fyEnd}.pdf");
     }
+
     /**
      * Export Account Statement to Excel
      */
     public function exportAccountStatementExcel(Request $request)
     {
-        $startDate = $request->get("start_date")
+        $startDate = $request->get('start_date')
             ? Carbon::parse($request->start_date)->startOfDay()
             : Carbon::now()->startOfMonth();
 
-        $endDate = $request->get("end_date")
+        $endDate = $request->get('end_date')
             ? Carbon::parse($request->end_date)->endOfDay()
             : Carbon::now()->endOfDay();
 
-        $accountId = $request->get("account_id");
+        $accountId = $request->get('account_id');
 
-        if (!$accountId) {
-            return back()->with("error", "Please select an account");
+        if (! $accountId) {
+            return back()->with('error', 'Please select an account');
         }
 
         $account = Account::find($accountId);
         $this->getReportingPeriod($endDate);
         $statement = $this->buildAccountStatement($account, $startDate, $endDate);
 
-        $export = new \App\Exports\AccountStatementExport(
+        $export = new AccountStatementExport(
             $account,
             $startDate,
             $endDate,
@@ -1125,6 +1137,7 @@ class ReportController extends Controller
         );
 
         $filename = "Account_Statement_{$account->code}_{$startDate->format('Ymd')}_{$endDate->format('Ymd')}.xlsx";
+
         return Excel::download($export, $filename);
     }
 
@@ -1134,10 +1147,10 @@ class ReportController extends Controller
     public function exportBasExcel(Request $request)
     {
         $currentFyEnd = now()->month >= 7 ? now()->year + 1 : now()->year;
-        $fyEnd = (int) $request->get("fy", $currentFyEnd);
+        $fyEnd = (int) $request->get('fy', $currentFyEnd);
         $statement = $this->buildBasStatement($fyEnd);
 
-        $export = new \App\Exports\BasExport($fyEnd, $statement);
+        $export = new BasExport($fyEnd, $statement);
 
         return Excel::download($export, "BAS_FY{$fyEnd}.xlsx");
     }
@@ -1151,13 +1164,13 @@ class ReportController extends Controller
         // FY named by its June year-end, derived from the entity's
         // year_start so it cannot drift from the ledger's FY boundaries.
         $currentFyEnd = ReportingPeriod::year(now(), $this->ifrsEntity()) + 1;
-        $fyEnd = (int) $request->get("fy", $currentFyEnd);
+        $fyEnd = (int) $request->get('fy', $currentFyEnd);
 
         $statement = $this->buildCompanyTaxStatement($fyEnd);
         $availableFys = range($currentFyEnd, $currentFyEnd - 5);
 
-        return view("reports.company-tax", compact(
-            "fyEnd", "currentFyEnd", "availableFys", "statement"
+        return view('reports.company-tax', compact(
+            'fyEnd', 'currentFyEnd', 'availableFys', 'statement'
         ));
     }
 
@@ -1167,12 +1180,12 @@ class ReportController extends Controller
     public function exportCompanyTaxPdf(Request $request)
     {
         $currentFyEnd = now()->month >= 7 ? now()->year + 1 : now()->year;
-        $fyEnd = (int) $request->get("fy", $currentFyEnd);
+        $fyEnd = (int) $request->get('fy', $currentFyEnd);
         $statement = $this->buildCompanyTaxStatement($fyEnd);
 
-        $pdf = Pdf::loadView("reports.pdf.company-tax", [
-            "fyEnd" => $fyEnd,
-            "statement" => $statement,
+        $pdf = Pdf::loadView('reports.pdf.company-tax', [
+            'fyEnd' => $fyEnd,
+            'statement' => $statement,
         ]);
 
         return $pdf->download("CompanyTax_FY{$fyEnd}.pdf");
@@ -1184,10 +1197,10 @@ class ReportController extends Controller
     public function exportCompanyTaxExcel(Request $request)
     {
         $currentFyEnd = now()->month >= 7 ? now()->year + 1 : now()->year;
-        $fyEnd = (int) $request->get("fy", $currentFyEnd);
+        $fyEnd = (int) $request->get('fy', $currentFyEnd);
         $statement = $this->buildCompanyTaxStatement($fyEnd);
 
-        $export = new \App\Exports\CompanyTaxExport($fyEnd, $statement);
+        $export = new CompanyTaxExport($fyEnd, $statement);
 
         return Excel::download($export, "CompanyTax_FY{$fyEnd}.xlsx");
     }
@@ -1198,10 +1211,10 @@ class ReportController extends Controller
     public function exportCompanyTaxCsv(Request $request)
     {
         $currentFyEnd = now()->month >= 7 ? now()->year + 1 : now()->year;
-        $fyEnd = (int) $request->get("fy", $currentFyEnd);
+        $fyEnd = (int) $request->get('fy', $currentFyEnd);
         $statement = $this->buildCompanyTaxStatement($fyEnd);
 
-        $export = new \App\Exports\CompanyTaxExport($fyEnd, $statement);
+        $export = new CompanyTaxExport($fyEnd, $statement);
 
         return Excel::download($export, "CompanyTax_FY{$fyEnd}.csv", \Maatwebsite\Excel\Excel::CSV);
     }
@@ -1213,16 +1226,16 @@ class ReportController extends Controller
      */
     public function prepaymentSchedule(Request $request)
     {
-        $prepayments = \App\Models\Prepayment::with(['assetAccount', 'expenseAccount', 'billPayment', 'billItem.bill'])
+        $prepayments = Prepayment::with(['assetAccount', 'expenseAccount', 'billPayment', 'billItem.bill'])
             ->orderBy('service_start')
             ->get();
 
-        $schedules = $prepayments->mapWithKeys(fn ($p) => [$p->id => \App\Services\PrepaymentService::scheduleWithPlanned($p)]);
+        $schedules = $prepayments->mapWithKeys(fn ($p) => [$p->id => PrepaymentService::scheduleWithPlanned($p)]);
 
         $totals = [
-            'funded' => round($prepayments->where('status', '!=', \App\Models\Prepayment::STATUS_VOID)->sum('total_amount'), 2),
+            'funded' => round($prepayments->where('status', '!=', Prepayment::STATUS_VOID)->sum('total_amount'), 2),
             'amortised' => round($prepayments->sum(fn ($p) => $p->amortisedAmount()), 2),
-            'remaining' => round($prepayments->where('status', '!=', \App\Models\Prepayment::STATUS_VOID)->sum(fn ($p) => $p->remainingAmount()), 2),
+            'remaining' => round($prepayments->where('status', '!=', Prepayment::STATUS_VOID)->sum(fn ($p) => $p->remainingAmount()), 2),
         ];
 
         return view('reports.prepayment-schedule', compact('prepayments', 'schedules', 'totals'));
@@ -1233,16 +1246,16 @@ class ReportController extends Controller
      */
     public function exportPrepaymentSchedulePdf(Request $request)
     {
-        $prepayments = \App\Models\Prepayment::with(['assetAccount', 'expenseAccount', 'billPayment', 'billItem.bill'])
+        $prepayments = Prepayment::with(['assetAccount', 'expenseAccount', 'billPayment', 'billItem.bill'])
             ->orderBy('service_start')
             ->get();
 
-        $schedules = $prepayments->mapWithKeys(fn ($p) => [$p->id => \App\Services\PrepaymentService::scheduleWithPlanned($p)]);
+        $schedules = $prepayments->mapWithKeys(fn ($p) => [$p->id => PrepaymentService::scheduleWithPlanned($p)]);
 
         $totals = [
-            'funded' => round($prepayments->where('status', '!=', \App\Models\Prepayment::STATUS_VOID)->sum('total_amount'), 2),
+            'funded' => round($prepayments->where('status', '!=', Prepayment::STATUS_VOID)->sum('total_amount'), 2),
             'amortised' => round($prepayments->sum(fn ($p) => $p->amortisedAmount()), 2),
-            'remaining' => round($prepayments->where('status', '!=', \App\Models\Prepayment::STATUS_VOID)->sum(fn ($p) => $p->remainingAmount()), 2),
+            'remaining' => round($prepayments->where('status', '!=', Prepayment::STATUS_VOID)->sum(fn ($p) => $p->remainingAmount()), 2),
         ];
 
         $pdf = Pdf::loadView('reports.pdf.prepayment-schedule', compact('prepayments', 'schedules', 'totals'));
@@ -1273,13 +1286,13 @@ class ReportController extends Controller
         // FY boundaries from the entity's year_start ($fyEnd is the FY's
         // ending calendar year; the FY label is one less).
         $entity = $this->ifrsEntity();
-        ['start' => $fyStart, 'end' => $fyEndDate] = (new FiscalYearService())->bounds($entity, $fyEnd - 1);
+        ['start' => $fyStart, 'end' => $fyEndDate] = (new FiscalYearService)->bounds($entity, $fyEnd - 1);
         $fyStart = $fyStart->startOfDay();
         $fyEndDate = $fyEndDate->copy()->endOfDay();
         $this->getReportingPeriod($fyEndDate);
 
-        $config = config("ato_tax_report");
-        $flags = $config["account_flags"];
+        $config = config('ato_tax_report');
+        $flags = $config['account_flags'];
         $warnings = [];
 
         $revenueTypes = [Account::OPERATING_REVENUE, Account::NON_OPERATING_REVENUE];
@@ -1294,19 +1307,19 @@ class ReportController extends Controller
         // Year-end closing entries are never trading activity — excluded
         // by reference prefix (belt-and-braces: their main account is
         // Retained Earnings, so the bank filter already drops them).
-        $accountMovements = DB::table("ifrs_ledgers as l")
-            ->join("ifrs_transactions as t", "t.id", "=", "l.transaction_id")
-            ->join("ifrs_accounts as a", "a.id", "=", "l.post_account")
-            ->join("ifrs_accounts as bank", "bank.id", "=", "t.account_id")
-            ->where("a.entity_id", $entity->id)
-            ->whereIn("a.account_type", $movementTypes)
-            ->where("bank.account_type", Account::BANK)
-            ->whereBetween("l.posting_date", [$fyStart, $fyEndDate])
-            ->whereNull("l.deleted_at")
-            ->whereNull("t.deleted_at")
-            ->where(fn ($q) => $q->whereNull("t.reference")->orWhereNot("t.reference", "like", FiscalYearClose::CLOSING_REFERENCE_PREFIX . "%"))
-            ->groupBy("a.id", "a.code", "a.name", "a.account_type")
-            ->orderBy("a.code")
+        $accountMovements = DB::table('ifrs_ledgers as l')
+            ->join('ifrs_transactions as t', 't.id', '=', 'l.transaction_id')
+            ->join('ifrs_accounts as a', 'a.id', '=', 'l.post_account')
+            ->join('ifrs_accounts as bank', 'bank.id', '=', 't.account_id')
+            ->where('a.entity_id', $entity->id)
+            ->whereIn('a.account_type', $movementTypes)
+            ->where('bank.account_type', Account::BANK)
+            ->whereBetween('l.posting_date', [$fyStart, $fyEndDate])
+            ->whereNull('l.deleted_at')
+            ->whereNull('t.deleted_at')
+            ->where(fn ($q) => $q->whereNull('t.reference')->orWhereNot('t.reference', 'like', FiscalYearClose::CLOSING_REFERENCE_PREFIX.'%'))
+            ->groupBy('a.id', 'a.code', 'a.name', 'a.account_type')
+            ->orderBy('a.code')
             ->selectRaw("a.id, a.code, a.name, a.account_type,
                 SUM(CASE WHEN l.entry_type = 'D' THEN l.amount ELSE 0 END) as debits,
                 SUM(CASE WHEN l.entry_type = 'C' THEN l.amount ELSE 0 END) as credits")
@@ -1316,33 +1329,33 @@ class ReportController extends Controller
         // distinct rows instead of GROUP_CONCAT so MySQL's
         // group_concat_max_len cannot silently truncate the id list.
         $auditByAccount = [];
-        DB::table("ifrs_ledgers as l")
-            ->join("ifrs_transactions as t", "t.id", "=", "l.transaction_id")
-            ->join("ifrs_accounts as bank", "bank.id", "=", "t.account_id")
-            ->join("ifrs_accounts as a", "a.id", "=", "l.post_account")
-            ->where("a.entity_id", $entity->id)
-            ->whereIn("a.account_type", $movementTypes)
-            ->where("bank.account_type", Account::BANK)
-            ->whereBetween("l.posting_date", [$fyStart, $fyEndDate])
-            ->whereNull("l.deleted_at")
-            ->whereNull("t.deleted_at")
-            ->where(fn ($q) => $q->whereNull("t.reference")->orWhereNot("t.reference", "like", FiscalYearClose::CLOSING_REFERENCE_PREFIX . "%"))
+        DB::table('ifrs_ledgers as l')
+            ->join('ifrs_transactions as t', 't.id', '=', 'l.transaction_id')
+            ->join('ifrs_accounts as bank', 'bank.id', '=', 't.account_id')
+            ->join('ifrs_accounts as a', 'a.id', '=', 'l.post_account')
+            ->where('a.entity_id', $entity->id)
+            ->whereIn('a.account_type', $movementTypes)
+            ->where('bank.account_type', Account::BANK)
+            ->whereBetween('l.posting_date', [$fyStart, $fyEndDate])
+            ->whereNull('l.deleted_at')
+            ->whereNull('t.deleted_at')
+            ->where(fn ($q) => $q->whereNull('t.reference')->orWhereNot('t.reference', 'like', FiscalYearClose::CLOSING_REFERENCE_PREFIX.'%'))
             ->distinct()
-            ->get(["a.id as account_id", "l.transaction_id", "l.line_item_id"])
+            ->get(['a.id as account_id', 'l.transaction_id', 'l.line_item_id'])
             ->each(function ($link) use (&$auditByAccount) {
-                $auditByAccount[$link->account_id]["txn"][] = $link->transaction_id;
+                $auditByAccount[$link->account_id]['txn'][] = $link->transaction_id;
                 if ($link->line_item_id) {
-                    $auditByAccount[$link->account_id]["line"][] = $link->line_item_id;
+                    $auditByAccount[$link->account_id]['line'][] = $link->line_item_id;
                 }
             });
 
         // Bank flows for the cash cross-checks (V05/V06).
-        $bankFlows = DB::table("ifrs_ledgers as l")
-            ->join("ifrs_accounts as a", "a.id", "=", "l.post_account")
-            ->where("a.entity_id", $entity->id)
-            ->where("a.account_type", Account::BANK)
-            ->whereBetween("l.posting_date", [$fyStart, $fyEndDate])
-            ->whereNull("l.deleted_at")
+        $bankFlows = DB::table('ifrs_ledgers as l')
+            ->join('ifrs_accounts as a', 'a.id', '=', 'l.post_account')
+            ->where('a.entity_id', $entity->id)
+            ->where('a.account_type', Account::BANK)
+            ->whereBetween('l.posting_date', [$fyStart, $fyEndDate])
+            ->whereNull('l.deleted_at')
             ->selectRaw("SUM(CASE WHEN l.entry_type = 'D' THEN l.amount ELSE 0 END) as inflows,
                 SUM(CASE WHEN l.entry_type = 'C' THEN l.amount ELSE 0 END) as outflows")
             ->first();
@@ -1350,18 +1363,18 @@ class ReportController extends Controller
         // GST collected/paid from the accounts the entity's Vats post to
         // (seeded "GST 10%" → account 2200): credits are GST collected on
         // receipts, debits are GST paid on payments.
-        $vatAccountIds = DB::table("ifrs_vats")
-            ->where("entity_id", $entity->id)
-            ->whereNotNull("account_id")
-            ->pluck("account_id")
+        $vatAccountIds = DB::table('ifrs_vats')
+            ->where('entity_id', $entity->id)
+            ->whereNotNull('account_id')
+            ->pluck('account_id')
             ->unique()
             ->values();
-        $gst = (object) ["collected" => 0.0, "paid" => 0.0];
+        $gst = (object) ['collected' => 0.0, 'paid' => 0.0];
         if ($vatAccountIds->isNotEmpty()) {
-            $gst = DB::table("ifrs_ledgers")
-                ->whereIn("post_account", $vatAccountIds)
-                ->whereBetween("posting_date", [$fyStart, $fyEndDate])
-                ->whereNull("deleted_at")
+            $gst = DB::table('ifrs_ledgers')
+                ->whereIn('post_account', $vatAccountIds)
+                ->whereBetween('posting_date', [$fyStart, $fyEndDate])
+                ->whereNull('deleted_at')
                 ->selectRaw("SUM(CASE WHEN entry_type = 'C' THEN amount ELSE 0 END) as collected,
                     SUM(CASE WHEN entry_type = 'D' THEN amount ELSE 0 END) as paid")
                 ->first();
@@ -1372,43 +1385,45 @@ class ReportController extends Controller
             $rows = [];
             foreach ($defs as $label => $def) {
                 $rows[$label] = [
-                    "item" => "6",
-                    "label" => $label,
-                    "name" => $def["name"],
-                    "note" => $def["note"] ?? null,
-                    "accounts" => [],
-                    "amount" => 0.0,
-                    "total" => (bool) ($def["total"] ?? false),
-                    "sourced" => !empty($def["accounts"]),
-                    "transaction_ids" => [],
-                    "line_item_ids" => [],
+                    'item' => '6',
+                    'label' => $label,
+                    'name' => $def['name'],
+                    'note' => $def['note'] ?? null,
+                    'accounts' => [],
+                    'amount' => 0.0,
+                    'total' => (bool) ($def['total'] ?? false),
+                    'sourced' => ! empty($def['accounts']),
+                    'transaction_ids' => [],
+                    'line_item_ids' => [],
                 ];
             }
+
             return $rows;
         };
-        $incomeRows = $makeRows($config["income_labels"]);
-        $expenseRows = $makeRows($config["expense_labels"]);
+        $incomeRows = $makeRows($config['income_labels']);
+        $expenseRows = $makeRows($config['expense_labels']);
 
         $accountMap = function (array $defs): array {
             $map = [];
             foreach ($defs as $label => $def) {
-                foreach ($def["accounts"] ?? [] as $code) {
+                foreach ($def['accounts'] ?? [] as $code) {
                     $map[(int) $code] = $label;
                 }
             }
+
             return $map;
         };
-        $incomeAccountMap = $accountMap($config["income_labels"]);
-        $expenseAccountMap = $accountMap($config["expense_labels"]);
+        $incomeAccountMap = $accountMap($config['income_labels']);
+        $expenseAccountMap = $accountMap($config['expense_labels']);
 
         $assignAccount = function (array &$rows, string $label, object $m, float $net, array $audit): void {
-            $rows[$label]["accounts"][] = [
-                "code" => $m->code, "name" => $m->name, "amount" => round($net),
+            $rows[$label]['accounts'][] = [
+                'code' => $m->code, 'name' => $m->name, 'amount' => round($net),
             ];
-            $rows[$label]["amount"] += $net;
-            $rows[$label]["sourced"] = true;
-            $rows[$label]["transaction_ids"] = array_merge($rows[$label]["transaction_ids"], $audit["txn"] ?? []);
-            $rows[$label]["line_item_ids"] = array_merge($rows[$label]["line_item_ids"], $audit["line"] ?? []);
+            $rows[$label]['amount'] += $net;
+            $rows[$label]['sourced'] = true;
+            $rows[$label]['transaction_ids'] = array_merge($rows[$label]['transaction_ids'], $audit['txn'] ?? []);
+            $rows[$label]['line_item_ids'] = array_merge($rows[$label]['line_item_ids'], $audit['line'] ?? []);
         };
 
         $nonDeductible = 0.0;
@@ -1417,7 +1432,7 @@ class ReportController extends Controller
         $capitalAccounts = [];
         $dividendsPaid = 0.0;
         $salaryTotal = 0.0;
-        $salaryAccounts = array_map("intval", $config["salary_expense_accounts"]);
+        $salaryAccounts = array_map('intval', $config['salary_expense_accounts']);
 
         foreach ($accountMovements as $m) {
             $isRevenue = in_array($m->account_type, $revenueTypes);
@@ -1427,21 +1442,23 @@ class ReportController extends Controller
             $audit = $auditByAccount[$m->id] ?? [];
             $flag = $flags[(int) $m->code] ?? null;
 
-            if ($flag === "excluded") {
+            if ($flag === 'excluded') {
                 continue;
             }
 
             if ($m->account_type === Account::NON_CURRENT_ASSET) {
                 // Capital purchases: reference data for Item 10 (SBE
                 // simplified depreciation), never an Item 6 deduction.
-                $capitalAccounts[] = ["code" => $m->code, "name" => $m->name, "amount" => round($net)];
+                $capitalAccounts[] = ['code' => $m->code, 'name' => $m->name, 'amount' => round($net)];
+
                 continue;
             }
 
             if ($m->account_type === Account::EQUITY) {
-                if ((int) $m->code === (int) $config["dividends_paid_account"]) {
+                if ((int) $m->code === (int) $config['dividends_paid_account']) {
                     $dividendsPaid = round($net);
                 }
+
                 // Other equity movements (share capital, injections) do
                 // not appear on the return's sourced labels; they are
                 // covered by the V05 bank-flow explanation note.
@@ -1450,24 +1467,24 @@ class ReportController extends Controller
 
             if ($isRevenue) {
                 $mapped = $incomeAccountMap[(int) $m->code] ?? null;
-                $label = $mapped ?? ($config["fallback"][$m->account_type] ?? "R");
+                $label = $mapped ?? ($config['fallback'][$m->account_type] ?? 'R');
                 if ($mapped === null) {
                     $warnings[] = "Income account {$m->code} {$m->name} is not mapped in config/ato_tax_report.php — reported at Item 6 label {$label}.";
                 }
                 $assignAccount($incomeRows, $label, $m, $net, $audit);
-                if ($flag === "non_assessable_exempt") {
+                if ($flag === 'non_assessable_exempt') {
                     $exemptIncome += $net;
-                } elseif ($flag === "non_assessable_other") {
+                } elseif ($flag === 'non_assessable_other') {
                     $otherNonAssessable += $net;
                 }
             } else {
                 $mapped = $expenseAccountMap[(int) $m->code] ?? null;
-                $label = $mapped ?? $config["fallback"]["expense"];
+                $label = $mapped ?? $config['fallback']['expense'];
                 if ($mapped === null) {
                     $warnings[] = "Expense account {$m->code} {$m->name} is not mapped in config/ato_tax_report.php — reported at Item 6 label {$label}.";
                 }
                 $assignAccount($expenseRows, $label, $m, $net, $audit);
-                if ($flag === "non_deductible") {
+                if ($flag === 'non_deductible') {
                     $nonDeductible += $net;
                 }
                 if (in_array((int) $m->code, $salaryAccounts)) {
@@ -1479,37 +1496,37 @@ class ReportController extends Controller
         // Round each label to whole dollars, then derive totals from the
         // rounded labels so V01–V04 hold exactly (spec V08).
         foreach ($incomeRows as $label => &$row) {
-            if (!$row["total"]) {
-                $row["amount"] = round($row["amount"]);
-                $row["transaction_ids"] = implode(",", array_unique($row["transaction_ids"]));
-                $row["line_item_ids"] = implode(",", array_unique($row["line_item_ids"]));
+            if (! $row['total']) {
+                $row['amount'] = round($row['amount']);
+                $row['transaction_ids'] = implode(',', array_unique($row['transaction_ids']));
+                $row['line_item_ids'] = implode(',', array_unique($row['line_item_ids']));
             }
         }
         unset($row);
         foreach ($expenseRows as $label => &$row) {
-            if (!$row["total"]) {
-                $row["amount"] = round($row["amount"]);
-                $row["transaction_ids"] = implode(",", array_unique($row["transaction_ids"]));
-                $row["line_item_ids"] = implode(",", array_unique($row["line_item_ids"]));
+            if (! $row['total']) {
+                $row['amount'] = round($row['amount']);
+                $row['transaction_ids'] = implode(',', array_unique($row['transaction_ids']));
+                $row['line_item_ids'] = implode(',', array_unique($row['line_item_ids']));
             }
         }
         unset($row);
 
         $sumNonTotals = fn (array $rows) => round(array_sum(array_map(
-            fn ($r) => $r["total"] ? 0 : $r["amount"], array_values($rows)
+            fn ($r) => $r['total'] ? 0 : $r['amount'], array_values($rows)
         )));
 
         $totalIncome = $sumNonTotals($incomeRows);
         $totalExpenses = $sumNonTotals($expenseRows);
-        $incomeRows["S"]["amount"] = $totalIncome;
-        $expenseRows["Q"]["amount"] = $totalExpenses;
+        $incomeRows['S']['amount'] = $totalIncome;
+        $expenseRows['Q']['amount'] = $totalExpenses;
 
         $profitOrLoss = $totalIncome - $totalExpenses; // 6-T
         $nonDeductible = round($nonDeductible);
         $exemptIncome = round($exemptIncome);
         $otherNonAssessable = round($otherNonAssessable);
         $taxableIncome = $profitOrLoss + $nonDeductible - $exemptIncome - $otherNonAssessable; // 7-T
-        $capitalTotal = array_sum(array_column($capitalAccounts, "amount"));
+        $capitalTotal = array_sum(array_column($capitalAccounts, 'amount'));
 
         $gstCollected = round((float) $gst->collected);
         $gstPaid = round((float) $gst->paid);
@@ -1520,7 +1537,7 @@ class ReportController extends Controller
         // Balance rows — the same basis as the trial balance).
         $asAtBalance = function (array $types) use ($entity, $fyEndDate): float {
             $total = 0.0;
-            foreach (Account::where("entity_id", $entity->id)->whereIn("account_type", $types)->get() as $account) {
+            foreach (Account::where('entity_id', $entity->id)->whereIn('account_type', $types)->get() as $account) {
                 $total += (float) Ledger::balance(
                     $account,
                     Carbon::create(2000, 1, 1),
@@ -1529,6 +1546,7 @@ class ReportController extends Controller
                 )[$entity->currency_id];
                 $total += OpeningBalances::effectiveOpening($account, $entity);
             }
+
             return $total;
         };
         $tradeDebtors = round($asAtBalance([Account::RECEIVABLE]));
@@ -1548,28 +1566,28 @@ class ReportController extends Controller
         // Non-cash P&L ledger rows excluded by the bank filter (V07).
         // Closing entries would otherwise dominate this count: they are
         // non-bank transactions hitting P&L accounts by design.
-        $nonCashRows = DB::table("ifrs_ledgers as l")
-            ->join("ifrs_transactions as t", "t.id", "=", "l.transaction_id")
-            ->join("ifrs_accounts as a", "a.id", "=", "l.post_account")
-            ->join("ifrs_accounts as main", "main.id", "=", "t.account_id")
-            ->where("a.entity_id", $entity->id)
-            ->whereIn("a.account_type", [...$revenueTypes, ...$expenseTypes])
-            ->where("main.account_type", "!=", Account::BANK)
-            ->whereBetween("l.posting_date", [$fyStart, $fyEndDate])
-            ->whereNull("l.deleted_at")
-            ->whereNull("t.deleted_at")
-            ->where(fn ($q) => $q->whereNull("t.reference")->orWhereNot("t.reference", "like", FiscalYearClose::CLOSING_REFERENCE_PREFIX . "%"))
+        $nonCashRows = DB::table('ifrs_ledgers as l')
+            ->join('ifrs_transactions as t', 't.id', '=', 'l.transaction_id')
+            ->join('ifrs_accounts as a', 'a.id', '=', 'l.post_account')
+            ->join('ifrs_accounts as main', 'main.id', '=', 't.account_id')
+            ->where('a.entity_id', $entity->id)
+            ->whereIn('a.account_type', [...$revenueTypes, ...$expenseTypes])
+            ->where('main.account_type', '!=', Account::BANK)
+            ->whereBetween('l.posting_date', [$fyStart, $fyEndDate])
+            ->whereNull('l.deleted_at')
+            ->whereNull('t.deleted_at')
+            ->where(fn ($q) => $q->whereNull('t.reference')->orWhereNot('t.reference', 'like', FiscalYearClose::CLOSING_REFERENCE_PREFIX.'%'))
             ->count();
 
         // Data completeness: best-effort posting means payments can exist
         // without ever reaching the ledger.
-        $unpostedPayments = Payment::whereNull("ifrs_receipt_id")
-            ->where("status", "!=", Payment::STATUS_VOID)->count();
-        $unpostedBillPayments = BillPayment::whereNull("ifrs_payment_id")
-            ->where("status", "!=", BillPayment::STATUS_VOID)->count();
+        $unpostedPayments = Payment::whereNull('ifrs_receipt_id')
+            ->where('status', '!=', Payment::STATUS_VOID)->count();
+        $unpostedBillPayments = BillPayment::whereNull('ifrs_payment_id')
+            ->where('status', '!=', BillPayment::STATUS_VOID)->count();
         if ($unpostedPayments || $unpostedBillPayments) {
             $warnings[] = sprintf(
-                "%d client payment(s) and %d bill payment(s) are not posted to the IFRS ledger and are excluded from this report.",
+                '%d client payment(s) and %d bill payment(s) are not posted to the IFRS ledger and are excluded from this report.',
                 $unpostedPayments,
                 $unpostedBillPayments
             );
@@ -1579,118 +1597,145 @@ class ReportController extends Controller
         $validations = [];
         $addValidation = function (string $code, string $description, bool $pass, string $detail) use (&$validations): void {
             $validations[] = [
-                "code" => $code,
-                "description" => $description,
-                "status" => $pass ? "PASS" : "FAIL",
-                "detail" => $detail,
+                'code' => $code,
+                'description' => $description,
+                'status' => $pass ? 'PASS' : 'FAIL',
+                'detail' => $detail,
             ];
         };
 
         $negativeLabels = [];
         foreach ([...$incomeRows, ...$expenseRows] as $row) {
-            if (!$row["total"] && $row["amount"] < 0) {
+            if (! $row['total'] && $row['amount'] < 0) {
                 $negativeLabels[] = "6-{$row['label']} {$row['name']}";
             }
         }
 
-        $taxRate = (float) $config["company_tax_rate"];
+        // The Calculation statement estimate follows the company profile's
+        // tax rate classification (base rate entity vs other company),
+        // falling back to the report config when unclassified.
+        $taxRate = CompanyProfile::effectiveTaxRate($entity?->id)
+            ?: (float) $config['company_tax_rate'];
         $estimatedTax = max(0, $taxableIncome) * $taxRate / 100;
 
-        $addValidation("V01", "Total income label equals sum of income field amounts", true,
+        $addValidation('V01', 'Total income label equals sum of income field amounts', true,
             "6-S {$totalIncome} is the sum of the rounded income labels.");
-        $addValidation("V02", "Total expenses label equals sum of expense field amounts", true,
+        $addValidation('V02', 'Total expenses label equals sum of expense field amounts', true,
             "6-Q {$totalExpenses} is the sum of the rounded expense labels.");
-        $addValidation("V03", "Net profit or loss equals total income minus total expenses", true,
+        $addValidation('V03', 'Net profit or loss equals total income minus total expenses', true,
             "6-T {$profitOrLoss} = 6-S {$totalIncome} − 6-Q {$totalExpenses}.");
-        $addValidation("V04", "Taxable income equals net profit plus add-backs less subtractions", true,
+        $addValidation('V04', 'Taxable income equals net profit plus add-backs less subtractions', true,
             "7-T {$taxableIncome} = 6-T {$profitOrLoss} + 7-W {$nonDeductible} − 7-V {$exemptIncome} − 7-Q {$otherNonAssessable}.");
 
         $inflowGap = $bankInflows - ($totalIncome + $gstCollected + $exemptIncome + $otherNonAssessable);
-        $addValidation("V05", "Bank inflows reconcile to income plus GST collected plus non-assessable receipts",
+        $addValidation('V05', 'Bank inflows reconcile to income plus GST collected plus non-assessable receipts',
             abs($inflowGap) <= 1,
-            "Bank inflows {$bankInflows} vs expected " . ($bankInflows - $inflowGap)
-            . ". Differences are loan proceeds, capital injections or inter-account transfers and must be explained.");
+            "Bank inflows {$bankInflows} vs expected ".($bankInflows - $inflowGap)
+            .'. Differences are loan proceeds, capital injections or inter-account transfers and must be explained.');
 
         $outflowGap = $bankOutflows - ($totalExpenses + $gstPaid + $capitalTotal);
-        $addValidation("V06", "Bank outflows reconcile to expenses plus GST paid plus capital purchases",
+        $addValidation('V06', 'Bank outflows reconcile to expenses plus GST paid plus capital purchases',
             abs($outflowGap) <= 1,
-            "Bank outflows {$bankOutflows} vs expected " . ($bankOutflows - $outflowGap)
-            . ". Non-deductible expenses are already inside 6-Q (added back at 7-W).");
+            "Bank outflows {$bankOutflows} vs expected ".($bankOutflows - $outflowGap)
+            .'. Non-deductible expenses are already inside 6-Q (added back at 7-W).');
 
-        $addValidation("V07", "No non-cash transaction included", true,
+        $addValidation('V07', 'No non-cash transaction included', true,
             "{$nonCashRows} non-bank P&L ledger rows excluded (depreciation, revaluations, forex).");
-        $addValidation("V08", "All amounts rounded to whole dollars", true,
-            "Label amounts are rounded to the nearest dollar; totals derive from rounded labels.");
-        $addValidation("V09", "No negative amounts except loss fields", empty($negativeLabels),
+        $addValidation('V08', 'All amounts rounded to whole dollars', true,
+            'Label amounts are rounded to the nearest dollar; totals derive from rounded labels.');
+        $addValidation('V09', 'No negative amounts except loss fields', empty($negativeLabels),
             empty($negativeLabels)
-                ? "All label amounts are zero or positive."
-                : "Negative labels: " . implode(", ", $negativeLabels) . " (net refunds) — review before lodging.");
-        $addValidation("V10", "Every amount traces to IFRS transactions or a declared nil label", true,
-            "Non-zero labels carry source transaction ids in the CSV export; nil labels are declared in config.");
-        $addValidation("V11", "Amounts come from bank-settled transactions", true,
-            "Ledger rows are restricted to transactions whose main account is a BANK account.");
-        $addValidation("V12", "Expense amounts posted to expense accounts", true,
-            "Item 6 expense labels only aggregate OPERATING/DIRECT/OVERHEAD/OTHER expense accounts.");
-        $addValidation("V13", "GST excluded per registration status", $vatAccountIds->isNotEmpty(),
+                ? 'All label amounts are zero or positive.'
+                : 'Negative labels: '.implode(', ', $negativeLabels).' (net refunds) — review before lodging.');
+        $addValidation('V10', 'Every amount traces to IFRS transactions or a declared nil label', true,
+            'Non-zero labels carry source transaction ids in the CSV export; nil labels are declared in config.');
+        $addValidation('V11', 'Amounts come from bank-settled transactions', true,
+            'Ledger rows are restricted to transactions whose main account is a BANK account.');
+        $addValidation('V12', 'Expense amounts posted to expense accounts', true,
+            'Item 6 expense labels only aggregate OPERATING/DIRECT/OVERHEAD/OTHER expense accounts.');
+        $addValidation('V13', 'GST excluded per registration status', $vatAccountIds->isNotEmpty(),
             $vatAccountIds->isNotEmpty()
                 ? "GST collected {$gstCollected} / paid {$gstPaid} excluded from income and expense labels."
-                : "No Vat configured for the entity — GST treatment unverifiable.");
+                : 'No Vat configured for the entity — GST treatment unverifiable.');
 
         $reconciliation = [
-            ["label" => "6-T", "name" => "Total profit or loss (cash basis)", "amount" => $profitOrLoss, "note" => null, "total" => false],
-            ["label" => "7-W", "name" => "Add back: Non-deductible expenses", "amount" => $nonDeductible,
-                "note" => "Meals & entertainment, income tax and franking deficit tax paid (flagged in config)", "total" => false],
-            ["label" => "7-V", "name" => "Less: Exempt income", "amount" => $exemptIncome, "note" => null, "total" => false],
-            ["label" => "7-Q", "name" => "Less: Other income not included in assessable income", "amount" => $otherNonAssessable, "note" => null, "total" => false],
-            ["label" => "7-F", "name" => "Less: Decline in value of depreciating assets", "amount" => null,
-                "note" => "Left blank — SBE claims simplified depreciation at Item 10", "total" => false],
-            ["label" => "7-R", "name" => "Less: Tax losses deducted", "amount" => 0,
-                "note" => "Prior-year losses are not tracked by the system", "total" => false],
-            ["label" => "7-T", "name" => "Taxable or net income or loss", "amount" => $taxableIncome, "note" => null, "total" => true],
+            ['label' => '6-T', 'name' => 'Total profit or loss (cash basis)', 'amount' => $profitOrLoss, 'note' => null, 'total' => false],
+            ['label' => '7-W', 'name' => 'Add back: Non-deductible expenses', 'amount' => $nonDeductible,
+                'note' => 'Meals & entertainment, income tax and franking deficit tax paid (flagged in config)', 'total' => false],
+            ['label' => '7-V', 'name' => 'Less: Exempt income', 'amount' => $exemptIncome, 'note' => null, 'total' => false],
+            ['label' => '7-Q', 'name' => 'Less: Other income not included in assessable income', 'amount' => $otherNonAssessable, 'note' => null, 'total' => false],
+            ['label' => '7-F', 'name' => 'Less: Decline in value of depreciating assets', 'amount' => null,
+                'note' => 'Left blank — SBE claims simplified depreciation at Item 10', 'total' => false],
+            ['label' => '7-R', 'name' => 'Less: Tax losses deducted', 'amount' => 0,
+                'note' => 'Prior-year losses are not tracked by the system', 'total' => false],
+            ['label' => '7-T', 'name' => 'Taxable or net income or loss', 'amount' => $taxableIncome, 'note' => null, 'total' => true],
         ];
 
+        // Item 8 J/K: the franked/unfranked split of dividends paid, from
+        // the runs settled in the year (the ledger's account 3400 movement
+        // is the total; the declarations' franking percentages split it).
+        $dividendRuns = DividendDeclaration::query()
+            ->where('entity_id', $entity->id)
+            ->where('status', DividendDeclaration::STATUS_COMPLETED)
+            ->whereBetween('payment_date', [$fyStart->toDateString(), $fyEndDate->toDateString()])
+            ->get();
+        $frankedDividends = round($dividendRuns->sum(fn ($d) => $d->frankedCashPortion()));
+        $unfrankedDividends = round($dividendRuns->sum(fn ($d) => $d->unfrankedCashPortion()));
+        if (($frankedDividends + $unfrankedDividends) > 0 && abs($frankedDividends + $unfrankedDividends - $dividendsPaid) > 1) {
+            $warnings[] = sprintf(
+                'Dividends settled per the dividend module (%d) differ from ledger account %d movement (%d) — manual journals to that account are not reflected in the 8-J/8-K split.',
+                $frankedDividends + $unfrankedDividends,
+                $config['dividends_paid_account'],
+                $dividendsPaid,
+            );
+        }
+        $frankingOpening = round(FrankingService::openingBalance($fyEnd - 1, $entity->id));
+        $frankingClosing = round(FrankingService::closingBalance($fyEnd - 1, $entity->id));
+
         $financialInfo = [
-            ["label" => "C", "name" => "Trade debtors", "amount" => $tradeDebtors, "note" => null],
-            ["label" => "D", "name" => "All current assets", "amount" => $currentAssets, "note" => null],
-            ["label" => "E", "name" => "Total assets", "amount" => $totalAssets, "note" => null],
-            ["label" => "F", "name" => "Trade creditors", "amount" => $tradeCreditors, "note" => null],
-            ["label" => "G", "name" => "All current liabilities", "amount" => $currentLiabilities, "note" => null],
-            ["label" => "H", "name" => "Total liabilities", "amount" => $totalLiabilities, "note" => null],
-            ["label" => "D", "name" => "Total salary and wage expenses", "amount" => round($salaryTotal),
-                "note" => "Information label — accounts " . implode(", ", $salaryAccounts) . " (no payroll ledger kept)"],
-            ["label" => "J", "name" => "Franked dividends paid", "amount" => $dividendsPaid,
-                "note" => "Account {$config['dividends_paid_account']} — expected nil until the dividend module exists"],
-            ["label" => "K", "name" => "Unfranked dividends paid", "amount" => 0,
-                "note" => "Requires dividend/franking module (unbuilt)"],
-            ["label" => "P/M", "name" => "Franking account balance (opening/closing)", "amount" => null,
-                "note" => "Not tracked — franking module not implemented"],
+            ['label' => 'C', 'name' => 'Trade debtors', 'amount' => $tradeDebtors, 'note' => null],
+            ['label' => 'D', 'name' => 'All current assets', 'amount' => $currentAssets, 'note' => null],
+            ['label' => 'E', 'name' => 'Total assets', 'amount' => $totalAssets, 'note' => null],
+            ['label' => 'F', 'name' => 'Trade creditors', 'amount' => $tradeCreditors, 'note' => null],
+            ['label' => 'G', 'name' => 'All current liabilities', 'amount' => $currentLiabilities, 'note' => null],
+            ['label' => 'H', 'name' => 'Total liabilities', 'amount' => $totalLiabilities, 'note' => null],
+            ['label' => 'D', 'name' => 'Total salary and wage expenses', 'amount' => round($salaryTotal),
+                'note' => 'Information label — accounts '.implode(', ', $salaryAccounts).' (no payroll ledger kept)'],
+            ['label' => 'J', 'name' => 'Franked dividends paid', 'amount' => $frankedDividends,
+                'note' => 'Franked portion of the dividend runs settled in the year'],
+            ['label' => 'K', 'name' => 'Unfranked dividends paid', 'amount' => $unfrankedDividends,
+                'note' => 'Unfranked portion of the dividend runs settled in the year'],
+            ['label' => 'P', 'name' => 'Franking account balance — opening', 'amount' => $frankingOpening,
+                'note' => 'Per the franking account ledger'],
+            ['label' => 'M', 'name' => 'Franking account balance — closing', 'amount' => $frankingClosing,
+                'note' => 'Per the franking account ledger'],
         ];
 
         return [
-            "fyStart" => $fyStart,
-            "fyEnd" => $fyEndDate,
-            "fyEndYear" => $fyEnd,
-            "entity" => [
-                "name" => $entity?->name ?? "",
+            'fyStart' => $fyStart,
+            'fyEnd' => $fyEndDate,
+            'fyEndYear' => $fyEnd,
+            'entity' => [
+                'name' => $entity?->name ?? '',
                 // Profile first, legacy env config as fallback.
-                "abn" => CompanyProfile::effectiveAbn($entity?->id),
-                "tfn" => CompanyProfile::effectiveTfn($entity?->id),
+                'abn' => CompanyProfile::effectiveAbn($entity?->id),
+                'tfn' => CompanyProfile::effectiveTfn($entity?->id),
             ],
-            "income" => $incomeRows,
-            "expenses" => $expenseRows,
-            "totalIncome" => $totalIncome,
-            "totalExpenses" => $totalExpenses,
-            "profitOrLoss" => $profitOrLoss,
-            "reconciliation" => $reconciliation,
-            "taxableIncome" => $taxableIncome,
-            "financialInfo" => $financialInfo,
-            "capitalPurchases" => ["accounts" => $capitalAccounts, "total" => $capitalTotal],
-            "gst" => ["collected" => $gstCollected, "paid" => $gstPaid],
-            "bank" => ["inflows" => $bankInflows, "outflows" => $bankOutflows],
-            "taxRate" => $taxRate,
-            "estimatedTax" => round($estimatedTax),
-            "validations" => $validations,
-            "warnings" => $warnings,
+            'income' => $incomeRows,
+            'expenses' => $expenseRows,
+            'totalIncome' => $totalIncome,
+            'totalExpenses' => $totalExpenses,
+            'profitOrLoss' => $profitOrLoss,
+            'reconciliation' => $reconciliation,
+            'taxableIncome' => $taxableIncome,
+            'financialInfo' => $financialInfo,
+            'capitalPurchases' => ['accounts' => $capitalAccounts, 'total' => $capitalTotal],
+            'gst' => ['collected' => $gstCollected, 'paid' => $gstPaid],
+            'bank' => ['inflows' => $bankInflows, 'outflows' => $bankOutflows],
+            'taxRate' => $taxRate,
+            'estimatedTax' => round($estimatedTax),
+            'validations' => $validations,
+            'warnings' => $warnings,
         ];
     }
 }

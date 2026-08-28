@@ -2,6 +2,19 @@
 
 namespace App\Services;
 
+use App\Models\BankTransaction;
+use App\Models\Bill;
+use App\Models\BillPayment;
+use App\Models\Client;
+use App\Models\DividendDeclaration;
+use App\Models\DividendDistribution;
+use App\Models\FrankingAccountEntry;
+use App\Models\Invoice;
+use App\Models\Payment;
+use App\Models\Project;
+use App\Models\PurchaseOrder;
+use App\Models\Shareholding;
+use App\Models\TimeEntry;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
 
@@ -10,19 +23,25 @@ class AuditService
     protected array $ignoredFields = ['updated_at', 'remember_token'];
 
     protected array $modelsToAudit = [
-        \App\Models\Invoice::class,
-        \App\Models\Payment::class,
-        \App\Models\Client::class,
-        \App\Models\Bill::class,
-        \App\Models\BillPayment::class,
-        \App\Models\Project::class,
-        \App\Models\PurchaseOrder::class,
-        \App\Models\TimeEntry::class,
-        \App\Models\BankTransaction::class,
+        Invoice::class,
+        Payment::class,
+        Client::class,
+        Bill::class,
+        BillPayment::class,
+        Project::class,
+        PurchaseOrder::class,
+        TimeEntry::class,
+        BankTransaction::class,
+        Shareholding::class,
+        FrankingAccountEntry::class,
+        DividendDeclaration::class,
+        DividendDistribution::class,
     ];
 
     public const ACTION_CREATED = 'created';
+
     public const ACTION_UPDATED = 'updated';
+
     public const ACTION_DELETED = 'deleted';
 
     /**
@@ -157,7 +176,7 @@ class AuditService
      */
     public function addModelToAudit(string $modelType): void
     {
-        if (!in_array($modelType, $this->modelsToAudit)) {
+        if (! in_array($modelType, $this->modelsToAudit)) {
             $this->modelsToAudit[] = $modelType;
         }
     }
@@ -169,7 +188,7 @@ class AuditService
     {
         $this->modelsToAudit = array_filter(
             $this->modelsToAudit,
-            fn($type) => $type !== $modelType
+            fn ($type) => $type !== $modelType
         );
     }
 }
