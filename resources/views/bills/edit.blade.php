@@ -16,15 +16,19 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Supplier *</label>
-                    <select name="supplier_id" id="supplierSelect" required
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
-                        <option value="">Select Supplier</option>
-                        @foreach ($suppliers as $id => $name)
-                            <option value="{{ $id }}"
-                                {{ old('supplier_id', $bill->supplier_id) == $id ? 'selected' : '' }}>{{ $name }}
-                            </option>
-                        @endforeach
-                    </select>
+                    <div class="flex gap-2">
+                        <select name="supplier_id" id="supplierSelect" required
+                            class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full flex-1">
+                            <option value="">Select Supplier</option>
+                            @foreach ($suppliers as $id => $name)
+                                <option value="{{ $id }}"
+                                    {{ old('supplier_id', $bill->supplier_id) == $id ? 'selected' : '' }}>{{ $name }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <button type="button" id="addSupplierBtn" title="Add Supplier"
+                            class="shrink-0 self-stretch px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-bold">+</button>
+                    </div>
                     @error('supplier_id')
                         <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
                     @enderror
@@ -348,6 +352,8 @@
     </template>
 
     <x-document-upload :model="$bill" hint="Attach the supplier's invoice or receipt — PDF, JPG, PNG, DOC up to 20MB" />
+
+    @include('bills.partials.quick-supplier')
 
     @push('scripts')
         <script>
