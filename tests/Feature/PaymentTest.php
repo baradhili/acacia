@@ -393,6 +393,143 @@ class PaymentTest extends TestCase
             ->where('entry_type', \IFRS\Models\Balance::CREDIT)->sum('amount'));
     }
 
+    public function test_allocation_groups_split_taxable_and_free_shares(): void
+    {
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_SENT,
+        ]);
+        $invoice->items()->createMany([
+            ['description' => 'Consulting', 'quantity' => 1, 'unit_price' => 100, 'tax_rate' => 10], // $110 incl GST
+            ['description' => 'Export service', 'quantity' => 1, 'unit_price' => 50, 'tax_rate' => 0], // $50 GST-free
+            ['description' => 'Consulting 2', 'quantity' => 1, 'unit_price' => 200, 'tax_rate' => 10], // $220 incl GST
+        ]);
+        $invoice->refresh();
+        $invoice->recalculateTotals();
+
+        // A 20% allocation of the $380 total: taxable $66 + GST-free
+        // $10 — the last item takes the remainder so shares sum exactly.
+        $this->assertSame(['gst' => 6600, 'free' => 1000], Payment::allocationGroups($invoice, 76.0));
+    }
+
+    public function test_mixed_gst_invoice_payment_apportions_revenue_and_gst(): void
+    {
+        $this->seedIfrs();
+
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_SENT,
+        ]);
+        $invoice->items()->createMany([
+            ['description' => 'Consulting', 'quantity' => 1, 'unit_price' => 100, 'tax_rate' => 10], // $110 incl GST
+            ['description' => 'Export service', 'quantity' => 1, 'unit_price' => 50, 'tax_rate' => 0], // $50 GST-free
+        ]);
+        $invoice->refresh();
+        $invoice->recalculateTotals();
+
+        $payment = Payment::create([
+            'client_id' => $this->client->id,
+            'amount' => 160,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+        $payment->allocateToInvoice($invoice, 160);
+
+        $this->assertNotNull($payment->postToIFRS());
+
+        // Dr Bank 160; Cr Revenue 160 gross with the GST leg debiting 10
+        // back out (net 150 = 100 net taxable + the full 50 GST-free
+        // share); Cr GST Payable 10 — the GST-free share accrues no GST.
+        $this->assertEquals(160, $this->ledgerSum(320, \IFRS\Models\Balance::DEBIT));
+        $this->assertEquals(160, $this->ledgerSum(4100, \IFRS\Models\Balance::CREDIT));
+        $this->assertEquals(10, $this->ledgerSum(4100, \IFRS\Models\Balance::DEBIT));
+        $this->assertEquals(10, $this->ledgerSum(2200, \IFRS\Models\Balance::CREDIT));
+        $this->assertEquals(0, $this->ledgerSum(2200, \IFRS\Models\Balance::DEBIT));
+    }
+
+    public function test_partially_allocated_payment_posts_remainder_gst_inclusive(): void
+    {
+        $this->seedIfrs();
+
+        // The setUp invoice is $110 taxable. The payment allocates only
+        // half of its $220; the unallocated remainder keeps the default
+        // GST-inclusive treatment so the bank leg equals the payment.
+        $payment = Payment::create([
+            'client_id' => $this->client->id,
+            'amount' => 220,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+        $payment->allocateToInvoice($this->invoice, 110);
+
+        $this->assertNotNull($payment->postToIFRS());
+
+        $this->assertEquals(220, $this->ledgerSum(320, \IFRS\Models\Balance::DEBIT));
+        $this->assertEquals(220, $this->ledgerSum(4100, \IFRS\Models\Balance::CREDIT)); // gross; net 200 after the GST leg
+        $this->assertEquals(20, $this->ledgerSum(4100, \IFRS\Models\Balance::DEBIT));
+        $this->assertEquals(20, $this->ledgerSum(2200, \IFRS\Models\Balance::CREDIT)); // 10 + 10
+    }
+
+    public function test_credit_note_refund_of_mixed_invoice_nets_ledger_to_zero(): void
+    {
+        $this->seedIfrs();
+
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_SENT,
+        ]);
+        $invoice->items()->createMany([
+            ['description' => 'Consulting', 'quantity' => 1, 'unit_price' => 100, 'tax_rate' => 10], // $110 incl GST
+            ['description' => 'Export service', 'quantity' => 1, 'unit_price' => 50, 'tax_rate' => 0], // $50 GST-free
+        ]);
+        $invoice->refresh();
+        $invoice->recalculateTotals();
+
+        $payment = Payment::create([
+            'client_id' => $this->client->id,
+            'amount' => 160,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+        $payment->allocateToInvoice($invoice, 160);
+        $this->assertNotNull($payment->postToIFRS());
+
+        $creditNote = \App\Models\CreditNote::create([
+            'client_id' => $this->client->id,
+            'total' => -160,
+            'remaining_amount' => 160,
+            'status' => \App\Models\CreditNote::STATUS_ISSUED,
+        ]);
+
+        // The refund allocates to the same mixed invoice, so it must
+        // reverse the exact apportioned legs the receipt accrued.
+        $this->assertTrue($creditNote->applyToInvoice($invoice, 160));
+
+        foreach ([320, 4100, 2200] as $code) {
+            $net = $this->ledgerSum($code, \IFRS\Models\Balance::DEBIT)
+                - $this->ledgerSum($code, \IFRS\Models\Balance::CREDIT);
+            $this->assertEquals(0, $net, "Account {$code} should net to zero after the refund.");
+        }
+    }
+
+    /**
+     * Sum posted ledger rows for one IFRS account code and entry side.
+     */
+    protected function ledgerSum(int $code, string $entryType): float
+    {
+        $account = \IFRS\Models\Account::where('code', $code)->first();
+
+        return (float) \IFRS\Models\Ledger::where('post_account', $account->id)
+            ->where('entry_type', $entryType)
+            ->sum('amount');
+    }
+
     /**
      * Seed the minimum IFRS prerequisites for receipt posting: currency,
      * entity + reporting period, bank (320), revenue (4100), GST Payable
