@@ -45,6 +45,7 @@ class CompanyProfileController extends Controller
             'abn' => ['nullable', 'digits:11'],
             'tfn' => ['nullable', 'digits:9'],
             'acn' => ['nullable', 'digits:9'],
+            'tax_rate_type' => ['nullable', Rule::in([CompanyProfile::TAX_RATE_SMALL, CompanyProfile::TAX_RATE_COMPANY])],
             'address_line1' => ['nullable', 'string', 'max:100'],
             'address_line2' => ['nullable', 'string', 'max:100'],
             'suburb' => ['nullable', 'string', 'max:60'],

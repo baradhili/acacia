@@ -13,16 +13,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Franking credit rate
+    | Company tax rates
     |--------------------------------------------------------------------------
     |
-    | The corporate tax rate used to gross up franked dividends
-    | (franking credit = cash x franking% x rate / (100 - rate)). Base rate
-    | entities pay 25%, other companies 30% — override per declaration as
-    | needed; each declaration snapshots the rate in force.
+    | The corporate tax rates that drive the franking credit gross-up:
+    | base rate entities ("small" — aggregated turnover under $50m and
+    | ≤80% passive income) pay 25%, other companies 30%. The company
+    | profile's tax_rate_type classification selects which applies
+    | (CompanyProfile::effectiveTaxRate()); each declaration snapshots
+    | the rate in force and can still be overridden.
     |
     */
-    'franking_credit_rate' => (float) env('FRANKING_CREDIT_RATE', 30),
+    'tax_rates' => [
+        'small' => (float) env('COMPANY_TAX_RATE_SMALL', 25),
+        'company' => (float) env('COMPANY_TAX_RATE_COMPANY', 30),
+    ],
 
     /*
     |--------------------------------------------------------------------------

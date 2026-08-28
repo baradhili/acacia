@@ -61,9 +61,25 @@
                     @error('acn') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                 </div>
             </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium text-gray-700 mb-1" for="tax_rate_type">Company tax rate classification</label>
+                    <select id="tax_rate_type" name="tax_rate_type"
+                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        @foreach (\App\Models\CompanyProfile::taxRateTypes() as $value => $label)
+                            <option value="{{ $value }}" {{ old('tax_rate_type', $profile->tax_rate_type ?: 'small') === $value ? 'selected' : '' }}>
+                                {{ $label }} — {{ config('dividends.tax_rates')[$value] }}%
+                            </option>
+                        @endforeach
+                    </select>
+                    @error('tax_rate_type') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+                </div>
+            </div>
             <p class="text-xs text-gray-500 mt-3">
                 The ABN/TFN appear on the Company Tax Report (labels and CSV/PDF exports). When blank here, the
                 <code>COMPANY_ABN</code>/<code>COMPANY_TFN</code> environment values are used as a fallback.
+                The tax rate classification (base rate entities pay 25%, other companies 30%) sets the default
+                franking credit rate on dividend declarations and the report's tax estimate.
             </p>
         </div>
 

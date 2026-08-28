@@ -1595,7 +1595,11 @@ class ReportController extends Controller
             }
         }
 
-        $taxRate = (float) $config["company_tax_rate"];
+        // The Calculation statement estimate follows the company profile's
+        // tax rate classification (base rate entity vs other company),
+        // falling back to the report config when unclassified.
+        $taxRate = CompanyProfile::effectiveTaxRate($entity?->id)
+            ?: (float) $config["company_tax_rate"];
         $estimatedTax = max(0, $taxableIncome) * $taxRate / 100;
 
         $addValidation("V01", "Total income label equals sum of income field amounts", true,

@@ -15,11 +15,18 @@ use IFRS\Models\Entity;
  */
 class CompanyProfile extends Model
 {
+    /** Base rate entity (small company): aggregated turnover < $50m and ≤80% passive income. */
+    public const TAX_RATE_SMALL = 'small';
+
+    /** Any other company (30%). */
+    public const TAX_RATE_COMPANY = 'company';
+
     protected $fillable = [
         'entity_id',
         'abn',
         'tfn',
         'acn',
+        'tax_rate_type',
         'address_line1',
         'address_line2',
         'suburb',
@@ -29,6 +36,26 @@ class CompanyProfile extends Model
         'email',
         'phone',
     ];
+
+    public static function taxRateTypes(): array
+    {
+        return [
+            self::TAX_RATE_SMALL => 'Base rate entity (small company)',
+            self::TAX_RATE_COMPANY => 'Other company',
+        ];
+    }
+
+    /**
+     * The corporate tax rate this company pays, from its tax_rate_type
+     * classification — the rate the franking credit gross-up must use.
+     */
+    public static function effectiveTaxRate(?int $entityId = null): float
+    {
+        $type = static::forEntity($entityId)->tax_rate_type ?: self::TAX_RATE_SMALL;
+        $rates = config('dividends.tax_rates');
+
+        return (float) ($rates[$type] ?? $rates[self::TAX_RATE_SMALL] ?? 25);
+    }
 
     public function entity(): BelongsTo
     {

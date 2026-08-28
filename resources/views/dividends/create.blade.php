@@ -18,6 +18,11 @@
             (after approved-but-unpaid declarations and estimated entries). Approval is blocked if the calculated
             franking credits exceed this.
         </p>
+        <p class="text-sm text-gray-500 mb-4">
+            The franking credit rate defaults to the company's classification —
+            <strong>{{ $taxRateTypeLabel }}</strong> at {{ rtrim(rtrim(number_format($frankingRate, 2), '0'), '.') }}%.
+            The rate is snapshotted onto the declaration and can be overridden for this run only.
+        </p>
 
         <form method="POST" action="{{ route('dividends.store') }}">
             @csrf

@@ -414,6 +414,38 @@ class SharesAndDividendsTest extends TestCase
         $this->assertFalse((bool) $declaration->distributions()->where('company_shareholder_id', $this->bob->id)->value('statement_sent'));
     }
 
+    public function test_tax_rate_classification_drives_default_franking_rate(): void
+    {
+        // Default classification: base rate entity (small company, 25%).
+        $this->assertSame(25.0, CompanyProfile::effectiveTaxRate($this->entity->id));
+
+        $this->get(route('dividends.create'))
+            ->assertStatus(200)
+            ->assertSee('Base rate entity (small company)')
+            ->assertSee('value="25', false); // prefilled franking credit rate
+
+        // Reclassify as a regular company (30%) — the default rate follows.
+        $this->put(route('company-profile.update'), [
+            'tax_rate_type' => CompanyProfile::TAX_RATE_COMPANY,
+        ])->assertSessionHas('success');
+
+        $this->assertSame(30.0, CompanyProfile::effectiveTaxRate($this->entity->id));
+        $this->get(route('dividends.create'))
+            ->assertSee('Other company')
+            ->assertSee('value="30', false);
+    }
+
+    public function test_small_company_franking_gross_up_uses_its_own_rate(): void
+    {
+        // 25% classification: $75 cash fully franked attaches $25, not $32.14.
+        $declaration = $this->createDeclaration(['amount_per_share' => '0.075', 'franking_credit_rate' => '25']);
+        $this->post(route('dividends.calculate', $declaration));
+
+        $aliceLine = $declaration->distributions()->where('company_shareholder_id', $this->alice->id)->first();
+        $this->assertEquals(75.0, (float) $aliceLine->cash_dividend);
+        $this->assertEquals(25.0, (float) $aliceLine->franking_credit);
+    }
+
     public function test_dividend_screens_render_for_admin_and_block_staff(): void
     {
         $this->get(route('dividends.index'))->assertStatus(200);

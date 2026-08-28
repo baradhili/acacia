@@ -39,9 +39,12 @@ class DividendDeclarationController extends Controller
         [$entity, $profile] = $this->entityAndProfile();
         abort_unless((bool) $profile, 404, 'Maintain the company profile and share classes first.');
 
+        $taxRateType = $profile->tax_rate_type ?: CompanyProfile::TAX_RATE_SMALL;
+
         return view('dividends.create', [
             'shareClasses' => $profile->shareClasses()->active()->orderBy('code')->get(),
-            'frankingRate' => config('dividends.franking_credit_rate'),
+            'frankingRate' => CompanyProfile::effectiveTaxRate($entity->id),
+            'taxRateTypeLabel' => CompanyProfile::taxRateTypes()[$taxRateType] ?? $taxRateType,
             'frankingPercentage' => config('dividends.default_franking_percentage'),
             'availableFranking' => FrankingService::availableBalance(),
         ]);
