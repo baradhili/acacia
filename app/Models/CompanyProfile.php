@@ -54,6 +54,14 @@ class CompanyProfile extends Model
     }
 
     /**
+     * Classes of shares the company has issued (franking/dividend module).
+     */
+    public function shareClasses(): HasMany
+    {
+        return $this->hasMany(ShareClass::class)->orderBy('code');
+    }
+
+    /**
      * The profile for an entity, or a null-object stand-in when none has
      * been maintained yet, so callers can read ABN/TFN unconditionally.
      */

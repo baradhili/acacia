@@ -19,6 +19,10 @@ class AuditService
         \App\Models\PurchaseOrder::class,
         \App\Models\TimeEntry::class,
         \App\Models\BankTransaction::class,
+        \App\Models\Shareholding::class,
+        \App\Models\FrankingAccountEntry::class,
+        \App\Models\DividendDeclaration::class,
+        \App\Models\DividendDistribution::class,
     ];
 
     public const ACTION_CREATED = 'created';
