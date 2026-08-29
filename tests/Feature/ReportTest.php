@@ -289,4 +289,38 @@ class ReportTest extends TestCase
             $this->assertNotEquals(404, $response->status());
         }
     }
+
+    public function test_time_by_client_groups_project_less_entries_under_their_client(): void
+    {
+        $this->actingAs($this->user);
+
+        // Ad-hoc entry targeted at the client directly, no project.
+        TimeEntry::create([
+            'user_id' => $this->staff->id,
+            'client_id' => $this->client->id,
+            'entry_date' => '2024-01-16',
+            'hours' => 2.5,
+            'billable' => true,
+            'status' => TimeEntry::STATUS_APPROVED,
+        ]);
+
+        $response = $this->get(route('reports.time-by-client', [
+            'start_date' => '2024-01-01',
+            'end_date' => '2024-01-31',
+        ]));
+
+        $response->assertStatus(200);
+        $response->assertSee($this->client->name);
+        $response->assertSee('2.5');
+
+        // The client filter finds the project-less entry too.
+        $filtered = $this->get(route('reports.time-by-client', [
+            'start_date' => '2024-01-01',
+            'end_date' => '2024-01-31',
+            'client_id' => $this->client->id,
+        ]));
+
+        $filtered->assertStatus(200);
+        $filtered->assertSee($this->client->name);
+    }
 }

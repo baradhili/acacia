@@ -16,6 +16,7 @@ class TimeEntry extends Model
         'user_id',
         'project_id',
         'purchase_order_id',
+        'client_id',
         'entry_date',
         'start_time',
         'end_time',
@@ -57,6 +58,13 @@ class TimeEntry extends Model
             if ($entry->start_time && $entry->end_time) {
                 $entry->hours = $entry->calculateHours();
             }
+
+            // A project belongs to exactly one client — keep the
+            // denormalised client_id in sync so reporting and the
+            // unbilled-time queries can rely on the column alone.
+            if ($entry->project_id && ($entry->isDirty('project_id') || ! $entry->client_id)) {
+                $entry->client_id = Project::whereKey($entry->project_id)->value('client_id');
+            }
         });
     }
 
@@ -79,6 +87,17 @@ class TimeEntry extends Model
     public function purchaseOrder(): BelongsTo
     {
         return $this->belongsTo(PurchaseOrder::class);
+    }
+
+    /**
+     * Direct client target. Entries on a project always carry the
+     * project's client (enforced by the saving hook); entries without
+     * a project may target a client directly or stand alone as
+     * internal time (both null).
+     */
+    public function client(): BelongsTo
+    {
+        return $this->belongsTo(Client::class);
     }
 
     public function approver(): BelongsTo

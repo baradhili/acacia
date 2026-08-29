@@ -94,20 +94,25 @@ class ReportController extends Controller
 
         $clientId = $request->get('client_id');
 
-        $query = TimeEntry::with(['project.client', 'user'])
+        $query = TimeEntry::with(['client', 'project.client', 'user'])
             ->whereBetween('entry_date', [$startDate->toDateString(), $endDate->toDateString()])
             ->approved();
 
         if ($clientId) {
-            $query->whereHas('project', fn ($q) => $q->where('client_id', $clientId));
+            // Entries carry a denormalised client_id (forced from the
+            // project when one is set), so this covers both targeted
+            // and project-based entries.
+            $query->where('client_id', $clientId);
         }
 
         $timeEntries = $query->get();
 
         // Group by client
-        $byClient = $timeEntries->groupBy(fn ($e) => $e->project?->client?->id ?? 'unassigned')
-            ->map(function ($entries, $clientId) {
-                $client = $entries->first()->project?->client?->name ?? 'Unassigned';
+        $byClient = $timeEntries->groupBy(fn ($e) => $e->client_id ?? $e->project?->client?->id ?? 'unassigned')
+            ->map(function ($entries, $groupKey) {
+                $client = $entries->first()->client?->name
+                    ?? $entries->first()->project?->client?->name
+                    ?? 'Unassigned';
 
                 return [
                     'client' => $client,

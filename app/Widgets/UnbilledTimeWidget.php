@@ -11,20 +11,23 @@ class UnbilledTimeWidget extends AbstractWidget
 
     public function run()
     {
-        $entries = TimeEntry::with('project.client')
+        $entries = TimeEntry::with(['client', 'project.client'])
             ->where('billable', true)
             ->where('status', 'approved')
+            ->whereDoesntHave('invoiceItem')
             ->get()
             ->map(function ($entry) {
                 return [
                     'id' => $entry->id,
                     'project_name' => $entry->project?->name ?? 'No Project',
-                    'client_name' => $entry->project?->client?->name ?? 'Unknown',
+                    'client_name' => $entry->client?->name
+                        ?? $entry->project?->client?->name
+                        ?? 'Unknown',
                     'description' => $entry->description,
                     'hours' => $entry->hours,
                     'rate' => $entry->rate ?? $entry->project?->hourly_rate ?? 0,
                     'amount' => $entry->hours * ($entry->rate ?? $entry->project?->hourly_rate ?? 0),
-                    'date' => $entry->date?->format('Y-m-d'),
+                    'date' => $entry->entry_date?->format('Y-m-d'),
                 ];
             })
             ->filter(function ($entry) {

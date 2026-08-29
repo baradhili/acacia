@@ -55,19 +55,19 @@ class InvoiceController extends Controller
         $selectedProject = $request->project_id ? Project::find($request->project_id) : null;
         $selectedPO = $request->purchase_order_id ? PurchaseOrder::find($request->purchase_order_id) : null;
 
-        // Get unbilled time entries for selected client/project
+        // Get unbilled time entries for selected client/project.
+        // Entries carry a denormalised client_id (forced from the
+        // project when one is set), so the client filter covers both
+        // project-based and directly-targeted entries.
         $timeEntries = collect();
         if ($selectedClient) {
             $timeEntriesQuery = TimeEntry::where('billable', true)
                 ->where('status', TimeEntry::STATUS_APPROVED)
-                ->whereDoesntHave('invoiceItem');
+                ->whereDoesntHave('invoiceItem')
+                ->where('client_id', $selectedClient->id);
 
             if ($selectedProject) {
                 $timeEntriesQuery->where('project_id', $selectedProject->id);
-            } else {
-                $timeEntriesQuery->whereHas('project', function ($q) use ($selectedClient) {
-                    $q->where('client_id', $selectedClient->id);
-                });
             }
 
             $timeEntries = $timeEntriesQuery->get();

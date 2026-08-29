@@ -23,6 +23,7 @@
                 <tr>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Staff</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Client</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Hours</th>
@@ -40,6 +41,7 @@
                             @endif
                         </td>
                         <td class="px-6 py-4 text-gray-900">{{ $entry->user->name ?? '-' }}</td>
+                        <td class="px-6 py-4 text-gray-900">{{ $entry->client?->name ?? $entry->project?->client?->name ?? '-' }}</td>
                         <td class="px-6 py-4 text-gray-900">{{ $entry->project?->name ?? '-' }}</td>
                         <td class="px-6 py-4 text-gray-900">{{ Str::limit($entry->description, 40) }}</td>
                         <td class="px-6 py-4 text-right text-gray-900">{{ number_format($entry->hours, 1) }}</td>
@@ -65,7 +67,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="7" class="px-6 py-4 text-center text-gray-500">No time entries found.</td>
+                        <td colspan="8" class="px-6 py-4 text-center text-gray-500">No time entries found.</td>
                     </tr>
                 @endforelse
             </tbody>
