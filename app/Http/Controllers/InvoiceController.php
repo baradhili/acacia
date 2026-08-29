@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Mail\InvoiceMail;
 use App\Models\Client;
 use App\Models\Invoice;
+use App\Models\InvoiceItem;
 use App\Models\Payment;
 use App\Models\Project;
 use App\Models\PurchaseOrder;
@@ -16,6 +17,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Validation\ValidationException;
 
 class InvoiceController extends Controller
 {
@@ -91,7 +93,7 @@ class InvoiceController extends Controller
             'due_date' => 'required|date|after_or_equal:issue_date',
             'notes' => 'nullable|string',
             'terms' => 'nullable|string',
-            'items' => 'required|array|min:1',
+            'items' => 'required_without:time_entry_ids|array',
             'items.*.description' => 'required|string',
             'items.*.quantity' => 'required|numeric|min:0',
             'items.*.unit_price' => 'required|numeric|min:0',
@@ -100,6 +102,12 @@ class InvoiceController extends Controller
             'time_entry_ids' => 'nullable|array',
             'time_entry_ids.*' => 'exists:time_entries,id',
         ]);
+
+        // Screen the checked entries before the transaction opens —
+        // ValidationException must not be swallowed by the catch below.
+        $timeEntries = ! empty($validated['time_entry_ids'])
+            ? $this->invoiceableTimeEntries($validated['time_entry_ids'])
+            : collect();
 
         DB::beginTransaction();
         try {
@@ -115,15 +123,24 @@ class InvoiceController extends Controller
             ]);
 
             // Create invoice items
-            foreach ($validated['items'] as $index => $item) {
-                $invoiceItem = $invoice->items()->create([
+            $sortOrder = 0;
+            foreach ($validated['items'] ?? [] as $item) {
+                $invoice->items()->create([
                     'description' => $item['description'],
                     'quantity' => $item['quantity'],
                     'unit_price' => $item['unit_price'],
                     'tax_rate' => $item['tax_rate'] ?? config('australian.gst.rate', 10),
                     'discount_percent' => $item['discount_percent'] ?? 0,
-                    'sort_order' => $index,
+                    'sort_order' => $sortOrder++,
                 ]);
+            }
+
+            // Checked unbilled time entries become linked invoice lines
+            foreach ($timeEntries as $timeEntry) {
+                $entryItem = InvoiceItem::createFromTimeEntry($timeEntry);
+                $invoice->items()->create(array_merge($entryItem->getAttributes(), [
+                    'sort_order' => $sortOrder++,
+                ]));
             }
 
             $invoice->recalculateTotals();
@@ -461,5 +478,45 @@ class InvoiceController extends Controller
         $pdf->setPaper('a4', 'portrait');
 
         return $pdf->download('invoice-'.$invoice->invoice_number.'.pdf');
+    }
+
+    /**
+     * Fetch time entries selected for invoicing, screening that every
+     * one is approved, billable and not already on a live invoice.
+     * Throws ValidationException, so callers must invoke it BEFORE
+     * opening a try/catch that swallows exceptions.
+     */
+    private function invoiceableTimeEntries(array $ids): \Illuminate\Support\Collection
+    {
+        $entries = TimeEntry::with('project')->whereIn('id', $ids)->get();
+
+        if ($entries->count() !== count(array_unique($ids))) {
+            throw ValidationException::withMessages([
+                'time_entry_ids' => 'One or more selected time entries no longer exist.',
+            ]);
+        }
+
+        $reasons = [];
+        foreach ($entries as $entry) {
+            if ($entry->status !== TimeEntry::STATUS_APPROVED) {
+                $reasons[] = "#{$entry->id} is not approved";
+                continue;
+            }
+            if (! $entry->billable) {
+                $reasons[] = "#{$entry->id} is not billable";
+                continue;
+            }
+            if ($entry->invoiceItem()->exists()) {
+                $reasons[] = "#{$entry->id} is already invoiced";
+            }
+        }
+
+        if ($reasons !== []) {
+            throw ValidationException::withMessages([
+                'time_entry_ids' => 'Cannot invoice: '.implode('; ', $reasons).'.',
+            ]);
+        }
+
+        return $entries;
     }
 }
