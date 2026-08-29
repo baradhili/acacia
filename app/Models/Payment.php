@@ -320,9 +320,14 @@ class Payment extends Model
      * revenue is recognised when this payment is received, not when the
      * invoice is issued. Do not "complete" the ledger by posting invoices.
      *
-     * The revenue LineItem is marked vat_inclusive with the seeded "GST 10%"
-     * Vat (code G); the IFRS package backs the GST out and credits account
-     * 2200 automatically, so the ledger reflects true ATO cash-basis receipts.
+     * The payment is apportioned across what it settles: each
+     * allocation's share of its invoice's items by GST treatment
+     * (allocationGroups()), so GST-free invoice items never accrue
+     * GST. Anything unallocated keeps the default GST-inclusive
+     * treatment. Taxable lines are marked vat_inclusive with the
+     * seeded "GST 10%" Vat (code G); the IFRS package backs the GST
+     * out and credits account 2200 automatically, so the ledger
+     * reflects true ATO cash-basis receipts.
      *
      * Credit-note refunds (negative payments) post the absolute amount with
      * every leg flipped — Cr Bank / Dr Revenue / Dr GST — because IFRS line
@@ -395,26 +400,62 @@ class Payment extends Model
                 'reference' => $this->payment_number,
             ]);
 
-            // Revenue line is the tax-inclusive amount with the GST 10% Vat
-            // applied. vat_inclusive=true makes the package split the net
-            // amount to Revenue and the GST component to account 2200
-            // (auto-credited for receipts, auto-debited for refunds — the
-            // line legs follow the transaction's credited side).
-            $revenueLine = new LineItem([
-                'account_id' => $revenueAccount->id,
-                'amount' => abs((float) $this->amount),
-                'vat_inclusive' => true,
-                'entity_id' => $entity->id,
-            ]);
-
             $gstVat = Vat::where('code', self::IFRS_GST_VAT_CODE)
                 ->where('entity_id', $entity->id)
                 ->first();
-            if ($gstVat) {
-                $revenueLine->addVat($gstVat);
+
+            // Apportion the payment across what it settles. Each
+            // allocation's share of its invoice's items is grouped by
+            // GST treatment, so GST-free invoice items never accrue
+            // GST; anything not allocated (or the unallocated slice of
+            // a partial payment) keeps the default GST-inclusive
+            // treatment so the bank leg equals the payment exactly.
+            $groups = ['gst' => 0, 'free' => 0];
+            $allocatedCents = 0;
+            foreach ($this->allocations as $allocation) {
+                $invoice = $allocation->invoice()->with('items')->first();
+                if (!$invoice) {
+                    continue;
+                }
+                foreach (self::allocationGroups($invoice, (float) $allocation->amount) as $treatment => $cents) {
+                    $groups[$treatment] += $cents;
+                    $allocatedCents += $cents;
+                }
             }
 
-            $journalEntry->addLineItem($revenueLine);
+            $remainderCents = (int) round(abs((float) $this->amount) * 100) - $allocatedCents;
+            if ($remainderCents > 0) {
+                $groups['gst'] += $remainderCents;
+            }
+
+            foreach ($groups as $treatment => $cents) {
+                if ($cents <= 0) {
+                    continue;
+                }
+
+                // Taxable share: tax-inclusive amount, vat_inclusive with
+                // the GST 10% Vat makes the package split the net amount to
+                // Revenue and the GST component to account 2200
+                // (auto-credited for receipts, auto-debited for refunds —
+                // the line legs follow the transaction's credited side).
+                // GST-free share: full amount to revenue, no Vat.
+                $revenueLine = LineItem::create([
+                    'account_id' => $revenueAccount->id,
+                    'amount' => $cents / 100,
+                    'vat_inclusive' => $treatment === 'gst',
+                    'entity_id' => $entity->id,
+                ]);
+
+                if ($treatment === 'gst' && $gstVat) {
+                    $revenueLine->addVat($gstVat);
+                    $revenueLine->save(); // persist the applied vat
+                }
+
+                // Lines are persisted before addLineItem() — unsaved items
+                // share a null id and the package silently drops all but
+                // the first.
+                $journalEntry->addLineItem($revenueLine);
+            }
             // post() saves the transaction AND writes the ledger rows
             // (save() alone leaves it unposted and invisible to reports).
             $journalEntry->post();
@@ -450,6 +491,56 @@ class Payment extends Model
     public function getIsPostedToIFRSAttribute(): bool
     {
         return $this->ifrs_receipt_id !== null;
+    }
+
+    /**
+     * Apportion one allocation across an invoice's line items by GST
+     * treatment — the sales-side mirror of
+     * BillPayment::allocationGroups(). Amounts are computed in cents so
+     * the shares sum exactly to the allocation; the last item takes the
+     * remainder. Invoice items carry no revenue account of their own,
+     * so groups are keyed by treatment only ("gst" = tax_rate > 0,
+     * tax-inclusive; "free" = GST-free) and the caller posts every
+     * group to the default revenue account.
+     *
+     * Key: "gst|free" → tax-inclusive cents. Returns [] when there is
+     * nothing allocatable (no items, or zero invoice/allocation
+     * totals).
+     */
+    public static function allocationGroups(Invoice $invoice, float $allocationAmount): array
+    {
+        $items = $invoice->items;
+        if ($items->isEmpty()) {
+            return [];
+        }
+
+        $invoiceTotalCents = (int) round(((float) $invoice->total) * 100);
+        $allocationCents = (int) round($allocationAmount * 100);
+        if ($invoiceTotalCents <= 0 || $allocationCents <= 0) {
+            return [];
+        }
+
+        $groups = [];
+        $distributed = 0;
+        $lastIndex = $items->count() - 1;
+        foreach ($items->values() as $index => $item) {
+            if ($index === $lastIndex) {
+                // Last item takes the remainder so shares sum exactly.
+                $shareCents = $allocationCents - $distributed;
+            } else {
+                $shareCents = (int) round($allocationCents * ((float) $item->total * 100) / $invoiceTotalCents);
+                $distributed += $shareCents;
+            }
+
+            if ($shareCents <= 0) {
+                continue;
+            }
+
+            $treatment = (float) $item->tax_rate > 0 ? 'gst' : 'free';
+            $groups[$treatment] = ($groups[$treatment] ?? 0) + $shareCents;
+        }
+
+        return $groups;
     }
 
     /**

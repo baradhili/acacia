@@ -317,8 +317,35 @@ class IfrsReportsFinancialTest extends TestCase
         $response->assertSee('60.00'); // outstanding: 110 total less 50 paid
     }
 
-    public function test_bas_uses_stored_line_amounts(): void
+    public function test_bas_uses_posted_payment_amounts(): void
     {
+        // Posting prerequisites beyond setUp's bank/travel accounts:
+        // revenue + GST Payable for receipts, the default expense
+        // fallback + GST Receivable for supplier payments.
+        $byCode = [];
+        foreach ([
+            ['Consulting Revenue', Account::OPERATING_REVENUE, 4100],
+            ['GST Payable', Account::CONTROL, 2200],
+            ['GST Receivable', Account::CONTROL, 430],
+            ['Other Expenses', Account::OTHER_EXPENSE, 8900],
+        ] as [$name, $type, $code]) {
+            $byCode[$code] = Account::create([
+                'name' => $name,
+                'account_type' => $type,
+                'code' => $code,
+                'currency_id' => $this->currency->id,
+                'entity_id' => $this->entity->id,
+            ]);
+        }
+        \IFRS\Models\Vat::create([
+            'name' => 'GST 10%', 'code' => 'G', 'rate' => 10,
+            'account_id' => $byCode[2200]->id, 'entity_id' => $this->entity->id,
+        ]);
+        \IFRS\Models\Vat::create([
+            'name' => 'GST Input 10%', 'code' => 'I', 'rate' => 10,
+            'account_id' => $byCode[430]->id, 'entity_id' => $this->entity->id,
+        ]);
+
         $client = Client::factory()->create();
         $invoice = Invoice::create([
             'client_id' => $client->id,
@@ -335,6 +362,15 @@ class IfrsReportsFinancialTest extends TestCase
         $invoice->refresh();
         $invoice->recalculateTotals();
 
+        $payment = \App\Models\Payment::createWithUniqueNumber([
+            'client_id' => $client->id,
+            'amount' => 110,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+        $payment->allocateToInvoice($invoice, 110);
+        $this->assertNotNull($payment->postToIFRS(), $payment->lastPostingError ?? 'posting failed');
+
         $supplier = Supplier::create(['name' => 'Tax Supplier Co']);
         $bill = Bill::create([
             'supplier_id' => $supplier->id,
@@ -350,11 +386,21 @@ class IfrsReportsFinancialTest extends TestCase
         ]);
         $bill->recalculateTotals();
 
+        $billPayment = \App\Models\BillPayment::createWithUniqueNumber([
+            'supplier_id' => $supplier->id,
+            'amount' => 110,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+        $billPayment->allocateToBill($bill, 110);
+        $this->assertNotNull($billPayment->postToIFRS(), $billPayment->lastPostingError ?? 'posting failed');
+
         $response = $this->get(route('reports.bas'));
 
         $response->assertStatus(200);
         // GST collected and GST paid both 10.00; net payable zero
         $response->assertSee('10.00');
+        $response->assertSee('0.00');
     }
 
     public function test_expenses_by_category_and_gst_reports_still_render(): void
