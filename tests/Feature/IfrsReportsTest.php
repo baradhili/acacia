@@ -545,6 +545,89 @@ class IfrsReportsTest extends TestCase
         $response->assertDontSee('$20.00');
     }
 
+    public function test_gst_report_nets_refund_reversals_per_vat_account(): void
+    {
+        $this->seedPostingAccounts();
+        $client = \App\Models\Client::factory()->create();
+        $supplier = Supplier::create(['name' => 'Test Supplier']);
+
+        // Paid $110 invoice (incl $10 GST), posted 2025-08-15: Cr 10 on 2200.
+        $invoice = \App\Models\Invoice::create([
+            'client_id' => $client->id,
+            'invoice_number' => 'INV-2025-0041',
+            'status' => 'sent',
+            'issue_date' => '2025-08-01',
+            'due_date' => '2025-09-01',
+        ]);
+        $invoice->items()->create([
+            'description' => 'Services',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+        $invoice->refresh();
+        $invoice->recalculateTotals();
+        $payment = \App\Models\Payment::createWithUniqueNumber([
+            'client_id' => $client->id,
+            'amount' => 110,
+            'payment_date' => '2025-08-15',
+            'payment_method' => 'bank_transfer',
+        ]);
+        $payment->allocateToInvoice($invoice, 110);
+        $this->assertNotNull($payment->postToIFRS(), $payment->lastPostingError ?? 'posting failed');
+
+        // Full credit-note refund (posts at now()): Dr 10 back on 2200 —
+        // an output-GST reversal, not GST paid.
+        $creditNote = \App\Models\CreditNote::create([
+            'client_id' => $client->id,
+            'total' => -110,
+            'remaining_amount' => 110,
+            'status' => \App\Models\CreditNote::STATUS_ISSUED,
+        ]);
+        $this->assertTrue($creditNote->applyToInvoice($invoice, 110));
+        $refund = $creditNote->refresh()->refund;
+        $this->assertNotNull($refund->ifrs_receipt_id, 'credit note refund must be posted');
+
+        // Paid $55 bill (incl $5 GST), posted 2025-11-01: Dr 5 on 430.
+        $bill = Bill::create([
+            'supplier_id' => $supplier->id,
+            'bill_date' => '2025-10-20',
+            'due_date' => '2025-11-20',
+        ]);
+        $bill->items()->create([
+            'description' => 'Supplies',
+            'quantity' => 1,
+            'unit_price' => 50,
+            'tax_rate' => 10,
+            'gst_added' => true,
+        ]);
+        $bill->recalculateTotals();
+        $bill->markAsOpen();
+        $billPayment = \App\Models\BillPayment::createWithUniqueNumber([
+            'supplier_id' => $supplier->id,
+            'amount' => $bill->total,
+            'payment_date' => '2025-11-01',
+            'payment_method' => \App\Models\BillPayment::METHOD_BANK_TRANSFER,
+        ]);
+        $billPayment->allocateToBill($bill, (float) $bill->total);
+        $this->assertNotNull($billPayment->postToIFRS(), $billPayment->lastPostingError ?? 'posting failed');
+
+        // End date reaches now(): the credit-note refund posts at today's date.
+        $response = $this->actingAs($this->user)
+            ->get(route('reports.gst', [
+                'start_date' => '2025-07-01',
+                'end_date' => now()->addDay()->toDateString(),
+            ]));
+
+        $response->assertStatus(200);
+        // The refund's Dr 10 on 2200 nets collected GST to $0.00 rather
+        // than being miscounted as GST paid; 430's Dr 5 stays GST paid.
+        // (Old per-side totals were $10.00 collected / $15.00 paid.)
+        $response->assertDontSee('$10.00');
+        $response->assertDontSee('$15.00');
+        $response->assertSee('$5.00');
+    }
+
     public function test_bas_export_pdf_generates(): void
     {
         $response = $this->actingAs($this->user)

@@ -703,35 +703,76 @@ class ReportController extends Controller
     /**
      * GST collected/paid from the accounts the entity's Vats post to
      * (seeded "GST 10%" → 2200 GST Payable, "GST Input 10%" → 430 GST
-     * Receivable): ledger credits are GST collected on receipts, debits
-     * are GST paid on supplier payments. Cash basis — the exact legs the
+     * Receivable), classified by account role: 2200's legs net to GST
+     * collected (its debits are credit-note refund reversals, not GST
+     * paid) and 430's legs net to GST paid (its credits are supplier
+     * refund reversals, not GST collected). When the input Vat is not
+     * seeded, BillPayment::purchaseGstVat() falls back to the output
+     * Vat (G), purchases post through 2200 too, and roles on that
+     * shared account cannot be separated — it keeps the per-side split
+     * (credits collected, debits paid). Cash basis — the exact legs the
      * payment postings write, so the GST, BAS and company tax reports
      * all tie to the ledger.
      */
     protected function ledgerGst(Entity $entity, Carbon $startDate, Carbon $endDate): object
     {
-        $vatAccountIds = DB::table('ifrs_vats')
+        $vatAccounts = DB::table('ifrs_vats')
             ->where('entity_id', $entity->id)
             ->whereNotNull('account_id')
-            ->pluck('account_id')
-            ->unique()
-            ->values();
+            ->get(['code', 'account_id']);
 
-        if ($vatAccountIds->isEmpty()) {
+        if ($vatAccounts->isEmpty()) {
             return (object) ['collected' => 0.0, 'paid' => 0.0];
         }
 
-        $gst = DB::table('ifrs_ledgers')
-            ->whereIn('post_account', $vatAccountIds)
+        $inputCode = config('subscriptions.purchase_gst_vat_code', 'I');
+
+        // Role per account from the Vat code that posts to it: the input
+        // code carries purchase GST, anything else output GST. An account
+        // both kinds post to is shared and reverts to the per-side split.
+        $roles = [];
+        foreach ($vatAccounts as $vat) {
+            $role = $vat->code === $inputCode ? 'input' : 'output';
+            $roles[$vat->account_id] = isset($roles[$vat->account_id]) && $roles[$vat->account_id] !== $role
+                ? 'shared'
+                : $role;
+        }
+
+        // Purchases normally post through the input Vat; the fallback to
+        // the output Vat (unmigrated databases without the input Vat)
+        // mixes both roles onto its account.
+        $purchaseVat = BillPayment::purchaseGstVat($entity);
+        if ($purchaseVat && $purchaseVat->account_id !== null && $purchaseVat->code !== $inputCode) {
+            $roles[$purchaseVat->account_id] = 'shared';
+        }
+
+        $legs = DB::table('ifrs_ledgers')
+            ->whereIn('post_account', array_keys($roles))
             ->whereBetween('posting_date', [$startDate, $endDate])
             ->whereNull('deleted_at')
-            ->selectRaw("SUM(CASE WHEN entry_type = '".Balance::CREDIT."' THEN amount ELSE 0 END) as collected,
-                SUM(CASE WHEN entry_type = '".Balance::DEBIT."' THEN amount ELSE 0 END) as paid")
-            ->first();
+            ->groupBy('post_account')
+            ->selectRaw("post_account,
+                SUM(CASE WHEN entry_type = '".Balance::CREDIT."' THEN amount ELSE 0 END) as credits,
+                SUM(CASE WHEN entry_type = '".Balance::DEBIT."' THEN amount ELSE 0 END) as debits")
+            ->get();
+
+        $collected = 0.0;
+        $paid = 0.0;
+        foreach ($legs as $leg) {
+            $role = $roles[$leg->post_account] ?? 'shared';
+            if ($role === 'output') {
+                $collected += (float) $leg->credits - (float) $leg->debits;
+            } elseif ($role === 'input') {
+                $paid += (float) $leg->debits - (float) $leg->credits;
+            } else {
+                $collected += (float) $leg->credits;
+                $paid += (float) $leg->debits;
+            }
+        }
 
         return (object) [
-            'collected' => (float) ($gst->collected ?? 0),
-            'paid' => (float) ($gst->paid ?? 0),
+            'collected' => $collected,
+            'paid' => $paid,
         ];
     }
 
@@ -1420,10 +1461,9 @@ class ReportController extends Controller
                 SUM(CASE WHEN l.entry_type = 'C' THEN l.amount ELSE 0 END) as outflows")
             ->first();
 
-        // GST collected/paid from the accounts the entity's Vats post to
-        // (seeded "GST 10%" → account 2200): credits are GST collected on
-        // receipts, debits are GST paid on payments. Shared with the
-        // GST/BAS reports so every GST figure uses the same cash basis.
+        // GST collected/paid from the Vat account ledger legs, netted
+        // per account role (see ledgerGst()). Shared with the GST/BAS
+        // reports so every GST figure uses the same cash basis.
         $gst = $this->ledgerGst($entity, $fyStart, $fyEndDate);
 
         // Label rows initialised from config (form order preserved).
