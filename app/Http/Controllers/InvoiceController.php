@@ -126,12 +126,6 @@ class InvoiceController extends Controller
                 ]);
             }
 
-            // Mark time entries as invoiced if provided
-            if (! empty($validated['time_entry_ids'])) {
-                TimeEntry::whereIn('id', $validated['time_entry_ids'])
-                    ->update(['invoiced' => true]);
-            }
-
             $invoice->recalculateTotals();
 
             DB::commit();
@@ -263,13 +257,9 @@ class InvoiceController extends Controller
                 ->with('error', 'Only draft invoices can be deleted.');
         }
 
-        // Unmark time entries
-        foreach ($invoice->items as $item) {
-            if ($item->time_entry_id) {
-                TimeEntry::where('id', $item->time_entry_id)->update(['invoiced' => false]);
-            }
-        }
-
+        // Deleting the invoice cascades its items, which releases any
+        // linked time entries (their invoiced state derives from
+        // invoice_items.time_entry_id via TimeEntry::invoiceItem()).
         $invoice->delete();
 
         return redirect()->route('invoices.index')
@@ -374,7 +364,8 @@ class InvoiceController extends Controller
     {
         $timeEntries = $purchaseOrder->timeEntries()
             ->where('status', TimeEntry::STATUS_APPROVED)
-            ->whereNull('invoice_item_id') // Only uninvoiced
+            ->where('billable', true)
+            ->whereDoesntHave('invoiceItem')
             ->get();
 
         if ($timeEntries->isEmpty()) {

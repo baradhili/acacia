@@ -1140,4 +1140,104 @@ class InvoiceTest extends TestCase
 
         $this->assertNull($invoice->po_remaining_after);
     }
+
+    public function test_invoice_create_form_with_client_preselect_loads(): void
+    {
+        // Regression: create() queries whereDoesntHave('invoiceItem') on
+        // TimeEntry — before the relation existed this threw
+        // RelationNotFoundException for any ?client_id= preselect.
+        $project = Project::factory()->create(['client_id' => $this->client->id]);
+        TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $project->id,
+            'start_time' => now()->subHours(2),
+            'end_time' => now(),
+            'description' => 'Consulting work',
+            'billable' => true,
+            'status' => TimeEntry::STATUS_APPROVED,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->get('/invoices/create?client_id=' . $this->client->id);
+
+        $response->assertOk();
+        $response->assertSee('Consulting work');
+    }
+
+    public function test_deleting_invoice_releases_its_time_entries(): void
+    {
+        $project = Project::factory()->create(['client_id' => $this->client->id]);
+        $timeEntry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $project->id,
+            'start_time' => now()->subHours(2),
+            'end_time' => now(),
+            'description' => 'Consulting work',
+            'billable' => true,
+            'status' => TimeEntry::STATUS_APPROVED,
+        ]);
+
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_DRAFT,
+        ]);
+        $invoice->items()->create([
+            'description' => 'Consulting work',
+            'quantity' => 2,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+            'time_entry_id' => $timeEntry->id,
+        ]);
+
+        $this->assertTrue($timeEntry->invoiceItem()->exists());
+
+        $response = $this->actingAs($this->user)
+            ->delete("/invoices/{$invoice->id}");
+
+        $response->assertRedirect(route('invoices.index'));
+        // Invoice deletion cascades items, which releases the entry.
+        $this->assertFalse($timeEntry->invoiceItem()->exists());
+        $this->assertDatabaseMissing('invoices', ['id' => $invoice->id]);
+    }
+
+    public function test_cancelling_invoice_releases_its_time_entries(): void
+    {
+        $project = Project::factory()->create(['client_id' => $this->client->id]);
+        $timeEntry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $project->id,
+            'start_time' => now()->subHours(2),
+            'end_time' => now(),
+            'description' => 'Consulting work',
+            'billable' => true,
+            'status' => TimeEntry::STATUS_APPROVED,
+        ]);
+
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_SENT,
+        ]);
+        $invoice->items()->create([
+            'description' => 'Consulting work',
+            'quantity' => 2,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+            'time_entry_id' => $timeEntry->id,
+        ]);
+
+        $this->assertTrue($timeEntry->invoiceItem()->exists());
+
+        $invoice->cancel();
+
+        // The invoiceItem relation excludes cancelled invoices, so the
+        // entry is available for re-invoicing without deleting anything.
+        $this->assertFalse($timeEntry->invoiceItem()->exists());
+        $this->assertTrue(
+            TimeEntry::whereDoesntHave('invoiceItem')->whereKey($timeEntry->id)->exists()
+        );
+    }
 }

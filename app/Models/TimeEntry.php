@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class TimeEntry extends Model
 {
@@ -88,6 +89,17 @@ class TimeEntry extends Model
     public function breaks(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(TimeEntryBreak::class)->orderBy('start_time');
+    }
+
+    /**
+     * The invoice item consuming this entry, if it has been invoiced.
+     * Items on cancelled invoices are excluded so cancelling an
+     * invoice releases its time entries for re-invoicing.
+     */
+    public function invoiceItem(): HasOne
+    {
+        return $this->hasOne(InvoiceItem::class)
+            ->whereHas('invoice', fn ($q) => $q->whereNot('status', 'cancelled'));
     }
 
     /**
