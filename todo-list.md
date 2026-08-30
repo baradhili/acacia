@@ -36,11 +36,17 @@
 
 - [x] review [Sales Cycle - Eloquent IFRS](https://ekmungai.github.io/ifrs-docs/v5docs/sales-cycle/) , [Purchase Cycle - Eloquent IFRS](https://ekmungai.github.io/ifrs-docs/v5docs/purchase-cycle/) , and [Compound Journal Entries - Eloquent IFRS](https://ekmungai.github.io/ifrs-docs/v5docs/compound-journals/) and check for any deviations done in teh app. update this document with teh proposed plan.
 
-- [ ]  2026_08_28_000001_create_shares_and_dividends_tables .......... 43.80ms FAIL
+- [ ] Process of adding profile picture fails
+
+- [ ] shareholders - share held at what value? $10 for 1000$
+
+- [ ] Company details page missing company name and optional trading name
+
+- [ ] 2026_08_28_000001_create_shares_and_dividends_tables .......... 43.80ms FAIL
   
-     Illuminate\Database\QueryException 
+    Illuminate\Database\QueryException 
   
-    SQLSTATE[23000]: Integrity constraint violation: 1451 Cannot delete or update a parent row: a foreign key constraint fails (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: erp, SQL: drop table if exists `dividend_declarations`)
+   SQLSTATE[23000]: Integrity constraint violation: 1451 Cannot delete or update a parent row: a foreign key constraint fails (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: erp, SQL: drop table if exists `dividend_declarations`)
 
 - [ ] ### 0. `createFromTimeEntries` doesn't actually create
   
