@@ -38,7 +38,13 @@
 
 - [ ] Process of adding profile picture fails
 
-- [ ] shareholders - share held at what value? $10 for 1000$
+- [ ] openeing balances view doesn't add totals - should totals even be visible?
+
+- [ ] Need to be able to set open balances for earlier fiscal years than this one
+
+- [ ] shareholders - share held at what value? $10 for 1000
+
+- [x] company details - index wants resignation date - should be optional
 
 - [ ] Company details page missing company name and optional trading name
 
