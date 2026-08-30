@@ -63,14 +63,35 @@ Most open-source accounting systems are either:
 
 Acacia occupies the middle ground:
 
-| What | How |
-| --- | --- |
-| **Australian-first** | GST 10%, GST-free and input-taxed codes; July–June financial year; BAS-ready reports; ATO Company Tax Return mapping. |
-| **Cash basis, properly enforced** | Revenue posts on payment receipt — not on invoice issue. Expenses post on payment — not on bill entry. |
-| **Double-entry underneath** | Powered by [Eloquent IFRS v5](https://github.com/ekmungai/eloquent-ifrs), so the books are always audit-grade. |
-| **Built for services** | First-class time tracking, project profitability, internal POs/budgets, billable hours → invoice conversion. |
-| **Owns your data** | Self-host, no vendor lock-in. MIT licensed. |
-| **Modern Laravel stack** | Laravel 13, Breeze, Spatie permissions, Blade + Tailwind + Alpine. |
+| What                              | How                                                                                                                   |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **Australian-first**              | GST 10%, GST-free and input-taxed codes; July–June financial year; BAS-ready reports; ATO Company Tax Return mapping. |
+| **Cash basis, properly enforced** | Revenue posts on payment receipt — not on invoice issue. Expenses post on payment — not on bill entry.                |
+| **Double-entry underneath**       | Powered by [Eloquent IFRS v5](https://github.com/ekmungai/eloquent-ifrs), so the books are always audit-grade.        |
+| **Built for services**            | First-class time tracking, project profitability, internal POs/budgets, billable hours → invoice conversion.          |
+| **Owns your data**                | Self-host, no vendor lock-in. MIT licensed.                                                                           |
+| **Modern Laravel stack**          | Laravel 13, Breeze, Spatie permissions, Blade + Tailwind + Alpine.                                                    |
+
+---
+
+Support the Project 🌱
+
+Acacia is built and maintained by developers who are passionate about empowering Australian small businesses with ethical, open-source tools. If Acacia saves your firm time and money, we’d love your support to keep it growing.
+
+There are three ways you can help sustain the project and shape its future:
+
+    Donate via Liberapay ❤️
+    Recurring or one-time donations help us cover hosting, development tools, and dedicated time for bug fixes and core improvements.
+    👉 Support us on Liberapay <script src="https://liberapay.com/baradhili/widgets/button.js"></script>
+    <noscript><a href="https://liberapay.com/baradhili/donate"><img alt="Donate using Liberapay" src="https://liberapay.com/assets/widgets/donate.svg"></a></noscript>
+    
+    Grant a Feature 🚀
+    Need a specific capability on the Roadmap delivered sooner? You can sponsor its development! Feature grants allow us to allocate focused development hours to build exactly what your firm needs, while keeping the code open-source for everyone.
+    👉 Email info@ticm.com to discuss feature grants.
+    
+    Commercial Support 🏢
+    Running Acacia in a production environment and need guaranteed response times, custom integrations, or bespoke modifications? We offer professional support packages tailored to professional services firms.
+    👉 Reach out to info@ticm.com for commercial support inquiries.
 
 ---
 
@@ -229,20 +250,20 @@ Built on IFRS reports, extended with project/PO reports:
 
 ## Technology Stack
 
-| Layer | Technology |
-| --- | --- |
-| Framework | Laravel 13 (PHP 8.2+) |
+| Layer           | Technology                                  |
+| --------------- | ------------------------------------------- |
+| Framework       | Laravel 13 (PHP 8.2+)                       |
 | Accounting core | Eloquent IFRS v5 (`ekmungai/eloquent-ifrs`) |
-| Database | MySQL 8 / PostgreSQL 15+ |
-| Auth | Laravel Breeze (Blade + Tailwind) |
-| Permissions | Spatie Laravel Permission v6 |
-| HTTP client | GuzzleHTTP 7 |
-| Frontend | Blade + Tailwind CSS + Alpine.js |
-| PDF | `barryvdh/laravel-dompdf` |
-| Excel | `maatwebsite/excel` |
-| Charts | Chart.js via Blade |
-| Queue | Laravel Queue (database / Redis) |
-| Scheduler | Laravel Scheduler (cron) |
+| Database        | MySQL 8 / PostgreSQL 15+                    |
+| Auth            | Laravel Breeze (Blade + Tailwind)           |
+| Permissions     | Spatie Laravel Permission v6                |
+| HTTP client     | GuzzleHTTP 7                                |
+| Frontend        | Blade + Tailwind CSS + Alpine.js            |
+| PDF             | `barryvdh/laravel-dompdf`                   |
+| Excel           | `maatwebsite/excel`                         |
+| Charts          | Chart.js via Blade                          |
+| Queue           | Laravel Queue (database / Redis)            |
+| Scheduler       | Laravel Scheduler (cron)                    |
 
 ---
 
@@ -344,13 +365,13 @@ Add the following to your server's crontab:
 
 ### Scheduled tasks
 
-| Command | Frequency | Purpose |
-| --- | --- | --- |
-| `reconcile:wise` | Daily | Pull Wise transactions and auto-match |
-| `invoices:mark-overdue` | Daily | Mark past-due invoices as overdue |
-| `invoices:recurring` | Daily | Generate recurring invoices due today |
-| `prepayments:amortise` | Monthly | Post monthly amortisation of prepaid subscriptions |
-| `statements:send` | Monthly | Email client statements |
+| Command                 | Frequency | Purpose                                            |
+| ----------------------- | --------- | -------------------------------------------------- |
+| `reconcile:wise`        | Daily     | Pull Wise transactions and auto-match              |
+| `invoices:mark-overdue` | Daily     | Mark past-due invoices as overdue                  |
+| `invoices:recurring`    | Daily     | Generate recurring invoices due today              |
+| `prepayments:amortise`  | Monthly   | Post monthly amortisation of prepaid subscriptions |
+| `statements:send`       | Monthly   | Email client statements                            |
 
 ---
 
@@ -459,8 +480,8 @@ php artisan test --filter=WiseReconciliationTest
 ### Coverage targets
 
 | Area | Target |
-| --- | --- |
-| TODO | ... |
+| ---- | ------ |
+| TODO | ...    |
 
 Please ensure all tests pass before opening a pull request. New features should ship with corresponding tests.
 
@@ -542,9 +563,9 @@ Made with care for the Australian small-business community.
 
 See [`CHANGELOG.md`](CHANGELOG.md) for the full history. Versions follow [Semantic Versioning](https://semver.org/).
 
-| Version | Notes |
-| --- | --- |
-| 0.1.0 | Functioning accounting system |
+| Version | Notes                         |
+| ------- | ----------------------------- |
+| 0.1.0   | Functioning accounting system |
 
 ---
 

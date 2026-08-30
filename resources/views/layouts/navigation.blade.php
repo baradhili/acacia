@@ -4,7 +4,7 @@
     <div class="h-16 flex items-center px-6 border-b border-slate-700">
 		<a href="{{ route('dashboard') }}" class="flex items-center gap-3">
 			<img src="{{ asset('images/logo.svg') }}" alt="Logo" class="h-8 w-auto">
-			<span class="text-xl font-bold">Laravel ERP</span>
+			<span class="text-xl font-bold">Acacia</span>
 		</a>
 	</div>
 
