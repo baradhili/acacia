@@ -40,11 +40,13 @@
 
 - [x] No way of creating an opening balance for franking account
 
-- [ ] openeing balances view doesn't add totals - should totals even be visible?
+- [ ] opening balances view doesn't add totals - should totals even be visible?
 
 - [x] Need to be able to set open balances for earlier fiscal years than this one
 
 - [ ] shareholders - share held at what value? $10 for 1000
+
+- [ ] Company details - add svg or png logo
 
 - [x] company details - index wants resignation date - should be optional
 
