@@ -67,7 +67,7 @@ Acacia occupies the middle ground:
 | --------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | **Australian-first**              | GST 10%, GST-free and input-taxed codes; July–June financial year; BAS-ready reports; ATO Company Tax Return mapping. |
 | **Cash basis, properly enforced** | Revenue posts on payment receipt — not on invoice issue. Expenses post on payment — not on bill entry.                |
-| **Double-entry underneath**       | Powered by [Eloquent IFRS v5](https://github.com/ekmungai/eloquent-ifrs), so the books are always audit-grade.        |
+| **Double-entry underneath**       | Powered by [Eloquent IFRS v6](https://github.com/ekmungai/eloquent-ifrs), so the books are always audit-grade.        |
 | **Built for services**            | First-class time tracking, project profitability, internal POs/budgets, billable hours → invoice conversion.          |
 | **Owns your data**                | Self-host, no vendor lock-in. MIT licensed.                                                                           |
 | **Modern Laravel stack**          | Laravel 13, Breeze, Spatie permissions, Blade + Tailwind + Alpine.                                                    |
@@ -80,18 +80,26 @@ Acacia is built and maintained by developers who are passionate about empowering
 
 There are three ways you can help sustain the project and shape its future:
 
-    Donate via Liberapay ❤️
-    Recurring or one-time donations help us cover hosting, development tools, and dedicated time for bug fixes and core improvements.
-    👉 Support us on Liberapay <script src="https://liberapay.com/baradhili/widgets/button.js"></script>
-    <noscript><a href="https://liberapay.com/baradhili/donate"><img alt="Donate using Liberapay" src="https://liberapay.com/assets/widgets/donate.svg"></a></noscript>
-    
-    Grant a Feature 🚀
-    Need a specific capability on the Roadmap delivered sooner? You can sponsor its development! Feature grants allow us to allocate focused development hours to build exactly what your firm needs, while keeping the code open-source for everyone.
-    👉 Email info@ticm.com to discuss feature grants.
-    
-    Commercial Support 🏢
-    Running Acacia in a production environment and need guaranteed response times, custom integrations, or bespoke modifications? We offer professional support packages tailored to professional services firms.
-    👉 Reach out to info@ticm.com for commercial support inquiries.
+**Donate via Liberapay ❤️**
+
+Recurring or one-time donations help us cover hosting, development tools, and dedicated time for bug fixes and core improvements.
+
+👉 Support us on Liberapay
+
+<script src="https://liberapay.com/baradhili/widgets/button.js"></script>
+<noscript><a href="https://liberapay.com/baradhili/donate"><img alt="Donate using Liberapay" src="https://liberapay.com/assets/widgets/donate.svg"></a></noscript>
+
+**Grant a Feature 🚀**
+
+Need a specific capability on the Roadmap delivered sooner? You can sponsor its development! Feature grants allow us to allocate focused development hours to build exactly what your firm needs, while keeping the code open-source for everyone.
+
+👉 Email info@ticm.com to discuss feature grants.
+
+**Commercial Support 🏢**
+
+Running Acacia in a production environment and need guaranteed response times, custom integrations, or bespoke modifications? We offer professional support packages tailored to professional services firms.
+
+👉 Reach out to info@ticm.com for commercial support inquiries.
 
 ---
 
@@ -99,7 +107,7 @@ There are three ways you can help sustain the project and shape its future:
 
 ### Accounting & Ledger
 
-- Double-entry ledger via Eloquent IFRS v5
+- Double-entry ledger via Eloquent IFRS v6
 - Australian Chart of Accounts (seeded)
 - GST 10% on sales/purchases with GST-free and input-taxed codes
 - Cash-basis revenue/expense recognition (enforced at the application layer)
@@ -252,8 +260,8 @@ Built on IFRS reports, extended with project/PO reports:
 
 | Layer           | Technology                                  |
 | --------------- | ------------------------------------------- |
-| Framework       | Laravel 13 (PHP 8.2+)                       |
-| Accounting core | Eloquent IFRS v5 (`ekmungai/eloquent-ifrs`) |
+| Framework       | Laravel 13 (PHP 8.3+)                       |
+| Accounting core | Eloquent IFRS v6 (`ekmungai/eloquent-ifrs`) |
 | Database        | MySQL 8 / PostgreSQL 15+                    |
 | Auth            | Laravel Breeze (Blade + Tailwind)           |
 | Permissions     | Spatie Laravel Permission v6                |
@@ -269,7 +277,7 @@ Built on IFRS reports, extended with project/PO reports:
 
 ## Requirements
 
-- PHP **8.2+** with `bcmath`, `ctype`, `fileinfo`, `json`, `mbstring`, `openssl`, `pdo`, `tokenizer`, `xml`
+- PHP **8.3+** with `bcmath`, `ctype`, `fileinfo`, `json`, `mbstring`, `openssl`, `pdo`, `tokenizer`, `xml`
 - Composer 2.x
 - MySQL 8+ **or** PostgreSQL 15+
 - A [Wise Business Account](https://wise.com/business) (optional, for bank reconciliation)
@@ -302,9 +310,17 @@ php artisan ifrs:setup
 # 7. Create the public storage symlink
 php artisan storage:link
 
-# 8. Start the development server
+# 8. Install frontend dependencies and build the assets
+#    (requires Node.js ^20.19.0 or >=22.12.0)
+npm install --ignore-scripts
+npm run prepare
+npm run build
+
+# 9. Start the development server
 php artisan serve
 ```
+
+> **Shortcut:** `composer run setup` performs the composer/npm installation, migrations and asset build in one command.
 
 Then visit `http://localhost:8000` and log in with the seeded admin account (see output of the seeder, or check `database/seeders/DemoCompanySeeder.php`).
 
