@@ -40,19 +40,31 @@
 
 - [x] No way of creating an opening balance for franking account
 
-- [ ] opening balances view doesn't add totals - should totals even be visible?
+- [x] opening balances view doesn't add totals - should totals even be visible?
 
 - [x] Need to be able to set open balances for earlier fiscal years than this one
 
 - [ ] shareholders - share held at what value? $10 for 1000
 
-- [ ] Company details - add svg or png logo
+- [ ] Company details - add svg or png logo - failed as it errors with "Name field required" on logo upload validation. There is an existing name
+
+- [ ] Need to handle clients who want timesheet reports for project by week sum
+
+- [ ] need to handle client who "reverse invoice" as in I fill their timesheet system and they send me a payment that is itemised like my time-based invoice timesheet
+
+- [ ] display the uploaded logo if it exists when viewing the bill record
+
+- [ ] use company logo that is uploaded on pdf invoice
+
+- [ ] allow abn/acn/tfn to be display formatted in the way they normally are - also allow entry with the usual spaces
+
+- [ ] update tax report: review .zcode/ato-company-tax/company-tax.md. create plan including branch. Only expect a single manual opening balance entry for a company (migration into this system). However need an admin process to "close" a financial year  (which should potentially move some ledger balances  and create opening balances for the subsequent financial year)  - so if I have entered an opening balance debit for current assets and a matching credit to equity then the correct output should show
 
 - [x] company details - index wants resignation date - should be optional
 
 - [x] Company details page missing company name and optional trading name
 
-- [ ] 2026_08_28_000001_create_shares_and_dividends_tables .......... 43.80ms FAIL
+- [x] 2026_08_28_000001_create_shares_and_dividends_tables .......... 43.80ms FAIL
   
     Illuminate\Database\QueryException 
   

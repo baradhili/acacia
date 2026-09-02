@@ -255,20 +255,15 @@ class ReportController extends Controller
             ->orderBy('code')
             ->get() as $account
         ) {
-            // Cumulative from an arbitrary epoch: exact as-at balances that
-            // don't depend on year-end closing entries having been posted
-            // (the package's period-scoped closingBalance() does), plus
-            // the account's opening Balance rows.
-            $balance = (float) Ledger::balance(
-                $account,
-                $closing ? Carbon::create(2000, 1, 1) : $startDate,
-                $endDate,
-                $entity->currency_id
-            )[$entity->currency_id];
-
-            if ($closing) {
-                $balance += OpeningBalances::effectiveOpening($account, $entity);
-            }
+            // Cumulative as-at balance: the opening snapshot in force at
+            // $endDate plus ledger movement after it (the whole ledger
+            // from an arbitrary epoch when no snapshot exists) — exact
+            // as-at figures that don't depend on year-end closing
+            // entries having been posted (the package's period-scoped
+            // closingBalance() does).
+            $balance = $closing
+                ? OpeningBalances::balanceAt($account, $entity, $endDate)
+                : (float) Ledger::balance($account, $startDate, $endDate, $entity->currency_id)[$entity->currency_id];
 
             if (abs($balance) < 0.005) {
                 continue;
@@ -332,16 +327,9 @@ class ReportController extends Controller
         $accountLines = collect();
 
         foreach (Account::where('entity_id', $entity->id)->orderBy('code')->get() as $account) {
-            $balance = (float) Ledger::balance(
-                $account,
-                Carbon::create(2000, 1, 1),
-                $endDate,
-                $entity->currency_id
-            )[$entity->currency_id];
-
-            // Opening Balance rows form the starting position of the
-            // trial balance (debit-positive; credit rows land negative).
-            $balance += OpeningBalances::effectiveOpening($account, $entity);
+            // As-at balance via the opening snapshot in force (debit-
+            // positive; credit opening rows land negative).
+            $balance = OpeningBalances::balanceAt($account, $entity, $endDate);
 
             if (abs($balance) < 0.005) {
                 continue;
@@ -847,16 +835,9 @@ class ReportController extends Controller
             Account::OVERHEAD_EXPENSE, Account::OTHER_EXPENSE,
         ]);
 
-        // Cumulative opening balance: everything posted before the period
-        // starts, plus the account's opening Balance rows (which sit
-        // before all ledger activity by construction).
-        $opening = (float) Ledger::balance(
-            $account,
-            Carbon::create(2000, 1, 1),
-            $startDate->copy()->subSecond(),
-            $entity->currency_id
-        )[$entity->currency_id];
-        $opening += OpeningBalances::effectiveOpening($account, $entity);
+        // Cumulative opening balance: the opening snapshot in force the
+        // day before the period starts plus ledger movement after it.
+        $opening = OpeningBalances::balanceAt($account, $entity, $startDate->copy()->subSecond());
         $openingBalance = $isDebitNormal ? $opening : -$opening;
 
         $entries = Ledger::where('post_account', $account->id)
