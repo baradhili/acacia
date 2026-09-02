@@ -21,6 +21,14 @@
             </button>
             <div x-show="open" @click.away="open = false"
                 class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+                @role('admin')
+                    <p class="px-4 py-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Administration</p>
+                    <a href="{{ route('administration.index') }}"
+                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                        Currently Open Year
+                    </a>
+                @endrole
+                <div class="border-t border-gray-100 my-1"></div>
                 <a href="{{ route('profile.edit') }}"
                     class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                     Profile

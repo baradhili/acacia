@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Models\BankTransaction;
 use App\Models\BillPayment;
+use App\Models\EntitySetting;
 use App\Models\FiscalPeriod;
 use App\Models\FiscalYearClose;
 use App\Models\Payment;
@@ -53,9 +55,102 @@ class FiscalYearService
         ];
     }
 
-    public function currentYear(Entity $entity): int
+    /**
+     * How far back an admin may pin the open year: the pin may be at most
+     * this many financial years before the calendar-derived one.
+     */
+    public const OPEN_YEAR_MAX_AGE = 7;
+
+    /**
+     * The financial year "now" falls in, ignoring any admin pin.
+     */
+    public function clockYear(Entity $entity): int
     {
         return ReportingPeriod::year(now(), $entity);
+    }
+
+    /**
+     * The working financial year: the admin's open-year pin when one is
+     * set and still within the allowed window, otherwise the calendar
+     * year. Drives the Financial Years page anchor, the unclosed-prior-year
+     * warning and the year-end closability rules.
+     */
+    public function currentYear(Entity $entity): int
+    {
+        $clock = $this->clockYear($entity);
+        $pinned = EntitySetting::storedOpenYear($entity);
+
+        // A pin left behind by the clock (outside the window) has expired;
+        // fall back to the calendar year rather than trust a stale value.
+        if ($pinned !== null && $pinned >= $clock - self::OPEN_YEAR_MAX_AGE && $pinned <= $clock) {
+            return $pinned;
+        }
+
+        return $clock;
+    }
+
+    /**
+     * The [min, max] financial years the open year may be pinned to.
+     */
+    public function openYearWindow(Entity $entity): array
+    {
+        $clock = $this->clockYear($entity);
+
+        return [$clock - self::OPEN_YEAR_MAX_AGE, $clock];
+    }
+
+    /**
+     * Pin (or clear) the open year. Pinning is the gateway for backfilling
+     * a past year: it ensures the year's IFRS ReportingPeriod row exists
+     * (OPEN), which makes the year selectable for opening balances and
+     * postable for transactions dated in it. Closed years must be reopened
+     * first.
+     */
+    public function setOpenYear(Entity $entity, ?int $year): void
+    {
+        if ($year === null) {
+            EntitySetting::setOpenYear($entity, null);
+
+            return;
+        }
+
+        [$min, $max] = $this->openYearWindow($entity);
+        if ($year < $min || $year > $max) {
+            throw new \InvalidArgumentException(
+                "FY {$year} is outside the allowed range FY {$min} – FY {$max}."
+            );
+        }
+
+        if ($this->isClosed($entity, $year)) {
+            throw new \InvalidArgumentException(
+                "FY {$year} is closed. Reopen it from the Financial Years page before setting it as the open year."
+            );
+        }
+
+        EntitySetting::setOpenYear($entity, $year);
+        $this->reportingPeriod($entity, $year);
+    }
+
+    /**
+     * Years the open year may be pinned to — the calendar FY and the seven
+     * before it — with their bounds and closed flags, newest first.
+     */
+    public function openYearOptions(Entity $entity): array
+    {
+        [$min, $max] = $this->openYearWindow($entity);
+
+        $options = [];
+        for ($year = $max; $year >= $min; $year--) {
+            $bounds = $this->bounds($entity, $year);
+            $options[] = (object) [
+                'year' => $year,
+                'start' => $bounds['start'],
+                'end' => $bounds['end'],
+                'closed' => $this->isClosed($entity, $year),
+            ];
+        }
+
+        return $options;
     }
 
     /**
@@ -95,11 +190,11 @@ class FiscalYearService
                 ->where('entity_id', $entity->id)
                 ->where('calendar_year', $year)
                 ->exists();
-            if (!$exists) {
+            if (! $exists) {
                 return null;
             }
 
-            if (!$this->isClosed($entity, $year)) {
+            if (! $this->isClosed($entity, $year)) {
                 return $year;
             }
         }
@@ -165,7 +260,7 @@ class FiscalYearService
             ->whereDate('next_period_date', '<=', $end->toDateString())
             ->orderBy('next_period_date')
             ->get(['description', 'next_period_date', 'monthly_amount']);
-        $unreconciledBank = \App\Models\BankTransaction::where('status', 'PENDING')
+        $unreconciledBank = BankTransaction::where('status', 'PENDING')
             ->whereBetween('transaction_date', [$start->toDateString(), $end->toDateString()])
             ->count();
 
@@ -176,7 +271,7 @@ class FiscalYearService
 
         $formatList = fn ($items) => $items->take(5)->map(
             fn ($i) => $i->payment_number ?? $i->description
-        )->implode(', ') . ($items->count() > 5 ? ' …' : '');
+        )->implode(', ').($items->count() > 5 ? ' …' : '');
 
         return [
             [
@@ -186,7 +281,7 @@ class FiscalYearService
                 'pass' => $unpostedPayments->isEmpty(),
                 'detail' => $unpostedPayments->isEmpty()
                     ? 'No unposted payments dated in the year.'
-                    : $unpostedPayments->count() . ' unposted: ' . $formatList($unpostedPayments),
+                    : $unpostedPayments->count().' unposted: '.$formatList($unpostedPayments),
             ],
             [
                 'key' => 'unposted_bill_payments',
@@ -195,7 +290,7 @@ class FiscalYearService
                 'pass' => $unpostedBillPayments->isEmpty(),
                 'detail' => $unpostedBillPayments->isEmpty()
                     ? 'No unposted supplier payments dated in the year.'
-                    : $unpostedBillPayments->count() . ' unposted: ' . $formatList($unpostedBillPayments),
+                    : $unpostedBillPayments->count().' unposted: '.$formatList($unpostedBillPayments),
             ],
             [
                 'key' => 'overdue_amortisation',
@@ -204,7 +299,7 @@ class FiscalYearService
                 'pass' => $overdueAmortisations->isEmpty(),
                 'detail' => $overdueAmortisations->isEmpty()
                     ? 'All amortisation entries due by year end are posted.'
-                    : $overdueAmortisations->count() . ' schedules behind: ' . $formatList($overdueAmortisations),
+                    : $overdueAmortisations->count().' schedules behind: '.$formatList($overdueAmortisations),
             ],
             [
                 'key' => 'unreconciled_bank_transactions',
@@ -213,14 +308,14 @@ class FiscalYearService
                 'pass' => $unreconciledBank === 0,
                 'detail' => $unreconciledBank === 0
                     ? 'No pending bank transactions dated in the year.'
-                    : $unreconciledBank . ' pending bank transaction(s) dated in the year.',
+                    : $unreconciledBank.' pending bank transaction(s) dated in the year.',
             ],
             [
                 'key' => 'ledger_activity',
                 'label' => 'Ledger activity in the year',
                 'blocking' => false,
                 'pass' => true,
-                'detail' => $postedTransactions . ' posted ledger transaction(s) dated in the year.',
+                'detail' => $postedTransactions.' posted ledger transaction(s) dated in the year.',
             ],
         ];
     }
@@ -228,7 +323,7 @@ class FiscalYearService
     public function checklistPasses(array $checklist): bool
     {
         foreach ($checklist as $item) {
-            if ($item['blocking'] && !$item['pass']) {
+            if ($item['blocking'] && ! $item['pass']) {
                 return false;
             }
         }
@@ -270,7 +365,7 @@ class FiscalYearService
     {
         return $query->where(function ($q) {
             $q->whereNull('t.reference')
-                ->orWhereNot('t.reference', 'like', FiscalYearClose::CLOSING_REFERENCE_PREFIX . '%');
+                ->orWhereNot('t.reference', 'like', FiscalYearClose::CLOSING_REFERENCE_PREFIX.'%');
         });
     }
 
@@ -361,7 +456,7 @@ class FiscalYearService
         $checklist = $this->checklist($entity, $year);
 
         $re = $this->retainedEarningsAccount($entity);
-        if (!$re) {
+        if (! $re) {
             throw new \RuntimeException(
                 'Retained Earnings account (code 3200) not found for entity — required by the year-end close.'
             );
@@ -446,7 +541,7 @@ class FiscalYearService
                 'line_count' => count($trial['lines']),
             ],
         ]);
-        if ($userId && !$record->requested_by) {
+        if ($userId && ! $record->requested_by) {
             $record->requested_by = $userId;
         }
         $record->save();
@@ -465,7 +560,7 @@ class FiscalYearService
         $this->assertClosable($entity, $year);
         $record = $this->ensureCloseRecord($entity, $year);
 
-        if (!$record->canSubmit()) {
+        if (! $record->canSubmit()) {
             throw new \InvalidArgumentException(
                 "FY {$year} cannot be submitted for approval from status '{$record->status}'."
             );
@@ -491,17 +586,17 @@ class FiscalYearService
     {
         $record = $this->closeRecord($entity, $year);
 
-        if (!$record || !$record->canApprove()) {
+        if (! $record || ! $record->canApprove()) {
             throw new \InvalidArgumentException("FY {$year} has no close request pending approval.");
         }
 
-        if (!$approver->hasAnyRole('admin', 'accountant')) {
+        if (! $approver->hasAnyRole('admin', 'accountant')) {
             throw new \InvalidArgumentException(
                 'Only an accountant or an admin can approve a financial year close.'
             );
         }
 
-        if (!$force && $record->requested_by === $approver->id) {
+        if (! $force && $record->requested_by === $approver->id) {
             throw new \InvalidArgumentException(
                 "The requester cannot approve their own FY {$year} close request."
             );
@@ -530,10 +625,10 @@ class FiscalYearService
         $this->assertClosable($entity, $year);
 
         $record = $this->closeRecord($entity, $year);
-        if ((!$record || !$record->canClose()) && !$force) {
+        if ((! $record || ! $record->canClose()) && ! $force) {
             throw new \InvalidArgumentException(
                 "FY {$year} has no approved close request. Submit and approve it first "
-                . '(or pass --force to bypass the workflow).'
+                .'(or pass --force to bypass the workflow).'
             );
         }
         $record ??= $this->ensureCloseRecord($entity, $year);
@@ -541,9 +636,9 @@ class FiscalYearService
         return DB::transaction(function () use ($entity, $year, $force, $record) {
             $trial = $this->trialClose($entity, $year);
 
-            if (!$trial['checklist_passes'] && !$force) {
+            if (! $trial['checklist_passes'] && ! $force) {
                 $failed = collect($trial['checklist'])
-                    ->filter(fn ($item) => $item['blocking'] && !$item['pass'])
+                    ->filter(fn ($item) => $item['blocking'] && ! $item['pass'])
                     ->map(fn ($item) => $item['label'])
                     ->implode('; ');
 
@@ -579,8 +674,8 @@ class FiscalYearService
                     'credited' => $credited,
                     'entity_id' => $entity->id,
                     'narration' => "FY {$year} year-end close: "
-                        . ($credited ? 'revenue' : 'expense')
-                        . ' accounts closed to Retained Earnings',
+                        .($credited ? 'revenue' : 'expense')
+                        .' accounts closed to Retained Earnings',
                     'reference' => $record->closingReference(),
                 ]);
 
@@ -617,7 +712,7 @@ class FiscalYearService
                 FiscalPeriod::createMonthlyPeriodsForYear($year, $entity->year_start);
             }
             foreach (FiscalPeriod::where('year', $year)->get() as $fiscalPeriod) {
-                if (!$fiscalPeriod->isLocked()) {
+                if (! $fiscalPeriod->isLocked()) {
                     $fiscalPeriod->lock("FY {$year} closed");
                 }
             }
@@ -658,11 +753,11 @@ class FiscalYearService
     {
         $record = $this->closeRecord($entity, $year);
 
-        if (!$record || !$record->canReopen()) {
+        if (! $record || ! $record->canReopen()) {
             throw new \InvalidArgumentException("FY {$year} has no executed close to reopen.");
         }
 
-        if (!$this->isClosed($entity, $year)) {
+        if (! $this->isClosed($entity, $year)) {
             throw new \InvalidArgumentException(
                 "FY {$year}'s reporting period is not CLOSED — nothing to reopen."
             );
@@ -680,7 +775,7 @@ class FiscalYearService
                 IfrsPosting::reverseTransaction(
                     (int) $transactionId,
                     "FY {$year} reopened: reversal of year-end closing entry",
-                    $record->closingReference() . '-REV',
+                    $record->closingReference().'-REV',
                     throw: true,
                 );
             }

@@ -3,6 +3,26 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] — 2026-09-02
+
+### Added — admin-settable "currently open year" (backfill gateway)
+
+- New Administration page (`/administration`, linked from an "Administration"
+  section in the admin's profile dropdown) where an administrator pins the
+  currently open financial year — any FY from the calendar-derived one back
+  seven years. The pin lives in the app-owned `entity_settings.open_year`
+  column; null follows the calendar, and a pin left outside the sliding window
+  by the clock is ignored on read (the page explains the expiry).
+- Pinning a past year creates its OPEN `ifrs_reporting_periods` row — the
+  gateway for backfilling history: the year becomes selectable on the Opening
+  Balances page (which now defaults to the open year) and transactions dated
+  in it can post. Closed years must be reopened before pinning; the year-end
+  close still governs which years are locked.
+- `FiscalYearService::currentYear()` honours the pin, so the Financial Years
+  page, the unclosed-prior-year warning and the close-workflow guards anchor
+  on the working year. Clock-derived statutory logic (BAS/report year pickers,
+  period locks, package mechanics) is unchanged.
+
 ## [Unreleased] — 2026-08-27
 
 ### Added — prepaid subscriptions, domain names and licence fees (AASB/IFRS)

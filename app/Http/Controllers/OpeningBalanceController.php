@@ -2,12 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\FiscalYearService;
 use App\Services\IfrsPosting;
 use App\Services\OpeningBalances;
-use Carbon\Carbon;
 use IFRS\Models\Account;
 use IFRS\Models\Balance;
-use IFRS\Models\ReportingPeriod;
 use IFRS\Models\Transaction;
 use IFRS\Reports\IncomeStatement;
 use IFRS\Scopes\EntityScope;
@@ -21,13 +20,18 @@ use Illuminate\Support\Facades\DB;
  */
 class OpeningBalanceController extends Controller
 {
+    public function __construct(protected FiscalYearService $fiscalYears) {}
+
     public function index(Request $request)
     {
         $entity = IfrsPosting::resolveEntity();
         abort_unless((bool) $entity, 404, 'No IFRS entity configured.');
 
         $periods = OpeningBalances::editablePeriods($entity);
-        $period = $periods->firstWhere('calendar_year', (int) $request->get('year')) ?? $periods->first();
+        // Default the selector to the open year — the backfill entry point.
+        $period = $periods->firstWhere('calendar_year', (int) $request->get('year'))
+            ?? $periods->firstWhere('calendar_year', $this->fiscalYears->currentYear($entity))
+            ?? $periods->first();
 
         $accounts = Account::where('entity_id', $entity->id)
             ->whereNotIn('account_type', IncomeStatement::getAccountTypes())
@@ -83,6 +87,7 @@ class OpeningBalanceController extends Controller
         foreach ($rows as $accountId => $row) {
             if ($row['debit'] > 0 && $row['credit'] > 0) {
                 $account = $accounts[$accountId];
+
                 return back()->withInput()
                     ->with('error', "{$account->code} {$account->name}: enter a debit or a credit, not both.");
             }
@@ -104,6 +109,7 @@ class OpeningBalanceController extends Controller
 
                 if ($side === null) {
                     $existing?->delete();
+
                     continue;
                 }
 

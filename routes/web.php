@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdministrationController;
 use App\Http\Controllers\Api\WidgetPreferenceController;
 use App\Http\Controllers\BillController;
 use App\Http\Controllers\BillPaymentController;
@@ -55,6 +56,12 @@ Route::middleware('auth')->group(function () {
     // Users (admin only)
     Route::middleware('role:admin')->group(function () {
         Route::resource('users', UserController::class);
+    });
+
+    // Administration settings (admin only) — currently-open-year pin
+    Route::middleware('role:admin')->group(function () {
+        Route::get('/administration', [AdministrationController::class, 'index'])->name('administration.index');
+        Route::put('/administration/open-year', [AdministrationController::class, 'updateOpenYear'])->name('administration.open-year.update');
     });
 
     // Opening balances (admin or accountant)
