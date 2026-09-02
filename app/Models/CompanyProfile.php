@@ -6,6 +6,7 @@ use IFRS\Models\Entity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Company identity for the reporting entity — the legal name lives on
@@ -26,6 +27,7 @@ class CompanyProfile extends Model
     protected $fillable = [
         'entity_id',
         'trading_name',
+        'logo',
         'abn',
         'tfn',
         'acn',
@@ -39,6 +41,20 @@ class CompanyProfile extends Model
         'email',
         'phone',
     ];
+
+    /**
+     * Servable URL for the stored logo (SVG or PNG), checked on the
+     * public disk where the file lives rather than through the
+     * public/storage link. Null when absent.
+     */
+    public function logoUrl(): ?string
+    {
+        if ($this->logo && Storage::disk('public')->exists($this->logo)) {
+            return asset('storage/'.$this->logo);
+        }
+
+        return null;
+    }
 
     public static function taxRateTypes(): array
     {

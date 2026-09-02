@@ -72,6 +72,8 @@ Route::middleware('auth')->group(function () {
         // Company identity: ABN/TFN, address, directors, shareholders
         Route::get('/company-profile', [CompanyProfileController::class, 'index'])->name('company-profile.index');
         Route::put('/company-profile', [CompanyProfileController::class, 'update'])->name('company-profile.update');
+        Route::post('/company-profile/logo', [LogoController::class, 'storeCompany'])->name('company-profile.logo.store');
+        Route::delete('/company-profile/logo', [LogoController::class, 'destroyCompany'])->name('company-profile.logo.destroy');
 
         // Prepaid subscriptions / licences (ledger-posting actions)
         Route::get('/prepayments', [PrepaymentController::class, 'index'])->name('prepayments.index');
