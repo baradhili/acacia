@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Client;
 use App\Models\Project;
+use App\Models\PurchaseOrder;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Carbon\Carbon;
@@ -82,6 +83,60 @@ class TimeEntryLifecycleTest extends TestCase
         $entry->save();
 
         $this->assertSame($other->id, $entry->fresh()->client_id);
+    }
+
+    public function test_purchase_order_must_match_the_effective_client(): void
+    {
+        $otherClient = Client::factory()->create();
+        $po = PurchaseOrder::create([
+            'client_id' => $this->client->id,
+            'title' => 'PO for the project client',
+            'budgeted_amount' => 10000,
+            'status' => 'open',
+        ]);
+
+        $base = [
+            'entry_date' => '2024-01-15',
+            'hours' => 2,
+            'description' => 'PO work',
+            'billable' => true,
+        ];
+
+        // Direct match still works (client or project supplying it).
+        $this->actingAs($this->user)->post(route('time-entries.store'),
+            $base + ['purchase_order_id' => $po->id, 'client_id' => $this->client->id]
+        )->assertRedirect(route('time-entries.index'));
+
+        $this->actingAs($this->user)->post(route('time-entries.store'),
+            $base + ['purchase_order_id' => $po->id, 'project_id' => $this->project->id]
+        )->assertRedirect(route('time-entries.index'));
+
+        // A client from elsewhere is rejected.
+        $this->actingAs($this->user)->post(route('time-entries.store'),
+            $base + ['purchase_order_id' => $po->id, 'client_id' => $otherClient->id]
+        )->assertSessionHasErrors('purchase_order_id');
+
+        // Project precedence: the project's client decides, so a matching
+        // client_id cannot smuggle a foreign project onto the PO's work.
+        $foreignProject = Project::factory()->create(['client_id' => $otherClient->id]);
+        $this->actingAs($this->user)->post(route('time-entries.store'),
+            $base + [
+                'purchase_order_id' => $po->id,
+                'client_id' => $this->client->id,
+                'project_id' => $foreignProject->id,
+            ]
+        )->assertSessionHasErrors('purchase_order_id');
+
+        // A PO tied to a specific project only accepts that project
+        // (a sibling project of the same client still misses the tie).
+        $po->update(['project_id' => $this->project->id]);
+        $siblingProject = Project::factory()->create(['client_id' => $this->client->id]);
+        $this->actingAs($this->user)->post(route('time-entries.store'),
+            $base + [
+                'purchase_order_id' => $po->id,
+                'project_id' => $siblingProject->id,
+            ]
+        )->assertSessionHasErrors('project_id');
     }
 
     public function test_can_create_manual_hours_entry_without_times(): void

@@ -11,6 +11,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class TimeEntryController extends Controller
 {
@@ -55,7 +56,8 @@ class TimeEntryController extends Controller
             DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->withInput()->with('error', 'Error creating time entry: ' . $e->getMessage());
+
+            return back()->withInput()->with('error', 'Error creating time entry: '.$e->getMessage());
         }
 
         return redirect()->route('time-entries.index')
@@ -65,6 +67,7 @@ class TimeEntryController extends Controller
     public function show(TimeEntry $timeEntry)
     {
         $timeEntry->load(['user', 'client', 'project', 'purchaseOrder', 'approver', 'breaks']);
+
         return view('time-entries.show', compact('timeEntry'));
     }
 
@@ -105,7 +108,8 @@ class TimeEntryController extends Controller
             DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->withInput()->with('error', 'Error updating time entry: ' . $e->getMessage());
+
+            return back()->withInput()->with('error', 'Error updating time entry: '.$e->getMessage());
         }
 
         return redirect()->route('time-entries.show', $timeEntry)
@@ -194,20 +198,22 @@ class TimeEntryController extends Controller
         // Drop half-entered break rows before the cross-field checks.
         $validated['breaks'] = array_values(array_filter(
             $validated['breaks'] ?? [],
-            fn ($b) => !empty($b['start']) && !empty($b['end'])
+            fn ($b) => ! empty($b['start']) && ! empty($b['end'])
         ));
 
-        if (!empty($validated['breaks'])) {
+        $this->validatePurchaseOrderFit($validated);
+
+        if (! empty($validated['breaks'])) {
             if (empty($validated['start_time']) || empty($validated['end_time'])) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
+                throw ValidationException::withMessages([
                     'breaks' => 'Breaks can only be recorded on entries with start and end times.',
                 ]);
             }
 
             foreach ($validated['breaks'] as $i => $break) {
                 if ($break['start'] < $validated['start_time'] || $break['end'] > $validated['end_time']) {
-                    throw \Illuminate\Validation\ValidationException::withMessages([
-                        'breaks' => "Break " . ($i + 1) . " must fall within the entry's start and end times.",
+                    throw ValidationException::withMessages([
+                        'breaks' => 'Break '.($i + 1)." must fall within the entry's start and end times.",
                     ]);
                 }
             }
@@ -217,7 +223,7 @@ class TimeEntryController extends Controller
             usort($sorted, fn ($a, $b) => strcmp($a['start'], $b['start']));
             for ($i = 1; $i < count($sorted); $i++) {
                 if ($sorted[$i]['start'] < $sorted[$i - 1]['end']) {
-                    throw \Illuminate\Validation\ValidationException::withMessages([
+                    throw ValidationException::withMessages([
                         'breaks' => 'Breaks cannot overlap each other.',
                     ]);
                 }
@@ -225,6 +231,41 @@ class TimeEntryController extends Controller
         }
 
         return $validated;
+    }
+
+    /**
+     * A purchase order belongs to one client (and possibly one project),
+     * so an entry booked against it must target that same client. The
+     * effective client applies project precedence — mirroring the model's
+     * saving hook, a project's client always wins over the submitted
+     * client_id. Entries without a purchase order are unchecked.
+     */
+    protected function validatePurchaseOrderFit(array $validated): void
+    {
+        if (empty($validated['purchase_order_id'])) {
+            return;
+        }
+
+        $purchaseOrder = PurchaseOrder::find($validated['purchase_order_id']);
+
+        $project = ! empty($validated['project_id'])
+            ? Project::find($validated['project_id'])
+            : null;
+        $effectiveClientId = $project?->client_id ?? ($validated['client_id'] ?? null);
+
+        if ((int) $purchaseOrder->client_id !== (int) $effectiveClientId) {
+            throw ValidationException::withMessages([
+                'purchase_order_id' => 'This purchase order belongs to a different client'
+                    .($project ? ' than the selected project' : '').'.',
+            ]);
+        }
+
+        if ($purchaseOrder->project_id
+            && (int) $purchaseOrder->project_id !== (int) ($validated['project_id'] ?? 0)) {
+            throw ValidationException::withMessages([
+                'project_id' => 'This purchase order is tied to a specific project — select that project or remove the purchase order.',
+            ]);
+        }
     }
 
     /**
@@ -249,7 +290,7 @@ class TimeEntryController extends Controller
             'description' => $validated['description'] ?? null,
         ];
 
-        if (!empty($validated['start_time']) && !empty($validated['end_time'])) {
+        if (! empty($validated['start_time']) && ! empty($validated['end_time'])) {
             $payload['start_time'] = $date->copy()->setTimeFromTimeString($validated['start_time']);
             $payload['end_time'] = $date->copy()->setTimeFromTimeString($validated['end_time']);
             $payload['hours'] = round($payload['start_time']->floatDiffInHours($payload['end_time']), 2);
@@ -294,7 +335,7 @@ class TimeEntryController extends Controller
             ->get();
 
         // Group by day
-        $byDay = $timeEntries->groupBy(fn($e) => $e->entry_date->format('Y-m-d'));
+        $byDay = $timeEntries->groupBy(fn ($e) => $e->entry_date->format('Y-m-d'));
 
         return view('time-entries.weekly', compact('timeEntries', 'byDay', 'weekStart', 'weekEnd', 'userId'));
     }
@@ -317,7 +358,7 @@ class TimeEntryController extends Controller
             ->get();
 
         // Group by day
-        $byDay = $timeEntries->groupBy(fn($e) => $e->entry_date->format('Y-m-d'));
+        $byDay = $timeEntries->groupBy(fn ($e) => $e->entry_date->format('Y-m-d'));
 
         // Summary stats
         $totalHours = $timeEntries->sum('hours');
