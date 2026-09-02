@@ -12,6 +12,7 @@ use App\Models\Prepayment;
 use App\Models\User;
 use Carbon\Carbon;
 use IFRS\Models\Account;
+use IFRS\Models\Balance;
 use IFRS\Models\Entity;
 use IFRS\Models\Ledger;
 use IFRS\Models\LineItem;
@@ -716,6 +717,13 @@ class FiscalYearService
                 }
             }
 
+            // The closed position becomes next year's opening set: one
+            // Balance row per balance-sheet account, dated the year end
+            // (the eve of FY {year+1}), carrying the full closing balance
+            // including the retained profit just closed. Reports read it
+            // as the superseding snapshot — no manual re-entry, ever.
+            $this->createNextYearOpeningBalances($entity, $year, $end);
+
             $record->fill([
                 'status' => FiscalYearClose::STATUS_CLOSED,
                 'closed_at' => now(),
@@ -783,6 +791,14 @@ class FiscalYearService
                 $fiscalPeriod->unlock();
             }
 
+            // The generated opening set for FY {year+1} was derived from
+            // the now-reversed closing position — drop it; a later
+            // re-close regenerates it from the fresh position.
+            Balance::withoutGlobalScope(EntityScope::class)
+                ->where('entity_id', $entity->id)
+                ->where('reference', $record->closingReference().'-OB')
+                ->delete();
+
             $record->fill([
                 'status' => FiscalYearClose::STATUS_REOPENED,
                 'reopened_at' => now(),
@@ -796,5 +812,52 @@ class FiscalYearService
 
             return $record;
         });
+    }
+
+    /**
+     * Write FY {year+1}'s opening set from the closing position: one
+     * Balance row per balance-sheet account (non-P&L) whose closing
+     * balance is non-zero, dated the year end, stamped with the closing
+     * reference plus "-OB" so the set is recognisable as system-
+     * generated (read-only in the Opening Balances UI, removed by
+     * reopen()). Any existing rows for the period are superseded first —
+     * including a manual migration set, which the closing position
+     * already contains. Runs inside close()'s transaction.
+     */
+    protected function createNextYearOpeningBalances(Entity $entity, int $year, Carbon $end): void
+    {
+        $nextPeriod = $this->reportingPeriod($entity, $year + 1);
+
+        Balance::withoutGlobalScope(EntityScope::class)
+            ->where('entity_id', $entity->id)
+            ->where('reporting_period_id', $nextPeriod->id)
+            ->delete();
+
+        $accounts = Account::withoutGlobalScope(EntityScope::class)
+            ->where('entity_id', $entity->id)
+            ->whereNotIn('account_type', self::PNL_ACCOUNT_TYPES)
+            ->orderBy('code')
+            ->get();
+
+        $reference = FiscalYearClose::CLOSING_REFERENCE_PREFIX.$year.'-OB';
+
+        foreach ($accounts as $account) {
+            $balance = round(OpeningBalances::balanceAt($account, $entity, $end->copy()->endOfDay()), 2);
+            if (abs($balance) < 0.01) {
+                continue;
+            }
+
+            (new Balance([
+                'entity_id' => $entity->id,
+                'account_id' => $account->id,
+                'reporting_period_id' => $nextPeriod->id,
+                'currency_id' => $account->currency_id,
+                'transaction_type' => Transaction::JN,
+                'transaction_date' => $end->copy()->startOfDay(),
+                'balance_type' => $balance > 0 ? Balance::DEBIT : Balance::CREDIT,
+                'balance' => abs($balance),
+                'reference' => $reference,
+            ]))->save();
+        }
     }
 }
