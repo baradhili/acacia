@@ -444,6 +444,10 @@ class InvoiceController extends Controller
      */
     public function createFromPurchaseOrder(PurchaseOrder $purchaseOrder)
     {
+        if (! $purchaseOrder->canBeInvoiced()) {
+            return back()->with('error', 'Only open or partially used purchase orders can be invoiced.');
+        }
+
         $timeEntries = $purchaseOrder->timeEntries()
             ->where('status', TimeEntry::STATUS_APPROVED)
             ->where('billable', true)
@@ -472,6 +476,10 @@ class InvoiceController extends Controller
      */
     public function storeFromPurchaseOrder(Request $request, PurchaseOrder $purchaseOrder)
     {
+        if (! $purchaseOrder->canBeInvoiced()) {
+            return back()->with('error', 'Only open or partially used purchase orders can be invoiced.');
+        }
+
         $validated = $request->validate([
             'time_entry_ids' => 'required|array|min:1',
             'time_entry_ids.*' => 'exists:time_entries,id',

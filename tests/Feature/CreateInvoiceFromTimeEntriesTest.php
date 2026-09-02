@@ -300,6 +300,47 @@ class CreateInvoiceFromTimeEntriesTest extends TestCase
         $this->assertEquals(880, (float) $po->refresh()->used_amount);
     }
 
+    public function test_only_open_or_partially_used_pos_can_be_invoiced(): void
+    {
+        $po = PurchaseOrder::create([
+            'client_id' => $this->client->id,
+            'title' => 'Not yet live',
+            'budgeted_amount' => 10000,
+            'status' => 'draft',
+        ]);
+        $entry = $this->makeEntry(['purchase_order_id' => $po->id]);
+
+        // The action never renders for non-invoiceable statuses, and the
+        // controller rejects direct hits on both endpoints.
+        $this->actingAs($this->user)
+            ->get(route('purchase-orders.show', $po))
+            ->assertOk()
+            ->assertDontSee('Create Invoice');
+
+        $this->actingAs($this->user)
+            ->get(route('purchase-orders.create-invoice', $po))
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $this->actingAs($this->user)
+            ->post(route('purchase-orders.create-invoice.store', $po), [
+                'time_entry_ids' => [$entry->id],
+                'issue_date' => now()->toDateString(),
+                'due_date' => now()->addDays(30)->toDateString(),
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $this->assertDatabaseCount('invoices', 0);
+
+        // partially_used stays invoiceable alongside open.
+        $po->update(['status' => 'partially_used']);
+        $this->actingAs($this->user)
+            ->get(route('purchase-orders.show', $po))
+            ->assertOk()
+            ->assertSee('Create Invoice');
+    }
+
     public function test_po_flow_rejects_entries_from_another_po(): void
     {
         $poA = PurchaseOrder::create([

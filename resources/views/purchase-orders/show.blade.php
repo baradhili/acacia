@@ -17,7 +17,7 @@
                     ->whereDoesntHave('invoiceItem')
                     ->exists();
             @endphp
-            @if($hasInvoiceableEntries && !in_array($purchaseOrder->status, ['completed', 'cancelled']))
+            @if($hasInvoiceableEntries && $purchaseOrder->canBeInvoiced())
                 <a href="{{ route('purchase-orders.create-invoice', $purchaseOrder) }}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg">
                     Create Invoice
                 </a>

@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
-use Illuminate\Support\Str;
 
 class PurchaseOrder extends Model
 {
@@ -39,9 +38,13 @@ class PurchaseOrder extends Model
 
     // Status constants
     const STATUS_DRAFT = 'draft';
+
     const STATUS_OPEN = 'open';
+
     const STATUS_PARTIALLY_USED = 'partially_used';
+
     const STATUS_COMPLETED = 'completed';
+
     const STATUS_CANCELLED = 'cancelled';
 
     // Valid state transitions
@@ -75,7 +78,7 @@ class PurchaseOrder extends Model
             ->first();
 
         if ($lastPo) {
-            preg_match('/PO-' . $year . '-(\d+)/', $lastPo->po_number, $matches);
+            preg_match('/PO-'.$year.'-(\d+)/', $lastPo->po_number, $matches);
             $nextNumber = isset($matches[1]) ? ((int) $matches[1]) + 1 : 1;
         } else {
             $nextNumber = 1;
@@ -131,6 +134,7 @@ class PurchaseOrder extends Model
         if ($this->budgeted_amount == 0) {
             return 0;
         }
+
         return ((float) $this->used_amount / (float) $this->budgeted_amount) * 100;
     }
 
@@ -140,6 +144,7 @@ class PurchaseOrder extends Model
     public function canTransitionTo(string $status): bool
     {
         $allowedTransitions = self::$transitions[$this->status] ?? [];
+
         return in_array($status, $allowedTransitions);
     }
 
@@ -189,7 +194,7 @@ class PurchaseOrder extends Model
     public function updateStatus(): void
     {
         // Only update status automatically for open or partially_used POs
-        if (!in_array($this->status, [self::STATUS_OPEN, self::STATUS_PARTIALLY_USED])) {
+        if (! in_array($this->status, [self::STATUS_OPEN, self::STATUS_PARTIALLY_USED])) {
             return;
         }
 
@@ -203,15 +208,26 @@ class PurchaseOrder extends Model
     }
 
     /**
+     * Invoicing draws down a live PO's budget: only open and
+     * partially_used POs qualify — drafts are not active yet, and
+     * completed or cancelled POs are finished.
+     */
+    public function canBeInvoiced(): bool
+    {
+        return in_array($this->status, [self::STATUS_OPEN, self::STATUS_PARTIALLY_USED]);
+    }
+
+    /**
      * Transition to a new status with validation
      */
     public function transitionTo(string $status): bool
     {
-        if (!$this->canTransitionTo($status)) {
+        if (! $this->canTransitionTo($status)) {
             return false;
         }
 
         $this->update(['status' => $status]);
+
         return true;
     }
 
@@ -254,6 +270,7 @@ class PurchaseOrder extends Model
             'utilization_notified_80' => false,
             'utilization_notified_100' => false,
         ]);
+
         return true;
     }
 
@@ -262,9 +279,9 @@ class PurchaseOrder extends Model
      */
     public function shouldNotify80Percent(): bool
     {
-        return $this->utilization >= 80 
-            && $this->utilization < 100 
-            && !$this->utilization_notified_80;
+        return $this->utilization >= 80
+            && $this->utilization < 100
+            && ! $this->utilization_notified_80;
     }
 
     /**
@@ -272,7 +289,7 @@ class PurchaseOrder extends Model
      */
     public function shouldNotify100Percent(): bool
     {
-        return $this->utilization >= 100 && !$this->utilization_notified_100;
+        return $this->utilization >= 100 && ! $this->utilization_notified_100;
     }
 
     /**
