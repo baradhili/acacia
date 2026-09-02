@@ -8,8 +8,8 @@ use App\Models\CompanyShareholder;
 use App\Models\User;
 use IFRS\Models\Currency;
 use IFRS\Models\Entity;
-use Spatie\Permission\Models\Role;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class CompanyProfileTest extends TestCase
@@ -17,6 +17,7 @@ class CompanyProfileTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected Entity $entity;
 
     protected function setUp(): void
@@ -83,6 +84,8 @@ class CompanyProfileTest extends TestCase
     {
         $response = $this->actingAs($this->admin)
             ->put(route('company-profile.update'), [
+                'name' => 'Test Entity Pty Ltd',
+                'trading_name' => 'TestCo Services',
                 'abn' => '51824753556',
                 'tfn' => '123456789',
                 'acn' => '123456789',
@@ -111,6 +114,10 @@ class CompanyProfileTest extends TestCase
         $this->assertSame('123456789', $profile->tfn);
         $this->assertSame('Sydney', $profile->suburb);
 
+        // The legal name moved onto the entity; the trading name stayed here.
+        $this->assertSame('Test Entity Pty Ltd', $this->entity->fresh()->name);
+        $this->assertSame('TestCo Services', $profile->trading_name);
+
         // The nameless director row is dropped, not stored.
         $this->assertSame(['Jane Doe'], $profile->fresh()->directors()->pluck('name')->all());
         $this->assertSame(1, CompanyDirector::count());
@@ -123,9 +130,42 @@ class CompanyProfileTest extends TestCase
         // The saved screen re-displays the values.
         $this->actingAs($this->admin)
             ->get(route('company-profile.index'))
+            ->assertSee('Test Entity Pty Ltd')
+            ->assertSee('TestCo Services')
             ->assertSee('51824753556')
             ->assertSee('Jane Doe')
             ->assertSee('Acme Super Fund');
+    }
+
+    public function test_company_profile_update_requires_a_legal_name_and_clears_trading_name(): void
+    {
+        // The legal name is mandatory on every save.
+        $this->actingAs($this->admin)
+            ->put(route('company-profile.update'), ['trading_name' => 'TestCo'])
+            ->assertSessionHasErrors('name');
+
+        // A blank trading name clears it; the legal name can stay as-is.
+        $this->entity->update(['name' => 'Kept Legal Name Pty Ltd']);
+        CompanyProfile::create([
+            'entity_id' => $this->entity->id,
+            'trading_name' => 'Old Trading Name',
+            'country' => 'AU',
+        ]);
+
+        $this->actingAs($this->admin)
+            ->put(route('company-profile.update'), ['name' => 'Kept Legal Name Pty Ltd', 'trading_name' => ''])
+            ->assertSessionHas('success');
+
+        $profile = CompanyProfile::where('entity_id', $this->entity->id)->firstOrFail();
+        $this->assertNull($profile->trading_name);
+        $this->assertSame('Kept Legal Name Pty Ltd', $this->entity->fresh()->name);
+
+        // The page shows the legal name with the trading name omitted.
+        $this->actingAs($this->admin)
+            ->get(route('company-profile.index'))
+            ->assertOk()
+            ->assertSee('Kept Legal Name Pty Ltd')
+            ->assertDontSee('trading as');
     }
 
     public function test_company_profile_update_replaces_registry_rows(): void
@@ -136,6 +176,7 @@ class CompanyProfileTest extends TestCase
 
         $this->actingAs($this->admin)
             ->put(route('company-profile.update'), [
+                'name' => 'Test Entity',
                 'directors' => [['name' => 'New Director']],
                 'shareholders' => [['name' => 'New Holder', 'share_class' => 'ORD', 'shares_held' => 100, 'resident_for_tax' => '1', 'status' => 'A']],
             ])
@@ -150,6 +191,7 @@ class CompanyProfileTest extends TestCase
     {
         $response = $this->actingAs($this->admin)
             ->put(route('company-profile.update'), [
+                'name' => 'Test Entity',
                 'abn' => '12345', // too short
                 'tfn' => 'not-digits',
                 'email' => 'not-an-email',
