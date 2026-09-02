@@ -38,17 +38,17 @@
 
 - [ ] Process of adding profile picture fails
 
-- [ ] No way of creating an opening balance for franking account
+- [x] No way of creating an opening balance for franking account
 
 - [ ] openeing balances view doesn't add totals - should totals even be visible?
 
-- [ ] Need to be able to set open balances for earlier fiscal years than this one
+- [x] Need to be able to set open balances for earlier fiscal years than this one
 
 - [ ] shareholders - share held at what value? $10 for 1000
 
 - [x] company details - index wants resignation date - should be optional
 
-- [ ] Company details page missing company name and optional trading name
+- [x] Company details page missing company name and optional trading name
 
 - [ ] 2026_08_28_000001_create_shares_and_dividends_tables .......... 43.80ms FAIL
   
