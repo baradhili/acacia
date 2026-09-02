@@ -177,7 +177,9 @@
         </form>
         <p class="text-xs text-gray-400 mt-3">
             Exactly one of credit or debit must be non-zero. Income tax paid, dividends received and FDT paid are
-            credits; tax refunds are debits.
+            credits; tax refunds are debits. Opening balance entries are dated the day before the financial year
+            they open (e.g. 30 Jun), one per year, and carry forward — a debit opening records a brought-forward
+            deficit.
         </p>
     </div>
 @endsection

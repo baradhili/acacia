@@ -202,6 +202,70 @@ class FrankingAccountTest extends TestCase
         ])->assertSessionHasErrors('entry_type');
     }
 
+    public function test_opening_balance_entry_carries_forward_without_polluting_movements(): void
+    {
+        $this->entry([
+            'entry_type' => FrankingAccountEntry::TYPE_OPENING_BALANCE,
+            'entry_date' => '2025-06-30',
+            'credit_amount' => 5000,
+            'description' => 'Franking credits brought forward',
+        ]);
+        $this->entry([
+            'entry_type' => FrankingAccountEntry::TYPE_TAX_PAYMENT,
+            'entry_date' => '2025-11-20',
+            'credit_amount' => 1000,
+        ]);
+
+        // The eve date belongs to the financial year it opens (FY2025 =
+        // 1 Jul 2025 – 30 Jun 2026), never the year before it.
+        $this->assertSame(2025, FrankingAccountEntry::query()
+            ->where('entry_type', FrankingAccountEntry::TYPE_OPENING_BALANCE)
+            ->value('financial_year'));
+
+        $this->assertEquals(5000.0, FrankingService::openingBalance(2025));
+        $this->assertEquals(6000.0, FrankingService::closingBalance(2025));
+        $this->assertEquals(6000.0, FrankingService::balance());
+
+        // Carry-forward, not a movement of the year it opens; the eve date
+        // never creates a phantom year in the selector.
+        $movements = FrankingService::movementsByType(2025);
+        $this->assertArrayNotHasKey(FrankingAccountEntry::TYPE_OPENING_BALANCE, $movements);
+        $this->assertEquals(1000.0, $movements[FrankingAccountEntry::TYPE_TAX_PAYMENT]);
+        $this->assertContains(2025, FrankingService::years());
+        $this->assertNotContains(2024, FrankingService::years());
+
+        // The screen offers the type and lists the entry with its label.
+        $this->get(route('franking-account.index', ['year' => 2025]))
+            ->assertOk()
+            ->assertSee('Opening balance');
+    }
+
+    public function test_opening_balance_entry_validation(): void
+    {
+        // Must sit on the eve of a financial year.
+        $this->post(route('franking-account.store'), [
+            'entry_type' => FrankingAccountEntry::TYPE_OPENING_BALANCE,
+            'entry_date' => '2025-07-15',
+            'credit_amount' => '1000',
+        ])->assertSessionHas('error');
+
+        // A debit opening records a brought-forward deficit.
+        $this->entry([
+            'entry_type' => FrankingAccountEntry::TYPE_OPENING_BALANCE,
+            'entry_date' => '2025-06-30',
+            'debit_amount' => 300,
+        ]);
+        $this->assertEquals(-300.0, FrankingService::balance());
+
+        // One opening balance per financial year.
+        $this->post(route('franking-account.store'), [
+            'entry_type' => FrankingAccountEntry::TYPE_OPENING_BALANCE,
+            'entry_date' => '2025-06-30',
+            'credit_amount' => '1000',
+        ])->assertSessionHas('error');
+        $this->assertEquals(-300.0, FrankingService::balance());
+    }
+
     public function test_system_franking_entries_cannot_be_deleted(): void
     {
         $entry = FrankingAccountEntry::create([

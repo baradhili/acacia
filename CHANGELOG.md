@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-09-02
 
+### Fixed — franking account opening balances can now be entered
+
+The franking account screen gains an **Opening balance** entry type (OB) for
+the brought-forward position when backfilling: dated the day before the
+financial year it opens (e.g. 30 Jun 2025 for FY2025), at most one per
+financial year, credit for surplus franking or debit for a brought-forward
+deficit. The entry carries forward into the year it opens (and every later
+year) without appearing in that year's movement summary or creating a
+phantom year in the selector; the estimated flag never applies to it.
+
 ### Added — admin-settable "currently open year" (backfill gateway)
 
 - New Administration page (`/administration`, linked from an "Administration"
