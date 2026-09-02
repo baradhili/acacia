@@ -6,7 +6,9 @@ use App\Http\Requests\ProfileUpdateRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 class ProfileController extends Controller
@@ -50,26 +52,42 @@ class ProfileController extends Controller
 
         // Delete old photo if exists
         if ($user->profile_photo) {
-            $oldPath = public_path('storage/' . $user->profile_photo);
-            if (file_exists($oldPath)) {
-                unlink($oldPath);
-            }
+            Storage::disk('public')->delete($user->profile_photo);
         }
 
         // Store new photo
-        $file = $request->file('profile_photo');
-        $path = $file->store('profile-photos', 'public');
+        $path = $request->file('profile_photo')->store('profile-photos', 'public');
 
-        // Ensure symlink exists
-        $link = public_path('storage');
-        $target = storage_path('app/public');
-        if (!file_exists($link) && !is_link($link)) {
-            symlink($target, $link);
-        }
+        $this->ensurePublicStorageLink();
 
         $user->update(['profile_photo' => $path]);
 
         return Redirect::route('profile.edit')->with('status', 'photo-updated');
+    }
+
+    /**
+     * The public disk serves through public/storage; create the link when
+     * the deployment step hasn't run (php artisan storage:link). Best
+     * effort: the web user often cannot write public/, and Laravel turns
+     * symlink()'s warning into an exception — a failure here must never
+     * take the upload down. The photo still saves and displays once the
+     * link exists.
+     */
+    protected function ensurePublicStorageLink(): void
+    {
+        $link = public_path('storage');
+
+        if (is_link($link) || file_exists($link)) {
+            return;
+        }
+
+        try {
+            symlink(storage_path('app/public'), $link);
+        } catch (\ErrorException $e) {
+            Log::warning('Could not create the public/storage symlink — run "php artisan storage:link".', [
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -80,10 +98,7 @@ class ProfileController extends Controller
         $user = $request->user();
 
         if ($user->profile_photo) {
-            $path = public_path('storage/' . $user->profile_photo);
-            if (file_exists($path)) {
-                unlink($path);
-            }
+            Storage::disk('public')->delete($user->profile_photo);
             $user->update(['profile_photo' => null]);
         }
 
