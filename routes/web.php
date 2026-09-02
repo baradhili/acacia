@@ -156,6 +156,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/purchase-orders/{purchaseOrder}/reopen', [PurchaseOrderController::class, 'reopen'])->name('purchase-orders.reopen');
     Route::post('/purchase-orders/{purchaseOrder}/allocate', [PurchaseOrderController::class, 'allocateTime'])->name('purchase-orders.allocate');
     Route::get('/purchase-orders/{purchaseOrder}/create-invoice', [InvoiceController::class, 'createFromPurchaseOrder'])->name('purchase-orders.create-invoice');
+    Route::post('/purchase-orders/{purchaseOrder}/create-invoice', [InvoiceController::class, 'storeFromPurchaseOrder'])->name('purchase-orders.create-invoice.store');
 
     // Invoices
     Route::resource('invoices', InvoiceController::class);
@@ -166,7 +167,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/invoices/{invoice}/pdf', [InvoiceController::class, 'pdf'])->name('invoices.pdf');
     Route::get('/invoices/{invoice}/download-pdf', [InvoiceController::class, 'downloadPdf'])->name('invoices.downloadPdf');
     Route::get('/create-invoice-from-time-entries', [InvoiceController::class, 'createFromTimeEntries'])->name('invoices.create-from-time-entries');
-    Route::post('/create-invoice-from-time-entries', [InvoiceController::class, 'createFromTimeEntries'])->name('invoices.create-from-time-entries.store');
+    Route::post('/create-invoice-from-time-entries', [InvoiceController::class, 'storeFromTimeEntries'])->name('invoices.create-from-time-entries.store');
 
     // Payments
     Route::resource('payments', PaymentController::class);

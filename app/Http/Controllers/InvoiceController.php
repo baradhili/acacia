@@ -13,6 +13,7 @@ use App\Models\TimeEntry;
 use App\Rules\NotInClosedPeriod;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -119,7 +120,7 @@ class InvoiceController extends Controller
                 'issue_date' => $validated['issue_date'],
                 'due_date' => $validated['due_date'],
                 'notes' => $validated['notes'] ?? null,
-                'terms' => $validated['terms'] ?? config('australian.invoice_terms'),
+                'terms' => $validated['terms'] ?? config('australian.invoice.terms'),
             ]);
 
             // Create invoice items
@@ -333,45 +334,98 @@ class InvoiceController extends Controller
     }
 
     /**
-     * Generate invoice from selected time entries
+     * Selection screen: pick a client's uninvoiced entries (or browse
+     * all clients') and build an invoice from them.
      */
     public function createFromTimeEntries(Request $request)
     {
-        $request->validate([
-            'time_entry_ids' => 'required|array|min:1',
-            'time_entry_ids.*' => 'exists:time_entries,id',
+        $validated = $request->validate([
             'client_id' => 'nullable|exists:clients,id',
         ]);
 
-        $timeEntries = TimeEntry::with('project')->find($request->time_entry_ids);
+        $clients = Client::orderBy('name')->pluck('name', 'id');
+        $selectedClient = ! empty($validated['client_id'])
+            ? Client::find($validated['client_id'])
+            : null;
 
-        // Determine client
-        $clientId = $request->client_id;
-        if (! $clientId && $timeEntries->isNotEmpty()) {
-            $firstProject = $timeEntries->first()->project;
-            $clientId = $firstProject->client_id ?? null;
-        }
-
-        if (! $clientId) {
-            return back()->with('error', 'Could not determine client.');
-        }
-
-        $client = Client::find($clientId);
-
-        // Calculate totals
-        $subtotal = $timeEntries->sum(function ($entry) {
-            return $entry->hours * $entry->effective_rate;
-        });
-        $taxAmount = $subtotal * (config('australian.gst.rate', 10) / 100);
-        $total = $subtotal + $taxAmount;
+        $timeEntries = TimeEntry::with(['project', 'client', 'user'])
+            ->where('billable', true)
+            ->where('status', TimeEntry::STATUS_APPROVED)
+            ->whereDoesntHave('invoiceItem')
+            ->when($selectedClient, fn ($query) => $query->where('client_id', $selectedClient->id))
+            ->orderBy('entry_date')
+            ->get();
 
         return view('invoices.create-from-time-entries', compact(
-            'timeEntries',
-            'client',
-            'subtotal',
-            'taxAmount',
-            'total'
+            'clients',
+            'selectedClient',
+            'timeEntries'
         ));
+    }
+
+    /**
+     * Create an invoice from the selected unbilled time entries.
+     */
+    public function storeFromTimeEntries(Request $request)
+    {
+        $validated = $request->validate([
+            'time_entry_ids' => 'required|array|min:1',
+            'time_entry_ids.*' => 'exists:time_entries,id',
+            'issue_date' => 'required|date',
+            'due_date' => 'required|date|after_or_equal:issue_date',
+            'notes' => 'nullable|string',
+            'terms' => 'nullable|string',
+        ]);
+
+        // Screening throws ValidationException — must run before the
+        // transaction opens so the errors aren't swallowed below.
+        $timeEntries = $this->invoiceableTimeEntries($validated['time_entry_ids']);
+
+        // Every entry must resolve to a single client.
+        $clientIds = $timeEntries
+            ->map(fn ($entry) => $entry->client_id ?? $entry->project?->client_id)
+            ->filter()
+            ->unique();
+        if ($clientIds->isEmpty()) {
+            throw ValidationException::withMessages([
+                'time_entry_ids' => 'Selected time entries are not linked to any client.',
+            ]);
+        }
+        if ($clientIds->count() > 1) {
+            $names = Client::whereIn('id', $clientIds)->pluck('name')->implode(', ');
+
+            throw ValidationException::withMessages([
+                'time_entry_ids' => "Selected time entries span multiple clients ({$names}). Invoice each client separately.",
+            ]);
+        }
+
+        // Project/PO carry onto the invoice only when every entry
+        // shares the same one; mixed selections stay unattributed.
+        $projectIds = $timeEntries->pluck('project_id')->filter()->unique();
+        $poIds = $timeEntries->pluck('purchase_order_id')->filter()->unique();
+
+        DB::beginTransaction();
+        try {
+            $invoice = $this->createInvoiceFromEntries($timeEntries, [
+                'client_id' => $clientIds->first(),
+                'project_id' => $projectIds->count() === 1 ? $projectIds->first() : null,
+                'purchase_order_id' => $poIds->count() === 1 ? $poIds->first() : null,
+                'created_by' => Auth::id(),
+                'issue_date' => $validated['issue_date'],
+                'due_date' => $validated['due_date'],
+                'notes' => $validated['notes'] ?? null,
+                'terms' => $validated['terms'] ?? config('australian.invoice.terms'),
+            ]);
+
+            DB::commit();
+
+            return redirect()->route('invoices.show', $invoice)
+                ->with('success', 'Invoice created successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return back()->withInput()->with('error', 'Error creating invoice: '.$e->getMessage());
+        }
     }
 
     /**
@@ -383,6 +437,8 @@ class InvoiceController extends Controller
             ->where('status', TimeEntry::STATUS_APPROVED)
             ->where('billable', true)
             ->whereDoesntHave('invoiceItem')
+            ->with(['project', 'client', 'user'])
+            ->orderBy('entry_date')
             ->get();
 
         if ($timeEntries->isEmpty()) {
@@ -398,6 +454,61 @@ class InvoiceController extends Controller
             'client',
             'project'
         ));
+    }
+
+    /**
+     * Create an invoice from the PO's selected unbilled time entries.
+     */
+    public function storeFromPurchaseOrder(Request $request, PurchaseOrder $purchaseOrder)
+    {
+        $validated = $request->validate([
+            'time_entry_ids' => 'required|array|min:1',
+            'time_entry_ids.*' => 'exists:time_entries,id',
+            'issue_date' => 'required|date',
+            'due_date' => 'required|date|after_or_equal:issue_date',
+            'notes' => 'nullable|string',
+            'terms' => 'nullable|string',
+        ]);
+
+        // Screening throws ValidationException — must run before the
+        // transaction opens so the errors aren't swallowed below.
+        $timeEntries = $this->invoiceableTimeEntries($validated['time_entry_ids']);
+
+        $foreign = $timeEntries->reject(
+            fn ($entry) => (int) $entry->purchase_order_id === (int) $purchaseOrder->id
+        );
+        if ($foreign->isNotEmpty()) {
+            $ids = $foreign->pluck('id')->implode(', ');
+
+            throw ValidationException::withMessages([
+                'time_entry_ids' => "Time entries #{$ids} do not belong to this purchase order.",
+            ]);
+        }
+
+        DB::beginTransaction();
+        try {
+            // purchase_order_id on the invoice drives the observer chain
+            // that keeps the PO's used_amount in sync.
+            $invoice = $this->createInvoiceFromEntries($timeEntries, [
+                'client_id' => $purchaseOrder->client_id,
+                'project_id' => $purchaseOrder->project_id,
+                'purchase_order_id' => $purchaseOrder->id,
+                'created_by' => Auth::id(),
+                'issue_date' => $validated['issue_date'],
+                'due_date' => $validated['due_date'],
+                'notes' => $validated['notes'] ?? null,
+                'terms' => $validated['terms'] ?? config('australian.invoice.terms'),
+            ]);
+
+            DB::commit();
+
+            return redirect()->route('invoices.show', $invoice)
+                ->with('success', 'Invoice created successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return back()->withInput()->with('error', 'Error creating invoice: '.$e->getMessage());
+        }
     }
 
     /**
@@ -481,12 +592,34 @@ class InvoiceController extends Controller
     }
 
     /**
+     * Persist an invoice whose lines are the given (pre-screened) time
+     * entries, one item per entry, linked via time_entry_id. Caller
+     * owns the surrounding transaction.
+     */
+    private function createInvoiceFromEntries(iterable $timeEntries, array $invoiceAttributes): Invoice
+    {
+        $invoice = Invoice::createWithUniqueNumber($invoiceAttributes);
+
+        $sortOrder = 0;
+        foreach ($timeEntries as $timeEntry) {
+            $entryItem = InvoiceItem::createFromTimeEntry($timeEntry);
+            $invoice->items()->create(array_merge($entryItem->getAttributes(), [
+                'sort_order' => $sortOrder++,
+            ]));
+        }
+
+        $invoice->recalculateTotals();
+
+        return $invoice;
+    }
+
+    /**
      * Fetch time entries selected for invoicing, screening that every
      * one is approved, billable and not already on a live invoice.
      * Throws ValidationException, so callers must invoke it BEFORE
      * opening a try/catch that swallows exceptions.
      */
-    private function invoiceableTimeEntries(array $ids): \Illuminate\Support\Collection
+    private function invoiceableTimeEntries(array $ids): Collection
     {
         $entries = TimeEntry::with('project')->whereIn('id', $ids)->get();
 
@@ -500,10 +633,12 @@ class InvoiceController extends Controller
         foreach ($entries as $entry) {
             if ($entry->status !== TimeEntry::STATUS_APPROVED) {
                 $reasons[] = "#{$entry->id} is not approved";
+
                 continue;
             }
             if (! $entry->billable) {
                 $reasons[] = "#{$entry->id} is not billable";
+
                 continue;
             }
             if ($entry->invoiceItem()->exists()) {
