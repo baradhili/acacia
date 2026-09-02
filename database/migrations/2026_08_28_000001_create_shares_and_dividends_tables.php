@@ -194,9 +194,12 @@ return new class extends Migration
 
     public function down(): void
     {
+        // Children before parents: both franking_account_entries and
+        // dividend_distributions carry FKs to dividend_declarations, so it
+        // must drop last or MySQL rejects with a 1451 constraint violation.
+        Schema::dropIfExists('franking_account_entries');
         Schema::dropIfExists('dividend_distributions');
         Schema::dropIfExists('dividend_declarations');
-        Schema::dropIfExists('franking_account_entries');
 
         Schema::table('company_shareholders', function (Blueprint $table) {
             $table->dropColumn(['address_line2', 'contact_name', 'bank_bsb', 'bank_account_number', 'bank_account_name']);
