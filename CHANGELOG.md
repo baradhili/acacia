@@ -5,6 +5,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-09-02
 
+### Fixed — profile photo upload no longer 500s when the storage link is missing
+
+updatePhoto() tried to create the public/storage symlink itself; the web
+user cannot write public/ on this deployment, and Laravel turns symlink()'s
+warning into an exception — the upload died with a 500 after the file was
+stored but before the user row was saved, so the photo never appeared. The
+symlink attempt is now best-effort (missing link logs a warning and never
+fails the upload), old-photo deletion goes through the Storage disk instead
+of unlinking through the public path, and the avatar accessor checks the
+public disk rather than public/storage so it resolves regardless of the
+link. Deployments should still run `php artisan storage:link` (done here).
+Three new photo tests cover upload/replace/delete and validation.
+
 ### Fixed — Company Details page can edit the company and trading names
 
 The page displayed the legal name read-only and had nowhere to record a

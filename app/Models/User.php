@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use Database\Factories\UserFactory;
+use IFRS\Models\Entity;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -11,14 +11,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use IFRS\Models\Entity;
+use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Traits\HasRoles;
 
 #[Fillable(['name', 'email', 'password', 'salary', 'charge_out_rate', 'position', 'phone', 'profile_photo', 'entity_id'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable, HasRoles, SoftDeletes;
+    use HasFactory, HasRoles, Notifiable, SoftDeletes;
 
     protected function casts(): array
     {
@@ -31,13 +31,16 @@ class User extends Authenticatable
     }
 
     /**
-     * Get the profile photo URL
+     * Get the profile photo URL. Existence is checked on the public disk
+     * (where the file actually lives) rather than through public/storage,
+     * so the avatar resolves even before the symlink has been created.
      */
     public function getProfilePhotoUrlAttribute(): ?string
     {
-        if ($this->profile_photo && file_exists(public_path('storage/' . $this->profile_photo))) {
-            return asset('storage/' . $this->profile_photo);
+        if ($this->profile_photo && Storage::disk('public')->exists($this->profile_photo)) {
+            return asset('storage/'.$this->profile_photo);
         }
+
         return null;
     }
 
@@ -51,6 +54,7 @@ class User extends Authenticatable
         foreach (array_slice($names, 0, 2) as $name) {
             $initials .= strtoupper(substr($name, 0, 1));
         }
+
         return $initials ?: strtoupper(substr($this->name, 0, 2));
     }
 
