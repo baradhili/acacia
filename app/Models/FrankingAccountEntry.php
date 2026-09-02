@@ -13,7 +13,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * and the balance itself is always computed, never stored.
  *
  * FD (franked dividend paid) entries are system-generated when a dividend
- * run is recorded as paid; the other types are entered manually. Entries
+ * run is recorded as paid; the other types are entered manually. OB (opening
+ * balance) entries carry the brought-forward position: dated the day before
+ * the financial year they open, one per financial year. Entries
  * flagged is_estimated record AASB 1054.13 anticipated movements (e.g.
  * franking credits expected from the current tax provision) and are
  * excluded from the actual balance.
@@ -32,6 +34,9 @@ class FrankingAccountEntry extends Model
 
     public const TYPE_ADJUSTMENT = 'AJ';
 
+    /** The brought-forward position at the start of a financial year. */
+    public const TYPE_OPENING_BALANCE = 'OB';
+
     /** Types that can be created manually from the franking account screen. */
     public const MANUAL_TYPES = [
         self::TYPE_TAX_PAYMENT,
@@ -39,6 +44,7 @@ class FrankingAccountEntry extends Model
         self::TYPE_REFUND_RECEIVED,
         self::TYPE_FDT_PAID,
         self::TYPE_ADJUSTMENT,
+        self::TYPE_OPENING_BALANCE,
     ];
 
     protected $fillable = [
@@ -73,6 +79,7 @@ class FrankingAccountEntry extends Model
             self::TYPE_REFUND_RECEIVED => 'Tax refund received',
             self::TYPE_FDT_PAID => 'Franking deficit tax paid',
             self::TYPE_ADJUSTMENT => 'Adjustment',
+            self::TYPE_OPENING_BALANCE => 'Opening balance',
         ];
     }
 
