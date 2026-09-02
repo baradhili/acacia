@@ -6,7 +6,9 @@
         <h1 class="text-2xl font-bold text-gray-800">Company Details</h1>
         <p class="text-sm text-gray-500">
             Identity, registered address, directors and shareholders for
-            <span class="font-medium text-gray-700">{{ $entity->name }}</span>
+            <span class="font-medium text-gray-700">{{ $entity->name }}</span>@if ($profile->trading_name)
+                <span class="text-gray-400">(trading as {{ $profile->trading_name }})</span>
+            @endif
         </p>
     </div>
 
@@ -39,6 +41,21 @@
         <div class="bg-white rounded-lg shadow p-6 mb-6">
             <h2 class="text-lg font-semibold text-gray-800 mb-4">Company Identity</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium text-gray-700 mb-1" for="name">Company name <span class="text-red-500">*</span></label>
+                    <input id="name" name="name" type="text" maxlength="300" required value="{{ old('name', $entity->name) }}"
+                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 @error('name') border-red-300 @enderror">
+                    @error('name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" for="trading_name">Trading name <span class="text-gray-400 font-normal">(optional)</span></label>
+                    <input id="trading_name" name="trading_name" type="text" maxlength="100" value="{{ old('trading_name', $profile->trading_name) }}"
+                        placeholder="Business name, if different"
+                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 @error('trading_name') border-red-300 @enderror">
+                    @error('trading_name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1" for="abn">ABN</label>
                     <input id="abn" name="abn" type="text" inputmode="numeric" maxlength="11" value="{{ old('abn', $profile->abn) }}"

@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-09-02
 
+### Fixed — Company Details page can edit the company and trading names
+
+The page displayed the legal name read-only and had nowhere to record a
+business name. The Company Identity card now leads with an editable
+**Company name** (required — persisted to the IFRS entity, whose name
+feeds statutory outputs like the Company Tax Return identification and
+dividend statements) and an optional **Trading name** (new nullable
+`company_profiles.trading_name` column, shown as "trading as" in the
+page header when set; blank clears it).
+
 ### Fixed — franking account opening balances can now be entered
 
 The franking account screen gains an **Opening balance** entry type (OB) for

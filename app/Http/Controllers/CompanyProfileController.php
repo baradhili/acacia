@@ -12,64 +12,65 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 /**
- * Maintain the reporting entity's company identity — ABN/TFN/ACN,
- * registered address, contact details, directors and the shareholder
- * registry. Admin/accountant only. The ABN/TFN feed the Company Tax
- * Report identification section (with env-config fallback).
+ * Maintain the reporting entity's company identity — legal name (on the
+ * IFRS entity, authoritative for statutory outputs), optional trading
+ * name, ABN/TFN/ACN, registered address, contact details, directors and
+ * the shareholder registry. Admin/accountant only. The ABN/TFN feed the
+ * Company Tax Report identification section (with env-config fallback).
  */
 class CompanyProfileController extends Controller
 {
-public function index()
-{
-    $entity = IfrsPosting::resolveEntity();
-    abort_unless((bool) $entity, 404, 'No IFRS entity configured.');
+    public function index()
+    {
+        $entity = IfrsPosting::resolveEntity();
+        abort_unless((bool) $entity, 404, 'No IFRS entity configured.');
 
-    $profile = CompanyProfile::firstOrNew(
-        ['entity_id' => $entity->id],
-        ['country' => 'AU']
-    )->load('directors', 'allShareholders');
+        $profile = CompanyProfile::firstOrNew(
+            ['entity_id' => $entity->id],
+            ['country' => 'AU']
+        )->load('directors', 'allShareholders');
 
-    // Normalize directors to an array of arrays so Blade doesn't need to
-    // guess whether it's dealing with an Eloquent model or old() input.
-    $directors = old('directors', $profile->directors->map(fn ($d) => [
-        'id'               => $d->id,
-        'name'             => $d->name,
-        'appointment_date' => $d->appointment_date?->format('Y-m-d'),
-        'resignation_date' => $d->resignation_date?->format('Y-m-d'),
-        'email'            => $d->email,
-        'phone'            => $d->phone,
-    ])->all());
+        // Normalize directors to an array of arrays so Blade doesn't need to
+        // guess whether it's dealing with an Eloquent model or old() input.
+        $directors = old('directors', $profile->directors->map(fn ($d) => [
+            'id' => $d->id,
+            'name' => $d->name,
+            'appointment_date' => $d->appointment_date?->format('Y-m-d'),
+            'resignation_date' => $d->resignation_date?->format('Y-m-d'),
+            'email' => $d->email,
+            'phone' => $d->phone,
+        ])->all());
 
-    // Normalize shareholders similarly
-    $shareholders = old('shareholders', $profile->allShareholders->map(fn ($s) => [
-        'id'                  => $s->id,
-        'name'                => $s->name,
-        'share_class'         => $s->share_class,
-        'shares_held'         => $s->shares_held,
-        'resident_for_tax'    => $s->resident_for_tax,
-        'status'              => $s->status,
-        'abn'                 => $s->abn,
-        'tfn'                 => $s->tfn,
-        'email'               => $s->email,
-        'address_line1'       => $s->address_line1,
-        'address_line2'       => $s->address_line2,
-        'suburb'              => $s->suburb,
-        'state'               => $s->state,
-        'postcode'            => $s->postcode,
-        'country'             => $s->country,
-        'contact_name'        => $s->contact_name,
-        'bank_bsb'            => $s->bank_bsb,
-        'bank_account_number' => $s->bank_account_number,
-        'bank_account_name'   => $s->bank_account_name,
-    ])->all());
+        // Normalize shareholders similarly
+        $shareholders = old('shareholders', $profile->allShareholders->map(fn ($s) => [
+            'id' => $s->id,
+            'name' => $s->name,
+            'share_class' => $s->share_class,
+            'shares_held' => $s->shares_held,
+            'resident_for_tax' => $s->resident_for_tax,
+            'status' => $s->status,
+            'abn' => $s->abn,
+            'tfn' => $s->tfn,
+            'email' => $s->email,
+            'address_line1' => $s->address_line1,
+            'address_line2' => $s->address_line2,
+            'suburb' => $s->suburb,
+            'state' => $s->state,
+            'postcode' => $s->postcode,
+            'country' => $s->country,
+            'contact_name' => $s->contact_name,
+            'bank_bsb' => $s->bank_bsb,
+            'bank_account_number' => $s->bank_account_number,
+            'bank_account_name' => $s->bank_account_name,
+        ])->all());
 
-    return view('company-profile.index', [
-        'entity'       => $entity,
-        'profile'      => $profile,
-        'directors'    => $directors,
-        'shareholders' => $shareholders,
-    ]);
-}
+        return view('company-profile.index', [
+            'entity' => $entity,
+            'profile' => $profile,
+            'directors' => $directors,
+            'shareholders' => $shareholders,
+        ]);
+    }
 
     public function update(Request $request)
     {
@@ -77,6 +78,11 @@ public function index()
         abort_unless((bool) $entity, 404, 'No IFRS entity configured.');
 
         $validated = $request->validate([
+            // The legal name lives on the IFRS entity — it feeds statutory
+            // outputs (Company Tax Return identification, dividend
+            // statements). Trading name is the optional business name.
+            'name' => ['required', 'string', 'max:300'],
+            'trading_name' => ['nullable', 'string', 'max:100'],
             'abn' => ['nullable', 'digits:11'],
             'tfn' => ['nullable', 'digits:9'],
             'acn' => ['nullable', 'digits:9'],
@@ -121,6 +127,8 @@ public function index()
         ]);
 
         DB::transaction(function () use ($validated, $entity) {
+            $entity->update(['name' => $validated['name']]);
+
             $profile = CompanyProfile::updateOrCreate(
                 ['entity_id' => $entity->id],
                 collect($validated)->only((new CompanyProfile)->getFillable())

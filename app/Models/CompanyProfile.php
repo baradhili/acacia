@@ -8,10 +8,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Company identity for the reporting entity — ABN/TFN/ACN, registered
- * address and contact details, plus the directors and shareholders
- * registries. Backs the ATO Company Tax Return identification section
- * and the shareholder registry (Phase 1 of the franking/dividend spec).
+ * Company identity for the reporting entity — the legal name lives on
+ * ifrs_entities (authoritative for statutory outputs) with an optional
+ * trading name here; ABN/TFN/ACN, registered address and contact details,
+ * plus the directors and shareholders registries. Backs the ATO Company
+ * Tax Return identification section and the shareholder registry
+ * (Phase 1 of the franking/dividend spec).
  */
 class CompanyProfile extends Model
 {
@@ -23,6 +25,7 @@ class CompanyProfile extends Model
 
     protected $fillable = [
         'entity_id',
+        'trading_name',
         'abn',
         'tfn',
         'acn',

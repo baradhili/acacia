@@ -432,6 +432,7 @@ class SharesAndDividendsTest extends TestCase
 
         // Reclassify as a regular company (30%) — the default rate follows.
         $this->put(route('company-profile.update'), [
+            'name' => $this->entity->name,
             'tax_rate_type' => CompanyProfile::TAX_RATE_COMPANY,
         ])->assertSessionHas('success');
 
