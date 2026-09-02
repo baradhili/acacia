@@ -434,9 +434,10 @@ class FiscalYearService
      * Trial close for a ended financial year — pure computation, no
      * ledger writes. Produces the checklist plus the proposed closing
      * entries: every P&L account's cumulative balance as at year end
-     * (epoch-to-date ledger movement plus opening Balance rows — the
-     * same convention the financial statements use), split into this
-     * year's movement and the carry-in from years never closed before.
+     * (the opening snapshot in force plus ledger movement after it —
+     * the same convention the financial statements use), split into
+     * this year's movement and the carry-in from years never closed
+     * before.
      *
      * Closing to cumulative (not just the year's movement) makes the
      * first-ever close a catch-up that moves all historic profit into
@@ -452,7 +453,6 @@ class FiscalYearService
 
         ['start' => $start, 'end' => $end] = $this->bounds($entity, $year);
         $endOfDay = $end->copy()->endOfDay();
-        $epoch = Carbon::create(2000, 1, 1);
         $checklist = $this->checklist($entity, $year);
 
         $re = $this->retainedEarningsAccount($entity);
@@ -474,11 +474,10 @@ class FiscalYearService
             ->get();
 
         foreach ($accounts as $account) {
-            // Cumulative as-at balance, opening Balance rows included —
-            // closing entries from earlier year-ends already net out of
+            // Cumulative as-at balance via the opening snapshot in force
+            // — closing entries from earlier year-ends already net out of
             // this figure, which is what makes repeated closes correct.
-            $total = (float) Ledger::balance($account, $epoch, $endOfDay, $entity->currency_id)[$entity->currency_id]
-                + OpeningBalances::effectiveOpening($account, $entity);
+            $total = OpeningBalances::balanceAt($account, $entity, $endOfDay);
 
             if (abs($total) < 0.005) {
                 continue;

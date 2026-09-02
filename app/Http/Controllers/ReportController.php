@@ -1605,18 +1605,13 @@ class ReportController extends Controller
         $bankInflows = round((float) $bankFlows->inflows);
         $bankOutflows = round((float) $bankFlows->outflows);
 
-        // Item 8 as-at balances at 30 June (cumulative ledger + opening
-        // Balance rows — the same basis as the trial balance).
+        // Item 8 as-at balances at 30 June: the opening snapshot in force
+        // plus ledger movement after it — the same basis as the trial
+        // balance.
         $asAtBalance = function (array $types) use ($entity, $fyEndDate): float {
             $total = 0.0;
             foreach (Account::where('entity_id', $entity->id)->whereIn('account_type', $types)->get() as $account) {
-                $total += (float) Ledger::balance(
-                    $account,
-                    Carbon::create(2000, 1, 1),
-                    $fyEndDate,
-                    $entity->currency_id
-                )[$entity->currency_id];
-                $total += OpeningBalances::effectiveOpening($account, $entity);
+                $total += OpeningBalances::balanceAt($account, $entity, $fyEndDate);
             }
 
             return $total;
