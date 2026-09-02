@@ -104,8 +104,8 @@
 
             <div class="mt-4">
                 <label class="block text-sm font-medium text-gray-700 mb-1">Terms & Conditions</label>
-                <textarea name="terms" rows="2"
-                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">{{ old('terms', config('australian.invoice_terms', 'Payment due within 30 days.')) }}</textarea>
+                    <textarea name="terms" rows="2"
+                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">{{ old('terms', config('australian.invoice.terms')) }}</textarea>
             </div>
         </div>
 

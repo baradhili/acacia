@@ -30,6 +30,10 @@
                 </span>
             </div>
             <div>
+                <h3 class="text-sm font-medium text-gray-500">Client</h3>
+                <p class="mt-1 text-gray-900">{{ $timeEntry->client?->name ?? $timeEntry->project?->client?->name ?? '-' }}</p>
+            </div>
+            <div>
                 <h3 class="text-sm font-medium text-gray-500">Project</h3>
                 <p class="mt-1 text-gray-900">{{ $timeEntry->project?->name ?? '-' }}</p>
             </div>

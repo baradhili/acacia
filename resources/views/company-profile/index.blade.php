@@ -150,17 +150,22 @@
                         </tr>
                     </thead>
                     <tbody id="director-rows" class="divide-y divide-gray-100">
-                        @foreach (old('directors', $profile->directors) as $director)
+                        @foreach ($directors as $director)
                             <tr>
-                                <td class="px-3 py-2"><input name="directors[{{ $loop->index }}][name]" type="text" value="{{ $director['name'] ?? $director->name }}"
-                                    class="w-full rounded-md border-gray-300 shadow-sm"></td>
-                                <td class="px-3 py-2"><input name="directors[{{ $loop->index }}][appointment_date]" type="date" value="{{ $director['appointment_date'] ?? optional($director->appointment_date)->format('Y-m-d') }}"
+                                <td class="px-3 py-2">
+                                    @if(!empty($director['id']))
+                                        <input type="hidden" name="directors[{{ $loop->index }}][id]" value="{{ $director['id'] }}">
+                                    @endif
+                                    <input name="directors[{{ $loop->index }}][name]" type="text" value="{{ $director['name'] ?? '' }}"
+                                        class="w-full rounded-md border-gray-300 shadow-sm">
+                                </td>
+                                <td class="px-3 py-2"><input name="directors[{{ $loop->index }}][appointment_date]" type="date" value="{{ $director['appointment_date'] ?? '' }}"
                                     class="rounded-md border-gray-300 shadow-sm"></td>
-                                <td class="px-3 py-2"><input name="directors[{{ $loop->index }}][resignation_date]" type="date" value="{{ $director['resignation_date'] ?? optional($director->resignation_date)->format('Y-m-d') }}"
+                                <td class="px-3 py-2"><input name="directors[{{ $loop->index }}][resignation_date]" type="date" value="{{ $director['resignation_date'] ?? '' }}"
                                     class="rounded-md border-gray-300 shadow-sm"></td>
-                                <td class="px-3 py-2"><input name="directors[{{ $loop->index }}][email]" type="email" value="{{ $director['email'] ?? $director->email }}"
+                                <td class="px-3 py-2"><input name="directors[{{ $loop->index }}][email]" type="email" value="{{ $director['email'] ?? '' }}"
                                     class="w-full rounded-md border-gray-300 shadow-sm"></td>
-                                <td class="px-3 py-2"><input name="directors[{{ $loop->index }}][phone]" type="text" value="{{ $director['phone'] ?? $director->phone }}"
+                                <td class="px-3 py-2"><input name="directors[{{ $loop->index }}][phone]" type="text" value="{{ $director['phone'] ?? '' }}"
                                     class="rounded-md border-gray-300 shadow-sm"></td>
                                 <td class="px-3 py-2 text-center">
                                     <button type="button" data-remove-row class="text-red-600 hover:text-red-800" title="Remove">&times;</button>
@@ -208,56 +213,59 @@
                         </tr>
                     </thead>
                     <tbody id="shareholder-rows" class="divide-y divide-gray-100">
-                        @foreach (old('shareholders', $profile->allShareholders) as $shareholder)
+                        @foreach ($shareholders as $shareholder)
                             <tr>
                                 <td class="px-3 py-2">
-                                    @if(!is_array($shareholder))<input type="hidden" name="shareholders[{{ $loop->index }}][id]" value="{{ $shareholder->id }}">@endif
-                                    <input name="shareholders[{{ $loop->index }}][name]" type="text" value="{{ $shareholder['name'] ?? $shareholder->name }}"
-                                        class="w-full rounded-md border-gray-300 shadow-sm"></td>
-                                <td class="px-3 py-2"><input name="shareholders[{{ $loop->index }}][share_class]" type="text" maxlength="10" value="{{ $shareholder['share_class'] ?? $shareholder->share_class }}"
+                                    @if(!empty($shareholder['id']))
+                                        <input type="hidden" name="shareholders[{{ $loop->index }}][id]" value="{{ $shareholder['id'] }}">
+                                    @endif
+                                    <input name="shareholders[{{ $loop->index }}][name]" type="text" value="{{ $shareholder['name'] ?? '' }}"
+                                        class="w-full rounded-md border-gray-300 shadow-sm">
+                                </td>
+                                <td class="px-3 py-2"><input name="shareholders[{{ $loop->index }}][share_class]" type="text" maxlength="10" value="{{ $shareholder['share_class'] ?? '' }}"
                                     class="w-20 rounded-md border-gray-300 shadow-sm"></td>
-                                <td class="px-3 py-2"><input name="shareholders[{{ $loop->index }}][shares_held]" type="number" min="0" value="{{ $shareholder['shares_held'] ?? $shareholder->shares_held }}"
+                                <td class="px-3 py-2"><input name="shareholders[{{ $loop->index }}][shares_held]" type="number" min="0" value="{{ $shareholder['shares_held'] ?? '' }}"
                                     class="w-28 rounded-md border-gray-300 shadow-sm text-right"></td>
                                 <td class="px-3 py-2 text-center"><input name="shareholders[{{ $loop->index }}][resident_for_tax]" type="checkbox" value="1"
-                                    {{ (bool) ($shareholder['resident_for_tax'] ?? $shareholder->resident_for_tax) ? 'checked' : '' }} class="rounded border-gray-300"></td>
+                                    {{ (bool) ($shareholder['resident_for_tax'] ?? false) ? 'checked' : '' }} class="rounded border-gray-300"></td>
                                 <td class="px-3 py-2">
                                     <select name="shareholders[{{ $loop->index }}][status]" class="rounded-md border-gray-300 shadow-sm">
-                                        <option value="A" {{ ($shareholder['status'] ?? $shareholder->status) === 'A' ? 'selected' : '' }}>Active</option>
-                                        <option value="I" {{ ($shareholder['status'] ?? $shareholder->status) === 'I' ? 'selected' : '' }}>Inactive</option>
+                                        <option value="A" {{ ($shareholder['status'] ?? 'A') === 'A' ? 'selected' : '' }}>Active</option>
+                                        <option value="I" {{ ($shareholder['status'] ?? 'A') === 'I' ? 'selected' : '' }}>Inactive</option>
                                     </select>
                                 </td>
                                 <td class="px-3 py-2">
-                                    <input name="shareholders[{{ $loop->index }}][abn]" type="text" maxlength="11" value="{{ $shareholder['abn'] ?? $shareholder->abn }}" placeholder="ABN"
+                                    <input name="shareholders[{{ $loop->index }}][abn]" type="text" maxlength="11" value="{{ $shareholder['abn'] ?? '' }}" placeholder="ABN"
                                         class="w-28 rounded-md border-gray-300 shadow-sm">
-                                    <input name="shareholders[{{ $loop->index }}][tfn]" type="text" maxlength="9" value="{{ $shareholder['tfn'] ?? $shareholder->tfn }}" placeholder="TFN"
+                                    <input name="shareholders[{{ $loop->index }}][tfn]" type="text" maxlength="9" value="{{ $shareholder['tfn'] ?? '' }}" placeholder="TFN"
                                         class="w-20 rounded-md border-gray-300 shadow-sm">
                                 </td>
-                                <td class="px-3 py-2"><input name="shareholders[{{ $loop->index }}][email]" type="email" value="{{ $shareholder['email'] ?? $shareholder->email }}"
+                                <td class="px-3 py-2"><input name="shareholders[{{ $loop->index }}][email]" type="email" value="{{ $shareholder['email'] ?? '' }}"
                                     class="w-40 rounded-md border-gray-300 shadow-sm"></td>
                                 <td class="px-3 py-2">
-                                    <input name="shareholders[{{ $loop->index }}][address_line1]" type="text" value="{{ $shareholder['address_line1'] ?? $shareholder->address_line1 }}" placeholder="Street"
+                                    <input name="shareholders[{{ $loop->index }}][address_line1]" type="text" value="{{ $shareholder['address_line1'] ?? '' }}" placeholder="Street"
                                         class="w-40 rounded-md border-gray-300 shadow-sm mb-1">
-                                    <input name="shareholders[{{ $loop->index }}][address_line2]" type="text" value="{{ $shareholder['address_line2'] ?? $shareholder->address_line2 }}" placeholder=""
+                                    <input name="shareholders[{{ $loop->index }}][address_line2]" type="text" value="{{ $shareholder['address_line2'] ?? '' }}" placeholder=""
                                         class="w-40 rounded-md border-gray-300 shadow-sm mb-1">
-                                    <input name="shareholders[{{ $loop->index }}][suburb]" type="text" value="{{ $shareholder['suburb'] ?? $shareholder->suburb }}" placeholder="Suburb"
+                                    <input name="shareholders[{{ $loop->index }}][suburb]" type="text" value="{{ $shareholder['suburb'] ?? '' }}" placeholder="Suburb"
                                         class="w-40 rounded-md border-gray-300 shadow-sm mb-1">
                                     <div class="flex gap-1">
-                                        <input name="shareholders[{{ $loop->index }}][state]" type="text" maxlength="3" value="{{ $shareholder['state'] ?? $shareholder->state }}" placeholder="State"
+                                        <input name="shareholders[{{ $loop->index }}][state]" type="text" maxlength="3" value="{{ $shareholder['state'] ?? '' }}" placeholder="State"
                                             class="w-14 rounded-md border-gray-300 shadow-sm">
-                                        <input name="shareholders[{{ $loop->index }}][postcode]" type="text" maxlength="4" value="{{ $shareholder['postcode'] ?? $shareholder->postcode }}" placeholder="Postcode"
+                                        <input name="shareholders[{{ $loop->index }}][postcode]" type="text" maxlength="4" value="{{ $shareholder['postcode'] ?? '' }}" placeholder="Postcode"
                                             class="w-20 rounded-md border-gray-300 shadow-sm">
-                                        <input name="shareholders[{{ $loop->index }}][country]" type="text" maxlength="2" value="{{ $shareholder['country'] ?? $shareholder->country }}" placeholder="AU"
+                                        <input name="shareholders[{{ $loop->index }}][country]" type="text" maxlength="2" value="{{ $shareholder['country'] ?? '' }}" placeholder="AU"
                                             class="w-12 rounded-md border-gray-300 shadow-sm">
                                     </div>
                                 </td>
                                 <td class="px-3 py-2">
-                                    <input name="shareholders[{{ $loop->index }}][contact_name]" type="text" maxlength="60" value="{{ $shareholder['contact_name'] ?? $shareholder->contact_name }}" placeholder="Contact"
+                                    <input name="shareholders[{{ $loop->index }}][contact_name]" type="text" maxlength="60" value="{{ $shareholder['contact_name'] ?? '' }}" placeholder="Contact"
                                         class="w-32 rounded-md border-gray-300 shadow-sm mb-1">
-                                    <input name="shareholders[{{ $loop->index }}][bank_bsb]" type="text" maxlength="7" value="{{ $shareholder['bank_bsb'] ?? $shareholder->bank_bsb }}" placeholder="BSB"
+                                    <input name="shareholders[{{ $loop->index }}][bank_bsb]" type="text" maxlength="7" value="{{ $shareholder['bank_bsb'] ?? '' }}" placeholder="BSB"
                                         class="w-20 rounded-md border-gray-300 shadow-sm mb-1">
-                                    <input name="shareholders[{{ $loop->index }}][bank_account_number]" type="text" maxlength="9" value="{{ $shareholder['bank_account_number'] ?? $shareholder->bank_account_number }}" placeholder="Account"
+                                    <input name="shareholders[{{ $loop->index }}][bank_account_number]" type="text" maxlength="9" value="{{ $shareholder['bank_account_number'] ?? '' }}" placeholder="Account"
                                         class="w-24 rounded-md border-gray-300 shadow-sm mb-1">
-                                    <input name="shareholders[{{ $loop->index }}][bank_account_name]" type="text" maxlength="60" value="{{ $shareholder['bank_account_name'] ?? $shareholder->bank_account_name }}" placeholder="Account name"
+                                    <input name="shareholders[{{ $loop->index }}][bank_account_name]" type="text" maxlength="60" value="{{ $shareholder['bank_account_name'] ?? '' }}" placeholder="Account name"
                                         class="w-40 rounded-md border-gray-300 shadow-sm">
                                 </td>
                                 <td class="px-3 py-2 text-center">

@@ -631,4 +631,89 @@ class TimeEntryLifecycleTest extends TestCase
 
         $this->assertEquals($this->user->id, $entry->user->id);
     }
+
+    public function test_time_entry_can_target_a_client_directly(): void
+    {
+        $response = $this->actingAs($this->user)->post(route('time-entries.store'), [
+            'client_id' => $this->client->id,
+            'entry_date' => '2024-01-15',
+            'hours' => 3,
+            'description' => 'Ad-hoc client call',
+            'billable' => true,
+        ]);
+
+        $response->assertRedirect(route('time-entries.index'));
+        $this->assertDatabaseHas('time_entries', [
+            'client_id' => $this->client->id,
+            'project_id' => null,
+            'hours' => 3,
+        ]);
+    }
+
+    public function test_time_entry_can_be_internal_with_no_target(): void
+    {
+        $response = $this->actingAs($this->user)->post(route('time-entries.store'), [
+            'entry_date' => '2024-01-15',
+            'hours' => 2,
+            'description' => 'Internal admin',
+            'billable' => false,
+        ]);
+
+        $response->assertRedirect(route('time-entries.index'));
+        $this->assertDatabaseHas('time_entries', [
+            'client_id' => null,
+            'project_id' => null,
+            'billable' => false,
+        ]);
+    }
+
+    public function test_project_selection_forces_the_projects_client(): void
+    {
+        $otherClient = Client::factory()->create();
+
+        // Even if the posted client disagrees, the project's client wins.
+        $response = $this->actingAs($this->user)->post(route('time-entries.store'), [
+            'client_id' => $otherClient->id,
+            'project_id' => $this->project->id,
+            'entry_date' => '2024-01-15',
+            'hours' => 4,
+            'billable' => true,
+        ]);
+
+        $response->assertRedirect(route('time-entries.index'));
+        $this->assertDatabaseHas('time_entries', [
+            'project_id' => $this->project->id,
+            'client_id' => $this->client->id,
+        ]);
+    }
+
+    public function test_changing_the_project_updates_the_denormalised_client(): void
+    {
+        $entry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $this->project->id,
+            'entry_date' => '2024-01-15',
+            'hours' => 4,
+            'status' => TimeEntry::STATUS_DRAFT,
+        ]);
+        $this->assertEquals($this->client->id, $entry->client_id);
+
+        $otherClient = Client::factory()->create();
+        $otherProject = Project::factory()->create(['client_id' => $otherClient->id]);
+
+        $entry->update(['project_id' => $otherProject->id]);
+
+        $this->assertEquals($otherClient->id, $entry->refresh()->client_id);
+    }
+
+    public function test_create_form_lists_clients_and_projects(): void
+    {
+        $response = $this->actingAs($this->user)->get(route('time-entries.create'));
+
+        $response->assertOk();
+        $response->assertSee('No client (internal time)');
+        $response->assertSee($this->project->name);
+        // Project options carry their client for the JS auto-fill.
+        $response->assertSee('data-client-id="' . $this->client->id . '"', false);
+    }
 }

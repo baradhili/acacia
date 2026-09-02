@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Client;
 use App\Models\Project;
 use App\Models\PurchaseOrder;
 use App\Models\TimeEntry;
@@ -15,7 +16,7 @@ class TimeEntryController extends Controller
 {
     public function index()
     {
-        $timeEntries = TimeEntry::with(['user', 'project', 'purchaseOrder'])
+        $timeEntries = TimeEntry::with(['user', 'client', 'project', 'purchaseOrder'])
             ->orderBy('entry_date', 'desc')
             ->orderByDesc('id')
             ->paginate(15);
@@ -25,12 +26,13 @@ class TimeEntryController extends Controller
 
     public function create()
     {
-        $projects = Project::where('status', 'active')->orderBy('name')->pluck('name', 'id');
+        $clients = Client::orderBy('name')->pluck('name', 'id');
+        $projects = Project::where('status', 'active')->orderBy('name')->get();
         $purchaseOrders = PurchaseOrder::whereNotIn('status', ['cancelled'])
             ->orderBy('po_number')
             ->pluck('po_number', 'id');
 
-        return view('time-entries.create', compact('projects', 'purchaseOrders'));
+        return view('time-entries.create', compact('clients', 'projects', 'purchaseOrders'));
     }
 
     /**
@@ -62,7 +64,7 @@ class TimeEntryController extends Controller
 
     public function show(TimeEntry $timeEntry)
     {
-        $timeEntry->load(['user', 'project', 'purchaseOrder', 'approver', 'breaks']);
+        $timeEntry->load(['user', 'client', 'project', 'purchaseOrder', 'approver', 'breaks']);
         return view('time-entries.show', compact('timeEntry'));
     }
 
@@ -74,14 +76,15 @@ class TimeEntryController extends Controller
                 ->with('error', 'Only draft entries can be edited.');
         }
 
-        $projects = Project::where('status', 'active')->orderBy('name')->pluck('name', 'id');
+        $clients = Client::orderBy('name')->pluck('name', 'id');
+        $projects = Project::where('status', 'active')->orderBy('name')->get();
         $purchaseOrders = PurchaseOrder::whereNotIn('status', ['cancelled'])
             ->orderBy('po_number')
             ->pluck('po_number', 'id');
 
         $timeEntry->load('breaks');
 
-        return view('time-entries.edit', compact('timeEntry', 'projects', 'purchaseOrders'));
+        return view('time-entries.edit', compact('timeEntry', 'clients', 'projects', 'purchaseOrders'));
     }
 
     public function update(Request $request, TimeEntry $timeEntry)
@@ -169,6 +172,7 @@ class TimeEntryController extends Controller
     protected function validateEntry(Request $request): array
     {
         $validated = $request->validate([
+            'client_id' => 'nullable|exists:clients,id',
             'project_id' => 'nullable|exists:projects,id',
             'purchase_order_id' => 'nullable|exists:purchase_orders,id',
             'entry_date' => 'required|date',
@@ -233,6 +237,7 @@ class TimeEntryController extends Controller
         $date = Carbon::parse($validated['entry_date'])->startOfDay();
 
         $payload = [
+            'client_id' => $validated['client_id'] ?? null,
             'project_id' => $validated['project_id'] ?? null,
             'purchase_order_id' => $validated['purchase_order_id'] ?? null,
             'entry_date' => $validated['entry_date'],
@@ -283,7 +288,7 @@ class TimeEntryController extends Controller
 
         $timeEntries = TimeEntry::where('user_id', $userId)
             ->whereBetween('entry_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
-            ->with(['project', 'purchaseOrder'])
+            ->with(['client', 'project', 'purchaseOrder'])
             ->orderBy('entry_date')
             ->orderBy('start_time')
             ->get();
@@ -306,7 +311,7 @@ class TimeEntryController extends Controller
 
         $timeEntries = TimeEntry::where('user_id', $userId)
             ->whereBetween('entry_date', [$month->toDateString(), $monthEnd->toDateString()])
-            ->with(['project', 'purchaseOrder'])
+            ->with(['client', 'project', 'purchaseOrder'])
             ->orderBy('entry_date')
             ->orderBy('start_time')
             ->get();

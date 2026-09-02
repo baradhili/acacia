@@ -49,7 +49,7 @@
                         </td>
                         <td class="px-4 py-3">
                             @forelse($dayEntries as $entry)
-                                <div class="text-sm text-gray-900 mb-1">{{ $entry->project?->name ?? '-' }}</div>
+                                <div class="text-sm text-gray-900 mb-1">{{ $entry->project?->name ?? $entry->client?->name ?? '-' }}</div>
                             @empty
                                 <span class="text-gray-400">-</span>
                             @endforelse
@@ -102,7 +102,7 @@
                                         : '(manual)' }}
                                 </span>
                             </td>
-                            <td class="px-4 py-3 text-sm text-gray-900">{{ $entry->project?->name ?? '-' }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-900">{{ $entry->project?->name ?? $entry->client?->name ?? '-' }}</td>
                             <td class="px-4 py-3 text-sm text-gray-900">{{ Str::limit($entry->description, 50) }}</td>
                             <td class="px-4 py-3 text-sm text-right text-gray-900">{{ number_format($entry->hours, 1) }}</td>
                             <td class="px-4 py-3">

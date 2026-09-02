@@ -11,27 +11,7 @@
             @csrf
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                    <label for="project_id" class="block text-sm font-medium text-gray-700">Project</label>
-                    <select name="project_id" id="project_id"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                        <option value="">Select Project</option>
-                        @foreach($projects as $id => $name)
-                            <option value="{{ $id }}" {{ old('project_id') == $id ? 'selected' : '' }}>{{ $name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div>
-                    <label for="purchase_order_id" class="block text-sm font-medium text-gray-700">Purchase Order</label>
-                    <select name="purchase_order_id" id="purchase_order_id"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                        <option value="">Select PO</option>
-                        @foreach($purchaseOrders as $id => $poNumber)
-                            <option value="{{ $id }}" {{ old('purchase_order_id') == $id ? 'selected' : '' }}>{{ $poNumber }}</option>
-                        @endforeach
-                    </select>
-                </div>
+                @include('time-entries.partials.target-fields')
 
                 <div>
                     <label for="entry_date" class="block text-sm font-medium text-gray-700">Date *</label>

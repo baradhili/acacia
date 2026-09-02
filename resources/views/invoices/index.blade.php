@@ -4,9 +4,15 @@
 
     <div class="mb-6 flex justify-between items-center">
         <h1 class="text-2xl font-bold text-gray-800">Invoices</h1>
-        <a href="{{ route('invoices.create') }}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg">
-            + New Invoice
-        </a>
+        <div class="flex gap-3">
+            <a href="{{ route('invoices.create-from-time-entries') }}"
+                class="bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 px-4 py-2 rounded-lg">
+                New from Time Entries
+            </a>
+            <a href="{{ route('invoices.create') }}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg">
+                + New Invoice
+            </a>
+        </div>
     </div>
 
     <!-- Filters -->

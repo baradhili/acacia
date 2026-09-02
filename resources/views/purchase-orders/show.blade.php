@@ -10,6 +10,18 @@
             <h1 class="text-2xl font-bold text-gray-800">{{ $purchaseOrder->po_number }}</h1>
         </div>
         <div class="flex gap-3">
+            @php
+                $hasInvoiceableEntries = $purchaseOrder->timeEntries()
+                    ->where('status', \App\Models\TimeEntry::STATUS_APPROVED)
+                    ->where('billable', true)
+                    ->whereDoesntHave('invoiceItem')
+                    ->exists();
+            @endphp
+            @if($hasInvoiceableEntries && !in_array($purchaseOrder->status, ['completed', 'cancelled']))
+                <a href="{{ route('purchase-orders.create-invoice', $purchaseOrder) }}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg">
+                    Create Invoice
+                </a>
+            @endif
             @if($purchaseOrder->status === 'draft')
                 <a href="{{ route('purchase-orders.edit', $purchaseOrder) }}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg">
                     Edit PO

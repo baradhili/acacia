@@ -1140,4 +1140,247 @@ class InvoiceTest extends TestCase
 
         $this->assertNull($invoice->po_remaining_after);
     }
+
+    public function test_invoice_create_form_with_client_preselect_loads(): void
+    {
+        // Regression: create() queries whereDoesntHave('invoiceItem') on
+        // TimeEntry — before the relation existed this threw
+        // RelationNotFoundException for any ?client_id= preselect.
+        $project = Project::factory()->create(['client_id' => $this->client->id]);
+        TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $project->id,
+            'start_time' => now()->subHours(2),
+            'end_time' => now(),
+            'description' => 'Consulting work',
+            'billable' => true,
+            'status' => TimeEntry::STATUS_APPROVED,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->get('/invoices/create?client_id=' . $this->client->id);
+
+        $response->assertOk();
+        $response->assertSee('Consulting work');
+    }
+
+    public function test_deleting_invoice_releases_its_time_entries(): void
+    {
+        $project = Project::factory()->create(['client_id' => $this->client->id]);
+        $timeEntry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $project->id,
+            'start_time' => now()->subHours(2),
+            'end_time' => now(),
+            'description' => 'Consulting work',
+            'billable' => true,
+            'status' => TimeEntry::STATUS_APPROVED,
+        ]);
+
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_DRAFT,
+        ]);
+        $invoice->items()->create([
+            'description' => 'Consulting work',
+            'quantity' => 2,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+            'time_entry_id' => $timeEntry->id,
+        ]);
+
+        $this->assertTrue($timeEntry->invoiceItem()->exists());
+
+        $response = $this->actingAs($this->user)
+            ->delete("/invoices/{$invoice->id}");
+
+        $response->assertRedirect(route('invoices.index'));
+        // Invoice deletion cascades items, which releases the entry.
+        $this->assertFalse($timeEntry->invoiceItem()->exists());
+        $this->assertDatabaseMissing('invoices', ['id' => $invoice->id]);
+    }
+
+    public function test_cancelling_invoice_releases_its_time_entries(): void
+    {
+        $project = Project::factory()->create(['client_id' => $this->client->id]);
+        $timeEntry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $project->id,
+            'start_time' => now()->subHours(2),
+            'end_time' => now(),
+            'description' => 'Consulting work',
+            'billable' => true,
+            'status' => TimeEntry::STATUS_APPROVED,
+        ]);
+
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_SENT,
+        ]);
+        $invoice->items()->create([
+            'description' => 'Consulting work',
+            'quantity' => 2,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+            'time_entry_id' => $timeEntry->id,
+        ]);
+
+        $this->assertTrue($timeEntry->invoiceItem()->exists());
+
+        $invoice->cancel();
+
+        // The invoiceItem relation excludes cancelled invoices, so the
+        // entry is available for re-invoicing without deleting anything.
+        $this->assertFalse($timeEntry->invoiceItem()->exists());
+        $this->assertTrue(
+            TimeEntry::whereDoesntHave('invoiceItem')->whereKey($timeEntry->id)->exists()
+        );
+    }
+
+    public function test_store_links_checked_time_entries_as_invoice_items(): void
+    {
+        $project = Project::factory()->create([
+            'client_id' => $this->client->id,
+            'hourly_rate' => 100,
+        ]);
+        $timeEntry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $project->id,
+            'start_time' => now()->subHours(2),
+            'end_time' => now(),
+            'description' => 'Consulting work',
+            'billable' => true,
+            'status' => TimeEntry::STATUS_APPROVED,
+        ]);
+
+        $response = $this->actingAs($this->user)->post('/invoices', [
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'items' => [
+                [
+                    'description' => 'Manual line',
+                    'quantity' => 1,
+                    'unit_price' => 100,
+                    'tax_rate' => 10,
+                ],
+            ],
+            'time_entry_ids' => [$timeEntry->id],
+        ]);
+
+        $response->assertSessionHas('success');
+
+        $invoice = Invoice::where('client_id', $this->client->id)->first();
+        $this->assertCount(2, $invoice->items);
+
+        $linked = $invoice->items->firstWhere('time_entry_id', $timeEntry->id);
+        $this->assertNotNull($linked, 'Checked entry must produce a linked invoice item.');
+        $this->assertEquals(2, (float) $linked->quantity);
+        $this->assertEquals(100, (float) $linked->unit_price);
+        $this->assertEquals($project->name . ' - Consulting work', $linked->description);
+        $this->assertEquals(1, $linked->sort_order, 'Entry line follows manual lines.');
+
+        // Manual 100 + entry 2h @ 100 = 200, GST 10% on 300.
+        $this->assertEquals(300.00, (float) $invoice->subtotal);
+        $this->assertEquals(330.00, (float) $invoice->total);
+
+        $this->assertTrue($timeEntry->invoiceItem()->exists());
+    }
+
+    public function test_store_creates_invoice_from_time_entries_without_manual_items(): void
+    {
+        $project = Project::factory()->create([
+            'client_id' => $this->client->id,
+            'hourly_rate' => 150,
+        ]);
+        $timeEntry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $project->id,
+            'start_time' => now()->subHours(3),
+            'end_time' => now(),
+            'description' => 'Design work',
+            'billable' => true,
+            'status' => TimeEntry::STATUS_APPROVED,
+        ]);
+
+        $response = $this->actingAs($this->user)->post('/invoices', [
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'time_entry_ids' => [$timeEntry->id],
+        ]);
+
+        $response->assertSessionHas('success');
+        $invoice = Invoice::where('client_id', $this->client->id)->first();
+        $this->assertCount(1, $invoice->items);
+        $this->assertEquals($timeEntry->id, $invoice->items[0]->time_entry_id);
+        $this->assertEquals(450.00, (float) $invoice->subtotal);
+    }
+
+    public function test_store_rejects_uninvoiceable_time_entries(): void
+    {
+        $project = Project::factory()->create(['client_id' => $this->client->id]);
+
+        $draftEntry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $project->id,
+            'start_time' => now()->subHours(1),
+            'end_time' => now(),
+            'status' => TimeEntry::STATUS_DRAFT,
+            'billable' => true,
+        ]);
+
+        $unbillableEntry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $project->id,
+            'start_time' => now()->subHours(1),
+            'end_time' => now(),
+            'status' => TimeEntry::STATUS_APPROVED,
+            'billable' => false,
+        ]);
+
+        $invoicedEntry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $project->id,
+            'start_time' => now()->subHours(1),
+            'end_time' => now(),
+            'status' => TimeEntry::STATUS_APPROVED,
+            'billable' => true,
+        ]);
+        $otherInvoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_DRAFT,
+        ]);
+        $otherInvoice->items()->create([
+            'description' => 'Already billed',
+            'quantity' => 1,
+            'unit_price' => 50,
+            'tax_rate' => 10,
+            'time_entry_id' => $invoicedEntry->id,
+        ]);
+
+        $response = $this->actingAs($this->user)->post('/invoices', [
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'items' => [
+                ['description' => 'Manual line', 'quantity' => 1, 'unit_price' => 100, 'tax_rate' => 10],
+            ],
+            'time_entry_ids' => [$draftEntry->id, $unbillableEntry->id, $invoicedEntry->id],
+        ]);
+
+        $response->assertSessionHas('errors');
+        // Only the pre-existing invoice; no new invoice created.
+        $this->assertDatabaseCount('invoices', 1);
+        $errors = session('errors')->get('time_entry_ids');
+        $this->assertStringContainsString("#{$draftEntry->id} is not approved", implode(' ', (array) $errors));
+        $this->assertStringContainsString("#{$unbillableEntry->id} is not billable", implode(' ', (array) $errors));
+        $this->assertStringContainsString("#{$invoicedEntry->id} is already invoiced", implode(' ', (array) $errors));
+    }
 }

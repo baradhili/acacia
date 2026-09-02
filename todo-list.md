@@ -14,7 +14,7 @@
 
 - [x] How to handle "end/start of financial year" - (Aug 2026) Staged year-end close: trial close (checklist + proposed closing entries, `fiscal-year:trial` / Financial Years page) → approval (accountant/admin ≠ requester) → execute (`fiscal-year:close`) posts two JEs (reference FY-CLOSE-{year}) transferring every P&L balance to Retained Earnings (3200), marks the IFRS ReportingPeriod CLOSED, locks the year's app periods and ensures next-FY exists OPEN. Reopen (`fiscal-year:reopen` / UI) mirrors the entries back out. Closed FYs block payment/bill-payment dates, voids and unapplies with friendly errors (NotInClosedPeriod rule); reports exclude FY-CLOSE references from P&L movement so historical statements survive the close, and the balance sheet stops adding on-the-fly profit once the FY is closed (no double count). BAS/company-tax FY boundaries derive from entity.year_start. CLI `--force` bypasses the approval workflow/checklist; the dashboard and Financial Years page warn while a prior FY is unclosed.
 
-- [ ] time entry - can only go to a project 
+- [x] time entry - can only go to a project - (Aug 2026) entries can now target a client directly (ad-hoc client work) or stand alone as internal time; `client_id` denormalised onto `time_entries` (forced from the project when one is set, backfilled historically), Client select added to the entry forms, reports/unbilled-time views resolve the client in all three cases. 
 
 - [x] data is not actually being written to most ifrs tables - they are being written to the tables - invoices, bills, payments etc - just not seeing them in the IFRS_transactions table - plan in .zcode/plans
 
@@ -34,11 +34,29 @@
 
 - [x] Need a way to identify capital purchases category in bills/chart of accounts (and update bas report)
 
-- [ ] review [Sales Cycle - Eloquent IFRS](https://ekmungai.github.io/ifrs-docs/v5docs/sales-cycle/) , [Purchase Cycle - Eloquent IFRS](https://ekmungai.github.io/ifrs-docs/v5docs/purchase-cycle/) , and [Compound Journal Entries - Eloquent IFRS](https://ekmungai.github.io/ifrs-docs/v5docs/compound-journals/) and check for any deviations done in teh app. update this document with teh proposed plan.
+- [x] review [Sales Cycle - Eloquent IFRS](https://ekmungai.github.io/ifrs-docs/v5docs/sales-cycle/) , [Purchase Cycle - Eloquent IFRS](https://ekmungai.github.io/ifrs-docs/v5docs/purchase-cycle/) , and [Compound Journal Entries - Eloquent IFRS](https://ekmungai.github.io/ifrs-docs/v5docs/compound-journals/) and check for any deviations done in teh app. update this document with teh proposed plan.
 
-- [ ] ### 0. `createFromTimeEntries` doesn't actually create
+- [ ] Process of adding profile picture fails
+
+- [ ] No way of creating an opening balance for franking account
+
+- [ ] openeing balances view doesn't add totals - should totals even be visible?
+
+- [ ] Need to be able to set open balances for earlier fiscal years than this one
+
+- [ ] shareholders - share held at what value? $10 for 1000
+
+- [x] company details - index wants resignation date - should be optional
+
+- [ ] Company details page missing company name and optional trading name
+
+- [ ] 2026_08_28_000001_create_shares_and_dividends_tables .......... 43.80ms FAIL
+  
+    Illuminate\Database\QueryException 
+  
+   SQLSTATE[23000]: Integrity constraint violation: 1451 Cannot delete or update a parent row: a foreign key constraint fails (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: erp, SQL: drop table if exists `dividend_declarations`)
+
+- [x] ### 0. `createFromTimeEntries` doesn't actually create
   
   **Files:** `app/Http/Controllers/InvoiceController.php`, `routes/web.php`, missing views
-  Investigation confirmed the bug is worse than reported: the POST route (`invoices.create-from-time-entries.store`) points to the **same render-only method** as the GET, so posting just re-renders and never persists. Additionally the view itself (`resources/views/invoices/create-from-time-entries.blade.php`) **does not exist**, so both GET and POST have been 500ing with `ViewNotFoundException` — the feature is unreachable/broken end-to-end, and nothing in the UI links to these routes (no tests either). The sibling `createFromPurchaseOrder` has the same problem (`invoices/create-from-po.blade.php` also missing; route `purchase-orders/{po}/create-invoice`). **Decision:** deferred per maintainer — time entries are out of scope for now. When revisiting: create the two missing views, split the POST into a real store handler that builds `InvoiceItem`s via `InvoiceItem::createFromTimeEntry()` (which already exists, unsave()-ed, for exactly this), and link `time_entry_id` on each item.
-  
-  - 🚫 *(deferred with #20 — time entries out of scope)* `time_entry_ids` validated in `store` but never linked to created items.
+  (Sep 2026) Done. Invoiced state now derives from `invoice_items.time_entry_id` via `TimeEntry::invoiceItem()` (the phantom `invoiced` column writes are gone; cancelled invoices release their entries). `/invoices/create` turns checked unbilled entries into real linked invoice lines. Dedicated screens: "New from Time Entries" (GET picker with client filter + real `storeFromTimeEntries` POST) and PO "Create Invoice" (`storeFromPurchaseOrder`) — both build items via `InvoiceItem::createFromTimeEntry()`, screen for approved/billable/uninvoiced/single-client before persisting, and the PO flow drives `used_amount` through the existing observer chain. The previously missing views (`create-from-time-entries`, `create-from-po`, `credit-notes/create-from-invoice`) all exist, plus drive-by fixes to the dashboard unbilled-time widget (phantom columns) and the `australian.invoice.terms` config key. Covered by `tests/Feature/CreateInvoiceFromTimeEntriesTest.php`.

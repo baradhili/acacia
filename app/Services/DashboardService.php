@@ -4,14 +4,11 @@ namespace App\Services;
 
 use App\Models\BankTransaction;
 use App\Models\BillPayment;
-use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\Payment;
-use App\Models\Project;
 use App\Models\PurchaseOrder;
 use App\Models\TimeEntry;
 use Carbon\Carbon;
-use Illuminate\Support\Collection;
 
 class DashboardService
 {
@@ -90,7 +87,7 @@ class DashboardService
     protected function getDailyCashFlow(Carbon $start, Carbon $end): array
     {
         $data = [];
-        
+
         for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
             $dayStart = $date->copy()->startOfDay();
             $dayEnd = $date->copy()->endOfDay();
@@ -287,20 +284,23 @@ class DashboardService
      */
     public function getUnbilledTimeWidget(): array
     {
-        $entries = TimeEntry::with('project.client')
-            ->where('invoiced', false)
-            ->whereNull('deleted_at')
+        $entries = TimeEntry::with(['client', 'project.client'])
+            ->where('billable', true)
+            ->where('status', TimeEntry::STATUS_APPROVED)
+            ->whereDoesntHave('invoiceItem')
             ->get()
             ->map(function ($entry) {
                 return [
                     'id' => $entry->id,
                     'project_name' => $entry->project?->name ?? 'No Project',
-                    'client_name' => $entry->project?->client?->name ?? 'Unknown',
+                    'client_name' => $entry->client?->name
+                        ?? $entry->project?->client?->name
+                        ?? 'Unknown',
                     'description' => $entry->description,
                     'hours' => $entry->hours,
                     'rate' => $entry->rate ?? $entry->project?->hourly_rate ?? 0,
                     'amount' => $entry->hours * ($entry->rate ?? $entry->project?->hourly_rate ?? 0),
-                    'date' => $entry->date?->format('Y-m-d'),
+                    'date' => $entry->entry_date?->format('Y-m-d'),
                 ];
             })
             ->filter(function ($entry) {
@@ -328,7 +328,7 @@ class DashboardService
     public function getBankBalanceWidget(): array
     {
         $bankTransactions = BankTransaction::all();
-        
+
         $totalCredits = $bankTransactions->where('type', BankTransaction::TYPE_CREDIT)->sum('amount');
         $totalDebits = $bankTransactions->where('type', BankTransaction::TYPE_DEBIT)->sum('amount');
         $balance = $totalCredits - $totalDebits;
@@ -340,7 +340,7 @@ class DashboardService
         // Group by source
         $bySource = $bankTransactions
             ->groupBy('source')
-            ->map(fn($group) => [
+            ->map(fn ($group) => [
                 'count' => $group->count(),
                 'total' => $group->sum('amount'),
             ]);
