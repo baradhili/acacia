@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class TimeEntry extends Model
@@ -51,7 +52,7 @@ class TimeEntry extends Model
         static::saving(function ($entry) {
             // Defensive default for model-level creates that only set a
             // start_time (the controller always sets entry_date explicitly).
-            if (!$entry->entry_date && $entry->start_time) {
+            if (! $entry->entry_date && $entry->start_time) {
                 $entry->entry_date = $entry->start_time->toDateString();
             }
 
@@ -62,7 +63,10 @@ class TimeEntry extends Model
             // A project belongs to exactly one client — keep the
             // denormalised client_id in sync so reporting and the
             // unbilled-time queries can rely on the column alone.
-            if ($entry->project_id && ($entry->isDirty('project_id') || ! $entry->client_id)) {
+            // Whenever a project is set it wins, even when a (changed)
+            // client_id was supplied: letting a stale manual client_id
+            // bypass the sync would desynchronise the column.
+            if ($entry->project_id) {
                 $entry->client_id = Project::whereKey($entry->project_id)->value('client_id');
             }
         });
@@ -70,8 +74,11 @@ class TimeEntry extends Model
 
     // Status constants
     const STATUS_DRAFT = 'draft';
+
     const STATUS_SUBMITTED = 'submitted';
+
     const STATUS_APPROVED = 'approved';
+
     const STATUS_REJECTED = 'rejected';
 
     public function user(): BelongsTo
@@ -105,7 +112,7 @@ class TimeEntry extends Model
         return $this->belongsTo(User::class, 'approved_by');
     }
 
-    public function breaks(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function breaks(): HasMany
     {
         return $this->hasMany(TimeEntryBreak::class)->orderBy('start_time');
     }
@@ -128,7 +135,7 @@ class TimeEntry extends Model
      */
     public function recalculateHours(): void
     {
-        if (!$this->start_time || !$this->end_time) {
+        if (! $this->start_time || ! $this->end_time) {
             return;
         }
 
@@ -149,6 +156,7 @@ class TimeEntry extends Model
 
             return round(max($span - $breakMinutes / 60, 0), 2);
         }
+
         return (float) $this->hours;
     }
 
@@ -171,6 +179,7 @@ class TimeEntry extends Model
         if ($this->project_id && $this->project) {
             return (float) ($this->project->hourly_rate ?? 0);
         }
+
         return 0;
     }
 

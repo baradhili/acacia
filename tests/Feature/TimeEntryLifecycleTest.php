@@ -15,7 +15,9 @@ class TimeEntryLifecycleTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected Client $client;
+
     protected Project $project;
 
     protected function setUp(): void
@@ -54,6 +56,32 @@ class TimeEntryLifecycleTest extends TestCase
         $this->assertEquals(8.0, $entry->hours);
         $this->assertEquals('2024-01-15 09:00', $entry->start_time->format('Y-m-d H:i'));
         $this->assertEquals('2024-01-15 17:00', $entry->end_time->format('Y-m-d H:i'));
+    }
+
+    public function test_project_client_sync_overrides_a_supplied_client(): void
+    {
+        $other = Client::factory()->create();
+
+        // A project always wins: even a freshly supplied, non-null
+        // client_id cannot desynchronise the denormalised column.
+        $entry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $this->project->id,
+            'client_id' => $other->id,
+            'entry_date' => '2024-01-15',
+            'hours' => 2,
+            'description' => 'Project time for another client',
+            'billable' => true,
+        ]);
+
+        $this->assertSame($this->client->id, $entry->client_id);
+
+        // Re-saving keeps the column in step even when project_id itself
+        // is untouched (e.g. the project's client changed since).
+        $this->project->update(['client_id' => $other->id]);
+        $entry->save();
+
+        $this->assertSame($other->id, $entry->fresh()->client_id);
     }
 
     public function test_can_create_manual_hours_entry_without_times(): void
@@ -714,6 +742,6 @@ class TimeEntryLifecycleTest extends TestCase
         $response->assertSee('No client (internal time)');
         $response->assertSee($this->project->name);
         // Project options carry their client for the JS auto-fill.
-        $response->assertSee('data-client-id="' . $this->client->id . '"', false);
+        $response->assertSee('data-client-id="'.$this->client->id.'"', false);
     }
 }
