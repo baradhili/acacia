@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Client;
 use App\Models\Invoice;
+use App\Models\InvoiceItem;
 use App\Models\Project;
 use App\Models\PurchaseOrder;
 use App\Models\TimeEntry;
@@ -195,6 +196,52 @@ class CreateInvoiceFromTimeEntriesTest extends TestCase
 
         $response->assertSessionHasErrors('time_entry_ids');
         $this->assertDatabaseCount('invoices', 1);
+    }
+
+    public function test_concurrent_submissions_cannot_both_consume_the_same_entry(): void
+    {
+        $entry = $this->makeEntry();
+
+        $payload = [
+            'time_entry_ids' => [$entry->id],
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+        ];
+
+        // Two racing submissions for the same time_entry_id: the first
+        // wins; the second hits the post-lock consumption recheck and is
+        // rejected instead of double-billing the entry.
+        $this->actingAs($this->user)
+            ->post(route('invoices.create-from-time-entries.store'), $payload)
+            ->assertSessionHas('success');
+
+        $this->actingAs($this->user)
+            ->post(route('invoices.create-from-time-entries.store'), $payload)
+            ->assertSessionHasErrors('time_entry_ids');
+
+        $this->assertDatabaseCount('invoices', 1);
+        $this->assertSame(
+            1,
+            InvoiceItem::where('time_entry_id', $entry->id)->count()
+        );
+    }
+
+    public function test_store_rejects_entries_resolving_to_another_client(): void
+    {
+        $otherClient = Client::factory()->create();
+        $entry = $this->makeEntry(); // resolves to $this->client via the project
+
+        $response = $this->actingAs($this->user)
+            ->post(route('invoices.store'), [
+                'client_id' => $otherClient->id,
+                'issue_date' => now()->toDateString(),
+                'due_date' => now()->addDays(30)->toDateString(),
+                'time_entry_ids' => [$entry->id],
+                'items' => [],
+            ]);
+
+        $response->assertSessionHasErrors('time_entry_ids');
+        $this->assertDatabaseCount('invoices', 0);
     }
 
     public function test_po_picker_screen_guards_and_renders(): void

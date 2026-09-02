@@ -104,14 +104,16 @@ class InvoiceController extends Controller
             'time_entry_ids.*' => 'exists:time_entries,id',
         ]);
 
-        // Screen the checked entries before the transaction opens —
-        // ValidationException must not be swallowed by the catch below.
-        $timeEntries = ! empty($validated['time_entry_ids'])
-            ? $this->invoiceableTimeEntries($validated['time_entry_ids'])
-            : collect();
-
         DB::beginTransaction();
         try {
+            // Screening runs under the transaction with row locks: the
+            // consumption check is a recheck that no concurrent request
+            // took an entry between submission and now, and every entry
+            // must resolve to this invoice's client.
+            $timeEntries = ! empty($validated['time_entry_ids'])
+                ? $this->invoiceableTimeEntries($validated['time_entry_ids'], (int) $validated['client_id'], forUpdate: true)
+                : collect();
+
             $invoice = Invoice::createWithUniqueNumber([
                 'client_id' => $validated['client_id'],
                 'project_id' => $validated['project_id'] ?? null,
@@ -150,6 +152,10 @@ class InvoiceController extends Controller
 
             return redirect()->route('invoices.show', $invoice)
                 ->with('success', 'Invoice created successfully.');
+        } catch (ValidationException $e) {
+            DB::rollBack();
+
+            throw $e;
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -377,35 +383,36 @@ class InvoiceController extends Controller
             'terms' => 'nullable|string',
         ]);
 
-        // Screening throws ValidationException — must run before the
-        // transaction opens so the errors aren't swallowed below.
-        $timeEntries = $this->invoiceableTimeEntries($validated['time_entry_ids']);
-
-        // Every entry must resolve to a single client.
-        $clientIds = $timeEntries
-            ->map(fn ($entry) => $entry->client_id ?? $entry->project?->client_id)
-            ->filter()
-            ->unique();
-        if ($clientIds->isEmpty()) {
-            throw ValidationException::withMessages([
-                'time_entry_ids' => 'Selected time entries are not linked to any client.',
-            ]);
-        }
-        if ($clientIds->count() > 1) {
-            $names = Client::whereIn('id', $clientIds)->pluck('name')->implode(', ');
-
-            throw ValidationException::withMessages([
-                'time_entry_ids' => "Selected time entries span multiple clients ({$names}). Invoice each client separately.",
-            ]);
-        }
-
-        // Project/PO carry onto the invoice only when every entry
-        // shares the same one; mixed selections stay unattributed.
-        $projectIds = $timeEntries->pluck('project_id')->filter()->unique();
-        $poIds = $timeEntries->pluck('purchase_order_id')->filter()->unique();
-
         DB::beginTransaction();
         try {
+            // Screening runs under the transaction with row locks — see
+            // store(). ValidationException is rethrown after rollback so
+            // the field errors still reach the form.
+            $timeEntries = $this->invoiceableTimeEntries($validated['time_entry_ids'], forUpdate: true);
+
+            // Every entry must resolve to a single client.
+            $clientIds = $timeEntries
+                ->map(fn ($entry) => $entry->client_id ?? $entry->project?->client_id)
+                ->filter()
+                ->unique();
+            if ($clientIds->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'time_entry_ids' => 'Selected time entries are not linked to any client.',
+                ]);
+            }
+            if ($clientIds->count() > 1) {
+                $names = Client::whereIn('id', $clientIds)->pluck('name')->implode(', ');
+
+                throw ValidationException::withMessages([
+                    'time_entry_ids' => "Selected time entries span multiple clients ({$names}). Invoice each client separately.",
+                ]);
+            }
+
+            // Project/PO carry onto the invoice only when every entry
+            // shares the same one; mixed selections stay unattributed.
+            $projectIds = $timeEntries->pluck('project_id')->filter()->unique();
+            $poIds = $timeEntries->pluck('purchase_order_id')->filter()->unique();
+
             $invoice = $this->createInvoiceFromEntries($timeEntries, [
                 'client_id' => $clientIds->first(),
                 'project_id' => $projectIds->count() === 1 ? $projectIds->first() : null,
@@ -421,6 +428,10 @@ class InvoiceController extends Controller
 
             return redirect()->route('invoices.show', $invoice)
                 ->with('success', 'Invoice created successfully.');
+        } catch (ValidationException $e) {
+            DB::rollBack();
+
+            throw $e;
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -470,23 +481,24 @@ class InvoiceController extends Controller
             'terms' => 'nullable|string',
         ]);
 
-        // Screening throws ValidationException — must run before the
-        // transaction opens so the errors aren't swallowed below.
-        $timeEntries = $this->invoiceableTimeEntries($validated['time_entry_ids']);
-
-        $foreign = $timeEntries->reject(
-            fn ($entry) => (int) $entry->purchase_order_id === (int) $purchaseOrder->id
-        );
-        if ($foreign->isNotEmpty()) {
-            $ids = $foreign->pluck('id')->implode(', ');
-
-            throw ValidationException::withMessages([
-                'time_entry_ids' => "Time entries #{$ids} do not belong to this purchase order.",
-            ]);
-        }
-
         DB::beginTransaction();
         try {
+            // Screening runs under the transaction with row locks — see
+            // store(). ValidationException is rethrown after rollback so
+            // the field errors still reach the form.
+            $timeEntries = $this->invoiceableTimeEntries($validated['time_entry_ids'], forUpdate: true);
+
+            $foreign = $timeEntries->reject(
+                fn ($entry) => (int) $entry->purchase_order_id === (int) $purchaseOrder->id
+            );
+            if ($foreign->isNotEmpty()) {
+                $ids = $foreign->pluck('id')->implode(', ');
+
+                throw ValidationException::withMessages([
+                    'time_entry_ids' => "Time entries #{$ids} do not belong to this purchase order.",
+                ]);
+            }
+
             // purchase_order_id on the invoice drives the observer chain
             // that keeps the PO's used_amount in sync.
             $invoice = $this->createInvoiceFromEntries($timeEntries, [
@@ -504,6 +516,10 @@ class InvoiceController extends Controller
 
             return redirect()->route('invoices.show', $invoice)
                 ->with('success', 'Invoice created successfully.');
+        } catch (ValidationException $e) {
+            DB::rollBack();
+
+            throw $e;
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -615,13 +631,21 @@ class InvoiceController extends Controller
 
     /**
      * Fetch time entries selected for invoicing, screening that every
-     * one is approved, billable and not already on a live invoice.
-     * Throws ValidationException, so callers must invoke it BEFORE
-     * opening a try/catch that swallows exceptions.
+     * one is approved, billable and not already on a live invoice — and,
+     * when invoicing for a specific client, that the entry resolves to
+     * that client. Throws ValidationException, so callers must either
+     * invoke it before opening a try/catch that swallows exceptions or
+     * rethrow the ValidationException from inside it.
+     *
+     * $forUpdate re-reads the rows under a row-level lock inside the
+     * caller's transaction: a concurrent request that consumed an entry
+     * after the unlocked screen is caught by the invoiceItem() recheck
+     * here, before any invoice item is created.
      */
-    private function invoiceableTimeEntries(array $ids): Collection
+    private function invoiceableTimeEntries(array $ids, ?int $clientId = null, bool $forUpdate = false): Collection
     {
-        $entries = TimeEntry::with('project')->whereIn('id', $ids)->get();
+        $query = TimeEntry::with('project')->whereIn('id', $ids);
+        $entries = $forUpdate ? $query->lockForUpdate()->get() : $query->get();
 
         if ($entries->count() !== count(array_unique($ids))) {
             throw ValidationException::withMessages([
@@ -643,6 +667,13 @@ class InvoiceController extends Controller
             }
             if ($entry->invoiceItem()->exists()) {
                 $reasons[] = "#{$entry->id} is already invoiced";
+
+                continue;
+            }
+
+            $resolvedClient = $entry->client_id ?? $entry->project?->client_id;
+            if ($clientId !== null && (int) $resolvedClient !== $clientId) {
+                $reasons[] = "#{$entry->id} belongs to another client";
             }
         }
 
