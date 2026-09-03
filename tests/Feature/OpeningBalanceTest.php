@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Client;
+use App\Models\FiscalYearClose;
 use App\Models\Payment;
 use App\Models\User;
 use IFRS\Models\Account;
@@ -357,5 +358,52 @@ class OpeningBalanceTest extends TestCase
             'id' => Balance::latest('id')->first()->id,
             'balance' => 5000,
         ]);
+    }
+
+    public function test_a_completed_prior_year_close_locks_the_next_periods_opening(): void
+    {
+        // An executed close where every balance nets to zero writes no
+        // Balance rows at all — the next period's opening is still
+        // close-derived and must stay read-only.
+        FiscalYearClose::create([
+            'entity_id' => $this->entity->id,
+            'year' => $this->year - 1,
+            'status' => FiscalYearClose::STATUS_CLOSED,
+            'closed_at' => now(),
+        ]);
+
+        $this->actingAs($this->admin)->get('/opening-balances')
+            ->assertOk()
+            ->assertSee('opens from the year-end close')
+            ->assertDontSee('Save Opening Balances');
+    }
+
+    public function test_ledger_activity_predating_a_migration_set_is_superseded_for_every_account(): void
+    {
+        // A receipt posted BEFORE the migration set's date, against
+        // accounts the set doesn't mention. The set is an entity-level
+        // opening trial balance: accounts absent from it open at zero
+        // and their pre-set history is superseded with everyone else's.
+        $client = Client::factory()->create();
+        $payment = Payment::create([
+            'client_id' => $client->id,
+            'amount' => 110,
+            'payment_date' => ($this->year - 1).'-06-30',
+            'payment_method' => 'bank_transfer',
+        ]);
+        $payment->postToIFRS();
+
+        $this->saveBalances([
+            $this->bank->id => ['debit' => 15000, 'credit' => null],
+        ], $this->admin);
+
+        $this->actingAs($this->admin)->get('/reports/trial-balance')
+            ->assertOk()
+            // The set's bank opening stands; the pre-set receipt is
+            // superseded for bank, revenue and GST alike.
+            ->assertSee('$15,000.00')
+            ->assertDontSee('$15,110.00')
+            ->assertDontSee('$100.00')
+            ->assertDontSee('$10.00');
     }
 }

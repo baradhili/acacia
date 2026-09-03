@@ -439,9 +439,12 @@ class FiscalYearCloseExecuteTest extends TestCase
         $this->assertEquals(2000.0, round($this->balance($this->bank), 2));
 
         $this->service->close($this->entity, $year, force: true);
+        $record = $this->service->closeRecord($this->entity, $year);
 
         // Post-close: exactly one bank row on the period — the generated
-        // one (closing position 10,000) — and the manual row is gone.
+        // one. It carries the snapshot the reports were showing at close
+        // time (2,000), so the close never moves reported balances; the
+        // manual row is preserved on the workflow record.
         $rows = Balance::withoutGlobalScope(EntityScope::class)
             ->where('entity_id', $this->entity->id)
             ->where('reporting_period_id', $nextPeriod->id)
@@ -449,8 +452,28 @@ class FiscalYearCloseExecuteTest extends TestCase
             ->get();
         $this->assertCount(1, $rows);
         $this->assertSame('FY-CLOSE-'.$year.'-OB', $rows->first()->reference);
-        $this->assertEquals(10000.0, (float) $rows->first()->balance);
+        $this->assertEquals(2000.0, (float) $rows->first()->balance);
+        $this->assertEquals(2000.0, round($this->balance($this->bank), 2));
 
-        $this->assertEquals(10000.0, round($this->balance($this->bank), 2));
+        $superseded = $record->refresh()->superseded_opening_balances;
+        $this->assertIsArray($superseded);
+        $this->assertSame($this->bank->id, (int) $superseded[0]['account_id']);
+        $this->assertEquals(2000.0, (float) $superseded[0]['balance']);
+        $this->assertNull($superseded[0]['reference']);
+
+        // Reopen: the generated set goes, the manual set returns exactly
+        // as it was, and the reports sit at their pre-close figures.
+        $this->service->reopen($this->entity, $year);
+
+        $restored = Balance::withoutGlobalScope(EntityScope::class)
+            ->where('entity_id', $this->entity->id)
+            ->where('reporting_period_id', $nextPeriod->id)
+            ->where('account_id', $this->bank->id)
+            ->get();
+        $this->assertCount(1, $restored);
+        $this->assertNull($restored->first()->reference);
+        $this->assertEquals(2000.0, (float) $restored->first()->balance);
+        $this->assertNull($record->refresh()->superseded_opening_balances);
+        $this->assertEquals(2000.0, round($this->balance($this->bank), 2));
     }
 }

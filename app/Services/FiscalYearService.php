@@ -730,12 +730,15 @@ class FiscalYearService
             // (the eve of FY {year+1}), carrying the full closing balance
             // including the retained profit just closed. Reports read it
             // as the superseding snapshot — no manual re-entry, ever.
-            $this->createNextYearOpeningBalances($entity, $year, $end);
+            // Any manual set it supersedes is preserved on the record so
+            // reopen() can put it back.
+            $superseded = $this->createNextYearOpeningBalances($entity, $year, $end);
 
             $record->fill([
                 'status' => FiscalYearClose::STATUS_CLOSED,
                 'closed_at' => now(),
                 'closing_transaction_ids' => $transactionIds,
+                'superseded_opening_balances' => $superseded,
                 'checklist' => $trial['checklist'],
                 'trial_totals' => [
                     'fy_net_profit' => $trial['fy_net_profit'],
@@ -801,15 +804,33 @@ class FiscalYearService
 
             // The generated opening set for FY {year+1} was derived from
             // the now-reversed closing position — drop it; a later
-            // re-close regenerates it from the fresh position.
+            // re-close regenerates it from the fresh position. Whatever
+            // manual set the close superseded goes back exactly as it
+            // was, so reopen restores the pre-close opening position.
             Balance::withoutGlobalScope(EntityScope::class)
                 ->where('entity_id', $entity->id)
                 ->where('reference', $record->closingReference().'-OB')
                 ->delete();
 
+            $nextPeriod = $this->reportingPeriod($entity, $year + 1);
+            foreach ($record->superseded_opening_balances ?? [] as $row) {
+                (new Balance([
+                    'entity_id' => $entity->id,
+                    'account_id' => $row['account_id'],
+                    'reporting_period_id' => $nextPeriod->id,
+                    'currency_id' => $row['currency_id'],
+                    'transaction_type' => $row['transaction_type'],
+                    'transaction_date' => $row['transaction_date'],
+                    'balance_type' => $row['balance_type'],
+                    'balance' => $row['balance'],
+                    'reference' => $row['reference'],
+                ]))->save();
+            }
+
             $record->fill([
                 'status' => FiscalYearClose::STATUS_REOPENED,
                 'reopened_at' => now(),
+                'superseded_opening_balances' => null,
             ])->save();
 
             Log::info('Financial year reopened', [
@@ -828,18 +849,17 @@ class FiscalYearService
      * balance is non-zero, dated the year end, stamped with the closing
      * reference plus "-OB" so the set is recognisable as system-
      * generated (read-only in the Opening Balances UI, removed by
-     * reopen()). Any existing rows for the period are superseded first —
+     * reopen()). Any existing rows for the period are superseded —
      * including a manual migration set, which the closing position
-     * already contains. Runs inside close()'s transaction.
+     * already contains; those rows are returned so close() can preserve
+     * them on the workflow record for reopen() to restore. Runs inside
+     * close()'s transaction.
+     *
+     * @return array<int, array<string, mixed>> the superseded rows
      */
-    protected function createNextYearOpeningBalances(Entity $entity, int $year, Carbon $end): void
+    protected function createNextYearOpeningBalances(Entity $entity, int $year, Carbon $end): array
     {
         $nextPeriod = $this->reportingPeriod($entity, $year + 1);
-
-        Balance::withoutGlobalScope(EntityScope::class)
-            ->where('entity_id', $entity->id)
-            ->where('reporting_period_id', $nextPeriod->id)
-            ->delete();
 
         $accounts = Account::withoutGlobalScope(EntityScope::class)
             ->where('entity_id', $entity->id)
@@ -847,14 +867,42 @@ class FiscalYearService
             ->orderBy('code')
             ->get();
 
-        $reference = FiscalYearClose::CLOSING_REFERENCE_PREFIX.$year.'-OB';
-
+        // Every closing balance is computed BEFORE any row is written:
+        // the first generated row would otherwise shift the entity-level
+        // opening snapshot and zero out the accounts still to measure.
+        $closing = [];
         foreach ($accounts as $account) {
             $balance = round(OpeningBalances::balanceAt($account, $entity, $end->copy()->endOfDay()), 2);
-            if (abs($balance) < 0.01) {
-                continue;
+            if (abs($balance) >= 0.01) {
+                $closing[] = [$account, $balance];
             }
+        }
 
+        // Preserve whatever the generated set supersedes, then clear the
+        // period so at most one set per period survives.
+        $superseded = Balance::withoutGlobalScope(EntityScope::class)
+            ->where('entity_id', $entity->id)
+            ->where('reporting_period_id', $nextPeriod->id)
+            ->get(['account_id', 'currency_id', 'transaction_type', 'transaction_date', 'balance_type', 'balance', 'reference'])
+            ->map(fn (Balance $row) => [
+                'account_id' => $row->account_id,
+                'currency_id' => $row->currency_id,
+                'transaction_type' => $row->transaction_type,
+                'transaction_date' => (string) $row->transaction_date,
+                'balance_type' => $row->balance_type,
+                'balance' => (float) $row->balance,
+                'reference' => $row->reference,
+            ])
+            ->all();
+
+        Balance::withoutGlobalScope(EntityScope::class)
+            ->where('entity_id', $entity->id)
+            ->where('reporting_period_id', $nextPeriod->id)
+            ->delete();
+
+        $reference = FiscalYearClose::CLOSING_REFERENCE_PREFIX.$year.'-OB';
+
+        foreach ($closing as [$account, $balance]) {
             (new Balance([
                 'entity_id' => $entity->id,
                 'account_id' => $account->id,
@@ -867,5 +915,7 @@ class FiscalYearService
                 'reference' => $reference,
             ]))->save();
         }
+
+        return $superseded;
     }
 }
