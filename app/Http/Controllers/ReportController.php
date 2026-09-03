@@ -1774,16 +1774,28 @@ class ReportController extends Controller
         $equityAt = fn (Carbon $asOf): float => round(-$equityAccounts->sum(
             fn ($account) => OpeningBalances::balanceAt($account, $entity, $asOf)
         ), 2);
+
+        $equityBroughtForward = $equityAt($fyStart->copy()->subSecond());
+        $equityResult = round((new FiscalYearService)->netProfitExcludingClosures($entity, $fyStart, $fyEndDate), 2);
+        $dividendsPaid = -round($frankedDividends + $unfrankedDividends);
+        $equityClosing = $equityAt($fyEndDate);
+
+        // Residual: equity-account movements none of the rows above cover
+        // — share issues, capital injections and the like — so the
+        // reconciliation identity holds exactly whatever hits equity.
+        $otherEquity = round($equityClosing - $equityBroughtForward - $equityResult - $dividendsPaid, 2);
+
         $equityReconciliation = [
             ['label' => 'EQ-1', 'name' => 'Equity brought forward (opening snapshot at FY start)',
-                'amount' => $equityAt($fyStart->copy()->subSecond()), 'note' => null],
+                'amount' => $equityBroughtForward, 'note' => null],
             ['label' => 'EQ-2', 'name' => 'Result for the year (net profit, closing entries excluded)',
-                'amount' => round((new FiscalYearService)->netProfitExcludingClosures($entity, $fyStart, $fyEndDate), 2),
-                'note' => null],
+                'amount' => $equityResult, 'note' => null],
             ['label' => 'EQ-3', 'name' => 'Dividends paid (labels 8-J/8-K basis)',
-                'amount' => -round($frankedDividends + $unfrankedDividends), 'note' => null],
-            ['label' => 'EQ-4', 'name' => 'Equity at FY end (opening snapshot at FY end)',
-                'amount' => $equityAt($fyEndDate), 'note' => 'EQ-1 + EQ-2 + EQ-3 (other equity movements excepted)'],
+                'amount' => $dividendsPaid, 'note' => null],
+            ['label' => 'EQ-4', 'name' => 'Other equity movements',
+                'amount' => $otherEquity, 'note' => 'Share issues, capital injections and other equity movements'],
+            ['label' => 'EQ-5', 'name' => 'Equity at FY end (opening snapshot at FY end)',
+                'amount' => $equityClosing, 'note' => 'EQ-1 + EQ-2 + EQ-3 + EQ-4'],
         ];
 
         $financialInfo = [

@@ -380,4 +380,45 @@ class CompanyTaxReportTest extends TestCase
             ->assertSee('Equity brought forward')
             ->assertSee('Equity at FY end');
     }
+
+    /**
+     * Equity-account movements outside profit and dividends — a capital
+     * injection here — land in the residual row so EQ-1 + EQ-2 + EQ-3 +
+     * EQ-4 always equals closing equity (EQ-5).
+     */
+    public function test_equity_reconciliation_residual_covers_capital_injections(): void
+    {
+        $equity = Account::create([
+            'name' => 'Contributed Equity', 'account_type' => Account::EQUITY, 'code' => 3300,
+            'currency_id' => $this->entity->currency_id, 'entity_id' => $this->entity->id,
+        ]);
+
+        // Capital injection during FY2025: Dr Bank / Cr Contributed Equity.
+        IfrsPosting::ensureReportingPeriod('2025-11-10', $this->entity);
+        $journalEntry = new JournalEntry([
+            'transaction_date' => Carbon::parse('2025-11-10'),
+            'account_id' => $this->bank->id,
+            'credited' => false,
+            'entity_id' => $this->entity->id,
+            'narration' => 'Capital injection',
+            'reference' => 'TEST-CAP',
+        ]);
+        $journalEntry->addLineItem(LineItem::create([
+            'account_id' => $equity->id,
+            'amount' => 40000,
+            'quantity' => 1,
+            'vat_inclusive' => false,
+            'entity_id' => $this->entity->id,
+        ]));
+        $journalEntry->post();
+
+        $this->actingAs($this->user)
+            ->get(route('reports.company-tax', ['fy' => 2026]))
+            ->assertOk()
+            // The residual row surfaces the injection…
+            ->assertSee('Other equity movements')
+            ->assertSee('$40,000')
+            // …and closing equity reconciles through it.
+            ->assertSee('EQ-1 + EQ-2 + EQ-3 + EQ-4');
+    }
 }
