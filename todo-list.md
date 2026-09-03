@@ -44,9 +44,11 @@
 
 - [x] Need to be able to set open balances for earlier fiscal years than this one
 
+- [ ] year end close - if there is not another admin/accountant - then pass the approval request to the user that raised it
+
 - [ ] shareholders - share held at what value? $10 for 1000
 
-- [ ] Company details - add svg or png logo - failed as it errors with "Name field required" on logo upload validation. There is an existing name
+- [x] Company details - add svg or png logo - failed as it errors with "Name field required" on logo upload validation. There is an existing name
 
 - [ ] Need to handle clients who want timesheet reports for project by week sum
 
@@ -60,9 +62,11 @@
 
 - [x] update tax report: review .zcode/ato-company-tax/company-tax.md. create plan including branch. Only expect a single manual opening balance entry for a company (migration into this system). However need an admin process to "close" a financial year  (which should potentially move some ledger balances  and create opening balances for the subsequent financial year)  - so if I have entered an opening balance debit for current assets and a matching credit to equity then the correct output should show - (Sep 2026, branch feat/fy-close-opening-balances) Done. Opening sets are now superseding snapshots: the year-end close (the existing admin trial → approve → execute process) writes FY {year+1}'s opening balances from the closing position (one Balance row per balance-sheet account incl. the profit closed into Retained Earnings, dated the year end, reference FY-CLOSE-{year}-OB), so opening balances are entered by hand exactly once, at migration. Reports (trial balance, balance sheet, account statement, company tax item 8, trial close) read as-at positions via OpeningBalances::balanceAt() — the latest snapshot plus only post-snapshot ledger movement — so a migration set (debit current assets / credit equity) shows in item 8 D/E and the new supplementary equity reconciliation, and multiple sets can never double-count. The Opening Balances screen renders close-generated sets read-only (reopen the year to change); reopen() removes the generated set.
 
-- [ ] Admin should have a backup button that backs up db and stored items
+- [ ] Admin should have a backup button that backs up db and stored items with the usual backup things like backup frequency, number of backups kept.
 
 - [ ] setting to prune transactions in closed years after x years (default 7 years)
+
+- [ ] allow bill and invoice adjustment items that might be negative. allow adjustments to subtotal and gst separately.
 
 - [x] company details - index wants resignation date - should be optional
 
