@@ -15,6 +15,7 @@ use Database\Seeders\IFRSSeeder;
 use Database\Seeders\RoleSeeder;
 use Database\Seeders\UserSeeder;
 use IFRS\Models\Account;
+use IFRS\Models\Balance;
 use IFRS\Models\Entity;
 use IFRS\Models\Ledger;
 use IFRS\Models\LineItem;
@@ -278,6 +279,12 @@ class FiscalYearCloseExecuteTest extends TestCase
         $this->assertEquals(FiscalYearClose::STATUS_REOPENED, $record->status);
         $this->assertNotNull($record->reopened_at);
 
+        // The generated opening set for the next year is removed with it.
+        $this->assertSame(0, Balance::withoutGlobalScope(EntityScope::class)
+            ->where('entity_id', $this->entity->id)
+            ->where('reference', 'FY-CLOSE-'.$year.'-OB')
+            ->count());
+
         // Ledger back to pre-close state.
         $this->assertEquals(-10000.0, round($this->balance($this->revenue), 2));
         $this->assertEquals(4000.0, round($this->balance($this->expense), 2));
@@ -362,5 +369,88 @@ class FiscalYearCloseExecuteTest extends TestCase
 
         $this->assertFalse($this->service->isClosed($this->entity, $year));
         $this->assertEquals(-5000.0, round($this->balance($this->revenue), 2));
+    }
+
+    public function test_close_writes_next_year_opening_set_without_double_counting(): void
+    {
+        $year = $this->closableYear();
+
+        $this->postJournal($year.'-09-15', $this->bank, false, [[$this->revenue, 10000]]);
+        $this->postJournal(($year + 1).'-01-10', $this->bank, true, [[$this->expense, 4000]]);
+
+        $bankBefore = round($this->balance($this->bank), 2);
+
+        $this->approvedRecord($year);
+        $this->service->close($this->entity, $year);
+
+        // One generated row per non-zero balance-sheet account: dated the
+        // year end (the eve of FY {year+1}), on the next year's period,
+        // under the -OB reference. P&L accounts never carry opening rows.
+        $nextPeriod = $this->service->reportingPeriod($this->entity, $year + 1);
+        $set = Balance::withoutGlobalScope(EntityScope::class)
+            ->where('entity_id', $this->entity->id)
+            ->where('reference', 'FY-CLOSE-'.$year.'-OB')
+            ->get();
+
+        $bankRow = $set->firstWhere('account_id', $this->bank->id);
+        $this->assertNotNull($bankRow);
+        $this->assertSame('D', $bankRow->balance_type);
+        // 10,000 receipt less the 4,000 January payment — both inside FY.
+        $this->assertEquals(6000.0, (float) $bankRow->balance);
+        $this->assertSame($nextPeriod->id, $bankRow->reporting_period_id);
+        $this->assertSame(($year + 1).'-06-30 00:00:00', (string) $bankRow->transaction_date);
+        $this->assertNull($set->firstWhere('account_id', $this->revenue->id));
+
+        // Retained Earnings carries the closed result into the new year.
+        $reRow = $set->firstWhere('account_id', $this->retainedEarnings->id);
+        $this->assertNotNull($reRow);
+        $this->assertSame('C', $reRow->balance_type);
+        $this->assertEquals(6000.0, (float) $reRow->balance);
+
+        // No double count: the snapshot-aware as-at balances are unchanged
+        // by the close and the generated set (the profit lands in RE).
+        $this->assertEquals($bankBefore, round($this->balance($this->bank), 2));
+        $this->assertEquals(-6000.0, round($this->balance($this->retainedEarnings), 2));
+    }
+
+    public function test_close_supersedes_a_manual_migration_set_for_the_next_year(): void
+    {
+        $year = $this->closableYear();
+
+        // A hand-entered migration set on FY {year+1}: bank 2,000 debit,
+        // dated the eve of that year. Ledger activity before the eve (the
+        // FY {year} receipt below) is superseded, not counted on top.
+        $nextPeriod = $this->service->reportingPeriod($this->entity, $year + 1);
+        (new Balance([
+            'entity_id' => $this->entity->id,
+            'account_id' => $this->bank->id,
+            'reporting_period_id' => $nextPeriod->id,
+            'currency_id' => $this->bank->currency_id,
+            'transaction_type' => Transaction::JN,
+            'transaction_date' => Carbon::create($year + 1, 6, 30),
+            'balance_type' => Balance::DEBIT,
+            'balance' => 2000,
+        ]))->save();
+
+        $this->postJournal($year.'-09-15', $this->bank, false, [[$this->revenue, 10000]]);
+
+        // Pre-close: the migration snapshot wins and the earlier receipt
+        // is excluded — 2,000, never 2,000 + 10,000.
+        $this->assertEquals(2000.0, round($this->balance($this->bank), 2));
+
+        $this->service->close($this->entity, $year, force: true);
+
+        // Post-close: exactly one bank row on the period — the generated
+        // one (closing position 10,000) — and the manual row is gone.
+        $rows = Balance::withoutGlobalScope(EntityScope::class)
+            ->where('entity_id', $this->entity->id)
+            ->where('reporting_period_id', $nextPeriod->id)
+            ->where('account_id', $this->bank->id)
+            ->get();
+        $this->assertCount(1, $rows);
+        $this->assertSame('FY-CLOSE-'.$year.'-OB', $rows->first()->reference);
+        $this->assertEquals(10000.0, (float) $rows->first()->balance);
+
+        $this->assertEquals(10000.0, round($this->balance($this->bank), 2));
     }
 }

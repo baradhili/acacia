@@ -10,6 +10,7 @@ use IFRS\Models\Balance;
 use IFRS\Models\Currency;
 use IFRS\Models\Entity;
 use IFRS\Models\ReportingPeriod;
+use IFRS\Models\Transaction;
 use IFRS\Models\Vat;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
@@ -20,12 +21,19 @@ class OpeningBalanceTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected User $accountant;
+
     protected User $staff;
+
     protected Entity $entity;
+
     protected Account $bank;
+
     protected Account $gstPayable;
+
     protected Account $revenue;
+
     protected int $year;
 
     protected function setUp(): void
@@ -144,7 +152,7 @@ class OpeningBalanceTest extends TestCase
         // Dated the day before the FY starts (year_start 1 → 31 Dec prior
         // year). The vendor model does not cast the date, hence the string.
         $this->assertSame(
-            ($this->year - 1) . '-12-31 00:00:00',
+            ($this->year - 1).'-12-31 00:00:00',
             (string) $bankBalance->transaction_date
         );
         $this->assertEquals(
@@ -180,7 +188,7 @@ class OpeningBalanceTest extends TestCase
 
         $response->assertOk();
         $this->assertStringContainsString(
-            'name="balances[' . $this->bank->id . '][debit]"',
+            'name="balances['.$this->bank->id.'][debit]"',
             $response->getContent()
         );
         $this->assertStringContainsString('value="15000"', $response->getContent());
@@ -288,5 +296,66 @@ class OpeningBalanceTest extends TestCase
         ]));
 
         $response->assertOk()->assertSee('$15,000.00');
+    }
+
+    public function test_a_later_opening_set_supersedes_the_earlier_one(): void
+    {
+        ReportingPeriod::create([
+            'period_count' => 1,
+            'calendar_year' => $this->year - 1,
+            'status' => ReportingPeriod::OPEN,
+            'entity_id' => $this->entity->id,
+        ]);
+
+        $this->saveBalances([$this->bank->id => ['debit' => 15000, 'credit' => null]], $this->admin, $this->year - 1)
+            ->assertSessionHas('success');
+        $this->actingAs($this->admin)->get('/reports/trial-balance')
+            ->assertOk()
+            ->assertSee('$15,000.00');
+
+        // A second opening set for a later year supersedes the first —
+        // the trial balance shows the latest snapshot only, never the sum.
+        $this->saveBalances([$this->bank->id => ['debit' => 20000, 'credit' => null]], $this->admin)
+            ->assertSessionHas('success');
+
+        $this->actingAs($this->admin)->get('/reports/trial-balance')
+            ->assertOk()
+            ->assertSee('$20,000.00')
+            ->assertDontSee('$35,000.00');
+    }
+
+    public function test_close_generated_opening_sets_are_read_only(): void
+    {
+        $period = ReportingPeriod::where('entity_id', $this->entity->id)
+            ->where('calendar_year', $this->year)
+            ->first();
+
+        Balance::create([
+            'entity_id' => $this->entity->id,
+            'account_id' => $this->bank->id,
+            'reporting_period_id' => $period->id,
+            'currency_id' => $this->bank->currency_id,
+            'transaction_type' => Transaction::JN,
+            'transaction_date' => ($this->year - 1).'-12-31',
+            'balance_type' => Balance::DEBIT,
+            'balance' => 5000,
+            'reference' => 'FY-CLOSE-'.($this->year - 1).'-OB',
+        ]);
+
+        // The screen renders the set read-only with the explanation.
+        $this->actingAs($this->admin)->get('/opening-balances')
+            ->assertOk()
+            ->assertSee('opens from the year-end close')
+            ->assertDontSee('Save Opening Balances');
+
+        // And submissions for the period are rejected.
+        $this->saveBalances([$this->bank->id => ['debit' => 1, 'credit' => null]], $this->admin)
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $this->assertDatabaseHas('ifrs_balances', [
+            'id' => Balance::latest('id')->first()->id,
+            'balance' => 5000,
+        ]);
     }
 }
