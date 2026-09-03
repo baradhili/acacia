@@ -241,11 +241,35 @@ class FiscalYearCloseExecuteTest extends TestCase
         $year = $this->closableYear();
         $this->service->submit($this->entity, $year, $this->requester->id);
 
-        // The requester is also the admin — still not allowed.
+        // The requester is also the admin — still not allowed while
+        // another accountant/admin exists (setUp's approver).
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('cannot approve their own');
 
         $this->service->approve($this->entity, $year, $this->requester);
+    }
+
+    public function test_sole_accountant_admin_approves_own_request(): void
+    {
+        $year = $this->closableYear();
+
+        // No other accountant/admin: the approval is routed back to the
+        // requester instead of dead-ending the workflow.
+        $this->approver->syncRoles([]);
+        $this->service->submit($this->entity, $year, $this->requester->id);
+
+        $record = $this->service->closeRecord($this->entity, $year);
+        $this->assertTrue($this->service->approvalRoutedToRequester($record));
+
+        $approved = $this->service->approve($this->entity, $year, $this->requester);
+
+        $this->assertTrue($approved->canClose());
+        $this->assertDatabaseHas('fiscal_year_closes', [
+            'year' => $year,
+            'status' => FiscalYearClose::STATUS_APPROVED,
+            'requested_by' => $this->requester->id,
+            'approved_by' => $this->requester->id,
+        ]);
     }
 
     public function test_approve_requires_accountant_or_admin_role(): void

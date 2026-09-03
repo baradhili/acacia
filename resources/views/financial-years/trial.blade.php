@@ -28,11 +28,16 @@
             @endif
 
             @if ($record->canApprove())
-                @if ($record->requested_by === auth()->id())
+                @if ($record->requested_by === auth()->id() && !$approvalRoutedToRequester)
                     <span class="px-4 py-2 text-sm text-gray-500 bg-gray-100 rounded">
                         Waiting for another accountant/admin to approve
                     </span>
                 @else
+                    @if ($record->requested_by === auth()->id())
+                        <span class="px-4 py-2 text-sm text-amber-700 bg-amber-50 rounded">
+                            You are the only accountant/admin — this approval is routed to you
+                        </span>
+                    @endif
                     <form method="POST" action="{{ route('financial-years.approve', $trial['year']) }}">
                         @csrf
                         <button type="submit" class="px-4 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700">

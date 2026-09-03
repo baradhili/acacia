@@ -5,7 +5,8 @@
     <div class="mb-6 flex justify-between items-center">
         <h1 class="text-2xl font-bold text-gray-800">Financial Years</h1>
         <p class="text-sm text-gray-500">
-            Year-end close: trial → approval (requester ≠ approver) → closing entries to Retained Earnings, then the year locks
+            Year-end close: trial → approval (requester ≠ approver; falls back to the requester when they are the
+            only accountant/admin) → closing entries to Retained Earnings, then the year locks
         </p>
     </div>
 

@@ -28,7 +28,8 @@ use Illuminate\Support\Facades\Log;
  *
  * A close works in stages: a read-only trial close (checklist + proposed
  * closing entries), an approval hand-off (accountant/admin, requester ≠
- * approver), then execution — closing JournalEntries transfer every P&L
+ * approver unless the requester is the only accountant/admin), then
+ * execution — closing JournalEntries transfer every P&L
  * account's cumulative balance to Retained Earnings, the IFRS
  * ReportingPeriod is marked CLOSED (the package then rejects any new
  * transaction in that year) and the app's FiscalPeriods are locked.
@@ -586,9 +587,41 @@ class FiscalYearService
     }
 
     /**
+     * Whether any user other than $requester holds the accountant or
+     * admin role — i.e. a second pair of eyes exists for the four-eyes
+     * hand-off.
+     */
+    public function hasOtherApprover(User $requester): bool
+    {
+        return User::role(['admin', 'accountant'])
+            ->whereKeyNot($requester->id)
+            ->exists();
+    }
+
+    /**
+     * Whether the pending approval for $record is routed back to the
+     * requester themselves — the fallback when they are the only
+     * accountant/admin, so the workflow cannot dead-end waiting for an
+     * approver that does not exist.
+     */
+    public function approvalRoutedToRequester(FiscalYearClose $record): bool
+    {
+        if (! $record->canApprove() || $record->requested_by === null) {
+            return false;
+        }
+
+        $requester = User::find($record->requested_by);
+
+        return $requester !== null && ! $this->hasOtherApprover($requester);
+    }
+
+    /**
      * Approve a pending close request. The approver must hold the
      * accountant or admin role and — unless forced — must not be the
      * requester: the four-eyes hand-off is the point of the workflow.
+     * Sole exception: when the requester is the only accountant/admin
+     * there is no one else to hand the request to, so it is routed back
+     * to them and they approve it themselves.
      */
     public function approve(Entity $entity, int $year, User $approver, bool $force = false): FiscalYearClose
     {
@@ -604,7 +637,10 @@ class FiscalYearService
             );
         }
 
-        if (! $force && $record->requested_by === $approver->id) {
+        if (! $force
+            && $record->requested_by === $approver->id
+            && $this->hasOtherApprover($approver)
+        ) {
             throw new \InvalidArgumentException(
                 "The requester cannot approve their own FY {$year} close request."
             );

@@ -5,6 +5,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-09-03
 
+### Fixed — a sole accountant/admin can approve their own year-end close
+
+The year-end close's four-eyes rule (requester ≠ approver) dead-ended a
+single-user company: with no other accountant/admin to hand the approval to,
+the request waited forever. Submitting now routes the approval back to the
+requester when they are the only accountant/admin — the submit confirmation
+says so and the trial page shows them the Approve button (with a note
+explaining why) instead of the waiting message. When a second
+accountant/admin exists, the four-eyes rule still applies and the requester
+still cannot approve their own request.
+
 ### Added — year-end close writes next year's opening balances (single-entry migration model)
 
 Opening balances are entered by hand exactly once, at migration into the

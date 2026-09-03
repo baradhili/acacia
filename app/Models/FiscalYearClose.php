@@ -12,7 +12,9 @@ class FiscalYearClose extends Model
     // Trial close computed; reviewable, no approval requested yet.
     public const STATUS_TRIAL = 'trial';
 
-    // Approval requested; waiting on an accountant/admin other than the requester.
+    // Approval requested; waiting on an accountant/admin other than the
+    // requester — or on the requester themselves when they are the only
+    // accountant/admin (the request is routed back to them).
     public const STATUS_PENDING_APPROVAL = 'pending_approval';
 
     // Approved and ready to execute.
