@@ -15,11 +15,13 @@ use Database\Seeders\IFRSSeeder;
 use Database\Seeders\RoleSeeder;
 use Database\Seeders\UserSeeder;
 use IFRS\Models\Account;
+use IFRS\Models\Balance;
 use IFRS\Models\Entity;
 use IFRS\Models\Ledger;
 use IFRS\Models\LineItem;
 use IFRS\Models\ReportingPeriod;
 use IFRS\Models\Transaction;
+use IFRS\Scopes\EntityScope;
 use IFRS\Transactions\JournalEntry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -29,12 +31,19 @@ class FiscalYearCloseExecuteTest extends TestCase
     use RefreshDatabase;
 
     protected Entity $entity;
+
     protected FiscalYearService $service;
+
     protected Account $bank;
+
     protected Account $revenue;
+
     protected Account $expense;
+
     protected Account $retainedEarnings;
+
     protected User $requester;
+
     protected User $approver;
 
     protected function setUp(): void
@@ -46,7 +55,7 @@ class FiscalYearCloseExecuteTest extends TestCase
         $this->seed(IFRSSeeder::class);
 
         $this->entity = Entity::first();
-        $this->service = new FiscalYearService();
+        $this->service = new FiscalYearService;
         $this->bank = Account::where('code', 320)->where('entity_id', $this->entity->id)->first();
         $this->revenue = Account::where('code', 4100)->where('entity_id', $this->entity->id)->first();
         $this->expense = Account::where('code', 5100)->where('entity_id', $this->entity->id)->first();
@@ -58,7 +67,7 @@ class FiscalYearCloseExecuteTest extends TestCase
         $this->actingAs($this->requester);
     }
 
-    protected function postJournal(string $date, Account $main, bool $credited, array $lines, string $reference = null): JournalEntry
+    protected function postJournal(string $date, Account $main, bool $credited, array $lines, ?string $reference = null): JournalEntry
     {
         IfrsPosting::ensureReportingPeriod($date, $this->entity);
 
@@ -96,12 +105,7 @@ class FiscalYearCloseExecuteTest extends TestCase
      */
     protected function balance(Account $account): float
     {
-        return (float) Ledger::balance(
-            $account,
-            Carbon::create(2000, 1, 1),
-            now()->endOfDay(),
-            $this->entity->currency_id
-        )[$this->entity->currency_id] + OpeningBalances::effectiveOpening($account, $this->entity);
+        return OpeningBalances::balanceAt($account, $this->entity, now()->copy()->endOfDay());
     }
 
     protected function approvedRecord(int $year): FiscalYearClose
@@ -116,8 +120,8 @@ class FiscalYearCloseExecuteTest extends TestCase
     {
         $year = $this->closableYear();
 
-        $this->postJournal($year . '-09-15', $this->bank, false, [[$this->revenue, 10000]]);
-        $this->postJournal(($year + 1) . '-01-10', $this->bank, true, [[$this->expense, 4000]]);
+        $this->postJournal($year.'-09-15', $this->bank, false, [[$this->revenue, 10000]]);
+        $this->postJournal(($year + 1).'-01-10', $this->bank, true, [[$this->expense, 4000]]);
 
         $record = $this->approvedRecord($year);
         $this->service->close($this->entity, $year);
@@ -142,8 +146,8 @@ class FiscalYearCloseExecuteTest extends TestCase
         // Closing entries carry the FY-CLOSE reference.
         foreach ($record->closing_transaction_ids as $transactionId) {
             $this->assertEquals(
-                'FY-CLOSE-' . $year,
-                Transaction::withoutGlobalScope(\IFRS\Scopes\EntityScope::class)->find($transactionId)->reference
+                'FY-CLOSE-'.$year,
+                Transaction::withoutGlobalScope(EntityScope::class)->find($transactionId)->reference
             );
         }
     }
@@ -162,7 +166,7 @@ class FiscalYearCloseExecuteTest extends TestCase
     {
         $year = $this->closableYear();
 
-        $this->postJournal($year . '-09-15', $this->bank, false, [[$this->revenue, 1000]]);
+        $this->postJournal($year.'-09-15', $this->bank, false, [[$this->revenue, 1000]]);
 
         $record = $this->service->close($this->entity, $year, force: true);
 
@@ -178,7 +182,7 @@ class FiscalYearCloseExecuteTest extends TestCase
         Payment::create([
             'client_id' => $client->id,
             'amount' => 500,
-            'payment_date' => $year . '-11-01',
+            'payment_date' => $year.'-11-01',
             'payment_method' => 'bank_transfer',
         ]);
 
@@ -237,11 +241,35 @@ class FiscalYearCloseExecuteTest extends TestCase
         $year = $this->closableYear();
         $this->service->submit($this->entity, $year, $this->requester->id);
 
-        // The requester is also the admin — still not allowed.
+        // The requester is also the admin — still not allowed while
+        // another accountant/admin exists (setUp's approver).
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('cannot approve their own');
 
         $this->service->approve($this->entity, $year, $this->requester);
+    }
+
+    public function test_sole_accountant_admin_approves_own_request(): void
+    {
+        $year = $this->closableYear();
+
+        // No other accountant/admin: the approval is routed back to the
+        // requester instead of dead-ending the workflow.
+        $this->approver->syncRoles([]);
+        $this->service->submit($this->entity, $year, $this->requester->id);
+
+        $record = $this->service->closeRecord($this->entity, $year);
+        $this->assertTrue($this->service->approvalRoutedToRequester($record));
+
+        $approved = $this->service->approve($this->entity, $year, $this->requester);
+
+        $this->assertTrue($approved->canClose());
+        $this->assertDatabaseHas('fiscal_year_closes', [
+            'year' => $year,
+            'status' => FiscalYearClose::STATUS_APPROVED,
+            'requested_by' => $this->requester->id,
+            'approved_by' => $this->requester->id,
+        ]);
     }
 
     public function test_approve_requires_accountant_or_admin_role(): void
@@ -262,8 +290,8 @@ class FiscalYearCloseExecuteTest extends TestCase
     {
         $year = $this->closableYear();
 
-        $this->postJournal($year . '-09-15', $this->bank, false, [[$this->revenue, 10000]]);
-        $this->postJournal(($year + 1) . '-01-10', $this->bank, true, [[$this->expense, 4000]]);
+        $this->postJournal($year.'-09-15', $this->bank, false, [[$this->revenue, 10000]]);
+        $this->postJournal(($year + 1).'-01-10', $this->bank, true, [[$this->expense, 4000]]);
 
         $record = $this->approvedRecord($year);
         $this->service->close($this->entity, $year);
@@ -274,6 +302,12 @@ class FiscalYearCloseExecuteTest extends TestCase
         $record->refresh();
         $this->assertEquals(FiscalYearClose::STATUS_REOPENED, $record->status);
         $this->assertNotNull($record->reopened_at);
+
+        // The generated opening set for the next year is removed with it.
+        $this->assertSame(0, Balance::withoutGlobalScope(EntityScope::class)
+            ->where('entity_id', $this->entity->id)
+            ->where('reference', 'FY-CLOSE-'.$year.'-OB')
+            ->count());
 
         // Ledger back to pre-close state.
         $this->assertEquals(-10000.0, round($this->balance($this->revenue), 2));
@@ -286,11 +320,11 @@ class FiscalYearCloseExecuteTest extends TestCase
 
         // Each closing entry has a mirrored reversal on the same date.
         foreach ($closingIds as $closingId) {
-            $original = Transaction::withoutGlobalScope(\IFRS\Scopes\EntityScope::class)->find($closingId);
-            $reversal = Transaction::withoutGlobalScope(\IFRS\Scopes\EntityScope::class)
-                ->where('reference', 'FY-CLOSE-' . $year . '-REV')
+            $original = Transaction::withoutGlobalScope(EntityScope::class)->find($closingId);
+            $reversal = Transaction::withoutGlobalScope(EntityScope::class)
+                ->where('reference', 'FY-CLOSE-'.$year.'-REV')
                 ->where('transaction_date', $original->transaction_date)
-                ->where('credited', !$original->credited)
+                ->where('credited', ! $original->credited)
                 ->first();
             $this->assertNotNull($reversal, "Reversal for closing transaction {$closingId} not found.");
         }
@@ -310,7 +344,7 @@ class FiscalYearCloseExecuteTest extends TestCase
     {
         $year = $this->closableYear();
 
-        $this->postJournal($year . '-09-15', $this->bank, false, [[$this->revenue, 2500]]);
+        $this->postJournal($year.'-09-15', $this->bank, false, [[$this->revenue, 2500]]);
 
         $this->service->submit($this->entity, $year, $this->requester->id);
         $this->service->approve($this->entity, $year, $this->approver);
@@ -333,7 +367,7 @@ class FiscalYearCloseExecuteTest extends TestCase
     public function test_close_command_executes_the_full_flow(): void
     {
         $year = $this->closableYear();
-        $this->postJournal($year . '-09-15', $this->bank, false, [[$this->revenue, 5000]]);
+        $this->postJournal($year.'-09-15', $this->bank, false, [[$this->revenue, 5000]]);
 
         $this->artisan('fiscal-year:close', ['year' => $year])
             ->expectsOutputToContain('no approved close request')
@@ -349,7 +383,7 @@ class FiscalYearCloseExecuteTest extends TestCase
     public function test_reopen_command_reverses_the_close(): void
     {
         $year = $this->closableYear();
-        $this->postJournal($year . '-09-15', $this->bank, false, [[$this->revenue, 5000]]);
+        $this->postJournal($year.'-09-15', $this->bank, false, [[$this->revenue, 5000]]);
         $this->service->close($this->entity, $year, force: true);
 
         $this->artisan('fiscal-year:reopen', ['year' => $year])
@@ -359,5 +393,111 @@ class FiscalYearCloseExecuteTest extends TestCase
 
         $this->assertFalse($this->service->isClosed($this->entity, $year));
         $this->assertEquals(-5000.0, round($this->balance($this->revenue), 2));
+    }
+
+    public function test_close_writes_next_year_opening_set_without_double_counting(): void
+    {
+        $year = $this->closableYear();
+
+        $this->postJournal($year.'-09-15', $this->bank, false, [[$this->revenue, 10000]]);
+        $this->postJournal(($year + 1).'-01-10', $this->bank, true, [[$this->expense, 4000]]);
+
+        $bankBefore = round($this->balance($this->bank), 2);
+
+        $this->approvedRecord($year);
+        $this->service->close($this->entity, $year);
+
+        // One generated row per non-zero balance-sheet account: dated the
+        // year end (the eve of FY {year+1}), on the next year's period,
+        // under the -OB reference. P&L accounts never carry opening rows.
+        $nextPeriod = $this->service->reportingPeriod($this->entity, $year + 1);
+        $set = Balance::withoutGlobalScope(EntityScope::class)
+            ->where('entity_id', $this->entity->id)
+            ->where('reference', 'FY-CLOSE-'.$year.'-OB')
+            ->get();
+
+        $bankRow = $set->firstWhere('account_id', $this->bank->id);
+        $this->assertNotNull($bankRow);
+        $this->assertSame('D', $bankRow->balance_type);
+        // 10,000 receipt less the 4,000 January payment — both inside FY.
+        $this->assertEquals(6000.0, (float) $bankRow->balance);
+        $this->assertSame($nextPeriod->id, $bankRow->reporting_period_id);
+        $this->assertSame(($year + 1).'-06-30 00:00:00', (string) $bankRow->transaction_date);
+        $this->assertNull($set->firstWhere('account_id', $this->revenue->id));
+
+        // Retained Earnings carries the closed result into the new year.
+        $reRow = $set->firstWhere('account_id', $this->retainedEarnings->id);
+        $this->assertNotNull($reRow);
+        $this->assertSame('C', $reRow->balance_type);
+        $this->assertEquals(6000.0, (float) $reRow->balance);
+
+        // No double count: the snapshot-aware as-at balances are unchanged
+        // by the close and the generated set (the profit lands in RE).
+        $this->assertEquals($bankBefore, round($this->balance($this->bank), 2));
+        $this->assertEquals(-6000.0, round($this->balance($this->retainedEarnings), 2));
+    }
+
+    public function test_close_supersedes_a_manual_migration_set_for_the_next_year(): void
+    {
+        $year = $this->closableYear();
+
+        // A hand-entered migration set on FY {year+1}: bank 2,000 debit,
+        // dated the eve of that year. Ledger activity before the eve (the
+        // FY {year} receipt below) is superseded, not counted on top.
+        $nextPeriod = $this->service->reportingPeriod($this->entity, $year + 1);
+        (new Balance([
+            'entity_id' => $this->entity->id,
+            'account_id' => $this->bank->id,
+            'reporting_period_id' => $nextPeriod->id,
+            'currency_id' => $this->bank->currency_id,
+            'transaction_type' => Transaction::JN,
+            'transaction_date' => Carbon::create($year + 1, 6, 30),
+            'balance_type' => Balance::DEBIT,
+            'balance' => 2000,
+        ]))->save();
+
+        $this->postJournal($year.'-09-15', $this->bank, false, [[$this->revenue, 10000]]);
+
+        // Pre-close: the migration snapshot wins and the earlier receipt
+        // is excluded — 2,000, never 2,000 + 10,000.
+        $this->assertEquals(2000.0, round($this->balance($this->bank), 2));
+
+        $this->service->close($this->entity, $year, force: true);
+        $record = $this->service->closeRecord($this->entity, $year);
+
+        // Post-close: exactly one bank row on the period — the generated
+        // one. It carries the snapshot the reports were showing at close
+        // time (2,000), so the close never moves reported balances; the
+        // manual row is preserved on the workflow record.
+        $rows = Balance::withoutGlobalScope(EntityScope::class)
+            ->where('entity_id', $this->entity->id)
+            ->where('reporting_period_id', $nextPeriod->id)
+            ->where('account_id', $this->bank->id)
+            ->get();
+        $this->assertCount(1, $rows);
+        $this->assertSame('FY-CLOSE-'.$year.'-OB', $rows->first()->reference);
+        $this->assertEquals(2000.0, (float) $rows->first()->balance);
+        $this->assertEquals(2000.0, round($this->balance($this->bank), 2));
+
+        $superseded = $record->refresh()->superseded_opening_balances;
+        $this->assertIsArray($superseded);
+        $this->assertSame($this->bank->id, (int) $superseded[0]['account_id']);
+        $this->assertEquals(2000.0, (float) $superseded[0]['balance']);
+        $this->assertNull($superseded[0]['reference']);
+
+        // Reopen: the generated set goes, the manual set returns exactly
+        // as it was, and the reports sit at their pre-close figures.
+        $this->service->reopen($this->entity, $year);
+
+        $restored = Balance::withoutGlobalScope(EntityScope::class)
+            ->where('entity_id', $this->entity->id)
+            ->where('reporting_period_id', $nextPeriod->id)
+            ->where('account_id', $this->bank->id)
+            ->get();
+        $this->assertCount(1, $restored);
+        $this->assertNull($restored->first()->reference);
+        $this->assertEquals(2000.0, (float) $restored->first()->balance);
+        $this->assertNull($record->refresh()->superseded_opening_balances);
+        $this->assertEquals(2000.0, round($this->balance($this->bank), 2));
     }
 }

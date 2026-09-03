@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Carbon\Carbon;
+use IFRS\Models\Entity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -11,7 +12,9 @@ class FiscalYearClose extends Model
     // Trial close computed; reviewable, no approval requested yet.
     public const STATUS_TRIAL = 'trial';
 
-    // Approval requested; waiting on an accountant/admin other than the requester.
+    // Approval requested; waiting on an accountant/admin other than the
+    // requester — or on the requester themselves when they are the only
+    // accountant/admin (the request is routed back to them).
     public const STATUS_PENDING_APPROVAL = 'pending_approval';
 
     // Approved and ready to execute.
@@ -43,6 +46,7 @@ class FiscalYearClose extends Model
         'checklist',
         'trial_totals',
         'closing_transaction_ids',
+        'superseded_opening_balances',
     ];
 
     protected $casts = [
@@ -53,6 +57,7 @@ class FiscalYearClose extends Model
         'checklist' => 'array',
         'trial_totals' => 'array',
         'closing_transaction_ids' => 'array',
+        'superseded_opening_balances' => 'array',
     ];
 
     /**
@@ -64,12 +69,12 @@ class FiscalYearClose extends Model
 
     public function closingReference(): string
     {
-        return self::CLOSING_REFERENCE_PREFIX . $this->year;
+        return self::CLOSING_REFERENCE_PREFIX.$this->year;
     }
 
     public function entity(): BelongsTo
     {
-        return $this->belongsTo(\IFRS\Models\Entity::class, 'entity_id');
+        return $this->belongsTo(Entity::class, 'entity_id');
     }
 
     public function requester(): BelongsTo

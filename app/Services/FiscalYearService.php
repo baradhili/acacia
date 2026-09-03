@@ -12,6 +12,7 @@ use App\Models\Prepayment;
 use App\Models\User;
 use Carbon\Carbon;
 use IFRS\Models\Account;
+use IFRS\Models\Balance;
 use IFRS\Models\Entity;
 use IFRS\Models\Ledger;
 use IFRS\Models\LineItem;
@@ -27,7 +28,8 @@ use Illuminate\Support\Facades\Log;
  *
  * A close works in stages: a read-only trial close (checklist + proposed
  * closing entries), an approval hand-off (accountant/admin, requester ≠
- * approver), then execution — closing JournalEntries transfer every P&L
+ * approver unless the requester is the only accountant/admin), then
+ * execution — closing JournalEntries transfer every P&L
  * account's cumulative balance to Retained Earnings, the IFRS
  * ReportingPeriod is marked CLOSED (the package then rejects any new
  * transaction in that year) and the app's FiscalPeriods are locked.
@@ -317,6 +319,14 @@ class FiscalYearService
                 'pass' => true,
                 'detail' => $postedTransactions.' posted ledger transaction(s) dated in the year.',
             ],
+            [
+                'key' => 'next_year_opening_balances',
+                'label' => 'Opening balances for the next financial year',
+                'blocking' => false,
+                'pass' => true,
+                'detail' => 'Executing the close writes FY '.($year + 1)."'s opening set from the closing position"
+                    .' — opening balances are entered by hand only once, at migration.',
+            ],
         ];
     }
 
@@ -434,9 +444,10 @@ class FiscalYearService
      * Trial close for a ended financial year — pure computation, no
      * ledger writes. Produces the checklist plus the proposed closing
      * entries: every P&L account's cumulative balance as at year end
-     * (epoch-to-date ledger movement plus opening Balance rows — the
-     * same convention the financial statements use), split into this
-     * year's movement and the carry-in from years never closed before.
+     * (the opening snapshot in force plus ledger movement after it —
+     * the same convention the financial statements use), split into
+     * this year's movement and the carry-in from years never closed
+     * before.
      *
      * Closing to cumulative (not just the year's movement) makes the
      * first-ever close a catch-up that moves all historic profit into
@@ -452,7 +463,6 @@ class FiscalYearService
 
         ['start' => $start, 'end' => $end] = $this->bounds($entity, $year);
         $endOfDay = $end->copy()->endOfDay();
-        $epoch = Carbon::create(2000, 1, 1);
         $checklist = $this->checklist($entity, $year);
 
         $re = $this->retainedEarningsAccount($entity);
@@ -474,11 +484,10 @@ class FiscalYearService
             ->get();
 
         foreach ($accounts as $account) {
-            // Cumulative as-at balance, opening Balance rows included —
-            // closing entries from earlier year-ends already net out of
+            // Cumulative as-at balance via the opening snapshot in force
+            // — closing entries from earlier year-ends already net out of
             // this figure, which is what makes repeated closes correct.
-            $total = (float) Ledger::balance($account, $epoch, $endOfDay, $entity->currency_id)[$entity->currency_id]
-                + OpeningBalances::effectiveOpening($account, $entity);
+            $total = OpeningBalances::balanceAt($account, $entity, $endOfDay);
 
             if (abs($total) < 0.005) {
                 continue;
@@ -578,9 +587,41 @@ class FiscalYearService
     }
 
     /**
+     * Whether any user other than $requester holds the accountant or
+     * admin role — i.e. a second pair of eyes exists for the four-eyes
+     * hand-off.
+     */
+    public function hasOtherApprover(User $requester): bool
+    {
+        return User::role(['admin', 'accountant'])
+            ->whereKeyNot($requester->id)
+            ->exists();
+    }
+
+    /**
+     * Whether the pending approval for $record is routed back to the
+     * requester themselves — the fallback when they are the only
+     * accountant/admin, so the workflow cannot dead-end waiting for an
+     * approver that does not exist.
+     */
+    public function approvalRoutedToRequester(FiscalYearClose $record): bool
+    {
+        if (! $record->canApprove() || $record->requested_by === null) {
+            return false;
+        }
+
+        $requester = User::find($record->requested_by);
+
+        return $requester !== null && ! $this->hasOtherApprover($requester);
+    }
+
+    /**
      * Approve a pending close request. The approver must hold the
      * accountant or admin role and — unless forced — must not be the
      * requester: the four-eyes hand-off is the point of the workflow.
+     * Sole exception: when the requester is the only accountant/admin
+     * there is no one else to hand the request to, so it is routed back
+     * to them and they approve it themselves.
      */
     public function approve(Entity $entity, int $year, User $approver, bool $force = false): FiscalYearClose
     {
@@ -596,7 +637,10 @@ class FiscalYearService
             );
         }
 
-        if (! $force && $record->requested_by === $approver->id) {
+        if (! $force
+            && $record->requested_by === $approver->id
+            && $this->hasOtherApprover($approver)
+        ) {
             throw new \InvalidArgumentException(
                 "The requester cannot approve their own FY {$year} close request."
             );
@@ -717,10 +761,20 @@ class FiscalYearService
                 }
             }
 
+            // The closed position becomes next year's opening set: one
+            // Balance row per balance-sheet account, dated the year end
+            // (the eve of FY {year+1}), carrying the full closing balance
+            // including the retained profit just closed. Reports read it
+            // as the superseding snapshot — no manual re-entry, ever.
+            // Any manual set it supersedes is preserved on the record so
+            // reopen() can put it back.
+            $superseded = $this->createNextYearOpeningBalances($entity, $year, $end);
+
             $record->fill([
                 'status' => FiscalYearClose::STATUS_CLOSED,
                 'closed_at' => now(),
                 'closing_transaction_ids' => $transactionIds,
+                'superseded_opening_balances' => $superseded,
                 'checklist' => $trial['checklist'],
                 'trial_totals' => [
                     'fy_net_profit' => $trial['fy_net_profit'],
@@ -784,9 +838,35 @@ class FiscalYearService
                 $fiscalPeriod->unlock();
             }
 
+            // The generated opening set for FY {year+1} was derived from
+            // the now-reversed closing position — drop it; a later
+            // re-close regenerates it from the fresh position. Whatever
+            // manual set the close superseded goes back exactly as it
+            // was, so reopen restores the pre-close opening position.
+            Balance::withoutGlobalScope(EntityScope::class)
+                ->where('entity_id', $entity->id)
+                ->where('reference', $record->closingReference().'-OB')
+                ->delete();
+
+            $nextPeriod = $this->reportingPeriod($entity, $year + 1);
+            foreach ($record->superseded_opening_balances ?? [] as $row) {
+                (new Balance([
+                    'entity_id' => $entity->id,
+                    'account_id' => $row['account_id'],
+                    'reporting_period_id' => $nextPeriod->id,
+                    'currency_id' => $row['currency_id'],
+                    'transaction_type' => $row['transaction_type'],
+                    'transaction_date' => $row['transaction_date'],
+                    'balance_type' => $row['balance_type'],
+                    'balance' => $row['balance'],
+                    'reference' => $row['reference'],
+                ]))->save();
+            }
+
             $record->fill([
                 'status' => FiscalYearClose::STATUS_REOPENED,
                 'reopened_at' => now(),
+                'superseded_opening_balances' => null,
             ])->save();
 
             Log::info('Financial year reopened', [
@@ -797,5 +877,81 @@ class FiscalYearService
 
             return $record;
         });
+    }
+
+    /**
+     * Write FY {year+1}'s opening set from the closing position: one
+     * Balance row per balance-sheet account (non-P&L) whose closing
+     * balance is non-zero, dated the year end, stamped with the closing
+     * reference plus "-OB" so the set is recognisable as system-
+     * generated (read-only in the Opening Balances UI, removed by
+     * reopen()). Any existing rows for the period are superseded —
+     * including a manual migration set, which the closing position
+     * already contains; those rows are returned so close() can preserve
+     * them on the workflow record for reopen() to restore. Runs inside
+     * close()'s transaction.
+     *
+     * @return array<int, array<string, mixed>> the superseded rows
+     */
+    protected function createNextYearOpeningBalances(Entity $entity, int $year, Carbon $end): array
+    {
+        $nextPeriod = $this->reportingPeriod($entity, $year + 1);
+
+        $accounts = Account::withoutGlobalScope(EntityScope::class)
+            ->where('entity_id', $entity->id)
+            ->whereNotIn('account_type', self::PNL_ACCOUNT_TYPES)
+            ->orderBy('code')
+            ->get();
+
+        // Every closing balance is computed BEFORE any row is written:
+        // the first generated row would otherwise shift the entity-level
+        // opening snapshot and zero out the accounts still to measure.
+        $closing = [];
+        foreach ($accounts as $account) {
+            $balance = round(OpeningBalances::balanceAt($account, $entity, $end->copy()->endOfDay()), 2);
+            if (abs($balance) >= 0.01) {
+                $closing[] = [$account, $balance];
+            }
+        }
+
+        // Preserve whatever the generated set supersedes, then clear the
+        // period so at most one set per period survives.
+        $superseded = Balance::withoutGlobalScope(EntityScope::class)
+            ->where('entity_id', $entity->id)
+            ->where('reporting_period_id', $nextPeriod->id)
+            ->get(['account_id', 'currency_id', 'transaction_type', 'transaction_date', 'balance_type', 'balance', 'reference'])
+            ->map(fn (Balance $row) => [
+                'account_id' => $row->account_id,
+                'currency_id' => $row->currency_id,
+                'transaction_type' => $row->transaction_type,
+                'transaction_date' => (string) $row->transaction_date,
+                'balance_type' => $row->balance_type,
+                'balance' => (float) $row->balance,
+                'reference' => $row->reference,
+            ])
+            ->all();
+
+        Balance::withoutGlobalScope(EntityScope::class)
+            ->where('entity_id', $entity->id)
+            ->where('reporting_period_id', $nextPeriod->id)
+            ->delete();
+
+        $reference = FiscalYearClose::CLOSING_REFERENCE_PREFIX.$year.'-OB';
+
+        foreach ($closing as [$account, $balance]) {
+            (new Balance([
+                'entity_id' => $entity->id,
+                'account_id' => $account->id,
+                'reporting_period_id' => $nextPeriod->id,
+                'currency_id' => $account->currency_id,
+                'transaction_type' => Transaction::JN,
+                'transaction_date' => $end->copy()->startOfDay(),
+                'balance_type' => $balance > 0 ? Balance::DEBIT : Balance::CREDIT,
+                'balance' => abs($balance),
+                'reference' => $reference,
+            ]))->save();
+        }
+
+        return $superseded;
     }
 }

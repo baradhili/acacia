@@ -9,6 +9,8 @@ use App\Models\User;
 use IFRS\Models\Currency;
 use IFRS\Models\Entity;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -199,6 +201,74 @@ class CompanyProfileTest extends TestCase
 
         $response->assertSessionHasErrors(['abn', 'tfn', 'email']);
         $this->assertSame(0, CompanyProfile::count());
+    }
+
+    public function test_company_logo_can_be_uploaded_and_removed(): void
+    {
+        Storage::fake('public');
+
+        // PNG uploads and the screen re-renders it.
+        $this->actingAs($this->admin)
+            ->post(route('company-profile.logo.store'), [
+                'logo' => UploadedFile::fake()->image('logo.png', 200, 60),
+            ])
+            ->assertRedirect(route('company-profile.index'))
+            ->assertSessionHas('success');
+
+        $profile = CompanyProfile::where('entity_id', $this->entity->id)->firstOrFail();
+        $this->assertStringStartsWith('company-logos/', $profile->logo);
+        Storage::disk('public')->assertExists($profile->logo);
+        $this->assertNotNull($profile->logoUrl());
+
+        $page = $this->actingAs($this->admin)->get(route('company-profile.index'));
+        $page->assertOk()->assertSee('Company Logo');
+
+        // The upload form must open before the company-details form:
+        // nested forms are invalid HTML and browsers would submit the
+        // file upload against company-profile.update instead.
+        $html = $page->getContent();
+        $this->assertLessThan(
+            strpos($html, 'action="'.route('company-profile.update').'"'),
+            strpos($html, 'action="'.route('company-profile.logo.store').'"'),
+            'The logo upload form must sit outside the company-details form.'
+        );
+
+        // The upload form must open before the company-details form:
+        // nested forms are invalid HTML and browsers would submit the
+        // file upload against company-profile.update instead.
+        $html = $page->getContent();
+        $this->assertLessThan(
+            strpos($html, 'action="'.route('company-profile.update').'"'),
+            strpos($html, 'action="'.route('company-profile.logo.store').'"'),
+            'The logo upload form must sit outside the company-details form.'
+        );
+
+        // SVG is equally accepted; replacing removes the previous file.
+        $oldPath = $profile->logo;
+        $this->actingAs($this->admin)
+            ->post(route('company-profile.logo.store'), [
+                'logo' => UploadedFile::fake()->create('mark.svg', 1, 'image/svg+xml'),
+            ])
+            ->assertSessionHas('success');
+
+        $this->assertNotSame($oldPath, $profile->refresh()->logo);
+        Storage::disk('public')->assertMissing($oldPath);
+
+        // Other formats are rejected.
+        $this->actingAs($this->admin)
+            ->post(route('company-profile.logo.store'), [
+                'logo' => UploadedFile::fake()->image('photo.jpg', 100, 100),
+            ])
+            ->assertSessionHasErrors('logo');
+
+        // Removal clears the column and deletes the file.
+        $path = $profile->refresh()->logo;
+        $this->actingAs($this->admin)
+            ->delete(route('company-profile.logo.destroy'))
+            ->assertSessionHas('success');
+
+        $this->assertNull($profile->refresh()->logo);
+        Storage::disk('public')->assertMissing($path);
     }
 
     public function test_company_tax_report_prefers_profile_abn_tfn_over_config(): void

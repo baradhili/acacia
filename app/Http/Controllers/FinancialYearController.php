@@ -12,13 +12,12 @@ use Illuminate\Support\Facades\Auth;
  * Year-end close workflow UI: FY status table, trial-close review and
  * the submit → approve → execute actions (plus reopen). Role gating is
  * route-level (admin|accountant); the four-eyes rule (requester ≠
- * approver) is enforced by FiscalYearService::approve().
+ * approver, falling back to the requester when they are the only
+ * accountant/admin) is enforced by FiscalYearService::approve().
  */
 class FinancialYearController extends Controller
 {
-    public function __construct(protected FiscalYearService $service)
-    {
-    }
+    public function __construct(protected FiscalYearService $service) {}
 
     public function index()
     {
@@ -61,7 +60,10 @@ class FinancialYearController extends Controller
             return redirect()->route('financial-years.index')->with('error', $e->getMessage());
         }
 
-        return view('financial-years.trial', ['trial' => $trial]);
+        return view('financial-years.trial', [
+            'trial' => $trial,
+            'approvalRoutedToRequester' => $this->service->approvalRoutedToRequester($trial['record']),
+        ]);
     }
 
     public function submit(int $year)
@@ -69,13 +71,19 @@ class FinancialYearController extends Controller
         $entity = $this->entity();
 
         try {
-            $this->service->submit($entity, $year, Auth::id());
+            $record = $this->service->submit($entity, $year, Auth::id());
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             return redirect()->route('financial-years.trial', $year)->with('error', $e->getMessage());
         }
 
-        return redirect()->route('financial-years.trial', $year)
-            ->with('success', "FY {$year} submitted for approval.");
+        // With no other accountant/admin to hand the request to, it is
+        // routed back to the requester — say so, or they'd wait on an
+        // approval only they can give.
+        $message = $this->service->approvalRoutedToRequester($record)
+            ? "FY {$year} submitted — you are the only accountant/admin, so the approval is routed to you."
+            : "FY {$year} submitted for approval.";
+
+        return redirect()->route('financial-years.trial', $year)->with('success', $message);
     }
 
     public function approve(int $year)

@@ -28,11 +28,16 @@
             @endif
 
             @if ($record->canApprove())
-                @if ($record->requested_by === auth()->id())
+                @if ($record->requested_by === auth()->id() && !$approvalRoutedToRequester)
                     <span class="px-4 py-2 text-sm text-gray-500 bg-gray-100 rounded">
                         Waiting for another accountant/admin to approve
                     </span>
                 @else
+                    @if ($record->requested_by === auth()->id())
+                        <span class="px-4 py-2 text-sm text-amber-700 bg-amber-50 rounded">
+                            You are the only accountant/admin — this approval is routed to you
+                        </span>
+                    @endif
                     <form method="POST" action="{{ route('financial-years.approve', $trial['year']) }}">
                         @csrf
                         <button type="submit" class="px-4 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700">
@@ -168,7 +173,8 @@
     <p class="text-xs text-gray-500">
         Executing the close posts two journal entries (reference FY-CLOSE-{{ $trial['year'] }}) dated
         {{ $trial['end']->format('d M Y') }}: revenue-side balances debited to zero and expense-side balances
-        credited to zero, with the net difference landing in Retained Earnings. Reports exclude FY-CLOSE
-        entries from P&amp;L movement, so historical statements are unchanged.
+        credited to zero, with the net difference landing in Retained Earnings. The closing position then becomes
+        FY {{ $trial['year'] + 1 }}'s opening balances (reference FY-CLOSE-{{ $trial['year'] }}-OB) — no manual
+        re-entry. Reports exclude FY-CLOSE entries from P&amp;L movement, so historical statements are unchanged.
     </p>
 @endsection

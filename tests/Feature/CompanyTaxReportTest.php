@@ -6,14 +6,17 @@ use App\Models\User;
 use App\Services\IfrsPosting;
 use Carbon\Carbon;
 use IFRS\Models\Account;
+use IFRS\Models\Balance;
 use IFRS\Models\Currency;
 use IFRS\Models\Entity;
 use IFRS\Models\LineItem;
+use IFRS\Models\ReportingPeriod;
+use IFRS\Models\Transaction;
 use IFRS\Models\Vat;
 use IFRS\Transactions\JournalEntry;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class CompanyTaxReportTest extends TestCase
@@ -21,8 +24,11 @@ class CompanyTaxReportTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected Entity $entity;
+
     protected Account $bank;
+
     protected Vat $gstVat;
 
     protected function setUp(): void
@@ -317,5 +323,102 @@ class CompanyTaxReportTest extends TestCase
             ->get(route('reports.export.company-tax.csv', ['fy' => 2026]));
         $csv->assertStatus(200);
         $this->assertStringContainsString('text/csv', (string) $csv->headers->get('content-type'));
+    }
+
+    /**
+     * The migration acceptance criterion: a single hand-entered opening
+     * set — debit current assets (and a non-current asset), matching
+     * credit to equity — shows on the tax report's item 8 asset labels
+     * and in the equity reconciliation, without any ledger activity.
+     */
+    public function test_item_8_and_equity_show_migration_opening_balances(): void
+    {
+        $currentAsset = Account::create([
+            'name' => 'Prepayments', 'account_type' => Account::CURRENT_ASSET, 'code' => 120,
+            'currency_id' => $this->entity->currency_id, 'entity_id' => $this->entity->id,
+        ]);
+        $equity = Account::create([
+            'name' => 'Contributed Equity', 'account_type' => Account::EQUITY, 'code' => 3300,
+            'currency_id' => $this->entity->currency_id, 'entity_id' => $this->entity->id,
+        ]);
+        $period = ReportingPeriod::create([
+            'period_count' => 1, 'calendar_year' => 2025,
+            'status' => ReportingPeriod::OPEN, 'entity_id' => $this->entity->id,
+        ]);
+
+        foreach ([
+            [$currentAsset, 25000, Balance::DEBIT],
+            [$equity, 30000, Balance::CREDIT],
+            [Account::where('entity_id', $this->entity->id)->where('code', 150)->first(), 5000, Balance::DEBIT],
+        ] as [$account, $amount, $side]) {
+            (new Balance([
+                'entity_id' => $this->entity->id,
+                'account_id' => $account->id,
+                'reporting_period_id' => $period->id,
+                'currency_id' => $account->currency_id,
+                'transaction_type' => Transaction::JN,
+                'transaction_date' => '2025-06-30',
+                'balance_type' => $side,
+                'balance' => $amount,
+            ]))->save();
+        }
+
+        $response = $this->actingAs($this->user)
+            ->get(route('reports.company-tax', ['fy' => 2026]));
+
+        // Item 8: current assets (D) 25,000; total assets (E) 30,000 —
+        // the migration debits land, liabilities stay at zero.
+        $response->assertOk()
+            ->assertSee('All current assets')
+            ->assertSee('$25,000')
+            ->assertSee('Total assets')
+            ->assertSee('$30,000');
+
+        // Supplementary equity reconciliation: the matching credit shows
+        // as equity brought forward and closing equity.
+        $response->assertSee('Equity reconciliation')
+            ->assertSee('Equity brought forward')
+            ->assertSee('Equity at FY end');
+    }
+
+    /**
+     * Equity-account movements outside profit and dividends — a capital
+     * injection here — land in the residual row so EQ-1 + EQ-2 + EQ-3 +
+     * EQ-4 always equals closing equity (EQ-5).
+     */
+    public function test_equity_reconciliation_residual_covers_capital_injections(): void
+    {
+        $equity = Account::create([
+            'name' => 'Contributed Equity', 'account_type' => Account::EQUITY, 'code' => 3300,
+            'currency_id' => $this->entity->currency_id, 'entity_id' => $this->entity->id,
+        ]);
+
+        // Capital injection during FY2025: Dr Bank / Cr Contributed Equity.
+        IfrsPosting::ensureReportingPeriod('2025-11-10', $this->entity);
+        $journalEntry = new JournalEntry([
+            'transaction_date' => Carbon::parse('2025-11-10'),
+            'account_id' => $this->bank->id,
+            'credited' => false,
+            'entity_id' => $this->entity->id,
+            'narration' => 'Capital injection',
+            'reference' => 'TEST-CAP',
+        ]);
+        $journalEntry->addLineItem(LineItem::create([
+            'account_id' => $equity->id,
+            'amount' => 40000,
+            'quantity' => 1,
+            'vat_inclusive' => false,
+            'entity_id' => $this->entity->id,
+        ]));
+        $journalEntry->post();
+
+        $this->actingAs($this->user)
+            ->get(route('reports.company-tax', ['fy' => 2026]))
+            ->assertOk()
+            // The residual row surfaces the injection…
+            ->assertSee('Other equity movements')
+            ->assertSee('$40,000')
+            // …and closing equity reconciles through it.
+            ->assertSee('EQ-1 + EQ-2 + EQ-3 + EQ-4');
     }
 }
