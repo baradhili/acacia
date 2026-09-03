@@ -33,7 +33,7 @@
         </div>
     @endif
 
-    <!-- Company logo — outside the details form: nested forms are invalid
+    <!-- Company logo - outside the details form: nested forms are invalid
          HTML and browsers would submit the file upload against
          company-profile.update instead of the logo endpoint. -->
     <div class="bg-white rounded-lg shadow p-6 mb-6">
