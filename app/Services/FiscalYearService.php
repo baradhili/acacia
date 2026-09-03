@@ -318,6 +318,14 @@ class FiscalYearService
                 'pass' => true,
                 'detail' => $postedTransactions.' posted ledger transaction(s) dated in the year.',
             ],
+            [
+                'key' => 'next_year_opening_balances',
+                'label' => 'Opening balances for the next financial year',
+                'blocking' => false,
+                'pass' => true,
+                'detail' => 'Executing the close writes FY '.($year + 1)."'s opening set from the closing position"
+                    .' — opening balances are entered by hand only once, at migration.',
+            ],
         ];
     }
 

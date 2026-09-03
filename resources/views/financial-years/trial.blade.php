@@ -168,7 +168,8 @@
     <p class="text-xs text-gray-500">
         Executing the close posts two journal entries (reference FY-CLOSE-{{ $trial['year'] }}) dated
         {{ $trial['end']->format('d M Y') }}: revenue-side balances debited to zero and expense-side balances
-        credited to zero, with the net difference landing in Retained Earnings. Reports exclude FY-CLOSE
-        entries from P&amp;L movement, so historical statements are unchanged.
+        credited to zero, with the net difference landing in Retained Earnings. The closing position then becomes
+        FY {{ $trial['year'] + 1 }}'s opening balances (reference FY-CLOSE-{{ $trial['year'] }}-OB) — no manual
+        re-entry. Reports exclude FY-CLOSE entries from P&amp;L movement, so historical statements are unchanged.
     </p>
 @endsection
