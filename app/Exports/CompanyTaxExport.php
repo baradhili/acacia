@@ -3,17 +3,18 @@
 namespace App\Exports;
 
 use Maatwebsite\Excel\Concerns\FromCollection;
-use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use Maatwebsite\Excel\Concerns\WithTitle;
 
 /**
  * Company tax report export — one row per ATO Company Tax Return label
  * with the audit-trail columns defined in ATO_tax_report_spec.md §6.1.
  * Used for both the Excel (xlsx) and CSV downloads.
  */
-class CompanyTaxExport implements FromCollection, WithTitle, ShouldAutoSize
+class CompanyTaxExport implements FromCollection, ShouldAutoSize, WithTitle
 {
     protected int $fyEnd;
+
     protected array $statement;
 
     public function __construct(int $fyEnd, array $statement)
@@ -30,10 +31,10 @@ class CompanyTaxExport implements FromCollection, WithTitle, ShouldAutoSize
 
         $data = collect();
 
-        $data->push(['Company Tax Return ' . $this->fyEnd . ' — ' . $entity['name']]);
+        $data->push(['Company Tax Return '.$this->fyEnd.' — '.$entity['name']]);
         $data->push([
-            'Income year: ' . $this->statement['fyStart']->format('d/m/Y') . ' to '
-                . $this->statement['fyEnd']->format('d/m/Y') . ' (cash basis, GST-exclusive)',
+            'Income year: '.$this->statement['fyStart']->format('d/m/Y').' to '
+                .$this->statement['fyEnd']->format('d/m/Y').' (cash basis, GST-exclusive)',
         ]);
         $data->push([]);
 
@@ -91,6 +92,10 @@ class CompanyTaxExport implements FromCollection, WithTitle, ShouldAutoSize
             $data->push($rowFor('8', $row['label'], $row['name'], $row['amount']));
         }
 
+        foreach ($this->statement['equityReconciliation'] as $row) {
+            $data->push($rowFor('EQ', $row['label'], $row['name'], $row['amount']));
+        }
+
         $data->push($rowFor('10', 'A/B', 'SBE simplified depreciation — capital purchases reference', $this->statement['capitalPurchases']['total']));
 
         return $data;
@@ -98,6 +103,6 @@ class CompanyTaxExport implements FromCollection, WithTitle, ShouldAutoSize
 
     public function title(): string
     {
-        return 'Company Tax ' . $this->fyEnd;
+        return 'Company Tax '.$this->fyEnd;
     }
 }

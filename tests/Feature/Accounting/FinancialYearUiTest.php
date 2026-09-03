@@ -22,9 +22,13 @@ class FinancialYearUiTest extends TestCase
     use RefreshDatabase;
 
     protected Entity $entity;
+
     protected FiscalYearService $service;
+
     protected User $admin;
+
     protected User $accountant;
+
     protected int $year;
 
     protected function setUp(): void
@@ -36,7 +40,7 @@ class FinancialYearUiTest extends TestCase
         $this->seed(IFRSSeeder::class);
 
         $this->entity = Entity::first();
-        $this->service = new FiscalYearService();
+        $this->service = new FiscalYearService;
         $this->year = $this->service->currentYear($this->entity) - 1;
 
         $this->admin = User::where('email', 'admin@example.com')->first();
@@ -47,13 +51,13 @@ class FinancialYearUiTest extends TestCase
     protected function postRevenue(float $amount): void
     {
         $this->actingAs($this->admin);
-        IfrsPosting::ensureReportingPeriod($this->year . '-09-15', $this->entity);
+        IfrsPosting::ensureReportingPeriod($this->year.'-09-15', $this->entity);
 
         $bank = Account::where('code', 320)->where('entity_id', $this->entity->id)->first();
         $revenue = Account::where('code', 4100)->where('entity_id', $this->entity->id)->first();
 
         $je = new JournalEntry([
-            'transaction_date' => Carbon::parse($this->year . '-09-15'),
+            'transaction_date' => Carbon::parse($this->year.'-09-15'),
             'account_id' => $bank->id,
             'credited' => false,
             'entity_id' => $this->entity->id,
@@ -84,7 +88,7 @@ class FinancialYearUiTest extends TestCase
 
         $response = $this->actingAs($this->admin)->get('/financial-years');
         $response->assertOk()
-            ->assertSee('FY ' . $this->year)
+            ->assertSee('FY '.$this->year)
             ->assertSee('Ended — open')
             ->assertSee("FY {$this->year} has ended but hasn't been closed", false);
     }
@@ -151,6 +155,38 @@ class FinancialYearUiTest extends TestCase
         $this->actingAs($this->admin)->post("/financial-years/{$this->year}/reopen")
             ->assertSessionHas('success');
         $this->assertFalse($this->service->isClosed($this->entity, $this->year));
+    }
+
+    public function test_sole_admin_approves_own_request(): void
+    {
+        $this->postRevenue(1000);
+
+        // No other accountant/admin exists — the approval is routed back
+        // to the requester instead of the waiting note.
+        $this->accountant->syncRoles([]);
+
+        $this->actingAs($this->admin)->post("/financial-years/{$this->year}/submit")
+            ->assertRedirect()
+            ->assertSessionHas('success', "FY {$this->year} submitted — you are the only accountant/admin, so the approval is routed to you.");
+
+        $this->actingAs($this->admin)->get("/financial-years/{$this->year}/trial")
+            ->assertOk()
+            ->assertSee('You are the only accountant/admin — this approval is routed to you')
+            ->assertDontSee('Waiting for another accountant/admin to approve');
+
+        // Self-approval goes through and the close executes.
+        $this->actingAs($this->admin)->post("/financial-years/{$this->year}/approve")
+            ->assertSessionHas('success');
+        $this->actingAs($this->admin)->post("/financial-years/{$this->year}/close")
+            ->assertSessionHas('success');
+
+        $this->assertTrue($this->service->isClosed($this->entity, $this->year));
+        $this->assertDatabaseHas('fiscal_year_closes', [
+            'year' => $this->year,
+            'status' => FiscalYearClose::STATUS_CLOSED,
+            'requested_by' => $this->admin->id,
+            'approved_by' => $this->admin->id,
+        ]);
     }
 
     public function test_dashboard_warns_about_unclosed_prior_year(): void

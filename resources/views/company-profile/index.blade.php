@@ -33,6 +33,51 @@
         </div>
     @endif
 
+    <!-- Company logo - outside the details form: nested forms are invalid
+         HTML and browsers would submit the file upload against
+         company-profile.update instead of the logo endpoint. -->
+    <div class="bg-white rounded-lg shadow p-6 mb-6">
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">Company Logo</h2>
+        <div class="flex items-center gap-6">
+            @if ($logoUrl = $profile->logoUrl())
+                <img src="{{ $logoUrl }}" alt="Company logo" class="h-24 w-auto object-contain border rounded-lg">
+            @else
+                <div class="h-24 w-48 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
+                    <p class="text-sm text-gray-500">No logo uploaded</p>
+                </div>
+            @endif
+
+            <div class="flex-1">
+                <form method="POST" action="{{ route('company-profile.logo.store') }}" enctype="multipart/form-data"
+                    class="flex items-end gap-3">
+                    @csrf
+                    <div class="flex-1">
+                        <label class="block text-sm font-medium text-gray-700 mb-1" for="logo">Logo file</label>
+                        <input type="file" name="logo" id="logo" accept=".svg,.png" required
+                            class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 @error('logo') border-red-300 @enderror">
+                        <p class="text-xs text-gray-400 mt-1">SVG or PNG, max 2MB — used on letterheads and invoice headers.</p>
+                        @error('logo') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+                    </div>
+                    <button type="submit"
+                        class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 shrink-0">
+                        Upload
+                    </button>
+                </form>
+
+                @if ($logoUrl)
+                    <form method="POST" action="{{ route('company-profile.logo.destroy') }}" class="mt-3">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit"
+                            class="text-sm text-red-600 hover:text-red-800">
+                            Remove logo
+                        </button>
+                    </form>
+                @endif
+            </div>
+        </div>
+    </div>
+
     <form method="POST" action="{{ route('company-profile.update') }}">
         @csrf
         @method('PUT')

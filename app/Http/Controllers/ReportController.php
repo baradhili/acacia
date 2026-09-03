@@ -255,20 +255,15 @@ class ReportController extends Controller
             ->orderBy('code')
             ->get() as $account
         ) {
-            // Cumulative from an arbitrary epoch: exact as-at balances that
-            // don't depend on year-end closing entries having been posted
-            // (the package's period-scoped closingBalance() does), plus
-            // the account's opening Balance rows.
-            $balance = (float) Ledger::balance(
-                $account,
-                $closing ? Carbon::create(2000, 1, 1) : $startDate,
-                $endDate,
-                $entity->currency_id
-            )[$entity->currency_id];
-
-            if ($closing) {
-                $balance += OpeningBalances::effectiveOpening($account, $entity);
-            }
+            // Cumulative as-at balance: the opening snapshot in force at
+            // $endDate plus ledger movement after it (the whole ledger
+            // from an arbitrary epoch when no snapshot exists) — exact
+            // as-at figures that don't depend on year-end closing
+            // entries having been posted (the package's period-scoped
+            // closingBalance() does).
+            $balance = $closing
+                ? OpeningBalances::balanceAt($account, $entity, $endDate)
+                : (float) Ledger::balance($account, $startDate, $endDate, $entity->currency_id)[$entity->currency_id];
 
             if (abs($balance) < 0.005) {
                 continue;
@@ -332,16 +327,9 @@ class ReportController extends Controller
         $accountLines = collect();
 
         foreach (Account::where('entity_id', $entity->id)->orderBy('code')->get() as $account) {
-            $balance = (float) Ledger::balance(
-                $account,
-                Carbon::create(2000, 1, 1),
-                $endDate,
-                $entity->currency_id
-            )[$entity->currency_id];
-
-            // Opening Balance rows form the starting position of the
-            // trial balance (debit-positive; credit rows land negative).
-            $balance += OpeningBalances::effectiveOpening($account, $entity);
+            // As-at balance via the opening snapshot in force (debit-
+            // positive; credit opening rows land negative).
+            $balance = OpeningBalances::balanceAt($account, $entity, $endDate);
 
             if (abs($balance) < 0.005) {
                 continue;
@@ -847,16 +835,9 @@ class ReportController extends Controller
             Account::OVERHEAD_EXPENSE, Account::OTHER_EXPENSE,
         ]);
 
-        // Cumulative opening balance: everything posted before the period
-        // starts, plus the account's opening Balance rows (which sit
-        // before all ledger activity by construction).
-        $opening = (float) Ledger::balance(
-            $account,
-            Carbon::create(2000, 1, 1),
-            $startDate->copy()->subSecond(),
-            $entity->currency_id
-        )[$entity->currency_id];
-        $opening += OpeningBalances::effectiveOpening($account, $entity);
+        // Cumulative opening balance: the opening snapshot in force the
+        // day before the period starts plus ledger movement after it.
+        $opening = OpeningBalances::balanceAt($account, $entity, $startDate->copy()->subSecond());
         $openingBalance = $isDebitNormal ? $opening : -$opening;
 
         $entries = Ledger::where('post_account', $account->id)
@@ -1624,18 +1605,13 @@ class ReportController extends Controller
         $bankInflows = round((float) $bankFlows->inflows);
         $bankOutflows = round((float) $bankFlows->outflows);
 
-        // Item 8 as-at balances at 30 June (cumulative ledger + opening
-        // Balance rows — the same basis as the trial balance).
+        // Item 8 as-at balances at 30 June: the opening snapshot in force
+        // plus ledger movement after it — the same basis as the trial
+        // balance.
         $asAtBalance = function (array $types) use ($entity, $fyEndDate): float {
             $total = 0.0;
             foreach (Account::where('entity_id', $entity->id)->whereIn('account_type', $types)->get() as $account) {
-                $total += (float) Ledger::balance(
-                    $account,
-                    Carbon::create(2000, 1, 1),
-                    $fyEndDate,
-                    $entity->currency_id
-                )[$entity->currency_id];
-                $total += OpeningBalances::effectiveOpening($account, $entity);
+                $total += OpeningBalances::balanceAt($account, $entity, $fyEndDate);
             }
 
             return $total;
@@ -1787,6 +1763,41 @@ class ReportController extends Controller
         $frankingOpening = round(FrankingService::openingBalance($fyEnd - 1, $entity->id));
         $frankingClosing = round(FrankingService::closingBalance($fyEnd - 1, $entity->id));
 
+        // Supplementary equity reconciliation (beyond the ATO labels):
+        // the ledger's equity story for the year. EQUITY accounts are
+        // credit-normal, so balanceAt()'s debit-positive figures are
+        // negated for display; the current-year result matches the
+        // balance sheet's on-the-fly equity figure.
+        $equityAccounts = Account::where('entity_id', $entity->id)
+            ->where('account_type', Account::EQUITY)
+            ->get();
+        $equityAt = fn (Carbon $asOf): float => round(-$equityAccounts->sum(
+            fn ($account) => OpeningBalances::balanceAt($account, $entity, $asOf)
+        ), 2);
+
+        $equityBroughtForward = $equityAt($fyStart->copy()->subSecond());
+        $equityResult = round((new FiscalYearService)->netProfitExcludingClosures($entity, $fyStart, $fyEndDate), 2);
+        $dividendsPaid = -round($frankedDividends + $unfrankedDividends);
+        $equityClosing = $equityAt($fyEndDate);
+
+        // Residual: equity-account movements none of the rows above cover
+        // — share issues, capital injections and the like — so the
+        // reconciliation identity holds exactly whatever hits equity.
+        $otherEquity = round($equityClosing - $equityBroughtForward - $equityResult - $dividendsPaid, 2);
+
+        $equityReconciliation = [
+            ['label' => 'EQ-1', 'name' => 'Equity brought forward (opening snapshot at FY start)',
+                'amount' => $equityBroughtForward, 'note' => null],
+            ['label' => 'EQ-2', 'name' => 'Result for the year (net profit, closing entries excluded)',
+                'amount' => $equityResult, 'note' => null],
+            ['label' => 'EQ-3', 'name' => 'Dividends paid (labels 8-J/8-K basis)',
+                'amount' => $dividendsPaid, 'note' => null],
+            ['label' => 'EQ-4', 'name' => 'Other equity movements',
+                'amount' => $otherEquity, 'note' => 'Share issues, capital injections and other equity movements'],
+            ['label' => 'EQ-5', 'name' => 'Equity at FY end (opening snapshot at FY end)',
+                'amount' => $equityClosing, 'note' => 'EQ-1 + EQ-2 + EQ-3 + EQ-4'],
+        ];
+
         $financialInfo = [
             ['label' => 'C', 'name' => 'Trade debtors', 'amount' => $tradeDebtors, 'note' => null],
             ['label' => 'D', 'name' => 'All current assets', 'amount' => $currentAssets, 'note' => null],
@@ -1824,6 +1835,7 @@ class ReportController extends Controller
             'reconciliation' => $reconciliation,
             'taxableIncome' => $taxableIncome,
             'financialInfo' => $financialInfo,
+            'equityReconciliation' => $equityReconciliation,
             'capitalPurchases' => ['accounts' => $capitalAccounts, 'total' => $capitalTotal],
             'gst' => ['collected' => $gstCollected, 'paid' => $gstPaid],
             'bank' => ['inflows' => $bankInflows, 'outflows' => $bankOutflows],

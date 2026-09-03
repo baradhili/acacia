@@ -45,6 +45,15 @@
     </div>
 
     @if ($period)
+        @if ($systemGenerated)
+            <div class="mb-4 bg-indigo-50 border border-indigo-200 text-indigo-800 px-4 py-3 rounded-lg">
+                <strong>FY{{ $period->calendar_year }} opens from the year-end close.</strong>
+                These balances were generated from FY{{ $period->calendar_year - 1 }}'s closing position —
+                reopen that year from the
+                <a href="{{ route('financial-years.index') }}" class="underline">Financial Years</a>
+                page to change them.
+            </div>
+        @endif
         <form method="POST" action="{{ route('opening-balances.store') }}">
             @csrf
             <input type="hidden" name="year" value="{{ $period->calendar_year }}">
@@ -79,16 +88,16 @@
                                     <td class="px-6 py-2 text-gray-900">{{ $account->name }}</td>
                                     <td class="px-6 py-2 text-gray-500">{{ config('ifrs.accounts')[$account->account_type] ?? $account->account_type }}</td>
                                     <td class="px-6 py-2">
-                                        <input type="number" step="0.01" min="0"
+                                        <input type="number" step="0.01" min="0" {{ $systemGenerated ? 'disabled' : '' }}
                                                name="balances[{{ $account->id }}][debit]"
                                                value="{{ old('balances.'.$account->id.'.debit', $debit) }}"
-                                               class="w-full max-w-[10rem] ml-auto rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right">
+                                               class="w-full max-w-[10rem] ml-auto rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right disabled:bg-gray-100 disabled:text-gray-500">
                                     </td>
                                     <td class="px-6 py-2">
-                                        <input type="number" step="0.01" min="0"
+                                        <input type="number" step="0.01" min="0" {{ $systemGenerated ? 'disabled' : '' }}
                                                name="balances[{{ $account->id }}][credit]"
                                                value="{{ old('balances.'.$account->id.'.credit', $credit) }}"
-                                               class="w-full max-w-[10rem] ml-auto rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right">
+                                               class="w-full max-w-[10rem] ml-auto rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right disabled:bg-gray-100 disabled:text-gray-500">
                                     </td>
                                 </tr>
                             @endforeach
@@ -113,7 +122,9 @@
 
             <div class="mt-6 flex justify-end gap-3">
                 <a href="{{ route('opening-balances.index', ['year' => $period->calendar_year]) }}" class="px-4 py-2 text-gray-700 hover:text-gray-900">Cancel</a>
-                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">Save Opening Balances</button>
+                @unless ($systemGenerated)
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">Save Opening Balances</button>
+                @endunless
             </div>
         </form>
     @else

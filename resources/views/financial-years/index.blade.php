@@ -5,7 +5,8 @@
     <div class="mb-6 flex justify-between items-center">
         <h1 class="text-2xl font-bold text-gray-800">Financial Years</h1>
         <p class="text-sm text-gray-500">
-            Year-end close: trial → approval (requester ≠ approver) → closing entries to Retained Earnings, then the year locks
+            Year-end close: trial → approval (requester ≠ approver; falls back to the requester when they are the
+            only accountant/admin) → closing entries to Retained Earnings, then the year locks
         </p>
     </div>
 
@@ -104,7 +105,9 @@
 
     <p class="mt-4 text-xs text-gray-500">
         Closing posts two journal entries dated the year end (reference FY-CLOSE-{year}) that transfer every P&amp;L
-        balance to Retained Earnings (3200), marks the IFRS reporting period CLOSED and locks the year's periods.
-        Reopening mirrors the entries back out. Reports stay correct in both states.
+        balance to Retained Earnings (3200), marks the IFRS reporting period CLOSED, locks the year's periods and
+        writes the next financial year's opening balances from the closing position (opening balances are entered
+        by hand only once, at migration). Reopening mirrors the entries back out and removes the generated opening
+        set. Reports stay correct in both states.
     </p>
 @endsection
