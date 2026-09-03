@@ -137,6 +137,22 @@
         </tbody>
     </table>
 
+    <h2>Equity reconciliation (supplementary)</h2>
+    <table>
+        <thead>
+            <tr><th class="label-cell">Label</th><th>Description</th><th class="text-right">Amount (AUD)</th></tr>
+        </thead>
+        <tbody>
+            @foreach ($statement['equityReconciliation'] as $row)
+            <tr>
+                <td>{{ $row['label'] }}</td>
+                <td>{{ $row['name'] }}@if ($row['note']) <span class="note">— {{ $row['note'] }}</span>@endif</td>
+                <td class="text-right">{{ $money($row['amount']) }}</td>
+            </tr>
+            @endforeach
+        </tbody>
+    </table>
+
     <h2>Item 10 — Capital purchases (SBE simplified depreciation reference)</h2>
     <table>
         <thead>

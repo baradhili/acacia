@@ -1763,6 +1763,29 @@ class ReportController extends Controller
         $frankingOpening = round(FrankingService::openingBalance($fyEnd - 1, $entity->id));
         $frankingClosing = round(FrankingService::closingBalance($fyEnd - 1, $entity->id));
 
+        // Supplementary equity reconciliation (beyond the ATO labels):
+        // the ledger's equity story for the year. EQUITY accounts are
+        // credit-normal, so balanceAt()'s debit-positive figures are
+        // negated for display; the current-year result matches the
+        // balance sheet's on-the-fly equity figure.
+        $equityAccounts = Account::where('entity_id', $entity->id)
+            ->where('account_type', Account::EQUITY)
+            ->get();
+        $equityAt = fn (Carbon $asOf): float => round(-$equityAccounts->sum(
+            fn ($account) => OpeningBalances::balanceAt($account, $entity, $asOf)
+        ), 2);
+        $equityReconciliation = [
+            ['label' => 'EQ-1', 'name' => 'Equity brought forward (opening snapshot at FY start)',
+                'amount' => $equityAt($fyStart->copy()->subSecond()), 'note' => null],
+            ['label' => 'EQ-2', 'name' => 'Result for the year (net profit, closing entries excluded)',
+                'amount' => round((new FiscalYearService)->netProfitExcludingClosures($entity, $fyStart, $fyEndDate), 2),
+                'note' => null],
+            ['label' => 'EQ-3', 'name' => 'Dividends paid (labels 8-J/8-K basis)',
+                'amount' => -round($frankedDividends + $unfrankedDividends), 'note' => null],
+            ['label' => 'EQ-4', 'name' => 'Equity at FY end (opening snapshot at FY end)',
+                'amount' => $equityAt($fyEndDate), 'note' => 'EQ-1 + EQ-2 + EQ-3 (other equity movements excepted)'],
+        ];
+
         $financialInfo = [
             ['label' => 'C', 'name' => 'Trade debtors', 'amount' => $tradeDebtors, 'note' => null],
             ['label' => 'D', 'name' => 'All current assets', 'amount' => $currentAssets, 'note' => null],
@@ -1800,6 +1823,7 @@ class ReportController extends Controller
             'reconciliation' => $reconciliation,
             'taxableIncome' => $taxableIncome,
             'financialInfo' => $financialInfo,
+            'equityReconciliation' => $equityReconciliation,
             'capitalPurchases' => ['accounts' => $capitalAccounts, 'total' => $capitalTotal],
             'gst' => ['collected' => $gstCollected, 'paid' => $gstPaid],
             'bank' => ['inflows' => $bankInflows, 'outflows' => $bankOutflows],

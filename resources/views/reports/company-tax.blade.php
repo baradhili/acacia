@@ -224,6 +224,38 @@
                     </div>
                 </div>
 
+                <!-- Equity reconciliation (supplementary) -->
+                <div>
+                    <h4 class="text-md font-semibold text-gray-800 mb-2">Equity reconciliation <span class="text-xs font-normal text-gray-400">(supplementary — not an ATO label)</span></h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Label</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount (AUD)</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                @foreach ($statement['equityReconciliation'] as $row)
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm text-gray-900">{{ $row['label'] }}</td>
+                                        <td class="px-4 py-3 text-sm text-gray-900">
+                                            {{ $row['name'] }}
+                                            @if ($row['note'])
+                                                <span class="block text-xs text-gray-400">{{ $row['note'] }}</span>
+                                            @endif
+                                        </td>
+                                        <td class="px-4 py-3 text-sm text-gray-900 text-right">
+                                            {{ $money($row['amount']) }}
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <!-- Item 10 capital purchases -->
                 <div>
                     <h4 class="text-md font-semibold text-gray-800 mb-2">Item 10 — SBE simplified depreciation (capital purchases reference)</h4>
