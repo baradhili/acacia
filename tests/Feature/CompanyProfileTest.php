@@ -220,9 +220,28 @@ class CompanyProfileTest extends TestCase
         Storage::disk('public')->assertExists($profile->logo);
         $this->assertNotNull($profile->logoUrl());
 
-        $this->actingAs($this->admin)->get(route('company-profile.index'))
-            ->assertOk()
-            ->assertSee('Company Logo');
+        $page = $this->actingAs($this->admin)->get(route('company-profile.index'));
+        $page->assertOk()->assertSee('Company Logo');
+
+        // The upload form must open before the company-details form:
+        // nested forms are invalid HTML and browsers would submit the
+        // file upload against company-profile.update instead.
+        $html = $page->getContent();
+        $this->assertLessThan(
+            strpos($html, 'action="'.route('company-profile.update').'"'),
+            strpos($html, 'action="'.route('company-profile.logo.store').'"'),
+            'The logo upload form must sit outside the company-details form.'
+        );
+
+        // The upload form must open before the company-details form:
+        // nested forms are invalid HTML and browsers would submit the
+        // file upload against company-profile.update instead.
+        $html = $page->getContent();
+        $this->assertLessThan(
+            strpos($html, 'action="'.route('company-profile.update').'"'),
+            strpos($html, 'action="'.route('company-profile.logo.store').'"'),
+            'The logo upload form must sit outside the company-details form.'
+        );
 
         // SVG is equally accepted; replacing removes the previous file.
         $oldPath = $profile->logo;
