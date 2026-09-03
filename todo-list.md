@@ -58,7 +58,11 @@
 
 - [ ] allow abn/acn/tfn to be display formatted in the way they normally are - also allow entry with the usual spaces
 
-- [ ] update tax report: review .zcode/ato-company-tax/company-tax.md. create plan including branch. Only expect a single manual opening balance entry for a company (migration into this system). However need an admin process to "close" a financial year  (which should potentially move some ledger balances  and create opening balances for the subsequent financial year)  - so if I have entered an opening balance debit for current assets and a matching credit to equity then the correct output should show
+- [x] update tax report: review .zcode/ato-company-tax/company-tax.md. create plan including branch. Only expect a single manual opening balance entry for a company (migration into this system). However need an admin process to "close" a financial year  (which should potentially move some ledger balances  and create opening balances for the subsequent financial year)  - so if I have entered an opening balance debit for current assets and a matching credit to equity then the correct output should show - (Sep 2026, branch feat/fy-close-opening-balances) Done. Opening sets are now superseding snapshots: the year-end close (the existing admin trial → approve → execute process) writes FY {year+1}'s opening balances from the closing position (one Balance row per balance-sheet account incl. the profit closed into Retained Earnings, dated the year end, reference FY-CLOSE-{year}-OB), so opening balances are entered by hand exactly once, at migration. Reports (trial balance, balance sheet, account statement, company tax item 8, trial close) read as-at positions via OpeningBalances::balanceAt() — the latest snapshot plus only post-snapshot ledger movement — so a migration set (debit current assets / credit equity) shows in item 8 D/E and the new supplementary equity reconciliation, and multiple sets can never double-count. The Opening Balances screen renders close-generated sets read-only (reopen the year to change); reopen() removes the generated set.
+
+- [ ] Admin should have a backup button that backs up db and stored items
+
+- [ ] setting to prune transactions in closed years after x years (default 7 years)
 
 - [x] company details - index wants resignation date - should be optional
 

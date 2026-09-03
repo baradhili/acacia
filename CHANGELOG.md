@@ -3,6 +3,33 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] — 2026-09-03
+
+### Added — year-end close writes next year's opening balances (single-entry migration model)
+
+Opening balances are entered by hand exactly once, at migration into the
+system; every later opening set is generated. Executing the year-end close
+now writes FY {year+1}'s opening set from the closing position — one Balance
+row per balance-sheet account (Retained Earnings included, carrying the
+closed result), dated the year end, stamped `FY-CLOSE-{year}-OB`. Opening
+sets behave as **superseding snapshots**: reports (trial balance, balance
+sheet, account statement, company tax item 8, the close's own trial math)
+read as-at positions through `OpeningBalances::balanceAt()` — the latest
+snapshot dated on/before the as-at date plus ledger movement strictly after
+it — so a migration set (debit current assets, matching credit to equity)
+shows in the tax report's item 8 asset labels, multiple sets can never
+double-count (previously they all summed), and ledger activity predating a
+migration set is superseded rather than counted on top. Reopen removes the
+generated set (a re-close regenerates it) and the Opening Balances screen
+renders close-generated sets read-only.
+
+### Added — company tax report equity reconciliation (supplementary)
+
+Beyond the ATO labels, the company tax report now reconciles equity: brought
+forward (opening snapshot at FY start), the year's result (net profit
+excluding year-end closing entries), dividends paid on the 8-J/8-K basis,
+and closing equity — on screen, in the PDF and in the Excel/CSV exports.
+
 ## [Unreleased] — 2026-09-02
 
 ### Fixed — profile photo upload no longer 500s when the storage link is missing
