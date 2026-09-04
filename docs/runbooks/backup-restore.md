@@ -8,8 +8,8 @@ This runbook documents the backup and restore procedures for the Professional Se
 
 | Component | Location | Frequency | Retention |
 |-----------|----------|-----------|-----------|
-| Database | MySQL/PostgreSQL | Daily + before major changes | 30 days |
-| Files | `storage/app/public/uploads/` | Daily | 30 days |
+| Database | MySQL/PostgreSQL | Per admin schedule (default daily) | Last 30 backups (configurable) |
+| Files | `storage/app/public/` | Per admin schedule (default daily) | Last 30 backups (configurable) |
 | Configuration | `.env` (encrypted) | Weekly | 90 days |
 | Application | Git repository | N/A (version controlled) | N/A |
 
@@ -103,82 +103,66 @@ crontab -e
 5 2 * * * tar -czvf /backups/files/psa_storage_$(date +\%Y\%m\%d).tar.gz /var/www/psa/storage/app/public/uploads/
 ```
 
-### Option 2: Laravel Scheduler
+### Option 2: Built-in `backup:create` command (recommended)
 
-Create a custom backup command:
+The application ships its own backup command covering the database and stored files:
 
 ```bash
-php artisan make:command BackupDatabase
+# Run a backup now, ignoring the schedule
+php artisan backup:create --force
+
+# Run respecting the admin's schedule (skips when not due)
+php artisan backup:create
+
+# Override the retention count for one run
+php artisan backup:create --force --keep=7
 ```
 
-```php
-// app/Console/Commands/BackupDatabase.php
-namespace App\Console\Commands;
+What it does:
 
-use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Storage;
+- Dumps the database to a gzipped archive — `mysqldump` (single
+  transaction, routines included) for MySQL, a `VACUUM INTO` snapshot
+  for SQLite — under `{BACKUP_PATH}/db/` (default
+  `storage/app/backups/db/`).
+- Archives everything on the public storage disk (uploads, client and
+  company logos, profile photos) to `{BACKUP_PATH}/files/*.tar.gz`.
+- Prunes old archives beyond the configured retention, per type
+  (database dumps and file archives each keep their own N).
 
-class BackupDatabase extends Command
-{
-    protected $signature = 'backup:database {--keep=7 : Number of backups to keep}';
-    protected $description = 'Backup the database';
+Schedule and retention are managed on the **Backups** page (admin →
+profile dropdown → Backups): frequency (daily / weekly / monthly) and
+the number of backups kept. They live in the `backup_settings` table.
 
-    public function handle()
-    {
-        $filename = 'database_backup_' . date('Y-m-d_His') . '.sql';
-        $path = storage_path('backups/' . $filename);
+The scheduler runs the command daily at 04:00 (see
+`routes/console.php`); the command itself decides whether a backup is
+due for weekly/monthly frequencies. The scheduler requires the usual
+cron entry on the server:
 
-        // Ensure directory exists
-        if (!is_dir(dirname($path))) {
-            mkdir(dirname($path), 0755, true);
-        }
-
-        $this->info('Creating database backup...');
-
-        $command = sprintf(
-            'mysqldump -u%s -p%s %s > %s 2>/dev/null',
-            config('database.connections.mysql.username'),
-            config('database.connections.mysql.password'),
-            config('database.connections.mysql.database'),
-            $path
-        );
-
-        exec($command);
-
-        $this->info("Backup created: {$filename}");
-
-        // Clean old backups
-        $keep = (int) $this->option('keep');
-        $this->cleanup($path, $keep);
-
-        // Upload to S3 (optional)
-        if (config('filesystems.disks.s3')) {
-            Storage::disk('s3')->put('backups/' . $filename, file_get_contents($path));
-            $this->info('Uploaded to S3');
-        }
-
-        return Command::SUCCESS;
-    }
-
-    protected function cleanup($currentBackup, $keep)
-    {
-        $backups = glob(storage_path('backups/*.sql'));
-        sort($backups);
-
-        while (count($backups) > $keep) {
-            $old = array_shift($backups);
-            unlink($old);
-            $this->warn("Removed old backup: {$old}");
-        }
-    }
-}
+```bash
+* * * * * cd /var/www/erp && php artisan schedule:run >> /dev/null 2>&1
 ```
 
-Register in `app/Console/Kernel.php`:
+Point `BACKUP_PATH` in `.env` at dedicated storage — ideally an
+external volume — so backups survive losing the app disk:
 
-```php
-$schedule->command('backup:database --keep=7')->daily();
 ```
+BACKUP_PATH=/backups
+```
+
+Restoring from these archives:
+
+```bash
+# Database
+gunzip < db/erp_20260903_040000.sql.gz | mysql -u root -p erp
+
+# Stored files (extract under storage/app)
+tar -xzvf files/files_20260903_040000.tar.gz -C storage/app
+```
+
+Out of scope for the built-in command (still handled manually per
+above/below): encrypted `.env` config backups and off-site S3 copies.
+Consider `aws s3 sync {BACKUP_PATH} s3://your-bucket/psa-backups/` from
+the host's crontab for the off-site leg.
 
 ### Option 3: Docker Volume Backup
 

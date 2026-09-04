@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdministrationController;
 use App\Http\Controllers\Api\WidgetPreferenceController;
+use App\Http\Controllers\BackupController;
 use App\Http\Controllers\BillController;
 use App\Http\Controllers\BillPaymentController;
 use App\Http\Controllers\ChartOfAccountsController;
@@ -62,6 +63,13 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:admin')->group(function () {
         Route::get('/administration', [AdministrationController::class, 'index'])->name('administration.index');
         Route::put('/administration/open-year', [AdministrationController::class, 'updateOpenYear'])->name('administration.open-year.update');
+    });
+
+    // Backups (admin only) — run backup:create on demand, manage its schedule
+    Route::middleware('role:admin')->group(function () {
+        Route::get('/backups', [BackupController::class, 'index'])->name('backups.index');
+        Route::post('/backups/run', [BackupController::class, 'run'])->name('backups.run');
+        Route::put('/backups/settings', [BackupController::class, 'update'])->name('backups.settings.update');
     });
 
     // Opening balances (admin or accountant)
