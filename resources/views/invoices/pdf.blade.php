@@ -44,6 +44,11 @@
             color: #333;
             margin-bottom: 10px;
         }
+        .legal-name {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 10px;
+        }
         .invoice-title {
             font-size: 28px;
             font-weight: bold;
@@ -164,14 +169,30 @@
         <div class="header">
             <div class="header-left">
                 @if($logo = $companyProfile->logoDataUri())
-                    <img src="{{ $logo }}" alt="{{ config('app.name') }} logo" class="company-logo">
+                    <img src="{{ $logo }}" alt="Company logo" class="company-logo">
                 @endif
-                <div class="company-name">{{ config('app.name', 'Your Company Name') }}</div>
-                <p>ABN: {{ config('australian.abn', 'XX XXX XXX XXX') }}</p>
-                <p>{{ config('australian.address', '123 Business Street') }}</p>
-                <p>{{ config('australian.city', 'Sydney') }}, {{ config('australian.state', 'NSW') }} {{ config('australian.postcode', '2000') }}</p>
-                <p>Email: {{ config('australian.email', 'info@example.com') }}</p>
-                <p>Phone: {{ config('australian.phone', '+61 2 1234 5678') }}</p>
+                <div class="company-name">{{ $companyProfile->trading_name ?: ($companyProfile->entity?->name ?: config('app.name')) }}</div>
+                @if($companyProfile->trading_name && $companyProfile->entity?->name && $companyProfile->trading_name !== $companyProfile->entity->name)
+                    <div class="legal-name">{{ $companyProfile->entity->name }}</div>
+                @endif
+                @if($abn = $companyProfile->formatted_abn ?: config('australian.abn'))
+                    <p>ABN: {{ $abn }}</p>
+                @endif
+                @if($companyProfile->address_line1)
+                    <p>{{ $companyProfile->address_line1 }}</p>
+                @endif
+                @if($companyProfile->address_line2)
+                    <p>{{ $companyProfile->address_line2 }}</p>
+                @endif
+                @if($companyProfile->suburb || $companyProfile->state || $companyProfile->postcode)
+                    <p>{{ implode(', ', array_filter([$companyProfile->suburb, $companyProfile->state, $companyProfile->postcode])) }}</p>
+                @endif
+                @if($companyProfile->email)
+                    <p>Email: {{ $companyProfile->email }}</p>
+                @endif
+                @if($companyProfile->phone)
+                    <p>Phone: {{ $companyProfile->phone }}</p>
+                @endif
             </div>
             <div class="header-right">
                 <div class="invoice-title">INVOICE</div>

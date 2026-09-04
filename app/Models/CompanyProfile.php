@@ -164,4 +164,19 @@ class CompanyProfile extends Model
             $this->country,
         ])->filter()->implode(', ');
     }
+
+    /**
+     * ABN formatted the way the ATO writes it (11 digits grouped 2-3-3-3).
+     * Anything that isn't an 11-digit ABN is returned untouched.
+     */
+    public function getFormattedAbnAttribute(): string
+    {
+        $digits = preg_replace('/\D/', '', (string) $this->abn);
+
+        if (strlen($digits) !== 11) {
+            return (string) $this->abn;
+        }
+
+        return substr($digits, 0, 2).' '.substr($digits, 2, 3).' '.substr($digits, 5, 3).' '.substr($digits, 8, 3);
+    }
 }
