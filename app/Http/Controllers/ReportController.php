@@ -1037,6 +1037,11 @@ class ReportController extends Controller
         $quarter = $statement['quarters'][$validated['quarter'] - 1] ?? null;
         abort_unless((bool) $quarter, 404, 'Unknown BAS quarter.');
 
+        if ($quarter['end']->greaterThan(now())) {
+            return redirect()->route('reports.bas', ['fy' => $validated['fy']])
+                ->with('error', sprintf('Q%d has not ended yet — nothing to lodge.', $validated['quarter']));
+        }
+
         BasStatement::updateOrCreate(
             [
                 'entity_id' => $this->ifrsEntity()->id,
