@@ -64,6 +64,12 @@
                         <p class="text-xs text-indigo-600 mt-1">
                             {{ $statement['totals']['net'] >= 0 ? 'Payable to ATO' : 'Refundable from ATO' }}
                         </p>
+                        @hasanyrole('admin|accountant')
+                            <a href="{{ route('bas-settlements.index') }}"
+                                class="inline-block mt-2 text-xs text-indigo-700 underline hover:text-indigo-900">
+                                Record the settlement →
+                            </a>
+                        @endhasanyrole
                     </div>
                 </div>
 

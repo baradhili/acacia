@@ -2,7 +2,7 @@
 
 /**
  * Australian Accounting Configuration
- * 
+ *
  * Configuration specific to Australian professional services companies
  */
 
@@ -130,6 +130,10 @@ return [
     'bas' => [
         'reporting_frequency' => env('BAS_REPORTING_FREQUENCY', 'quarterly'),
         'installment_rate' => env('BAS_INSTALLMENT_RATE', null),
+
+        // Operating bank account (seeded code 320) that settlement
+        // journals post against — the same account dividend payments use.
+        'bank_account_code' => env('BAS_BANK_ACCOUNT_CODE', 320),
     ],
 
     /*
