@@ -36,6 +36,10 @@ class BasSettlementTest extends TestCase
 
     protected Account $gstReceivable; // 430
 
+    protected Account $paygWithholding; // 2210
+
+    protected Account $incomeTaxPayable; // 2240
+
     protected Account $bank; // 320
 
     protected BasSettlementService $service;
@@ -53,6 +57,8 @@ class BasSettlementTest extends TestCase
         $this->entity = IfrsPosting::resolveEntity();
         $this->gstPayable = $this->account(2200);
         $this->gstReceivable = $this->account(430);
+        $this->paygWithholding = $this->account(2210);
+        $this->incomeTaxPayable = $this->account(2240);
         $this->bank = $this->account(320);
         $this->service = app(BasSettlementService::class);
     }
@@ -235,6 +241,62 @@ class BasSettlementTest extends TestCase
         $this->assertEqualsWithDelta(0.0, $this->balance($this->gstReceivable), 0.001);
     }
 
+    public function test_payg_withholding_settles_its_liability_account(): void
+    {
+        // Withholding accrued (Cr 2210) with its bank side — the same
+        // single-liability netting, no receivable counterpart.
+        $this->postJournal(320, 2210, 800, now(), 'WITHHELD');
+        $bankBefore = $this->balance($this->bank);
+
+        $settlement = $this->settle(['type' => BasSettlement::TYPE_PAYG]);
+
+        $this->assertSame(BasSettlement::TYPE_PAYG, $settlement->type);
+        $this->assertSame(BasSettlement::DIRECTION_PAY, $settlement->direction);
+        $this->assertEqualsWithDelta(800.0, $settlement->net_amount, 0.001);
+        $this->assertEqualsWithDelta(0.0, $this->balance($this->paygWithholding), 0.001);
+        $this->assertEqualsWithDelta($bankBefore - 800.0, $this->balance($this->bank), 0.001);
+    }
+
+    public function test_an_income_tax_overpayment_settles_as_a_refund(): void
+    {
+        // A debit balance on 2240 is an overpayment — the single account
+        // plays the receivable role and the settlement refunds it.
+        $this->postJournal(2240, 320, 300, now(), 'OVERPAID');
+        $bankBefore = $this->balance($this->bank);
+
+        $settlement = $this->settle(['type' => BasSettlement::TYPE_INCOME_TAX]);
+
+        $this->assertSame(BasSettlement::TYPE_INCOME_TAX, $settlement->type);
+        $this->assertSame(BasSettlement::DIRECTION_REFUND, $settlement->direction);
+        $this->assertEqualsWithDelta(300.0, $settlement->bank_amount, 0.001);
+        $this->assertEqualsWithDelta(0.0, $this->balance($this->incomeTaxPayable), 0.001);
+        $this->assertEqualsWithDelta($bankBefore + 300.0, $this->balance($this->bank), 0.001);
+    }
+
+    public function test_positions_cover_every_settlement_type(): void
+    {
+        $this->collect(1000);
+        $this->paid(400);
+        $this->postJournal(320, 2210, 800, now(), 'WITHHELD');
+
+        $positions = $this->service->positions();
+
+        $this->assertSame(['gst', 'payg_withholding', 'income_tax'], array_keys($positions));
+        $this->assertEqualsWithDelta(600.0, $positions['gst']['net'], 0.001);
+        $this->assertEqualsWithDelta(800.0, $positions['payg_withholding']['payable'], 0.001);
+        $this->assertEqualsWithDelta(0.0, $positions['income_tax']['net'], 0.001);
+    }
+
+    public function test_an_unknown_settlement_type_is_refused(): void
+    {
+        $this->collect(500);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unknown settlement type');
+
+        $this->settle(['type' => 'stamp_duty']);
+    }
+
     public function test_a_bank_date_in_a_locked_period_is_refused(): void
     {
         $locked = now()->subMonth()->startOfMonth()->addDays(5);
@@ -263,6 +325,7 @@ class BasSettlementTest extends TestCase
 
         $response = $this->actingAs($this->admin())
             ->post('/bas-settlements', [
+                'type' => BasSettlement::TYPE_GST,
                 'as_at' => now()->toDateString(),
                 'settled_at' => now()->toDateString(),
                 'reference' => 'ATO receipt 123',
