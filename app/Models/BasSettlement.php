@@ -16,6 +16,18 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class BasSettlement extends Model
 {
+    public const TYPE_GST = 'gst';
+
+    public const TYPE_PAYG = 'payg_withholding';
+
+    public const TYPE_INCOME_TAX = 'income_tax';
+
+    public const TYPES = [
+        self::TYPE_GST,
+        self::TYPE_PAYG,
+        self::TYPE_INCOME_TAX,
+    ];
+
     public const DIRECTION_PAY = 'pay';
 
     public const DIRECTION_REFUND = 'refund';
@@ -24,6 +36,7 @@ class BasSettlement extends Model
 
     protected $fillable = [
         'entity_id',
+        'type',
         'as_at',
         'settled_at',
         'gst_payable',
@@ -69,10 +82,23 @@ class BasSettlement extends Model
     }
 
     /**
-     * "Covers GST to 30 Jun 2026" for report labels and narrations.
+     * Human label for a settlement type ("GST", "PAYG withholding",
+     * "income tax") — used in narrations, flashes and the screen.
+     */
+    public static function typeLabel(string $type): string
+    {
+        return match ($type) {
+            self::TYPE_PAYG => 'PAYG withholding',
+            self::TYPE_INCOME_TAX => 'income tax',
+            default => 'GST',
+        };
+    }
+
+    /**
+     * "GST to 30 Jun 2026" for report labels and narrations.
      */
     public function label(): string
     {
-        return 'GST to '.$this->as_at->format('d M Y');
+        return static::typeLabel($this->type ?: self::TYPE_GST).' to '.$this->as_at->format('d M Y');
     }
 }
