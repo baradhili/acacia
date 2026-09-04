@@ -7,6 +7,16 @@
 @endsection
 
 @section('content')
+    @if (session('success'))
+        <div class="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
+            {{ session('success') }}
+        </div>
+    @endif
+    @if (session('error'))
+        <div class="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            {{ session('error') }}
+        </div>
+    @endif
     <div class="bg-white rounded-lg shadow">
         <div class="p-6">
             <!-- Filters -->
@@ -86,6 +96,7 @@
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">1A GST on sales</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">1B GST on purchases</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Net GST</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lodgement</th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
@@ -103,6 +114,36 @@
                                         <span class="block text-xs font-normal {{ $q['net'] >= 0 ? 'text-gray-500' : 'text-indigo-500' }}">
                                             {{ $q['net'] >= 0 ? 'payable' : 'refundable' }}
                                         </span>
+                                    </td>
+                                    <td class="px-4 py-3 text-sm">
+                                        @if (isset($q['frozen_at']))
+                                            <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800"
+                                                title="Figures frozen at lodgement — later postings don't rewrite them">
+                                                Lodged {{ $q['frozen_at']->format('d M Y') }}
+                                            </span>
+                                            @hasanyrole('admin|accountant')
+                                                <form method="POST" action="{{ route('bas-statements.unfreeze', $q['frozen_id']) }}"
+                                                    onsubmit="return confirm('Unfreeze this quarter? Its figures will recompute from the ledger.')">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="text-xs text-red-600 hover:text-red-800 underline mt-1">Unfreeze</button>
+                                                </form>
+                                            @endhasanyrole
+                                        @elseif ($q['end']->lessThan(now()))
+                                            @hasanyrole('admin|accountant')
+                                                <form method="POST" action="{{ route('bas-statements.freeze') }}">
+                                                    @csrf
+                                                    <input type="hidden" name="fy" value="{{ $fyEnd }}">
+                                                    <input type="hidden" name="quarter" value="{{ $loop->index + 1 }}">
+                                                    <button type="submit" class="text-xs text-indigo-600 hover:text-indigo-800 underline"
+                                                        title="Capture this quarter's figures as lodged — they stop recomputing from the ledger">
+                                                        Freeze at lodgement
+                                                    </button>
+                                                </form>
+                                            @endhasanyrole
+                                        @else
+                                            <span class="text-xs text-gray-400">in progress</span>
+                                        @endif
                                     </td>
                                 </tr>
                             @endforeach
