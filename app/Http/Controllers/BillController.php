@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Bill;
 use App\Models\BillPayment;
+use App\Models\CompanyProfile;
 use App\Models\Project;
 use App\Models\Supplier;
 use App\Rules\NotInClosedPeriod;
 use App\Services\BillLifecycleService;
+use App\Services\IfrsPosting;
 use App\Services\PeriodLockService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -95,7 +97,7 @@ class BillController extends Controller
             'items.*.amortise_to_account_id' => 'nullable|integer|exists:ifrs_accounts,id',
             'paid_now' => 'nullable|boolean',
             'payment_date' => ['required_if:paid_now,1', 'nullable', 'date', new NotInClosedPeriod],
-            'payment_method' => 'required_if:paid_now,1|nullable|in:' . implode(',', array_keys(BillPayment::paymentMethods())),
+            'payment_method' => 'required_if:paid_now,1|nullable|in:'.implode(',', array_keys(BillPayment::paymentMethods())),
             'payment_reference' => 'nullable|string|max:255',
             // Receipts uploaded alongside a bill paid at entry
             'documents' => 'nullable|array',
@@ -119,14 +121,14 @@ class BillController extends Controller
                     'description' => $item['description'],
                     'quantity' => $item['quantity'],
                     'unit_price' => $item['unit_price'],
-                    'tax_rate' => (!empty($item['gst']) || !empty($item['gst_add'])) ? config('australian.gst.rate', 10) : 0,
+                    'tax_rate' => (! empty($item['gst']) || ! empty($item['gst_add'])) ? config('australian.gst.rate', 10) : 0,
                     // "Incl. GST" wins if both boxes are somehow submitted
-                    'gst_added' => empty($item['gst']) && !empty($item['gst_add']),
+                    'gst_added' => empty($item['gst']) && ! empty($item['gst_add']),
                     'discount_percent' => $item['discount_percent'] ?? 0,
                     'expense_account_id' => $item['expense_account_id'] ?? null,
-                    'is_prepaid' => !empty($item['is_prepaid']),
-                    'service_start' => !empty($item['is_prepaid']) ? $item['service_start'] : null,
-                    'service_end' => !empty($item['is_prepaid']) ? $item['service_end'] : null,
+                    'is_prepaid' => ! empty($item['is_prepaid']),
+                    'service_start' => ! empty($item['is_prepaid']) ? $item['service_start'] : null,
+                    'service_end' => ! empty($item['is_prepaid']) ? $item['service_end'] : null,
                     'amortise_to_account_id' => $item['amortise_to_account_id'] ?? null,
                     'sort_order' => $index,
                 ]);
@@ -141,7 +143,7 @@ class BillController extends Controller
             foreach ($request->file('documents', []) as $file) {
                 $bill->documents()->create([
                     'name' => $file->getClientOriginalName(),
-                    'file_path' => $file->store('uploads/' . now()->format('Y/m'), 'public'),
+                    'file_path' => $file->store('uploads/'.now()->format('Y/m'), 'public'),
                     'mime_type' => $file->getMimeType(),
                     'size' => $file->getSize(),
                     'uploaded_by' => Auth::id(),
@@ -150,7 +152,7 @@ class BillController extends Controller
 
             // Paid-at-entry: create the payment, allocate the full total and
             // post to the ledger in the same transaction.
-            if (!empty($validated['paid_now'])) {
+            if (! empty($validated['paid_now'])) {
                 $payment = BillPayment::createWithUniqueNumber([
                     'supplier_id' => $bill->supplier_id,
                     'paid_by' => Auth::id(),
@@ -178,7 +180,8 @@ class BillController extends Controller
                 ->with('success', 'Bill created successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->withInput()->with('error', 'Error creating bill: ' . $e->getMessage());
+
+            return back()->withInput()->with('error', 'Error creating bill: '.$e->getMessage());
         }
     }
 
@@ -188,13 +191,14 @@ class BillController extends Controller
         // "shared with other bills?" check in the Unapply action.
         $bill->load(['supplier', 'project', 'creator', 'items', 'allocations.billPayment.allocations', 'documents']);
         $paymentMethods = BillPayment::paymentMethods();
+        $companyProfile = CompanyProfile::forEntity(IfrsPosting::resolveEntity()?->id);
 
-        return view('bills.show', compact('bill', 'paymentMethods'));
+        return view('bills.show', compact('bill', 'paymentMethods', 'companyProfile'));
     }
 
     public function edit(Bill $bill)
     {
-        if (!$bill->canBeEdited()) {
+        if (! $bill->canBeEdited()) {
             return redirect()->route('bills.show', $bill)
                 ->with('error', 'Only unpaid bills can be edited. Remove the payments first (each removal reverses its ledger entry).');
         }
@@ -209,7 +213,7 @@ class BillController extends Controller
 
     public function update(Request $request, Bill $bill)
     {
-        if (!$bill->canBeEdited()) {
+        if (! $bill->canBeEdited()) {
             return redirect()->route('bills.show', $bill)
                 ->with('error', 'Only unpaid bills can be edited. Remove the payments first (each removal reverses its ledger entry).');
         }
@@ -273,14 +277,14 @@ class BillController extends Controller
                     'description' => $item['description'],
                     'quantity' => $item['quantity'],
                     'unit_price' => $item['unit_price'],
-                    'tax_rate' => (!empty($item['gst']) || !empty($item['gst_add'])) ? config('australian.gst.rate', 10) : 0,
+                    'tax_rate' => (! empty($item['gst']) || ! empty($item['gst_add'])) ? config('australian.gst.rate', 10) : 0,
                     // "Incl. GST" wins if both boxes are somehow submitted
-                    'gst_added' => empty($item['gst']) && !empty($item['gst_add']),
+                    'gst_added' => empty($item['gst']) && ! empty($item['gst_add']),
                     'discount_percent' => $item['discount_percent'] ?? 0,
                     'expense_account_id' => $item['expense_account_id'] ?? null,
-                    'is_prepaid' => !empty($item['is_prepaid']),
-                    'service_start' => !empty($item['is_prepaid']) ? $item['service_start'] : null,
-                    'service_end' => !empty($item['is_prepaid']) ? $item['service_end'] : null,
+                    'is_prepaid' => ! empty($item['is_prepaid']),
+                    'service_start' => ! empty($item['is_prepaid']) ? $item['service_start'] : null,
+                    'service_end' => ! empty($item['is_prepaid']) ? $item['service_end'] : null,
                     'amortise_to_account_id' => $item['amortise_to_account_id'] ?? null,
                     'sort_order' => $index,
                 ];
@@ -300,7 +304,8 @@ class BillController extends Controller
                 ->with('success', 'Bill updated successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->withInput()->with('error', 'Error updating bill: ' . $e->getMessage());
+
+            return back()->withInput()->with('error', 'Error updating bill: '.$e->getMessage());
         }
     }
 
@@ -318,13 +323,13 @@ class BillController extends Controller
             $voidedPayments = BillLifecycleService::deleteBill($bill);
         } catch (\Throwable $e) {
             return redirect()->route('bills.show', $bill)
-                ->with('error', 'Could not delete bill: ' . $e->getMessage());
+                ->with('error', 'Could not delete bill: '.$e->getMessage());
         }
 
         $message = 'Bill deleted successfully.';
         if ($voidedPayments > 0) {
-            $message .= " {$voidedPayments} payment" . ($voidedPayments === 1 ? ' was' : 's were')
-                . ' voided and the related ledger entries reversed.';
+            $message .= " {$voidedPayments} payment".($voidedPayments === 1 ? ' was' : 's were')
+                .' voided and the related ledger entries reversed.';
         }
 
         return redirect()->route('bills.index')->with('success', $message);
@@ -349,13 +354,13 @@ class BillController extends Controller
         $paymentDate = Carbon::parse($billPayment->payment_date);
         if ($lockService->isDateBlocked($paymentDate)) {
             return back()->with('error', $lockService->dateBlockedMessage($paymentDate)
-                . ' The payment cannot be unapplied while its year is closed.');
+                .' The payment cannot be unapplied while its year is closed.');
         }
 
         try {
             BillLifecycleService::unapplyPayment($bill, $billPayment);
         } catch (\Throwable $e) {
-            return back()->with('error', 'Could not remove payment: ' . $e->getMessage());
+            return back()->with('error', 'Could not remove payment: '.$e->getMessage());
         }
 
         return redirect()->route('bills.show', $bill)
@@ -378,7 +383,7 @@ class BillController extends Controller
 
     public function cancel(Bill $bill)
     {
-        if (!$bill->canBeCancelled()) {
+        if (! $bill->canBeCancelled()) {
             return back()->with('error', 'This bill cannot be cancelled.');
         }
 
@@ -400,9 +405,9 @@ class BillController extends Controller
 
         $amountDue = (float) $bill->amount_due;
         $validated = $request->validate([
-            'amount' => 'required|numeric|min:0.01|max:' . $amountDue,
+            'amount' => 'required|numeric|min:0.01|max:'.$amountDue,
             'payment_date' => ['required', 'date', new NotInClosedPeriod],
-            'payment_method' => 'required|in:' . implode(',', array_keys(BillPayment::paymentMethods())),
+            'payment_method' => 'required|in:'.implode(',', array_keys(BillPayment::paymentMethods())),
             'reference' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
         ]);
@@ -430,7 +435,8 @@ class BillController extends Controller
                 ->with('success', 'Payment recorded successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', 'Error recording payment: ' . $e->getMessage());
+
+            return back()->with('error', 'Error recording payment: '.$e->getMessage());
         }
     }
 }

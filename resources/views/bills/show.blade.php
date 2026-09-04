@@ -3,18 +3,23 @@
 @section('content')
 
     <div class="mb-6 flex justify-between items-center">
-        <div>
-            <h1 class="text-2xl font-bold text-gray-800">Bill {{ $bill->bill_number }}</h1>
-            <p class="text-gray-600">
-                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                    @if($bill->status === 'paid') bg-green-100 text-green-800
-                    @elseif($bill->status === 'overdue') bg-red-100 text-red-800
-                    @elseif($bill->status === 'partially_paid') bg-yellow-100 text-yellow-800
-                    @else bg-gray-100 text-gray-800
-                    @endif">
-                    {{ ucfirst(str_replace('_', ' ', $bill->status)) }}
-                </span>
-            </p>
+        <div class="flex items-center gap-4">
+            @if($logoUrl = $bill->supplier->getLogoUrlAttribute())
+                <img src="{{ $logoUrl }}" alt="Company logo" class="h-12 w-auto object-contain">
+            @endif
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">{{ $bill->bill_number }}</h1>
+                <p class="text-gray-600">
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                        @if($bill->status === 'paid') bg-green-100 text-green-800
+                        @elseif($bill->status === 'overdue') bg-red-100 text-red-800
+                        @elseif($bill->status === 'partially_paid') bg-yellow-100 text-yellow-800
+                        @else bg-gray-100 text-gray-800
+                        @endif">
+                        {{ ucfirst(str_replace('_', ' ', $bill->status)) }}
+                    </span>
+                </p>
+            </div>
         </div>
         <div class="flex gap-2">
             @if($bill->status === 'draft')
@@ -98,7 +103,7 @@
                             <th class="text-right py-2 text-xs font-medium text-gray-500 uppercase">Qty</th>
                             <th class="text-right py-2 text-xs font-medium text-gray-500 uppercase">Unit Price (as paid)</th>
                             <th class="text-right py-2 text-xs font-medium text-gray-500 uppercase">GST</th>
-                            <th class="text-left py-2 text-xs font-medium text-gray-500 uppercase">Account</th>
+                            <th class="text-center py-2 text-xs font-medium text-gray-500 uppercase">Account</th>
                             <th class="text-right py-2 text-xs font-medium text-gray-500 uppercase">Total</th>
                         </tr>
                     </thead>
@@ -125,7 +130,7 @@
                                         <span title="Amount is GST-inclusive; this portion was back-calculated">Incl. {{ $item->tax_rate }}%</span>
                                     @endif
                                 </td>
-                                <td class="py-3 text-sm text-gray-600">
+                                <td class="py-3 text-center text-sm text-gray-600">
                                     {{ $item->expenseAccount?->code ? $item->expenseAccount->code . ' — ' . $item->expenseAccount->name : '—' }}
                                 </td>
                                 <td class="py-3 text-right font-medium">${{ number_format($item->total, 2) }}</td>

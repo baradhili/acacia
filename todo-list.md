@@ -61,11 +61,17 @@
 
 - [ ] need to handle client who "reverse invoice" as in I fill their timesheet system and they send me a payment that is itemised like my time-based invoice timesheet
 
-- [ ] display the uploaded logo in the top left if it exists when viewing the bill record
+- [x] display the uploaded logo in the top left if it exists when viewing the bill record
 
-- [ ] use company logo that is uploaded on pdf invoice
+- [x] use company logo that is uploaded on pdf invoice
 
 - [ ] allow abn/acn/tfn to be display formatted in the way they normally are - also allow entry with the usual spaces
+
+- [ ] THINK ABOUT THIS - no need to enter both project and po project should have po
+
+- [ ] When Credit note is issued against an invoice - the invoice should no longer be marked overdue - also if invoice is cancelled then amount due should be zero dollars
+
+- [ ] Add "select all" for create invoice from time entries against time entries
 
 - [ ] refactor to ensure all users are created linked with an entity
 

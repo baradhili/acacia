@@ -195,7 +195,7 @@
                 @endif
             </div>
             <div class="header-right">
-                <div class="invoice-title">INVOICE</div>
+                <div class="invoice-title">TAX INVOICE</div>
                 <div class="invoice-number">{{ $invoice->invoice_number }}</div>
                 <div class="invoice-meta" style="margin-top: 20px;">
                     <p><strong>Issue Date:</strong> {{ $invoice->issue_date->format('d M Y') }}</p>
