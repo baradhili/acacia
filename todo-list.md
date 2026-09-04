@@ -1,3 +1,78 @@
+# Todo list
+
+- [ ] In `@app/Http/Controllers/BackupController.php`:
+Line 46: Update BackupService::runAndPrune() to acquire one shared
+cross-process atomic lock before running the complete backup-and-prune
+operation, including temporary/archive creation and pruning, and release it
+afterward. Return an explicit “backup already running” result when the lock is
+unavailable, then update BackupController::run() and CreateBackup::handle() to
+handle that result without proceeding as if the backup succeeded.
+
+- [ ] In `@app/Http/Controllers/BasSettlementController.php`:
+Around line 31-36: Update BasSettlementController::index to derive the default
+as-at date once, using the requested as_at when present or the latest completed
+quarter end otherwise, and reuse that value for service->positions(),
+positionAsAt, and defaultAsAt.
+
+- [ ] In `@app/Http/Controllers/ReportController.php`:
+Line 1073: Update unfreezeBasQuarter to verify the route-bound BasStatement
+belongs to the authenticated entity before deletion, preferably by loading it
+through the current entity relationship or enforcing the entity-scoped
+authorization policy. Preserve authorized same-entity behavior and add a feature
+test confirming a user cannot unfreeze another entity’s statement.
+
+- [ ] In `@app/Models/BackupSetting.php`:
+Around line 33-37: Update BackupSetting::current() to use a fixed singleton
+key and an atomic fetch-or-create operation, ensuring concurrent callers obtain
+or create the same persisted settings row before BackupService::runAndPrune()
+invokes recordSuccess(). Add a database uniqueness constraint for that key so
+only one BackupSetting row can exist.
+
+- [ ] In `@app/Services/BackupService.php`:
+Line 224: Replace the raw copy fallback in the backup flow with
+SQLite-consistent handling that includes or checkpoints WAL contents, such as
+reusing dumpSqliteStatements(), so committed data is preserved when VACUUM INTO
+fails.
+Line 60: Update the archive stamp generation in BackupService::runAndPrune()
+to include sufficient uniqueness beyond seconds, such as microseconds and a
+random suffix, so sequential runs cannot reuse database or file archive paths.
+
+- [ ] In `@app/Services/BasSettlementService.php`:
+Around line 259-269: Wrap the reverseTransaction call and the subsequent
+settlement forceFill/save operation in a single database transaction, preserving
+the existing reversal ID and timestamp updates so both ledger posting and
+settlement state commit or roll back together.
+Around line 249-264: In BasSettlementService::reverse, validate the
+settlement's settled_at date and settlement entity with the existing
+assertDatePostable() guard before calling IfrsPosting::reverseTransaction().
+Preserve the current reversal checks and posting flow, ensuring locked
+FiscalPeriod entries cannot be bypassed.
+
+- [ ] In `@docs/runbooks/backup-restore.md`:
+Around line 11-12: Update the backup table to list only MySQL and SQLite as
+supported database drivers, then revise the restore procedure to provide
+actionable commands for both SQLite archive formats: .sqlite.gz snapshots and
+.sql.gz textual dumps, while retaining the existing MySQL restore command for
+SQL archives.
+
+- [ ] shareholders - share held at what value? $10 for 1000
+
+- [ ] Need to handle clients who want timesheet reports for project by week sum
+
+- [ ] need to handle client who "reverse invoice" as in I fill their timesheet system and they send me a payment that is itemised like my time-based invoice timesheet
+
+- [ ] display the uploaded logo in the top left if it exists when viewing the bill record
+
+- [ ] use company logo that is uploaded on pdf invoice
+
+- [ ] allow abn/acn/tfn to be display formatted in the way they normally are - also allow entry with the usual spaces
+
+- [ ] refactor to ensure all users are created and linked with an entity
+
+- [ ] setting to prune transactions in closed years after x years (default 7 years)
+
+- [ ] allow bill and invoice adjustment items that might be negative. allow adjustments to subtotal and gst separately.
+
 - [x] Need an option in bills to "add GST" per line item as well - for suppliers who show "ex-GST" for line items and then calculate it at subtotal. Make it another checkbox
 
 - [x] For bills that are "already paid" at entry time - still need a method to attach documents
@@ -44,29 +119,13 @@
 
 - [x] Need to be able to set open balances for earlier fiscal years than this one
 
-- [ ] year end close - if there is not another admin/accountant - then pass the approval request to the user that raised it
-
-- [ ] shareholders - share held at what value? $10 for 1000
+- [x] year end close - if there is not another admin/accountant - then pass the approval request to the user that raised it
 
 - [x] Company details - add svg or png logo - failed as it errors with "Name field required" on logo upload validation. There is an existing name
-
-- [ ] Need to handle clients who want timesheet reports for project by week sum
-
-- [ ] need to handle client who "reverse invoice" as in I fill their timesheet system and they send me a payment that is itemised like my time-based invoice timesheet
-
-- [ ] display the uploaded logo if it exists when viewing the bill record
-
-- [ ] use company logo that is uploaded on pdf invoice
-
-- [ ] allow abn/acn/tfn to be display formatted in the way they normally are - also allow entry with the usual spaces
 
 - [x] update tax report: review .zcode/ato-company-tax/company-tax.md. create plan including branch. Only expect a single manual opening balance entry for a company (migration into this system). However need an admin process to "close" a financial year  (which should potentially move some ledger balances  and create opening balances for the subsequent financial year)  - so if I have entered an opening balance debit for current assets and a matching credit to equity then the correct output should show - (Sep 2026, branch feat/fy-close-opening-balances) Done. Opening sets are now superseding snapshots: the year-end close (the existing admin trial → approve → execute process) writes FY {year+1}'s opening balances from the closing position (one Balance row per balance-sheet account incl. the profit closed into Retained Earnings, dated the year end, reference FY-CLOSE-{year}-OB), so opening balances are entered by hand exactly once, at migration. Reports (trial balance, balance sheet, account statement, company tax item 8, trial close) read as-at positions via OpeningBalances::balanceAt() — the latest snapshot plus only post-snapshot ledger movement — so a migration set (debit current assets / credit equity) shows in item 8 D/E and the new supplementary equity reconciliation, and multiple sets can never double-count. The Opening Balances screen renders close-generated sets read-only (reopen the year to change); reopen() removes the generated set.
 
 - [x] Admin should have a backup button that backs up db and stored items with the usual backup things like backup frequency, number of backups kept. - (Sep 2026) Done. `backup:create` command (MySQL via mysqldump, SQLite via VACUUM INTO snapshot, both gzipped) + a tar.gz of the public storage disk land in {BACKUP_PATH}/db and /files (default storage/app/backups), then old archives are pruned per type. Frequency (daily/weekly/monthly) and backups-kept live in backup_settings and are managed on the Backups admin page (profile dropdown), which also lists archives and runs the command on demand; scheduled daily 04:00 with the command's internal due-check honouring the frequency. Runbook documents restore.
-
-- [ ] setting to prune transactions in closed years after x years (default 7 years)
-
-- [ ] allow bill and invoice adjustment items that might be negative. allow adjustments to subtotal and gst separately.
 
 - [x] company details - index wants resignation date - should be optional
 
@@ -86,3 +145,4 @@
 - [x] BAS settlement: settle PAYG withheld (2210) and income tax payable (2240) with the same netting recipe the GST settlement uses - (Sep 2026, branch feat/bas-settlements) Done. Settlements gained a type (gst / payg_withholding / income_tax): the single liability accounts play both netting roles, so a debit balance (an overpayment) settles as an ATO refund. Account codes configurable via `BAS_PAYG_ACCOUNT_CODE`/`BAS_INCOME_TAX_ACCOUNT_CODE`. The settlement screen shows all three unsettled positions and a type selector; journal narrations/references carry the type.
 
 - [x] BAS: freeze quarters at lodgement — per-quarter BAS records so a lodged quarter stops recomputing from live ledger data - (Sep 2026, branch feat/bas-settlements) Done. `bas_statements` rows snapshot a quarter's figures (G1/G10/G11/1A/1B/net) when an admin/accountant freezes it from the BAS report; buildBasStatement() prefers the frozen figures (including in the PDF/Excel exports and FY totals), so backdated postings can never rewrite a lodged BAS. Refreezing recaptures live figures, unfreezing returns the quarter to recomputation, and quarters that haven't ended can't be frozen.
+
