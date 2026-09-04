@@ -56,6 +56,27 @@ class CompanyProfile extends Model
         return null;
     }
 
+    /**
+     * The stored logo as a self-contained data URI for PDF rendering:
+     * dompdf loads embedded bytes reliably where an asset() URL would
+     * need remote-image access and a resolvable APP_URL (queued mail
+     * has neither guaranteed). Null when absent.
+     */
+    public function logoDataUri(): ?string
+    {
+        if (! $this->logo || ! Storage::disk('public')->exists($this->logo)) {
+            return null;
+        }
+
+        $mime = str_ends_with(strtolower($this->logo), '.png') ? 'image/png' : 'image/svg+xml';
+
+        return sprintf(
+            'data:%s;base64,%s',
+            $mime,
+            base64_encode(Storage::disk('public')->get($this->logo))
+        );
+    }
+
     public static function taxRateTypes(): array
     {
         return [

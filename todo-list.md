@@ -1,63 +1,63 @@
 # Todo list
 
 - [ ] In `@app/Http/Controllers/BackupController.php`:
-Line 46: Update BackupService::runAndPrune() to acquire one shared
-cross-process atomic lock before running the complete backup-and-prune
-operation, including temporary/archive creation and pruning, and release it
-afterward. Return an explicit “backup already running” result when the lock is
-unavailable, then update BackupController::run() and CreateBackup::handle() to
-handle that result without proceeding as if the backup succeeded.
+  Line 46: Update BackupService::runAndPrune() to acquire one shared
+  cross-process atomic lock before running the complete backup-and-prune
+  operation, including temporary/archive creation and pruning, and release it
+  afterward. Return an explicit “backup already running” result when the lock is
+  unavailable, then update BackupController::run() and CreateBackup::handle() to
+  handle that result without proceeding as if the backup succeeded.
 
 - [ ] In `@app/Http/Controllers/BasSettlementController.php`:
-Around line 31-36: Update BasSettlementController::index to derive the default
-as-at date once, using the requested as_at when present or the latest completed
-quarter end otherwise, and reuse that value for service->positions(),
-positionAsAt, and defaultAsAt.
+  Around line 31-36: Update BasSettlementController::index to derive the default
+  as-at date once, using the requested as_at when present or the latest completed
+  quarter end otherwise, and reuse that value for service->positions(),
+  positionAsAt, and defaultAsAt.
 
 - [ ] In `@app/Http/Controllers/ReportController.php`:
-Line 1073: Update unfreezeBasQuarter to verify the route-bound BasStatement
-belongs to the authenticated entity before deletion, preferably by loading it
-through the current entity relationship or enforcing the entity-scoped
-authorization policy. Preserve authorized same-entity behavior and add a feature
-test confirming a user cannot unfreeze another entity’s statement.
+  Line 1073: Update unfreezeBasQuarter to verify the route-bound BasStatement
+  belongs to the authenticated entity before deletion, preferably by loading it
+  through the current entity relationship or enforcing the entity-scoped
+  authorization policy. Preserve authorized same-entity behavior and add a feature
+  test confirming a user cannot unfreeze another entity’s statement.
 
 - [ ] In `@app/Models/BackupSetting.php`:
-Around line 33-37: Update BackupSetting::current() to use a fixed singleton
-key and an atomic fetch-or-create operation, ensuring concurrent callers obtain
-or create the same persisted settings row before BackupService::runAndPrune()
-invokes recordSuccess(). Add a database uniqueness constraint for that key so
-only one BackupSetting row can exist.
+  Around line 33-37: Update BackupSetting::current() to use a fixed singleton
+  key and an atomic fetch-or-create operation, ensuring concurrent callers obtain
+  or create the same persisted settings row before BackupService::runAndPrune()
+  invokes recordSuccess(). Add a database uniqueness constraint for that key so
+  only one BackupSetting row can exist.
 
 - [ ] In `@app/Services/BackupService.php`:
-Line 224: Replace the raw copy fallback in the backup flow with
-SQLite-consistent handling that includes or checkpoints WAL contents, such as
-reusing dumpSqliteStatements(), so committed data is preserved when VACUUM INTO
-fails.
-Line 60: Update the archive stamp generation in BackupService::runAndPrune()
-to include sufficient uniqueness beyond seconds, such as microseconds and a
-random suffix, so sequential runs cannot reuse database or file archive paths.
+  Line 224: Replace the raw copy fallback in the backup flow with
+  SQLite-consistent handling that includes or checkpoints WAL contents, such as
+  reusing dumpSqliteStatements(), so committed data is preserved when VACUUM INTO
+  fails.
+  Line 60: Update the archive stamp generation in BackupService::runAndPrune()
+  to include sufficient uniqueness beyond seconds, such as microseconds and a
+  random suffix, so sequential runs cannot reuse database or file archive paths.
 
 - [ ] In `@app/Services/BasSettlementService.php`:
-Around line 259-269: Wrap the reverseTransaction call and the subsequent
-settlement forceFill/save operation in a single database transaction, preserving
-the existing reversal ID and timestamp updates so both ledger posting and
-settlement state commit or roll back together.
-Around line 249-264: In BasSettlementService::reverse, validate the
-settlement's settled_at date and settlement entity with the existing
-assertDatePostable() guard before calling IfrsPosting::reverseTransaction().
-Preserve the current reversal checks and posting flow, ensuring locked
-FiscalPeriod entries cannot be bypassed.
+  Around line 259-269: Wrap the reverseTransaction call and the subsequent
+  settlement forceFill/save operation in a single database transaction, preserving
+  the existing reversal ID and timestamp updates so both ledger posting and
+  settlement state commit or roll back together.
+  Around line 249-264: In BasSettlementService::reverse, validate the
+  settlement's settled_at date and settlement entity with the existing
+  assertDatePostable() guard before calling IfrsPosting::reverseTransaction().
+  Preserve the current reversal checks and posting flow, ensuring locked
+  FiscalPeriod entries cannot be bypassed.
 
 - [ ] In `@docs/runbooks/backup-restore.md`:
-Around line 11-12: Update the backup table to list only MySQL and SQLite as
-supported database drivers, then revise the restore procedure to provide
-actionable commands for both SQLite archive formats: .sqlite.gz snapshots and
-.sql.gz textual dumps, while retaining the existing MySQL restore command for
-SQL archives.
+  Around line 11-12: Update the backup table to list only MySQL and SQLite as
+  supported database drivers, then revise the restore procedure to provide
+  actionable commands for both SQLite archive formats: .sqlite.gz snapshots and
+  .sql.gz textual dumps, while retaining the existing MySQL restore command for
+  SQL archives.
 
 - [ ] shareholders - share held at what value? $10 for 1000
 
-- [ ] Need to handle clients who want timesheet reports for project by week sum
+- [ ] Need to handle clients who want timesheet reports for project by month and week sum
 
 - [ ] need to handle client who "reverse invoice" as in I fill their timesheet system and they send me a payment that is itemised like my time-based invoice timesheet
 
@@ -67,7 +67,7 @@ SQL archives.
 
 - [ ] allow abn/acn/tfn to be display formatted in the way they normally are - also allow entry with the usual spaces
 
-- [ ] refactor to ensure all users are created and linked with an entity
+- [ ] refactor to ensure all users are created linked with an entity
 
 - [ ] setting to prune transactions in closed years after x years (default 7 years)
 
@@ -145,4 +145,3 @@ SQL archives.
 - [x] BAS settlement: settle PAYG withheld (2210) and income tax payable (2240) with the same netting recipe the GST settlement uses - (Sep 2026, branch feat/bas-settlements) Done. Settlements gained a type (gst / payg_withholding / income_tax): the single liability accounts play both netting roles, so a debit balance (an overpayment) settles as an ATO refund. Account codes configurable via `BAS_PAYG_ACCOUNT_CODE`/`BAS_INCOME_TAX_ACCOUNT_CODE`. The settlement screen shows all three unsettled positions and a type selector; journal narrations/references carry the type.
 
 - [x] BAS: freeze quarters at lodgement — per-quarter BAS records so a lodged quarter stops recomputing from live ledger data - (Sep 2026, branch feat/bas-settlements) Done. `bas_statements` rows snapshot a quarter's figures (G1/G10/G11/1A/1B/net) when an admin/accountant freezes it from the BAS report; buildBasStatement() prefers the frozen figures (including in the PDF/Excel exports and FY totals), so backdated postings can never rewrite a lodged BAS. Refreezing recaptures live figures, unfreezing returns the quarter to recomputation, and quarters that haven't ended can't be frozen.
-

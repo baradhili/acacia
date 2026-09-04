@@ -34,6 +34,10 @@
         .header-right {
             text-align: right;
         }
+        .company-logo {
+            height: 60px;
+            margin-bottom: 10px;
+        }
         .company-name {
             font-size: 24px;
             font-weight: bold;
@@ -159,6 +163,9 @@
     <div class="container">
         <div class="header">
             <div class="header-left">
+                @if($logo = $companyProfile->logoDataUri())
+                    <img src="{{ $logo }}" alt="{{ config('app.name') }} logo" class="company-logo">
+                @endif
                 <div class="company-name">{{ config('app.name', 'Your Company Name') }}</div>
                 <p>ABN: {{ config('australian.abn', 'XX XXX XXX XXX') }}</p>
                 <p>{{ config('australian.address', '123 Business Street') }}</p>

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Mail\InvoiceMail;
 use App\Models\Client;
+use App\Models\CompanyProfile;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Payment;
@@ -11,6 +12,7 @@ use App\Models\Project;
 use App\Models\PurchaseOrder;
 use App\Models\TimeEntry;
 use App\Rules\NotInClosedPeriod;
+use App\Services\IfrsPosting;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -598,8 +600,9 @@ class InvoiceController extends Controller
     public function pdf(Invoice $invoice)
     {
         $invoice->load(['client', 'project', 'items', 'purchaseOrder']);
+        $companyProfile = CompanyProfile::forEntity(IfrsPosting::resolveEntity()?->id);
 
-        return view('invoices.pdf', compact('invoice'));
+        return view('invoices.pdf', compact('invoice', 'companyProfile'));
     }
 
     /**
@@ -608,8 +611,9 @@ class InvoiceController extends Controller
     public function downloadPdf(Invoice $invoice)
     {
         $invoice->load(['client', 'project', 'items', 'purchaseOrder']);
+        $companyProfile = CompanyProfile::forEntity(IfrsPosting::resolveEntity()?->id);
 
-        $pdf = Pdf::loadView('invoices.pdf', compact('invoice'));
+        $pdf = Pdf::loadView('invoices.pdf', compact('invoice', 'companyProfile'));
         $pdf->setPaper('a4', 'portrait');
 
         return $pdf->download('invoice-'.$invoice->invoice_number.'.pdf');

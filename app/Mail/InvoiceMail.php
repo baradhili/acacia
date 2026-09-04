@@ -2,7 +2,9 @@
 
 namespace App\Mail;
 
+use App\Models\CompanyProfile;
 use App\Models\Invoice;
+use App\Services\IfrsPosting;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -51,6 +53,7 @@ class InvoiceMail extends Mailable
         // Generate PDF
         $pdf = Pdf::loadView('invoices.pdf', [
             'invoice' => $this->invoice->loadMissing(['client', 'project', 'items', 'purchaseOrder']),
+            'companyProfile' => CompanyProfile::forEntity(IfrsPosting::resolveEntity()?->id),
         ]);
 
         $filename = "Invoice-{$this->invoice->invoice_number}.pdf";
