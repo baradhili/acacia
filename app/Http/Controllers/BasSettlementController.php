@@ -7,6 +7,7 @@ use App\Services\BasSettlementService;
 use App\Services\IfrsPosting;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 /**
  * BAS settlements — recording the ATO payment (or refund) that nets
@@ -27,7 +28,7 @@ class BasSettlementController extends Controller
         $quarterEnds = $this->service->quarterEnds($entity);
 
         return view('bas-settlements.index', [
-            'position' => $this->service->position($asAt),
+            'positions' => $this->service->positions($asAt),
             'positionAsAt' => ($asAt ?? now())->toDateString(),
             'quarterEnds' => $quarterEnds,
             'defaultAsAt' => $quarterEnds !== []
@@ -42,6 +43,7 @@ class BasSettlementController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
+            'type' => ['required', Rule::in(BasSettlement::TYPES)],
             'as_at' => ['required', 'date'],
             'settled_at' => ['required', 'date'],
             'reference' => ['nullable', 'string', 'max:255'],
@@ -57,7 +59,8 @@ class BasSettlementController extends Controller
         }
 
         return redirect()->route('bas-settlements.index')->with('success', sprintf(
-            'Settlement recorded — GST to %s: payable $%s, receivable $%s, %s $%s.',
+            'Settlement recorded — %s to %s: payable $%s, receivable $%s, %s $%s.',
+            BasSettlement::typeLabel($settlement->type),
             $settlement->as_at->format('d M Y'),
             number_format($settlement->gst_payable, 2),
             number_format($settlement->gst_receivable, 2),
