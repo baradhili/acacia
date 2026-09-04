@@ -57,13 +57,11 @@
 
 - [ ] shareholders - share held at what value? $10 for 1000
 
+- [ ] Add handling for payroll - australian rules
+
 - [ ] Need to handle clients who want timesheet reports for project by month and week sum
 
 - [ ] need to handle client who "reverse invoice" as in I fill their timesheet system and they send me a payment that is itemised like my time-based invoice timesheet
-
-- [x] display the uploaded logo in the top left if it exists when viewing the bill record
-
-- [x] use company logo that is uploaded on pdf invoice
 
 - [ ] allow abn/acn/tfn to be display formatted in the way they normally are - also allow entry with the usual spaces
 
@@ -78,6 +76,8 @@
 - [ ] setting to prune transactions in closed years after x years (default 7 years)
 
 - [ ] allow bill and invoice adjustment items that might be negative. allow adjustments to subtotal and gst separately.
+  
+  
 
 - [x] Need an option in bills to "add GST" per line item as well - for suppliers who show "ex-GST" for line items and then calculate it at subtotal. Make it another checkbox
 
@@ -151,3 +151,7 @@
 - [x] BAS settlement: settle PAYG withheld (2210) and income tax payable (2240) with the same netting recipe the GST settlement uses - (Sep 2026, branch feat/bas-settlements) Done. Settlements gained a type (gst / payg_withholding / income_tax): the single liability accounts play both netting roles, so a debit balance (an overpayment) settles as an ATO refund. Account codes configurable via `BAS_PAYG_ACCOUNT_CODE`/`BAS_INCOME_TAX_ACCOUNT_CODE`. The settlement screen shows all three unsettled positions and a type selector; journal narrations/references carry the type.
 
 - [x] BAS: freeze quarters at lodgement — per-quarter BAS records so a lodged quarter stops recomputing from live ledger data - (Sep 2026, branch feat/bas-settlements) Done. `bas_statements` rows snapshot a quarter's figures (G1/G10/G11/1A/1B/net) when an admin/accountant freezes it from the BAS report; buildBasStatement() prefers the frozen figures (including in the PDF/Excel exports and FY totals), so backdated postings can never rewrite a lodged BAS. Refreezing recaptures live figures, unfreezing returns the quarter to recomputation, and quarters that haven't ended can't be frozen.
+
+- [x] display the uploaded logo in the top left if it exists when viewing the bill record
+
+- [x] use company logo that is uploaded on pdf invoice
