@@ -418,6 +418,17 @@
             </svg>
             BAS (GST)
         </a>
+        @hasanyrole('admin|accountant')
+            <a href="{{ route('bas-settlements.index') }}"
+                class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('bas-settlements.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z">
+                    </path>
+                </svg>
+                BAS Settlements
+            </a>
+        @endhasanyrole
         <a href="{{ route('reports.company-tax') }}"
             class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('reports.company-tax') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
             <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

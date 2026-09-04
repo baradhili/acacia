@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Exports\AccountStatementExport;
 use App\Exports\BasExport;
 use App\Exports\CompanyTaxExport;
+use App\Models\BasStatement;
 use App\Models\Bill;
 use App\Models\BillItem;
 use App\Models\BillPayment;
@@ -1019,6 +1020,67 @@ class ReportController extends Controller
     }
 
     /**
+     * Freeze a BAS quarter at lodgement: capture the report's live
+     * figures for that quarter so later backdated postings can't
+     * rewrite a lodged BAS. Freezing again recaptures the live figures
+     * (use unfreeze to return to recomputation). Admin/accountant only
+     * (route middleware).
+     */
+    public function freezeBasQuarter(Request $request)
+    {
+        $validated = $request->validate([
+            'fy' => ['required', 'integer'],
+            'quarter' => ['required', 'integer', 'min:1', 'max:4'],
+        ]);
+
+        $statement = $this->buildBasStatement($validated['fy'], $validated['quarter']);
+        $quarter = $statement['quarters'][$validated['quarter'] - 1] ?? null;
+        abort_unless((bool) $quarter, 404, 'Unknown BAS quarter.');
+
+        if ($quarter['end']->greaterThan(now())) {
+            return redirect()->route('reports.bas', ['fy' => $validated['fy']])
+                ->with('error', sprintf('Q%d has not ended yet — nothing to lodge.', $validated['quarter']));
+        }
+
+        BasStatement::updateOrCreate(
+            [
+                'entity_id' => $this->ifrsEntity()->id,
+                'fy_end' => $validated['fy'],
+                'quarter' => $validated['quarter'],
+            ],
+            [
+                'period_start' => $quarter['start']->toDateString(),
+                'period_end' => $quarter['end']->toDateString(),
+                'g1' => $quarter['g1'],
+                'g10' => $quarter['g10'],
+                'g11' => $quarter['g11'],
+                'gst_sales' => $quarter['gst_sales'],
+                'gst_purchases' => $quarter['gst_purchases'],
+                'net' => $quarter['net'],
+                'lodged_at' => now(),
+                'lodged_by' => $request->user()->id,
+            ],
+        );
+
+        return redirect()->route('reports.bas', ['fy' => $validated['fy']])
+            ->with('success', sprintf('Q%d frozen at lodgement — its figures no longer recompute from the ledger.', $validated['quarter']));
+    }
+
+    /**
+     * Unfreeze a lodged quarter — delete the frozen record and return
+     * the quarter to live recomputation. Admin/accountant only.
+     */
+    public function unfreezeBasQuarter(BasStatement $statement)
+    {
+        $fyEnd = $statement->fy_end;
+        $label = $statement->label();
+        $statement->delete();
+
+        return redirect()->route('reports.bas', ['fy' => $fyEnd])
+            ->with('success', "{$label} unfrozen — the quarter recomputes from the ledger again.");
+    }
+
+    /**
      * Quarterly BAS figures for the financial year ending 30 June
      * $fyEnd, on the cash basis the ledger keeps: G1 is posted client
      * payments (GST-inclusive, refunds netting via negative amounts),
@@ -1030,7 +1092,7 @@ class ReportController extends Controller
      * payments count; unposted ones appear once ifrs:post-payments
      * backfills them.
      */
-    protected function buildBasStatement(int $fyEnd): array
+    protected function buildBasStatement(int $fyEnd, ?int $withoutFrozenQuarter = null): array
     {
         // FY boundaries from the entity's year_start ($fyEnd is the FY's
         // ending calendar year; the FY label is one less). Identical to
@@ -1113,6 +1175,28 @@ class ReportController extends Controller
 
         foreach ($quarters as &$q) {
             $q['net'] = $q['gst_sales'] - $q['gst_purchases'];
+        }
+        unset($q);
+
+        // A quarter frozen at lodgement keeps its lodged figures: the
+        // BAS was computed and sent with them, so backdated postings
+        // must not rewrite it. Totals below pick the frozen values up.
+        $frozen = BasStatement::where('entity_id', $entity->id)
+            ->where('fy_end', $fyEnd)
+            ->get()
+            ->keyBy('quarter');
+
+        foreach ($quarters as $i => &$q) {
+            if ($withoutFrozenQuarter === $i + 1) {
+                continue; // freezing (again) recaptures live figures
+            }
+
+            if (($statement = $frozen->get($i + 1)) !== null) {
+                $q = array_merge($q, $statement->frozenFigures(), [
+                    'frozen_at' => $statement->lodged_at,
+                    'frozen_id' => $statement->id,
+                ]);
+            }
         }
         unset($q);
 

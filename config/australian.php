@@ -2,7 +2,7 @@
 
 /**
  * Australian Accounting Configuration
- * 
+ *
  * Configuration specific to Australian professional services companies
  */
 
@@ -130,6 +130,16 @@ return [
     'bas' => [
         'reporting_frequency' => env('BAS_REPORTING_FREQUENCY', 'quarterly'),
         'installment_rate' => env('BAS_INSTALLMENT_RATE', null),
+
+        // Operating bank account (seeded code 320) that settlement
+        // journals post against — the same account dividend payments use.
+        'bank_account_code' => env('BAS_BANK_ACCOUNT_CODE', 320),
+
+        // Single-liability settlement types (same netting recipe as GST,
+        // both roles played by the one account — a debit balance is an
+        // overpayment refunded by the ATO).
+        'payg_account_code' => env('BAS_PAYG_ACCOUNT_CODE', 2210),
+        'income_tax_account_code' => env('BAS_INCOME_TAX_ACCOUNT_CODE', 2240),
     ],
 
     /*

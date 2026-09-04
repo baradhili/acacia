@@ -116,12 +116,12 @@ class IfrsPosting
             self::resolveEntity();
 
             $original = Transaction::with('lineItems.appliedVats.vat')->find($transactionId);
-            if (!$original) {
+            if (! $original) {
                 throw new \RuntimeException("IFRS transaction {$transactionId} not found for reversal.");
             }
 
             $entity = Entity::find($original->entity_id);
-            if (!$entity) {
+            if (! $entity) {
                 throw new \RuntimeException("IFRS entity {$original->entity_id} not found for reversal of transaction {$transactionId}.");
             }
 
@@ -130,8 +130,14 @@ class IfrsPosting
             $reversal = new JournalEntry([
                 'transaction_date' => $original->transaction_date,
                 'account_id' => $original->account_id,
-                'credited' => !$original->credited,
+                'credited' => ! $original->credited,
                 'entity_id' => $original->entity_id,
+                // Carried explicitly: addLineItem()'s single-currency
+                // check runs before save() would default it from the main
+                // account, so a bank line item on the reversal would
+                // otherwise fail with InvalidCurrency (bank was only ever
+                // the MAIN account until BAS settlements used it as a line).
+                'currency_id' => $original->currency_id,
                 'narration' => $narration,
                 'reference' => $reference,
             ]);
@@ -145,6 +151,7 @@ class IfrsPosting
                     'amount' => (float) $line->amount,
                     'quantity' => (float) $line->quantity,
                     'vat_inclusive' => $line->vat_inclusive,
+                    'currency_id' => $line->currency_id,
                     'entity_id' => $original->entity_id,
                 ]);
 
@@ -173,6 +180,7 @@ class IfrsPosting
             if ($throw) {
                 throw $e;
             }
+
             return null;
         }
     }

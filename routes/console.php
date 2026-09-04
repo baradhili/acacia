@@ -58,3 +58,11 @@ Schedule::command('dividends:send-statements')
     ->dailyAt('09:30')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/dividend-statements.log'));
+
+// Back up the database and stored files. Scheduled daily; the command's
+// internal due-check honours the admin's weekly/monthly frequency, so
+// cached routes can never desync the schedule from the settings.
+Schedule::command('backup:create')
+    ->dailyAt('04:00')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/backups.log'));

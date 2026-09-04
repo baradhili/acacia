@@ -77,6 +77,12 @@
                     No GST payable or refundable
                 @endif
             </p>
+            @hasanyrole('admin|accountant')
+                <a href="{{ route('bas-settlements.index') }}"
+                    class="inline-block mt-2 text-sm text-indigo-700 underline hover:text-indigo-900">
+                    Record the settlement →
+                </a>
+            @endhasanyrole
         </div>
 
         <div class="mt-6 text-sm text-gray-500">

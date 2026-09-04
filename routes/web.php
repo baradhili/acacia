@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\AdministrationController;
 use App\Http\Controllers\Api\WidgetPreferenceController;
+use App\Http\Controllers\BackupController;
+use App\Http\Controllers\BasSettlementController;
 use App\Http\Controllers\BillController;
 use App\Http\Controllers\BillPaymentController;
 use App\Http\Controllers\ChartOfAccountsController;
@@ -64,6 +66,13 @@ Route::middleware('auth')->group(function () {
         Route::put('/administration/open-year', [AdministrationController::class, 'updateOpenYear'])->name('administration.open-year.update');
     });
 
+    // Backups (admin only) — run backup:create on demand, manage its schedule
+    Route::middleware('role:admin')->group(function () {
+        Route::get('/backups', [BackupController::class, 'index'])->name('backups.index');
+        Route::post('/backups/run', [BackupController::class, 'run'])->name('backups.run');
+        Route::put('/backups/settings', [BackupController::class, 'update'])->name('backups.settings.update');
+    });
+
     // Opening balances (admin or accountant)
     Route::middleware('role:admin|accountant')->group(function () {
         Route::get('/opening-balances', [OpeningBalanceController::class, 'index'])->name('opening-balances.index');
@@ -101,6 +110,16 @@ Route::middleware('auth')->group(function () {
         Route::post('/shareholders/{shareholder}/shareholdings/{shareholding}/cancel', [ShareholderController::class, 'cancelShareholding'])->name('shareholders.shareholdings.cancel');
 
         Route::resource('share-classes', ShareClassController::class)->except('show');
+
+        // BAS settlements — ATO payment/refund that nets GST Payable/Receivable
+        Route::get('/bas-settlements', [BasSettlementController::class, 'index'])->name('bas-settlements.index');
+        Route::post('/bas-settlements', [BasSettlementController::class, 'store'])->name('bas-settlements.store');
+        Route::post('/bas-settlements/{settlement}/reverse', [BasSettlementController::class, 'reverse'])->name('bas-settlements.reverse');
+
+        // BAS lodgement — freeze a quarter's figures so a lodged BAS
+        // never recomputes from live ledger data
+        Route::post('/bas-statements/freeze', [ReportController::class, 'freezeBasQuarter'])->name('bas-statements.freeze');
+        Route::delete('/bas-statements/{statement}/unfreeze', [ReportController::class, 'unfreezeBasQuarter'])->name('bas-statements.unfreeze');
 
         Route::get('/franking-account', [FrankingAccountController::class, 'index'])->name('franking-account.index');
         Route::post('/franking-account', [FrankingAccountController::class, 'store'])->name('franking-account.store');
