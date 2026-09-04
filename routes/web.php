@@ -116,6 +116,11 @@ Route::middleware('auth')->group(function () {
         Route::post('/bas-settlements', [BasSettlementController::class, 'store'])->name('bas-settlements.store');
         Route::post('/bas-settlements/{settlement}/reverse', [BasSettlementController::class, 'reverse'])->name('bas-settlements.reverse');
 
+        // BAS lodgement — freeze a quarter's figures so a lodged BAS
+        // never recomputes from live ledger data
+        Route::post('/bas-statements/freeze', [ReportController::class, 'freezeBasQuarter'])->name('bas-statements.freeze');
+        Route::delete('/bas-statements/{statement}/unfreeze', [ReportController::class, 'unfreezeBasQuarter'])->name('bas-statements.unfreeze');
+
         Route::get('/franking-account', [FrankingAccountController::class, 'index'])->name('franking-account.index');
         Route::post('/franking-account', [FrankingAccountController::class, 'store'])->name('franking-account.store');
         Route::delete('/franking-account/{entry}', [FrankingAccountController::class, 'destroy'])->name('franking-account.destroy');
