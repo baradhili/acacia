@@ -238,6 +238,77 @@ class ReportController extends Controller
     }
 
     /**
+     * Client-facing timesheet report for a project: the week-by-week
+     * and month-by-month sums clients ask for, per project (filterable
+     * to one project or one client's projects). Weeks start Monday
+     * (the timesheet grid's convention).
+     */
+    public function projectTimesheet(Request $request)
+    {
+        $startDate = $request->get('start_date')
+            ? Carbon::parse($request->start_date)->startOfDay()
+            : now()->startOfYear();
+
+        $endDate = $request->get('end_date')
+            ? Carbon::parse($request->end_date)->endOfDay()
+            : now()->endOfDay();
+
+        $projectId = $request->get('project_id');
+        $clientId = $request->get('client_id');
+
+        $entries = TimeEntry::with(['project.client', 'client', 'user'])
+            ->whereBetween('entry_date', [$startDate->toDateString(), $endDate->toDateString()])
+            ->approved()
+            ->when($projectId, fn ($q) => $q->where('project_id', $projectId))
+            ->when($clientId, fn ($q) => $q->where('client_id', $clientId))
+            ->whereNotNull('project_id')
+            ->get();
+
+        $byProject = $entries->groupBy('project_id')
+            ->map(function ($projectEntries) {
+                $byWeek = $projectEntries
+                    ->groupBy(fn ($e) => $e->entry_date->copy()->startOfWeek()->format('Y-m-d'))
+                    ->map(fn ($weekEntries, $weekStart) => [
+                        'label' => Carbon::parse($weekStart)->format('d M Y'),
+                        'hours' => (float) $weekEntries->sum('hours'),
+                        'amount' => (float) $weekEntries->sum('total'),
+                    ])
+                    ->sortKeys();
+
+                $byMonth = $projectEntries
+                    ->groupBy(fn ($e) => $e->entry_date->format('Y-m'))
+                    ->map(fn ($monthEntries, $ym) => [
+                        'label' => Carbon::parse($ym.'-01')->format('M Y'),
+                        'hours' => (float) $monthEntries->sum('hours'),
+                        'amount' => (float) $monthEntries->sum('total'),
+                    ])
+                    ->sortKeys();
+
+                return [
+                    'project' => $projectEntries->first()->project,
+                    'by_week' => $byWeek->values(),
+                    'by_month' => $byMonth->values(),
+                    'total_hours' => (float) $projectEntries->sum('hours'),
+                    'total_amount' => (float) $projectEntries->sum('total'),
+                ];
+            })
+            ->sortBy(fn ($row) => $row['project']?->name)
+            ->values();
+
+        return view('reports.project-timesheet', [
+            'byProject' => $byProject,
+            'projects' => Project::orderBy('name')->pluck('name', 'id'),
+            'clients' => Client::orderBy('name')->pluck('name', 'id'),
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'projectId' => $projectId,
+            'clientId' => $clientId,
+            'totalHours' => (float) $entries->sum('hours'),
+            'totalAmount' => (float) $entries->sum('total'),
+        ]);
+    }
+
+    /**
      * Financial Reports
      */
     /**

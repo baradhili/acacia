@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Models\Client;
 use App\Models\Invoice;
-use App\Models\InvoiceItem;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\User;
@@ -18,8 +17,11 @@ class ReportTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected User $staff;
+
     protected Client $client;
+
     protected Project $project;
 
     protected function setUp(): void
@@ -322,5 +324,53 @@ class ReportTest extends TestCase
 
         $filtered->assertStatus(200);
         $filtered->assertSee($this->client->name);
+    }
+
+    public function test_project_timesheet_sums_hours_by_week_and_month(): void
+    {
+        // Two January 2024 weeks (Mondays 8th and 15th) and one
+        // February entry — three distinct weeks across two months.
+        foreach (['2024-01-08', '2024-01-10', '2024-01-15', '2024-02-05'] as $date) {
+            TimeEntry::create([
+                'user_id' => $this->staff->id,
+                'project_id' => $this->project->id,
+                'client_id' => $this->client->id,
+                'entry_date' => $date,
+                'hours' => 5,
+                'rate' => 100,
+                'billable' => true,
+                'status' => TimeEntry::STATUS_APPROVED,
+            ]);
+        }
+
+        $response = $this->actingAs($this->user)->get(route('reports.project-timesheet', [
+            'start_date' => '2024-01-01',
+            'end_date' => '2024-02-29',
+        ]));
+
+        $response->assertStatus(200);
+        $response->assertSee('By week');
+        $response->assertSee('By month');
+        $response->assertSee('08 Jan 2024'); // week-of labels
+        $response->assertSee('15 Jan 2024');
+        $response->assertSee('05 Feb 2024');
+        $response->assertSee('Jan 2024');    // month rows
+        $response->assertSee('Feb 2024');
+        $response->assertSee('20.00 hours'); // grand total across 4 × 5h entries
+
+        // Week sums: 10.00 in each January week, 5.00 in February's.
+        $response->assertSee('<td class="py-2 text-right">10.00</td>', false);
+        $response->assertSee('<td class="py-2 text-right">5.00</td>', false);
+
+        // Filtering to a different client hides the project entirely.
+        $other = Client::factory()->create();
+        $filtered = $this->get(route('reports.project-timesheet', [
+            'start_date' => '2024-01-01',
+            'end_date' => '2024-02-29',
+            'client_id' => $other->id,
+        ]));
+
+        $filtered->assertStatus(200);
+        $filtered->assertSee('No approved project time entries');
     }
 }

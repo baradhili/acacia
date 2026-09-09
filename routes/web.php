@@ -268,6 +268,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/time-by-client', [ReportController::class, 'timeByClient'])->name('reports.time-by-client');
     Route::get('/reports/time-by-staff', [ReportController::class, 'timeByStaff'])->name('reports.time-by-staff');
     Route::get('/reports/time-by-project', [ReportController::class, 'timeByProject'])->name('reports.time-by-project');
+    Route::get('/reports/project-timesheet', [ReportController::class, 'projectTimesheet'])->name('reports.project-timesheet');
 
     // Financial Reports
     Route::get('/reports/trial-balance', [ReportController::class, 'trialBalance'])->name('reports.trial-balance');

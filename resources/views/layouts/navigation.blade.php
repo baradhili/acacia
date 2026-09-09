@@ -426,6 +426,15 @@
             </svg>
             Time by Project
         </a>
+        <a href="{{ route('reports.project-timesheet') }}"
+            class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('reports.project-timesheet') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z">
+                </path>
+            </svg>
+            Project Timesheet
+        </a>
         <a href="{{ route('projects.index') }}"
             class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('projects.profitability') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
             <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
