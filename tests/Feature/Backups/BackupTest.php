@@ -6,6 +6,7 @@ use App\Models\BackupSetting;
 use App\Models\User;
 use App\Services\BackupService;
 use Carbon\Carbon;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
@@ -96,6 +97,36 @@ class BackupTest extends TestCase
         $this->assertNotEmpty(glob($this->backupPath.'/db/*.gz'));
         $this->assertNotEmpty(glob($this->backupPath.'/files/*.tar.gz'));
         $this->assertNotNull(BackupSetting::query()->first()->last_backup_at);
+    }
+
+    public function test_current_fetch_or_creates_one_singleton_row(): void
+    {
+        $first = BackupSetting::current();
+
+        $this->assertTrue($first->exists);
+        $this->assertSame(BackupSetting::DEFAULT_FREQUENCY, $first->frequency);
+        $this->assertSame(BackupSetting::DEFAULT_RETENTION, $first->retention_count);
+
+        // Every caller shares the same persisted row.
+        $this->assertSame($first->id, BackupSetting::current()->id);
+        $this->assertDatabaseCount('backup_settings', 1);
+    }
+
+    public function test_a_second_singleton_row_is_refused_by_the_unique_index(): void
+    {
+        BackupSetting::current();
+
+        $this->expectException(UniqueConstraintViolationException::class);
+
+        // Bypasses Eloquent on purpose: the index is the cross-process
+        // guard current()'s fetch-or-create races against.
+        BackupSetting::query()->insert([
+            'singleton_key' => BackupSetting::SINGLETON_KEY,
+            'frequency' => 'daily',
+            'retention_count' => 30,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     public function test_overlapping_runs_report_already_running_instead_of_backing_up(): void

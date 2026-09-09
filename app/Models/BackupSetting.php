@@ -3,11 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\UniqueConstraintViolationException;
 
 /**
- * Instance-wide backup schedule settings for `backup:create`. One row,
- * created lazily: until an admin saves a change, BackupSetting::current()
- * hands out the code defaults below.
+ * Instance-wide backup schedule settings for `backup:create`. Exactly
+ * one persisted row, keyed by SINGLETON_KEY under a unique index:
+ * BackupSetting::current() fetch-or-creates it atomically so the
+ * scheduled command and the admin page always share the same row.
  */
 class BackupSetting extends Model
 {
@@ -16,6 +18,9 @@ class BackupSetting extends Model
     public const DEFAULT_FREQUENCY = 'daily';
 
     public const DEFAULT_RETENTION = 30;
+
+    /** The only value singleton_key ever holds — the index is the guard. */
+    public const SINGLETON_KEY = 'default';
 
     protected $fillable = [
         'frequency',
@@ -30,11 +35,19 @@ class BackupSetting extends Model
 
     public static function current(): self
     {
-        return static::query()->first()
-            ?? new static([
-                'frequency' => static::DEFAULT_FREQUENCY,
-                'retention_count' => static::DEFAULT_RETENTION,
-            ]);
+        try {
+            return static::query()->firstOrCreate(
+                ['singleton_key' => static::SINGLETON_KEY],
+                [
+                    'frequency' => static::DEFAULT_FREQUENCY,
+                    'retention_count' => static::DEFAULT_RETENTION,
+                ],
+            );
+        } catch (UniqueConstraintViolationException) {
+            // A concurrent caller won the insert race — the unique
+            // index guarantees their row is the one to read.
+            return static::query()->where('singleton_key', static::SINGLETON_KEY)->firstOrFail();
+        }
     }
 
     /**

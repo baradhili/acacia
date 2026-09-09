@@ -39,12 +39,18 @@
     Same-entity unfreezing is unchanged. Covered by
     BasStatementFreezeTest::test_another_entitys_statement_cannot_be_unfrozen.
 
-- [ ] In `@app/Models/BackupSetting.php`:
+- [x] In `@app/Models/BackupSetting.php`:
   Around line 33-37: Update BackupSetting::current() to use a fixed singleton
   key and an atomic fetch-or-create operation, ensuring concurrent callers obtain
   or create the same persisted settings row before BackupService::runAndPrune()
   invokes recordSuccess(). Add a database uniqueness constraint for that key so
   only one BackupSetting row can exist.
+  - (Sep 2026) Done. current() now firstOrCreate()s on a fixed
+    `singleton_key = 'default'`; concurrent first callers race on a unique index
+    (migration 2026_09_09_000001, which also collapses any rows the old
+    first()-wins race left), the loser re-reads the winner's row via the
+    UniqueConstraintViolationException catch, and recordSuccess() always stamps a
+    persisted row. Covered by the two new BackupTest singleton tests.
 
 - [ ] In `@app/Services/BackupService.php`:
   Line 224: Replace the raw copy fallback in the backup flow with
