@@ -129,6 +129,23 @@ class BackupTest extends TestCase
         ]);
     }
 
+    public function test_sequential_runs_in_the_same_second_never_reuse_archive_paths(): void
+    {
+        $this->travelTo(now());
+
+        try {
+            $this->backups->run();
+            $this->backups->run();
+        } finally {
+            $this->travelBack();
+        }
+
+        // A seconds-only stamp would have made the second run overwrite
+        // the first (gzip -f on the same path).
+        $this->assertCount(2, glob($this->backupPath.'/db/*.gz'));
+        $this->assertCount(2, glob($this->backupPath.'/files/*.tar.gz'));
+    }
+
     public function test_overlapping_runs_report_already_running_instead_of_backing_up(): void
     {
         // Held by "another process": same shared lock key, different owner.

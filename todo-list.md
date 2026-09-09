@@ -52,7 +52,7 @@
     UniqueConstraintViolationException catch, and recordSuccess() always stamps a
     persisted row. Covered by the two new BackupTest singleton tests.
 
-- [ ] In `@app/Services/BackupService.php`:
+- [x] In `@app/Services/BackupService.php`:
   Line 224: Replace the raw copy fallback in the backup flow with
   SQLite-consistent handling that includes or checkpoints WAL contents, such as
   reusing dumpSqliteStatements(), so committed data is preserved when VACUUM INTO
@@ -60,6 +60,15 @@
   Line 60: Update the archive stamp generation in BackupService::runAndPrune()
   to include sufficient uniqueness beyond seconds, such as microseconds and a
   random suffix, so sequential runs cannot reuse database or file archive paths.
+  - (Sep 2026) Done. When VACUUM INTO cannot run (e.g. inside a transaction) the
+    fallback is now always dumpSqliteStatements() — it reads through the live
+    connection so committed rows still in the WAL are captured; the raw
+    file copy (which missed WAL contents and could copy torn pages) is gone.
+    The archive stamp gained milliseconds and a random hex suffix
+    (`Ymd_His_v` + 6 hex chars) while keeping the sortable Ymd_His prefix.
+    Covered by test_sequential_runs_in_the_same_second_never_reuse_archive_paths
+    (time frozen so both runs share one second); the dump fallback runs in every
+    backup-creating test since tests execute inside a transaction.
 
 - [ ] In `@app/Services/BasSettlementService.php`:
   Around line 259-269: Wrap the reverseTransaction call and the subsequent

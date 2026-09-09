@@ -88,7 +88,12 @@ class BackupService
     public function run(): array
     {
         $base = rtrim((string) config('backups.path'), '/');
-        $stamp = now()->format('Ymd_His');
+
+        // Seconds alone are not unique: sequential runs (or a manual run
+        // racing the scheduler) would otherwise land on the same archive
+        // paths, so milliseconds and a random suffix widen the stamp
+        // while keeping the Ymd_His prefix sortable.
+        $stamp = now()->format('Ymd_His_v').'_'.bin2hex(random_bytes(3));
 
         return [
             'db' => $this->dumpDatabase($base.'/db', $stamp),
@@ -242,17 +247,16 @@ class BackupService
 
         if ($database === ':memory:' || is_file($database)) {
             // A binary snapshot via VACUUM INTO (consistent even while
-            // the database is in use) is preferred, with a plain copy
-            // and a textual dump as fallbacks — VACUUM cannot run
-            // inside a transaction, e.g. in tests.
+            // the database is in use) is preferred. When it cannot run
+            // (VACUUM is refused inside a transaction, e.g. in tests),
+            // fall back to the textual dump rather than a raw file
+            // copy: the dump reads through the live connection, so it
+            // includes committed data still sitting in the WAL, which
+            // copy() would miss.
             try {
                 DB::statement($this->vacuumInto($snapshot));
             } catch (\Throwable) {
-                if ($database === ':memory:') {
-                    return $this->gzip($this->dumpSqliteStatements($dir, $prefix, $stamp));
-                }
-
-                copy($database, $snapshot);
+                return $this->gzip($this->dumpSqliteStatements($dir, $prefix, $stamp));
             }
         } else {
             throw new \RuntimeException("SQLite database file not found: {$database}");
