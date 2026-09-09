@@ -55,9 +55,17 @@
   .sql.gz textual dumps, while retaining the existing MySQL restore command for
   SQL archives.
 
+- [ ] Time entry - must not enter time against an already entered date/client combination - but if it is not allocated to an invoice can unapprove it and edit again
+
+- [ ] Bank reconciliation doesn't upload - also remove API integration, its too much of a hassle.
+
+- [ ] Update dashboard widget and report to pick up unlodged GST balances both receivable and payable
+
 - [ ] shareholders - share held at what value? $10 for 1000
 
-- [ ] Add handling for payroll - australian rules
+- [ ] Add handling for payroll - australian rules - handle closely linked people as well, personal services income
+
+- [x] add crud/ui etc for services controller and model - fix any bugs. - (Sep 2026, branch add-services) Done. Services catalogue (name, description, standard hourly rate — nullable for fixed-fee, 4dp) with full CRUD at /services, admin/accountant only, nav link under Time & Projects; covered by tests/Feature/ServiceTest.php. Skeleton bugs fixed: removed references to the non-existent Skill model and to PhpWord/Markdown (packages not installed — every route fataled); dropped the required_skills JSON (two incompatible shapes between store/index/update); plain `find()` crashes on unknown ids → route-model binding 404s; duplicated conflicting validation → single ServiceRequest.
 
 - [ ] Need to handle clients who want timesheet reports for project by month and week sum
 
@@ -76,8 +84,10 @@
 - [ ] setting to prune transactions in closed years after x years (default 7 years)
 
 - [ ] allow bill and invoice adjustment items that might be negative. allow adjustments to subtotal and gst separately.
-  
-  
+
+- [ ] Balance Sheet report
+
+- [ ] Make things modular using nwidart
 
 - [x] Need an option in bills to "add GST" per line item as well - for suppliers who show "ex-GST" for line items and then calculate it at subtotal. Make it another checkbox
 

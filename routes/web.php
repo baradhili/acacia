@@ -27,6 +27,7 @@ use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\ReconciliationController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\ShareClassController;
 use App\Http\Controllers\ShareholderController;
 use App\Http\Controllers\SupplierController;
@@ -110,6 +111,9 @@ Route::middleware('auth')->group(function () {
         Route::post('/shareholders/{shareholder}/shareholdings/{shareholding}/cancel', [ShareholderController::class, 'cancelShareholding'])->name('shareholders.shareholdings.cancel');
 
         Route::resource('share-classes', ShareClassController::class)->except('show');
+
+        // Services catalogue — rate-card master data behind time billing
+        Route::resource('services', ServiceController::class);
 
         // BAS settlements — ATO payment/refund that nets GST Payable/Receivable
         Route::get('/bas-settlements', [BasSettlementController::class, 'index'])->name('bas-settlements.index');
