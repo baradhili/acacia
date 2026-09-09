@@ -2,31 +2,29 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Class Service
- *
- * @property $id
- * @property $service_name
- * @property $description
- * @property $required_skills
- * @property $hours_cost
- * @property $created_at
- * @property $updated_at
- *
- * @mixin Builder
+ * A service the practice sells — the catalogue behind estimates, invoices
+ * and time billing (e.g. "Bookkeeping", "BAS Preparation"). The standard
+ * hourly rate is a prefill for rate cards and time entries, not a ledger
+ * amount; fixed-fee services simply leave it null.
  */
 class Service extends Model
 {
-    use HasFactory;
+    protected $fillable = ['name', 'description', 'hourly_rate'];
+
+    protected $casts = [
+        'hourly_rate' => 'decimal:4',
+    ];
 
     /**
-     * The attributes that are mass assignable.
-     *
-     * @var array<int, string>
+     * Rate formatted for display (money precision, trailing zeros trimmed).
      */
-    protected $fillable = ['service_name', 'description', 'required_skills', 'hours_cost'];
+    public function formattedRate(): string
+    {
+        return $this->hourly_rate === null
+            ? '—'
+            : '$'.rtrim(rtrim(number_format((float) $this->hourly_rate, 2), '0'), '.');
+    }
 }

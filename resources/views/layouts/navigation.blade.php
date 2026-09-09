@@ -143,6 +143,24 @@
                 title="Add Purchase Order">+</a>
         </div>
 
+        <!-- Rate-card master data (admin/accountant only) -->
+        @hasanyrole('admin|accountant')
+            <div class="flex items-center justify-between group">
+                <a href="{{ route('services.index') }}"
+                    class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors flex-1 {{ request()->routeIs('services.*') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z">
+                        </path>
+                    </svg>
+                    Services
+                </a>
+                <a href="{{ route('services.create') }}"
+                    class="text-slate-500 hover:text-white px-2 text-lg font-bold transition-colors"
+                    title="Add Service">+</a>
+            </div>
+        @endhasanyrole
+
         <!-- Divider -->
         <div class="my-4 border-t border-slate-700"></div>
 

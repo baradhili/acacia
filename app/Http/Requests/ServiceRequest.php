@@ -23,10 +23,16 @@ class ServiceRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'service_name' => 'required|string',
-            'description' => 'string',
-            'required_skills' => 'nullable|json',
-            'hours_cost' => 'nullable|numeric|regex:/^\d+(\.\d{1,2})?$/',
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'hourly_rate' => ['nullable', 'numeric', 'min:0', 'regex:/^\d+(\.\d{1,4})?$/'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'hourly_rate.regex' => 'The hourly rate may have up to 4 decimal places.',
         ];
     }
 }
