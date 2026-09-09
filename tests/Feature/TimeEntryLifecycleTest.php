@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Client;
+use App\Models\Invoice;
+use App\Models\InvoiceItem;
 use App\Models\Project;
 use App\Models\PurchaseOrder;
 use App\Models\TimeEntry;
@@ -103,12 +105,13 @@ class TimeEntryLifecycleTest extends TestCase
         ];
 
         // Direct match still works (client or project supplying it).
+        // Distinct dates: one entry per staff member per client per day.
         $this->actingAs($this->user)->post(route('time-entries.store'),
             $base + ['purchase_order_id' => $po->id, 'client_id' => $this->client->id]
         )->assertRedirect(route('time-entries.index'));
 
         $this->actingAs($this->user)->post(route('time-entries.store'),
-            $base + ['purchase_order_id' => $po->id, 'project_id' => $this->project->id]
+            ['entry_date' => '2024-01-16'] + $base + ['purchase_order_id' => $po->id, 'project_id' => $this->project->id]
         )->assertRedirect(route('time-entries.index'));
 
         // A client from elsewhere is rejected.
@@ -798,5 +801,224 @@ class TimeEntryLifecycleTest extends TestCase
         $response->assertSee($this->project->name);
         // Project options carry their client for the JS auto-fill.
         $response->assertSee('data-client-id="'.$this->client->id.'"', false);
+    }
+
+    // ============================================================
+    // One entry per staff member per client per day
+    // ============================================================
+
+    public function test_duplicate_date_client_combination_is_rejected(): void
+    {
+        $this->actingAs($this->user)->post(route('time-entries.store'), [
+            'client_id' => $this->client->id,
+            'entry_date' => '2024-03-05',
+            'hours' => 2,
+            'billable' => true,
+        ])->assertRedirect(route('time-entries.index'));
+
+        $this->actingAs($this->user)->post(route('time-entries.store'), [
+            'client_id' => $this->client->id,
+            'entry_date' => '2024-03-05',
+            'hours' => 1,
+            'billable' => true,
+        ])->assertSessionHasErrors('client_id');
+
+        $this->assertSame(1, TimeEntry::count());
+    }
+
+    public function test_project_of_the_same_client_counts_as_the_duplicate(): void
+    {
+        TimeEntry::create([
+            'user_id' => $this->user->id,
+            'client_id' => $this->client->id,
+            'entry_date' => '2024-03-05',
+            'hours' => 2,
+        ]);
+
+        // The project's client is the effective client, so this clashes
+        // even though no client_id was submitted.
+        $this->actingAs($this->user)->post(route('time-entries.store'), [
+            'project_id' => $this->project->id,
+            'entry_date' => '2024-03-05',
+            'hours' => 1,
+        ])->assertSessionHasErrors('client_id');
+
+        // A different day for the same project is fine.
+        $this->actingAs($this->user)->post(route('time-entries.store'), [
+            'project_id' => $this->project->id,
+            'entry_date' => '2024-03-06',
+            'hours' => 1,
+        ])->assertRedirect(route('time-entries.index'));
+    }
+
+    public function test_other_users_clients_and_dates_are_not_blocked(): void
+    {
+        TimeEntry::create([
+            'user_id' => $this->user->id,
+            'client_id' => $this->client->id,
+            'entry_date' => '2024-03-05',
+            'hours' => 2,
+        ]);
+
+        $otherUser = User::factory()->create();
+        $otherClient = Client::factory()->create();
+
+        // Another staff member may log their own time for the same
+        // client and date.
+        $this->actingAs($otherUser)->post(route('time-entries.store'), [
+            'client_id' => $this->client->id,
+            'entry_date' => '2024-03-05',
+            'hours' => 3,
+        ])->assertRedirect(route('time-entries.index'));
+
+        // Same staff member, different client or different date.
+        $this->actingAs($this->user)->post(route('time-entries.store'), [
+            'client_id' => $otherClient->id,
+            'entry_date' => '2024-03-05',
+            'hours' => 1,
+        ])->assertRedirect(route('time-entries.index'));
+
+        $this->actingAs($this->user)->post(route('time-entries.store'), [
+            'client_id' => $this->client->id,
+            'entry_date' => '2024-03-06',
+            'hours' => 1,
+        ])->assertRedirect(route('time-entries.index'));
+    }
+
+    public function test_internal_entries_may_repeat_on_a_date(): void
+    {
+        $base = ['entry_date' => '2024-03-05', 'billable' => false];
+
+        $this->actingAs($this->user)->post(route('time-entries.store'),
+            ['hours' => 1, 'description' => 'Morning admin'] + $base
+        )->assertRedirect(route('time-entries.index'));
+
+        $this->actingAs($this->user)->post(route('time-entries.store'),
+            ['hours' => 1, 'description' => 'Evening training'] + $base
+        )->assertRedirect(route('time-entries.index'));
+
+        $this->assertSame(2, TimeEntry::count());
+    }
+
+    public function test_update_cannot_move_an_entry_onto_a_taken_combination(): void
+    {
+        $first = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'client_id' => $this->client->id,
+            'entry_date' => '2024-03-05',
+            'hours' => 2,
+        ]);
+        $otherClient = Client::factory()->create();
+        $second = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'client_id' => $otherClient->id,
+            'entry_date' => '2024-03-05',
+            'hours' => 1,
+        ]);
+
+        // Moving onto the first entry's date/client is refused.
+        $this->actingAs($this->user)->put(route('time-entries.update', $second), [
+            'client_id' => $this->client->id,
+            'entry_date' => '2024-03-05',
+            'hours' => 4,
+            'billable' => true,
+        ])->assertSessionHasErrors('client_id');
+
+        // Keeping its own combination (self-exclusion) still saves.
+        $this->actingAs($this->user)->put(route('time-entries.update', $second), [
+            'client_id' => $otherClient->id,
+            'entry_date' => '2024-03-05',
+            'hours' => 4,
+            'billable' => true,
+        ])->assertSessionHas('success');
+
+        $this->assertEquals(4, (float) $second->fresh()->hours);
+        $this->assertEquals($first->id, TimeEntry::where('client_id', $this->client->id)
+            ->whereDate('entry_date', '2024-03-05')->first()->id);
+    }
+
+    // ============================================================
+    // Unapprove — edit again unless allocated to an invoice
+    // ============================================================
+
+    public function test_approved_entry_can_be_unapproved_and_edited_again(): void
+    {
+        $approver = User::factory()->create();
+        $entry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $this->project->id,
+            'entry_date' => '2024-03-05',
+            'hours' => 8,
+            'status' => TimeEntry::STATUS_APPROVED,
+            'approved_by' => $approver->id,
+            'approved_at' => now(),
+        ]);
+
+        // Approved entries are locked for editing.
+        $this->actingAs($this->user)->get(route('time-entries.edit', $entry))
+            ->assertRedirect(route('time-entries.show', $entry));
+
+        $this->actingAs($this->user)->post(route('time-entries.unapprove', $entry))
+            ->assertSessionHas('success');
+
+        $entry->refresh();
+        $this->assertEquals(TimeEntry::STATUS_DRAFT, $entry->status);
+        $this->assertNull($entry->approved_by);
+        $this->assertNull($entry->approved_at);
+
+        // Back in draft, the edit form is reachable again.
+        $this->actingAs($this->user)->get(route('time-entries.edit', $entry))->assertOk();
+    }
+
+    public function test_entry_allocated_to_an_invoice_cannot_be_unapproved(): void
+    {
+        $entry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'client_id' => $this->client->id,
+            'entry_date' => '2024-03-05',
+            'hours' => 2,
+            'status' => TimeEntry::STATUS_APPROVED,
+            'approved_by' => $this->user->id,
+            'approved_at' => now(),
+        ]);
+
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => '2024-03-31',
+            'due_date' => '2024-04-30',
+        ]);
+        InvoiceItem::create([
+            'invoice_id' => $invoice->id,
+            'time_entry_id' => $entry->id,
+            'description' => 'March work',
+            'quantity' => 2,
+            'unit_price' => 100,
+        ]);
+
+        $this->actingAs($this->user)->post(route('time-entries.unapprove', $entry))
+            ->assertSessionHas('error');
+
+        $this->assertEquals(TimeEntry::STATUS_APPROVED, $entry->fresh()->status);
+
+        // Cancelling the invoice releases the entry again.
+        $invoice->update(['status' => Invoice::STATUS_CANCELLED]);
+        $this->actingAs($this->user)->post(route('time-entries.unapprove', $entry))
+            ->assertSessionHas('success');
+        $this->assertEquals(TimeEntry::STATUS_DRAFT, $entry->fresh()->status);
+    }
+
+    public function test_only_approved_entries_can_be_unapproved(): void
+    {
+        $draft = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'client_id' => $this->client->id,
+            'entry_date' => '2024-03-05',
+            'hours' => 1,
+        ]);
+
+        $this->actingAs($this->user)->post(route('time-entries.unapprove', $draft))
+            ->assertSessionHas('error');
+
+        $this->assertEquals(TimeEntry::STATUS_DRAFT, $draft->fresh()->status);
     }
 }

@@ -177,6 +177,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/time-entries/{timeEntry}/submit', [TimeEntryController::class, 'submit'])->name('time-entries.submit');
     Route::post('/time-entries/{timeEntry}/approve', [TimeEntryController::class, 'approve'])->name('time-entries.approve');
     Route::post('/time-entries/{timeEntry}/reject', [TimeEntryController::class, 'reject'])->name('time-entries.reject');
+    Route::post('/time-entries/{timeEntry}/unapprove', [TimeEntryController::class, 'unapprove'])->name('time-entries.unapprove');
     Route::get('/timesheets/weekly', [TimeEntryController::class, 'weekly'])->name('timesheets.weekly');
     Route::get('/timesheets/monthly', [TimeEntryController::class, 'monthly'])->name('timesheets.monthly');
 

@@ -217,6 +217,21 @@ class TimeEntry extends Model
     }
 
     /**
+     * Return an approved entry to draft so it can be edited again.
+     * Guarded by the controller: only entries not allocated to an
+     * invoice may be unapproved. Approval stamps are cleared.
+     */
+    public function unapprove(): void
+    {
+        $this->update([
+            'status' => self::STATUS_DRAFT,
+            'approved_by' => null,
+            'approved_at' => null,
+            'rejection_reason' => null,
+        ]);
+    }
+
+    /**
      * Scope for pending approval
      */
     public function scopePendingApproval($query)

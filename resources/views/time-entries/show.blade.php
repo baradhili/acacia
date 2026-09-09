@@ -143,6 +143,25 @@
                 </form>
             </div>
         @endif
+
+        @if($timeEntry->status === 'approved')
+            <div class="flex gap-3 items-center">
+                @if ($timeEntry->invoiceItem)
+                    <p class="text-sm text-gray-500">
+                        Allocated to an invoice — remove it from the invoice before unapproving.
+                    </p>
+                @else
+                    <form action="{{ route('time-entries.unapprove', $timeEntry) }}" method="POST" class="inline"
+                        onsubmit="return confirm('Unapprove this entry? It returns to draft and can then be edited.')">
+                        @csrf
+                        <button type="submit" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg">
+                            Unapprove
+                        </button>
+                    </form>
+                    <p class="text-sm text-gray-500">Unapproving returns the entry to draft so it can be edited again.</p>
+                @endif
+            </div>
+        @endif
     </div>
 
 @endsection

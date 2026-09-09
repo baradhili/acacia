@@ -66,7 +66,7 @@ class TimeEntryController extends Controller
 
     public function show(TimeEntry $timeEntry)
     {
-        $timeEntry->load(['user', 'client', 'project', 'purchaseOrder', 'approver', 'breaks']);
+        $timeEntry->load(['user', 'client', 'project', 'purchaseOrder', 'approver', 'breaks', 'invoiceItem']);
 
         return view('time-entries.show', compact('timeEntry'));
     }
@@ -98,7 +98,7 @@ class TimeEntryController extends Controller
                 ->with('error', 'Only draft entries can be edited.');
         }
 
-        $validated = $this->validateEntry($request);
+        $validated = $this->validateEntry($request, $timeEntry);
 
         DB::beginTransaction();
         try {
@@ -169,11 +169,33 @@ class TimeEntryController extends Controller
     }
 
     /**
+     * Return an approved entry to draft so it can be edited again. Only
+     * entries not allocated to an invoice can be unapproved — invoiced
+     * time is billable history and must be corrected on the invoice
+     * (credit note / cancellation) instead.
+     */
+    public function unapprove(TimeEntry $timeEntry)
+    {
+        if ($timeEntry->status !== TimeEntry::STATUS_APPROVED) {
+            return back()->with('error', 'Only approved entries can be unapproved.');
+        }
+
+        if ($timeEntry->invoiceItem()->exists()) {
+            return back()->with('error', 'This entry is allocated to an invoice — remove it from the invoice before unapproving.');
+        }
+
+        $timeEntry->unapprove();
+
+        return back()->with('success', 'Time entry unapproved — it is now a draft and can be edited.');
+    }
+
+    /**
      * Shared validation for store/update. Times and breaks are optional
      * HH:MM values on the entry date; hours are required unless times
-     * are given (they are then derived server-side).
+     * are given (they are then derived server-side). Pass the entry
+     * being updated so the duplicate check can exclude it.
      */
-    protected function validateEntry(Request $request): array
+    protected function validateEntry(Request $request, ?TimeEntry $entry = null): array
     {
         $validated = $request->validate([
             'client_id' => 'nullable|exists:clients,id',
@@ -202,6 +224,7 @@ class TimeEntryController extends Controller
         ));
 
         $this->validatePurchaseOrderFit($validated);
+        $this->validateNoDuplicate($validated, $entry);
 
         if (! empty($validated['breaks'])) {
             if (empty($validated['start_time']) || empty($validated['end_time'])) {
@@ -247,16 +270,12 @@ class TimeEntryController extends Controller
         }
 
         $purchaseOrder = PurchaseOrder::find($validated['purchase_order_id']);
-
-        $project = ! empty($validated['project_id'])
-            ? Project::find($validated['project_id'])
-            : null;
-        $effectiveClientId = $project?->client_id ?? ($validated['client_id'] ?? null);
+        $effectiveClientId = $this->effectiveClientId($validated);
 
         if ((int) $purchaseOrder->client_id !== (int) $effectiveClientId) {
             throw ValidationException::withMessages([
                 'purchase_order_id' => 'This purchase order belongs to a different client'
-                    .($project ? ' than the selected project' : '').'.',
+                    .(! empty($validated['project_id']) ? ' than the selected project' : '').'.',
             ]);
         }
 
@@ -264,6 +283,50 @@ class TimeEntryController extends Controller
             && (int) $purchaseOrder->project_id !== (int) ($validated['project_id'] ?? 0)) {
             throw ValidationException::withMessages([
                 'project_id' => 'This purchase order is tied to a specific project — select that project or remove the purchase order.',
+            ]);
+        }
+    }
+
+    /**
+     * The client an entry counts against: a project's client always
+     * wins over a supplied client_id, mirroring the model's saving hook.
+     */
+    protected function effectiveClientId(array $validated): ?int
+    {
+        $project = ! empty($validated['project_id'])
+            ? Project::find($validated['project_id'])
+            : null;
+
+        return $project?->client_id ?? ($validated['client_id'] ?? null);
+    }
+
+    /**
+     * One entry per staff member per client per day: a second entry for
+     * an already-entered date/client combination is refused — edit the
+     * existing entry instead (unapprove it first if it is approved).
+     * Internal entries (no client) are exempt, and other staff may
+     * still record their own time for the same client and date.
+     */
+    protected function validateNoDuplicate(array $validated, ?TimeEntry $entry): void
+    {
+        $clientId = $this->effectiveClientId($validated);
+        if (! $clientId) {
+            return;
+        }
+
+        $duplicate = TimeEntry::where('user_id', $entry?->user_id ?? Auth::id())
+            ->whereDate('entry_date', Carbon::parse($validated['entry_date']))
+            ->where('client_id', $clientId)
+            ->when($entry, fn ($query) => $query->whereKeyNot($entry->getKey()))
+            ->first();
+
+        if ($duplicate) {
+            $client = Client::find($clientId);
+            $date = Carbon::parse($validated['entry_date'])->format('d M Y');
+
+            throw ValidationException::withMessages([
+                'client_id' => "Time has already been entered for {$client?->name} on {$date}."
+                    .' Edit that entry instead — unapprove it first if it has been approved.',
             ]);
         }
     }
