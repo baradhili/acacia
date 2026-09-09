@@ -47,7 +47,15 @@
                 @forelse($holdings as $holding)
                     <li class="flex justify-between">
                         <span>{{ $holding['class']->code }} — {{ $holding['class']->description }}</span>
-                        <span class="font-medium">{{ number_format($holding['quantity']) }}</span>
+                        <span class="font-medium text-right">
+                            {{ number_format($holding['quantity']) }}
+                            @if($holding['cost'] > 0)
+                                <span class="block text-xs text-gray-500 font-normal">
+                                    ${{ number_format($holding['cost'], 2) }}
+                                    {{ '@' }}${{ number_format($holding['unit_price'], 4) }}/share
+                                </span>
+                            @endif
+                        </span>
                     </li>
                 @empty
                     <li class="text-gray-400">No holdings</li>
@@ -68,6 +76,7 @@
                                 <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Class</th>
                                 <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Quantity</th>
                                 <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Unit price</th>
+                                <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Value</th>
                                 <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Reference</th>
                                 <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                                 <th class="px-3 py-2"></th>
@@ -83,6 +92,14 @@
                                         {{ number_format($holding->quantity) }}
                                     </td>
                                     <td class="px-3 py-2 text-right">{{ $holding->unit_price ? '$' . number_format((float) $holding->unit_price, 4) : '—' }}</td>
+                                    <td class="px-3 py-2 text-right">
+                                        @php
+                                            $value = $holding->amount_paid !== null
+                                                ? (float) $holding->amount_paid
+                                                : ($holding->unit_price !== null ? $holding->quantity * (float) $holding->unit_price : null);
+                                        @endphp
+                                        {{ $value !== null ? '$' . number_format($value, 2) : '—' }}
+                                    </td>
                                     <td class="px-3 py-2">{{ $holding->reference ?: '—' }}</td>
                                     <td class="px-3 py-2">
                                         <span class="px-2 py-0.5 text-xs rounded-full {{ $holding->status === \App\Models\Shareholding::STATUS_ACTIVE ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500' }}">
@@ -100,7 +117,7 @@
                                     </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="8" class="px-3 py-6 text-center text-gray-500">No transactions recorded.</td></tr>
+                                <tr><td colspan="9" class="px-3 py-6 text-center text-gray-500">No transactions recorded.</td></tr>
                             @endforelse
                         </tbody>
                     </table>

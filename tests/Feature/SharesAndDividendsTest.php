@@ -225,6 +225,47 @@ class SharesAndDividendsTest extends TestCase
         $this->assertSame(300, $this->bob->shares_held); // display cache synced
     }
 
+    public function test_holdings_carry_the_value_they_are_held_at(): void
+    {
+        ShareholdingService::record($this->alice, [
+            'share_class_id' => $this->ord->id,
+            'transaction_type' => Shareholding::TYPE_ISSUE,
+            'transaction_date' => '2025-07-20',
+            'quantity' => 1000,
+            'unit_price' => 10, // $10 for 1000 shares
+        ]);
+
+        // The fixture's unpriced 1000 contribute shares but no cost, so
+        // 2000 shares carry $10,000 → $5.0000/share average.
+        [$holding] = ShareholdingService::holdingsByClass($this->alice);
+        $this->assertSame(2000, $holding['quantity']);
+        $this->assertEquals(10000.0, $holding['cost']);
+        $this->assertEquals(5.0, $holding['unit_price']);
+
+        // amount_paid, when recorded, overrides quantity × unit price.
+        ShareholdingService::record($this->alice, [
+            'share_class_id' => $this->ord->id,
+            'transaction_type' => Shareholding::TYPE_TRANSFER,
+            'transaction_date' => '2025-08-01',
+            'quantity' => 500,
+            'unit_price' => 10,
+            'amount_paid' => 4000,
+        ]);
+
+        [$holding] = ShareholdingService::holdingsByClass($this->alice);
+        $this->assertSame(2500, $holding['quantity']);
+        $this->assertEquals(14000.0, $holding['cost']);
+        $this->assertEquals(5.6, $holding['unit_price']);
+
+        // Both screens show the value, not just the share count.
+        $this->get(route('shareholders.index'))->assertOk()
+            ->assertSee('$14,000.00', false)
+            ->assertSee('$5.6000/share', false);
+        $this->get(route('shareholders.show', $this->alice))->assertOk()
+            ->assertSee('$14,000.00', false)
+            ->assertSee('$10,000.00', false);
+    }
+
     public function test_buyback_cannot_take_holding_negative(): void
     {
         $this->expectException(\InvalidArgumentException::class);

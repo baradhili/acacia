@@ -114,7 +114,13 @@
     (as at the report end date) with payable, receivable and net rows. Covered by
     tests/Feature/Bas/GstPositionDisplayTest.php.
 
-- [ ] shareholders - share held at what value? $10 for 1000
+- [x] shareholders - share held at what value? $10 for 1000
+  - (Sep 2026) Done. holdingsByClass() now aggregates each holding's book value —
+    SUM(amount_paid, falling back to quantity × unit_price) — with the average
+    unit price (1000 @ $10 shows as $10,000.00 @ $10.0000/share), and the
+    shareholder register, the shareholder screen's Current holdings card and a
+    per-transaction Value column all display it. Covered by
+    SharesAndDividendsTest::test_holdings_carry_the_value_they_are_held_at.
 
 - [ ] Add handling for payroll - australian rules - handle closely linked people as well, personal services income
 

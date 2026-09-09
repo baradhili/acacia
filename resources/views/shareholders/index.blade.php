@@ -66,6 +66,12 @@
                                             <span class="font-medium text-gray-900">{{ number_format($holding['quantity']) }}</span>
                                             <span class="text-gray-500">{{ $holding['class']->code }}</span>
                                             <span class="text-xs text-gray-400">({{ $pct }}% of {{ number_format($issued) }})</span>
+                                            @if($holding['cost'] > 0)
+                                                <span class="text-xs text-gray-400">
+                                                    &middot; ${{ number_format($holding['cost'], 2) }}
+                                                    {{ '@' }}${{ number_format($holding['unit_price'], 4) }}/share
+                                                </span>
+                                            @endif
                                         </div>
                                     @empty
                                         <span class="text-gray-400">No holdings</span>

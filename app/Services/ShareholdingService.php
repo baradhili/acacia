@@ -38,26 +38,39 @@ class ShareholdingService
     /**
      * Current holdings of a shareholder grouped by share class.
      *
-     * @return array<int, array{class: ShareClass, quantity: int}>
+     * Each row also carries what the holding is worth on the books:
+     * cost is the sum of each transaction's amount_paid (or quantity ×
+     * unit_price when the paid amount was not recorded), so 1000
+     * shares issued at $10 carry $10,000 at $10.0000/share.
+     *
+     * @return array<int, array{class: ShareClass, quantity: int, cost: float, unit_price: ?float}>
      */
     public static function holdingsByClass(CompanyShareholder $shareholder, $asOf = null): array
     {
         $asOf = Carbon::parse($asOf ?? today())->endOfDay();
 
         $rows = Shareholding::query()
-            ->selectRaw('share_class_id, SUM(quantity) as total')
+            ->selectRaw('share_class_id, SUM(quantity) as total, SUM(COALESCE(amount_paid, quantity * unit_price)) as cost')
             ->where('company_shareholder_id', $shareholder->id)
             ->where('status', Shareholding::STATUS_ACTIVE)
             ->whereDate('transaction_date', '<=', $asOf->toDateString())
             ->groupBy('share_class_id')
             ->havingRaw('SUM(quantity) != 0')
-            ->pluck('total', 'share_class_id');
+            ->get(['share_class_id', 'total', 'cost']);
 
         $holdings = [];
-        foreach ($rows as $classId => $total) {
-            $class = ShareClass::find($classId);
+        foreach ($rows as $row) {
+            $class = ShareClass::find($row->share_class_id);
             if ($class) {
-                $holdings[] = ['class' => $class, 'quantity' => (int) $total];
+                $quantity = (int) $row->total;
+                $cost = (float) $row->cost;
+
+                $holdings[] = [
+                    'class' => $class,
+                    'quantity' => $quantity,
+                    'cost' => $cost,
+                    'unit_price' => $quantity !== 0 ? round($cost / $quantity, 4) : null,
+                ];
             }
         }
 
