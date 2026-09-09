@@ -21,6 +21,8 @@ use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\LogoController;
 use App\Http\Controllers\OpeningBalanceController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\PayrollEmployeeController;
 use App\Http\Controllers\PrepaymentController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
@@ -95,6 +97,18 @@ Route::middleware('auth')->group(function () {
         // Domain name registry (intangibles)
         Route::resource('domains', DomainController::class);
         Route::post('/domains/{domain}/amortisation', [DomainController::class, 'createAmortisation'])->name('domains.amortisation');
+
+        // Payroll: pay runs (posting actions) and employee master data
+        Route::get('/payroll', [PayrollController::class, 'index'])->name('payroll.index');
+        Route::get('/payroll/runs/create', [PayrollController::class, 'create'])->name('payroll.runs.create');
+        Route::post('/payroll/runs', [PayrollController::class, 'store'])->name('payroll.runs.store');
+        Route::get('/payroll/runs/{run}', [PayrollController::class, 'show'])->name('payroll.runs.show');
+        Route::post('/payroll/runs/{run}/payslips', [PayrollController::class, 'addPayslip'])->name('payroll.runs.payslips.store');
+        Route::delete('/payroll/runs/{run}/payslips/{payslip}', [PayrollController::class, 'removePayslip'])->name('payroll.runs.payslips.destroy');
+        Route::post('/payroll/runs/{run}/process', [PayrollController::class, 'process'])->name('payroll.runs.process');
+        Route::post('/payroll/runs/{run}/reverse', [PayrollController::class, 'reverse'])->name('payroll.runs.reverse');
+        Route::delete('/payroll/runs/{run}', [PayrollController::class, 'destroy'])->name('payroll.runs.destroy');
+        Route::resource('payroll-employees', PayrollEmployeeController::class)->except(['show'])->names('payroll.employees');
 
         // Year-end close workflow (four-eyes hand-off enforced in the service)
         Route::get('/financial-years', [FinancialYearController::class, 'index'])->name('financial-years.index');

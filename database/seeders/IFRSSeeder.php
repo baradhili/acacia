@@ -4,8 +4,8 @@ namespace Database\Seeders;
 
 use App\Models\User;
 use IFRS\Models\Account;
-use IFRS\Models\Entity;
 use IFRS\Models\Currency;
+use IFRS\Models\Entity;
 use IFRS\Models\ReportingPeriod;
 use IFRS\Models\Vat;
 use Illuminate\Database\Seeder;
@@ -37,7 +37,7 @@ class IFRSSeeder extends Seeder
         );
 
         // Attach the reporting currency to the entity if not already linked.
-        if (!$entity->currency_id) {
+        if (! $entity->currency_id) {
             $entity->update(['currency_id' => $aud->id]);
             $entity->refresh();
         }
@@ -69,7 +69,7 @@ class IFRSSeeder extends Seeder
             $exists = DB::table('ifrs_currencies')->where('currency_code', $currency['code'])->exists();
             $currencyId = null;
 
-            if (!$exists) {
+            if (! $exists) {
                 $currencyId = DB::table('ifrs_currencies')->insertGetId([
                     'currency_code' => $currency['code'],
                     'name' => $currency['name'],
@@ -88,7 +88,7 @@ class IFRSSeeder extends Seeder
                 ->whereDate('valid_from', now()->startOfYear())
                 ->exists();
 
-            if (!$rateExists) {
+            if (! $rateExists) {
                 DB::table('ifrs_exchange_rates')->insert([
                     'currency_id' => $currencyId,
                     'entity_id' => $entity->id,
@@ -116,7 +116,7 @@ class IFRSSeeder extends Seeder
             ]
         );
 
-        if (!$user->entity_id) {
+        if (! $user->entity_id) {
             $user->forceFill(['entity_id' => $entity->id])->save();
         }
 
@@ -229,6 +229,7 @@ class IFRSSeeder extends Seeder
         // Operating Expenses (Codes 5000-5999)
         $this->createAccount('Director Remuneration', Account::OPERATING_EXPENSE, 5120, $entity);
         $this->createAccount('Salaries & Wages', Account::OPERATING_EXPENSE, 5100, $entity);
+        $this->createAccount('Superannuation Expense', Account::OPERATING_EXPENSE, 5150, $entity);
         $this->createAccount('Contract Labour', Account::OPERATING_EXPENSE, 5110, $entity);
         $this->createAccount('Staff Training', Account::OPERATING_EXPENSE, 5200, $entity);
         $this->createAccount('Travel & Accommodation', Account::OPERATING_EXPENSE, 5300, $entity);
@@ -267,7 +268,7 @@ class IFRSSeeder extends Seeder
         // ============================================
 
         $gstFreeExists = DB::table('ifrs_vats')->where('name', 'GST Free')->where('entity_id', $entity->id)->exists();
-        if (!$gstFreeExists) {
+        if (! $gstFreeExists) {
             DB::table('ifrs_vats')->insert([
                 'name' => 'GST Free',
                 'code' => 'Z',
@@ -280,7 +281,7 @@ class IFRSSeeder extends Seeder
         }
 
         $gst10Exists = DB::table('ifrs_vats')->where('name', 'GST 10%')->where('entity_id', $entity->id)->exists();
-        if (!$gst10Exists) {
+        if (! $gst10Exists) {
             // Get GST Payable account
             $gstPayableAccount = DB::table('ifrs_accounts')
                 ->where('entity_id', $entity->id)
@@ -303,7 +304,7 @@ class IFRSSeeder extends Seeder
         // of netting against 2200. Inserted via the query builder because
         // the package's Vat::save() insists on a CONTROL-type account.
         $gstInputExists = DB::table('ifrs_vats')->where('code', 'I')->where('entity_id', $entity->id)->exists();
-        if (!$gstInputExists) {
+        if (! $gstInputExists) {
             $gstReceivableAccount = DB::table('ifrs_accounts')
                 ->where('entity_id', $entity->id)
                 ->where('code', 430)
