@@ -12,17 +12,300 @@ use App\Models\ReconciliationHistory;
 use App\Models\Supplier;
 use App\Models\User;
 use Carbon\Carbon;
+use IFRS\Models\Account;
+use IFRS\Models\Ledger;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use IFRS\Models\Account;
-use IFRS\Models\Ledger;
 
 class ReconciliationService
 {
     // Matching tolerances
     private const AMOUNT_TOLERANCE = 0.01; // $0.01 tolerance for amount matching
+
     private const DATE_TOLERANCE_DAYS = 3; // 3 days tolerance for date matching
+
+    /**
+     * Import a bank statement CSV export (Wise). Two layouts are
+     * recognised: the current transaction-history.csv download
+     * (ID, Status, Direction, Source/Target name & amount ...) and the
+     * older statement export (TransferWise ID, Date, Amount ...).
+     *
+     * Rows already imported (same source + source_id) are skipped, as
+     * are rows that are not completed movements (e.g. REFUNDED card
+     * authorisations with zero amounts).
+     *
+     * @return array{imported: int, skipped: int, errors: string[]}|array{error: string}
+     */
+    public function importFromCsv(string $filePath): array
+    {
+        if (! is_file($filePath)) {
+            return ['error' => 'Cannot open file'];
+        }
+
+        $handle = fopen($filePath, 'r');
+        if (! $handle) {
+            return ['error' => 'Cannot open file'];
+        }
+
+        $headers = fgetcsv($handle) ?: [];
+        $map = [];
+        foreach ($headers as $index => $header) {
+            $map[strtolower(trim((string) $header))] = $index;
+        }
+        // First non-empty value among the named columns.
+        $get = function (array $row, string ...$names) use ($map): ?string {
+            foreach ($names as $name) {
+                $index = $map[strtolower($name)] ?? null;
+                if ($index !== null && isset($row[$index]) && trim((string) $row[$index]) !== '') {
+                    return trim((string) $row[$index]);
+                }
+            }
+
+            return null;
+        };
+
+        $normalized = array_keys($map);
+        if (in_array('direction', $normalized) && in_array('source amount (after fees)', $normalized)) {
+            $importRow = fn (array $row) => $this->importHistoryRow($row, $get);
+        } elseif (in_array('transferwise id', $normalized)) {
+            $importRow = fn (array $row) => $this->importStatementRow($row, $get);
+        } else {
+            fclose($handle);
+
+            return ['error' => 'Unrecognised statement format — export the transactions CSV from Wise (transaction-history.csv) and try again.'];
+        }
+
+        $imported = 0;
+        $skipped = 0;
+        $errors = [];
+
+        while (($row = fgetcsv($handle)) !== false) {
+            if (empty(array_filter($row))) {
+                continue;
+            }
+
+            try {
+                [$transaction, $created] = $importRow($row);
+                $created ? $imported++ : $skipped++;
+            } catch (\InvalidArgumentException $e) {
+                $skipped++;
+                $errors[] = $e->getMessage();
+            } catch (\Exception $e) {
+                $skipped++;
+                $errors[] = 'Row '.($imported + $skipped).': '.$e->getMessage();
+            }
+        }
+
+        fclose($handle);
+
+        return [
+            'imported' => $imported,
+            'skipped' => $skipped,
+            'errors' => $errors,
+        ];
+    }
+
+    /**
+     * Current Wise download: transaction-history.csv. Direction IN
+     * means money landed in the account (the target amount is the
+     * movement); OUT means it left (the source amount, which is the AUD
+     * figure even when the card spend targeted another currency).
+     *
+     * @return array{0: BankTransaction, 1: bool} the transaction and whether it was created
+     */
+    private function importHistoryRow(array $row, callable $get): array
+    {
+        $sourceId = $get($row, 'ID');
+        $status = strtoupper($get($row, 'Status') ?? '');
+        $direction = strtoupper($get($row, 'Direction') ?? '');
+
+        if (! $sourceId) {
+            throw new \InvalidArgumentException('Row without an ID');
+        }
+        if ($status !== 'COMPLETED') {
+            throw new \InvalidArgumentException("{$sourceId}: skipped (status {$status})");
+        }
+        if (! in_array($direction, ['IN', 'OUT'], true)) {
+            throw new \InvalidArgumentException("{$sourceId}: skipped (unknown direction)");
+        }
+
+        $amount = $direction === 'IN'
+            ? $this->csvNumber($get($row, 'Target amount (after fees)'))
+            : $this->csvNumber($get($row, 'Source amount (after fees)'));
+        if (abs($amount) < 0.005) {
+            throw new \InvalidArgumentException("{$sourceId}: skipped (zero amount)");
+        }
+
+        $existing = BankTransaction::where('source', BankTransaction::SOURCE_WISE)
+            ->where('source_id', $sourceId)
+            ->first();
+        if ($existing) {
+            return [$existing, false];
+        }
+
+        $currency = $direction === 'IN'
+            ? ($get($row, 'Target currency') ?? 'AUD')
+            : ($get($row, 'Source currency') ?? 'AUD');
+
+        $reference = $get($row, 'Reference');
+        if ($reference !== null && strcasecmp($reference, 'NOTPROVIDED') === 0) {
+            $reference = null;
+        }
+
+        $sourceName = $get($row, 'Source name');
+        $targetName = $get($row, 'Target name');
+        $category = $get($row, 'Category');
+
+        if ($direction === 'IN') {
+            $description = 'Money in from '.($sourceName ?? 'unknown source')
+                .($reference !== null ? " — reference {$reference}" : '');
+
+            return [BankTransaction::create([
+                'source' => BankTransaction::SOURCE_WISE,
+                'source_id' => $sourceId,
+                'reference' => $reference,
+                'description' => $description,
+                'amount' => abs($amount),
+                'currency' => $currency,
+                'type' => BankTransaction::TYPE_CREDIT,
+                'transaction_date' => $this->csvTimestamp($get($row, 'Finished on', 'Created on')),
+                'created_at_source' => $this->csvTimestamp($get($row, 'Created on')),
+                'merchant_name' => $sourceName,
+                'payer_name' => $sourceName,
+                'payee_name' => null,
+                'status' => BankTransaction::STATUS_PENDING,
+            ]), true];
+        }
+
+        $description = (str_starts_with($sourceId, 'CARD_TRANSACTION') ? 'Card payment to ' : 'Payment to ')
+            .($targetName ?? 'unknown payee')
+            .($category !== null && strcasecmp($category, 'Money added') !== 0 ? " — {$category}" : '');
+
+        return [BankTransaction::create([
+            'source' => BankTransaction::SOURCE_WISE,
+            'source_id' => $sourceId,
+            'reference' => $reference,
+            'description' => $description,
+            'amount' => -abs($amount),
+            'currency' => $currency,
+            'type' => BankTransaction::TYPE_DEBIT,
+            'transaction_date' => $this->csvTimestamp($get($row, 'Finished on', 'Created on')),
+            'created_at_source' => $this->csvTimestamp($get($row, 'Created on')),
+            'merchant_name' => $targetName,
+            'payer_name' => null,
+            'payee_name' => $targetName,
+            'status' => BankTransaction::STATUS_PENDING,
+        ]), true];
+    }
+
+    /**
+     * Older Wise statement export: TransferWise ID, Date, Amount,
+     * Currency, Description, Payment Reference, Payer/Payee Name,
+     * Transaction Type, ...
+     *
+     * @return array{0: BankTransaction, 1: bool} the transaction and whether it was created
+     */
+    private function importStatementRow(array $row, callable $get): array
+    {
+        $sourceId = $get($row, 'TransferWise ID');
+        $date = $get($row, 'Date');
+        $amount = $this->csvNumber($get($row, 'Amount'));
+        $currency = $get($row, 'Currency') ?? 'AUD';
+        $description = $get($row, 'Description') ?? '';
+        $reference = $get($row, 'Payment Reference') ?? '';
+        $type = strtoupper($get($row, 'Transaction Type') ?? 'DEBIT');
+        $payerName = $get($row, 'Payer Name');
+        $payeeName = $get($row, 'Payee Name');
+        $merchant = $payerName ?? $payeeName;
+
+        if (empty($sourceId) && empty($date)) {
+            throw new \InvalidArgumentException('Empty row');
+        }
+
+        // Debits are stored negative, credits positive.
+        if ($type === BankTransaction::TYPE_DEBIT && $amount > 0) {
+            $amount = -$amount;
+        }
+
+        $transactionDate = null;
+        if ($date) {
+            try {
+                $transactionDate = Carbon::createFromFormat('d-m-Y', $date)
+                    ?? Carbon::parse($date);
+            } catch (\Exception) {
+                $transactionDate = Carbon::parse($date);
+            }
+        }
+
+        // Fall back to a reference embedded in the description
+        // ("Received money from X with reference Y").
+        if (empty($reference) && ! empty($description)) {
+            if (preg_match('/reference\s+(\S+)/i', $description, $matches)) {
+                $reference = $matches[1];
+            }
+        }
+
+        $existing = BankTransaction::where('source', BankTransaction::SOURCE_WISE)
+            ->where('source_id', trim((string) $sourceId))
+            ->first();
+        if ($existing) {
+            return [$existing, false];
+        }
+
+        return [BankTransaction::create([
+            'source' => BankTransaction::SOURCE_WISE,
+            'source_id' => ! empty($sourceId) ? $sourceId : 'CSV-'.uniqid(),
+            'reference' => $reference ?: null,
+            'description' => $description,
+            'amount' => $amount,
+            'currency' => $currency,
+            'type' => $type,
+            'transaction_date' => $transactionDate,
+            'created_at_source' => $transactionDate,
+            'merchant_name' => $merchant,
+            'payer_name' => $payerName,
+            'payee_name' => $payeeName,
+            'status' => BankTransaction::STATUS_PENDING,
+        ]), true];
+    }
+
+    private function csvNumber(?string $value): float
+    {
+        return (float) str_replace(',', '', $value ?? '0');
+    }
+
+    private function csvTimestamp(?string $value): ?Carbon
+    {
+        if (! $value) {
+            return null;
+        }
+
+        return Carbon::parse($value);
+    }
+
+    /**
+     * Get unmatched transactions
+     */
+    public function getUnmatchedTransactions(): Collection
+    {
+        return BankTransaction::pending()
+            ->orderBy('transaction_date', 'desc')
+            ->get();
+    }
+
+    /**
+     * Get reconciliation statistics
+     */
+    public function getStatistics(): array
+    {
+        return [
+            'total' => BankTransaction::count(),
+            'pending' => BankTransaction::pending()->count(),
+            'matched' => BankTransaction::matched()->count(),
+            'ignored' => BankTransaction::where('status', BankTransaction::STATUS_IGNORED)->count(),
+        ];
+    }
 
     /**
      * Log a reconciliation action to history
@@ -90,7 +373,7 @@ class ReconciliationService
             ->groupBy('user_id')
             ->with('user:id,name,email')
             ->get()
-            ->mapWithKeys(fn($item) => [$item->user?->name ?? 'Unknown' => $item->count])
+            ->mapWithKeys(fn ($item) => [$item->user?->name ?? 'Unknown' => $item->count])
             ->toArray();
 
         return [
@@ -111,7 +394,7 @@ class ReconciliationService
 
         if ($matchedLedger) {
             $wiseTransaction->markAsMatched($matchedLedger->id, 'ledger');
-            
+
             $this->logHistory(
                 $wiseTransaction,
                 ReconciliationHistory::ACTION_AUTO_MATCH,
@@ -120,7 +403,7 @@ class ReconciliationService
                 'ledger',
                 "Auto-matched to ledger entry #{$matchedLedger->id} ({$matchedLedger->reference})"
             );
-            
+
             return $matchedLedger->id;
         }
 
@@ -144,7 +427,7 @@ class ReconciliationService
         $query = Ledger::query();
 
         // Match by reference
-        $query->where('reference', 'like', '%' . $wiseTransaction->reference . '%');
+        $query->where('reference', 'like', '%'.$wiseTransaction->reference.'%');
 
         // Match by amount (with tolerance)
         $amount = $wiseTransaction->amount;
@@ -190,7 +473,7 @@ class ReconciliationService
                     $unmatched++;
                 }
             } catch (\Exception $e) {
-                $errors[] = "Transaction {$transaction->id}: " . $e->getMessage();
+                $errors[] = "Transaction {$transaction->id}: ".$e->getMessage();
                 $unmatched++;
             }
         }
@@ -208,6 +491,7 @@ class ReconciliationService
     public function manualMatch(BankTransaction $wiseTransaction, int $ledgerId, string $type = 'ledger'): bool
     {
         $wiseTransaction->markAsMatched($ledgerId, $type);
+
         return true;
     }
 
@@ -290,7 +574,7 @@ class ReconciliationService
         preg_match_all('/\d+/', $wiseRef, $wiseNums);
         preg_match_all('/\d+/', $ledgerRef, $ledgerNums);
 
-        if (!empty($wiseNums[0]) && !empty($ledgerNums[0])) {
+        if (! empty($wiseNums[0]) && ! empty($ledgerNums[0])) {
             $wiseNum = end($wiseNums[0]);
             $ledgerNum = end($ledgerNums[0]);
             if ($wiseNum === $ledgerNum) {
@@ -314,11 +598,11 @@ class ReconciliationService
 
     /**
      * Auto-create a cash receipt (Payment) from an unmatched Wise credit
-     * 
-     * @param BankTransaction $bankTransaction The unmatched credit transaction
-     * @param int $clientId The client to associate with the payment
-     * @param int|null $receivedByUserId The user recording the payment
-     * @param bool $postToIFRS Whether to post the payment to IFRS immediately
+     *
+     * @param  BankTransaction  $bankTransaction  The unmatched credit transaction
+     * @param  int  $clientId  The client to associate with the payment
+     * @param  int|null  $receivedByUserId  The user recording the payment
+     * @param  bool  $postToIFRS  Whether to post the payment to IFRS immediately
      * @return Payment|null The created payment or null on failure
      */
     public function createCashReceiptFromBankTransaction(
@@ -329,20 +613,22 @@ class ReconciliationService
     ): ?Payment {
         // Validate this is a credit transaction
         if ($bankTransaction->type !== BankTransaction::TYPE_CREDIT) {
-            Log::warning("Cannot create cash receipt from debit transaction", [
+            Log::warning('Cannot create cash receipt from debit transaction', [
                 'bank_transaction_id' => $bankTransaction->id,
                 'type' => $bankTransaction->type,
             ]);
+
             return null;
         }
 
         // Validate client exists
         $client = Client::find($clientId);
-        if (!$client) {
-            Log::error("Client not found for cash receipt creation", [
+        if (! $client) {
+            Log::error('Client not found for cash receipt creation', [
                 'client_id' => $clientId,
                 'bank_transaction_id' => $bankTransaction->id,
             ]);
+
             return null;
         }
 
@@ -363,7 +649,7 @@ class ReconciliationService
             // Mark bank transaction as matched
             $bankTransaction->markAsMatched($payment->id, 'payment');
 
-            Log::info("Cash receipt created from unmatched Wise credit", [
+            Log::info('Cash receipt created from unmatched Wise credit', [
                 'payment_id' => $payment->id,
                 'payment_number' => $payment->payment_number,
                 'client_id' => $clientId,
@@ -391,11 +677,11 @@ class ReconciliationService
             return $payment;
 
         } catch (\Exception $e) {
-            Log::error("Failed to create cash receipt from Wise transaction", [
+            Log::error('Failed to create cash receipt from Wise transaction', [
                 'bank_transaction_id' => $bankTransaction->id,
                 'error' => $e->getMessage(),
             ]);
-            
+
             $this->logHistory(
                 $bankTransaction,
                 ReconciliationHistory::ACTION_AUTO_CREATE_RECEIPT,
@@ -404,7 +690,7 @@ class ReconciliationService
                 null,
                 $e->getMessage()
             );
-            
+
             return null;
         }
     }
@@ -414,7 +700,6 @@ class ReconciliationService
      * ledger-entry logic (double-entry, GST, entity resolution) lives in one
      * place and the two implementations can't drift out of sync.
      *
-     * @param Payment $payment
      * @return bool Success status
      */
     protected function postPaymentToIFRS(Payment $payment): bool
@@ -424,8 +709,8 @@ class ReconciliationService
 
     /**
      * Auto-create cash receipts for all unmatched Wise credits
-     * 
-     * @param int|null $clientId Optional client ID to filter by
+     *
+     * @param  int|null  $clientId  Optional client ID to filter by
      * @return array Results with created payments and errors
      */
     public function autoCreateCashReceipts(?int $clientId = null): array
@@ -447,13 +732,14 @@ class ReconciliationService
             // Try to find a matching client by payer name or reference
             $matchedClientId = $this->findClientForTransaction($transaction, $clientId);
 
-            if (!$matchedClientId) {
+            if (! $matchedClientId) {
                 $skipped++;
                 $errors[] = [
                     'transaction_id' => $transaction->id,
                     'reference' => $transaction->reference,
                     'error' => 'No matching client found',
                 ];
+
                 continue;
             }
 
@@ -484,9 +770,7 @@ class ReconciliationService
 
     /**
      * Find a client for a bank transaction based on payer name or reference
-     * 
-     * @param BankTransaction $transaction
-     * @param int|null $preferredClientId
+     *
      * @return int|null Client ID or null
      */
     protected function findClientForTransaction(BankTransaction $transaction, ?int $preferredClientId = null): ?int
@@ -500,17 +784,17 @@ class ReconciliationService
         }
 
         // Try to match by payer name
-        if (!empty($transaction->payer_name)) {
-            $client = Client::where('name', 'like', '%' . $transaction->payer_name . '%')->first();
+        if (! empty($transaction->payer_name)) {
+            $client = Client::where('name', 'like', '%'.$transaction->payer_name.'%')->first();
             if ($client) {
                 return $client->id;
             }
         }
 
         // Try to match by reference (often contains client name or invoice number)
-        if (!empty($transaction->reference)) {
+        if (! empty($transaction->reference)) {
             // Try exact reference match with clients
-            $client = Client::where('name', 'like', '%' . $transaction->reference . '%')->first();
+            $client = Client::where('name', 'like', '%'.$transaction->reference.'%')->first();
             if ($client) {
                 return $client->id;
             }
@@ -522,11 +806,11 @@ class ReconciliationService
     /**
      * Auto-create a bill (paid at entry) from an unmatched Wise debit
      *
-     * @param BankTransaction $bankTransaction The unmatched debit transaction
-     * @param int $supplierId The supplier to associate with the bill
-     * @param int|null $expenseAccountId IFRS expense account for the line item
-     * @param int|null $paidByUserId The user recording the bill
-     * @param bool $markAsPaid Whether to record payment immediately
+     * @param  BankTransaction  $bankTransaction  The unmatched debit transaction
+     * @param  int  $supplierId  The supplier to associate with the bill
+     * @param  int|null  $expenseAccountId  IFRS expense account for the line item
+     * @param  int|null  $paidByUserId  The user recording the bill
+     * @param  bool  $markAsPaid  Whether to record payment immediately
      * @return Bill|null The created bill or null on failure
      */
     public function createPurchaseFromBankTransaction(
@@ -538,26 +822,28 @@ class ReconciliationService
     ): ?Bill {
         // Validate this is a debit transaction
         if ($bankTransaction->type !== BankTransaction::TYPE_DEBIT) {
-            Log::warning("Cannot create purchase from credit transaction", [
+            Log::warning('Cannot create purchase from credit transaction', [
                 'bank_transaction_id' => $bankTransaction->id,
                 'type' => $bankTransaction->type,
             ]);
+
             return null;
         }
 
         // Validate supplier exists
         $supplier = Supplier::find($supplierId);
-        if (!$supplier) {
-            Log::error("Supplier not found for purchase creation", [
+        if (! $supplier) {
+            Log::error('Supplier not found for purchase creation', [
                 'supplier_id' => $supplierId,
                 'bank_transaction_id' => $bankTransaction->id,
             ]);
+
             return null;
         }
 
         try {
             $description = "Auto-created from Wise transaction {$bankTransaction->source_id}."
-                . " Description: {$bankTransaction->description}";
+                ." Description: {$bankTransaction->description}";
 
             $bill = Bill::createWithUniqueNumber([
                 'supplier_id' => $supplierId,
@@ -584,7 +870,7 @@ class ReconciliationService
             // Mark bank transaction as matched
             $bankTransaction->markAsMatched($bill->id, 'bill');
 
-            Log::info("Bill created from unmatched Wise debit", [
+            Log::info('Bill created from unmatched Wise debit', [
                 'bill_id' => $bill->id,
                 'supplier_id' => $supplierId,
                 'amount' => $bill->total,
@@ -611,10 +897,11 @@ class ReconciliationService
             return $bill;
 
         } catch (\Exception $e) {
-            Log::error("Failed to create purchase from Wise transaction", [
+            Log::error('Failed to create purchase from Wise transaction', [
                 'bank_transaction_id' => $bankTransaction->id,
                 'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }
@@ -622,7 +909,7 @@ class ReconciliationService
     /**
      * Auto-create paid bills for all unmatched Wise debits
      *
-     * @param bool $markAsPaid Whether to mark bills as paid
+     * @param  bool  $markAsPaid  Whether to mark bills as paid
      * @return array Results with created bills and errors
      */
     public function autoCreatePurchases(bool $markAsPaid = true): array
@@ -640,13 +927,14 @@ class ReconciliationService
             // Try to find a matching supplier by merchant name
             $matchedSupplierId = $this->findSupplierForTransaction($transaction);
 
-            if (!$matchedSupplierId) {
+            if (! $matchedSupplierId) {
                 $skipped++;
                 $errors[] = [
                     'transaction_id' => $transaction->id,
                     'reference' => $transaction->reference,
                     'error' => 'No matching supplier found',
                 ];
+
                 continue;
             }
 
@@ -678,31 +966,30 @@ class ReconciliationService
 
     /**
      * Find a supplier for a bank transaction based on merchant name
-     * 
-     * @param BankTransaction $transaction
+     *
      * @return int|null Supplier ID or null
      */
     protected function findSupplierForTransaction(BankTransaction $transaction): ?int
     {
         // Try to match by merchant name
-        if (!empty($transaction->merchant_name)) {
-            $supplier = Supplier::where('name', 'like', '%' . $transaction->merchant_name . '%')->first();
+        if (! empty($transaction->merchant_name)) {
+            $supplier = Supplier::where('name', 'like', '%'.$transaction->merchant_name.'%')->first();
             if ($supplier) {
                 return $supplier->id;
             }
         }
 
         // Try to match by payee name
-        if (!empty($transaction->payee_name)) {
-            $supplier = Supplier::where('name', 'like', '%' . $transaction->payee_name . '%')->first();
+        if (! empty($transaction->payee_name)) {
+            $supplier = Supplier::where('name', 'like', '%'.$transaction->payee_name.'%')->first();
             if ($supplier) {
                 return $supplier->id;
             }
         }
 
         // Try to match by reference
-        if (!empty($transaction->reference)) {
-            $supplier = Supplier::where('name', 'like', '%' . $transaction->reference . '%')->first();
+        if (! empty($transaction->reference)) {
+            $supplier = Supplier::where('name', 'like', '%'.$transaction->reference.'%')->first();
             if ($supplier) {
                 return $supplier->id;
             }
@@ -714,7 +1001,6 @@ class ReconciliationService
     /**
      * Get an IFRS expense account suggestion based on merchant name
      *
-     * @param string $merchantName
      * @return int|null IFRS account id, or null when no account matches
      */
     public function suggestExpenseAccount(string $merchantName): ?int
@@ -743,36 +1029,38 @@ class ReconciliationService
 
     /**
      * Ignore a bank transaction (mark as non-business)
-     * 
-     * @param BankTransaction $bankTransaction The transaction to ignore
-     * @param string|null $reason Reason for ignoring
+     *
+     * @param  BankTransaction  $bankTransaction  The transaction to ignore
+     * @param  string|null  $reason  Reason for ignoring
      * @return bool Success status
      */
     public function ignoreTransaction(BankTransaction $bankTransaction, ?string $reason = null): bool
     {
         // Cannot ignore already matched transactions
         if ($bankTransaction->status === BankTransaction::STATUS_MATCHED) {
-            Log::warning("Cannot ignore matched bank transaction", [
+            Log::warning('Cannot ignore matched bank transaction', [
                 'bank_transaction_id' => $bankTransaction->id,
             ]);
+
             return false;
         }
 
         // Cannot ignore already ignored transactions
         if ($bankTransaction->status === BankTransaction::STATUS_IGNORED) {
-            Log::warning("Bank transaction is already ignored", [
+            Log::warning('Bank transaction is already ignored', [
                 'bank_transaction_id' => $bankTransaction->id,
             ]);
+
             return false;
         }
 
         try {
             $ignoreReason = $reason ?? 'Marked as non-business transaction';
-            $ignoreReason .= " on " . now()->toDateTimeString();
+            $ignoreReason .= ' on '.now()->toDateTimeString();
 
             $bankTransaction->markAsIgnored($ignoreReason);
 
-            Log::info("Bank transaction ignored", [
+            Log::info('Bank transaction ignored', [
                 'bank_transaction_id' => $bankTransaction->id,
                 'reason' => $ignoreReason,
                 'ignored_by' => auth()->id() ?? 'system',
@@ -791,11 +1079,11 @@ class ReconciliationService
             return true;
 
         } catch (\Exception $e) {
-            Log::error("Failed to ignore bank transaction", [
+            Log::error('Failed to ignore bank transaction', [
                 'bank_transaction_id' => $bankTransaction->id,
                 'error' => $e->getMessage(),
             ]);
-            
+
             $this->logHistory(
                 $bankTransaction,
                 ReconciliationHistory::ACTION_IGNORE,
@@ -804,16 +1092,16 @@ class ReconciliationService
                 null,
                 $e->getMessage()
             );
-            
+
             return false;
         }
     }
 
     /**
      * Ignore multiple bank transactions in batch
-     * 
-     * @param array $transactionIds Array of transaction IDs to ignore
-     * @param string|null $reason Reason for ignoring
+     *
+     * @param  array  $transactionIds  Array of transaction IDs to ignore
+     * @param  string|null  $reason  Reason for ignoring
      * @return array Results with counts
      */
     public function ignoreTransactions(array $transactionIds, ?string $reason = null): array
@@ -824,9 +1112,10 @@ class ReconciliationService
 
         foreach ($transactionIds as $id) {
             $bankTxn = BankTransaction::find($id);
-            
-            if (!$bankTxn) {
+
+            if (! $bankTxn) {
                 $errors[] = ['id' => $id, 'error' => 'Transaction not found'];
+
                 continue;
             }
 
@@ -846,29 +1135,30 @@ class ReconciliationService
 
     /**
      * Restore an ignored transaction back to pending
-     * 
-     * @param BankTransaction $bankTransaction The ignored transaction to restore
+     *
+     * @param  BankTransaction  $bankTransaction  The ignored transaction to restore
      * @return bool Success status
      */
     public function restoreIgnoredTransaction(BankTransaction $bankTransaction): bool
     {
         if ($bankTransaction->status !== BankTransaction::STATUS_IGNORED) {
-            Log::warning("Bank transaction is not ignored", [
+            Log::warning('Bank transaction is not ignored', [
                 'bank_transaction_id' => $bankTransaction->id,
                 'current_status' => $bankTransaction->status,
             ]);
+
             return false;
         }
 
         try {
             $bankTransaction->update([
                 'status' => BankTransaction::STATUS_PENDING,
-                'notes' => $bankTransaction->notes 
-                    ? $bankTransaction->notes . "\n" . "Restored from ignored on " . now()->toDateTimeString()
-                    : "Restored from ignored on " . now()->toDateTimeString(),
+                'notes' => $bankTransaction->notes
+                    ? $bankTransaction->notes."\n".'Restored from ignored on '.now()->toDateTimeString()
+                    : 'Restored from ignored on '.now()->toDateTimeString(),
             ]);
 
-            Log::info("Ignored bank transaction restored to pending", [
+            Log::info('Ignored bank transaction restored to pending', [
                 'bank_transaction_id' => $bankTransaction->id,
                 'restored_by' => auth()->id() ?? 'system',
             ]);
@@ -886,11 +1176,11 @@ class ReconciliationService
             return true;
 
         } catch (\Exception $e) {
-            Log::error("Failed to restore ignored bank transaction", [
+            Log::error('Failed to restore ignored bank transaction', [
                 'bank_transaction_id' => $bankTransaction->id,
                 'error' => $e->getMessage(),
             ]);
-            
+
             $this->logHistory(
                 $bankTransaction,
                 ReconciliationHistory::ACTION_UNIGNORE,
@@ -899,18 +1189,18 @@ class ReconciliationService
                 null,
                 $e->getMessage()
             );
-            
+
             return false;
         }
     }
 
     /**
      * Manually link a bank transaction to an existing IFRS transaction
-     * 
-     * @param BankTransaction $bankTransaction The bank transaction to link
-     * @param string $transactionType The type of IFRS transaction (invoice, payment, bill, ledger)
-     * @param int $transactionId The ID of the IFRS transaction
-     * @param string|null $notes Optional notes explaining the manual link
+     *
+     * @param  BankTransaction  $bankTransaction  The bank transaction to link
+     * @param  string  $transactionType  The type of IFRS transaction (invoice, payment, bill, ledger)
+     * @param  int  $transactionId  The ID of the IFRS transaction
+     * @param  string|null  $notes  Optional notes explaining the manual link
      * @return bool Success status
      */
     public function manualOverrideLink(
@@ -921,36 +1211,39 @@ class ReconciliationService
     ): bool {
         // Validate transaction type ('expense' kept as a legacy alias)
         $validTypes = ['invoice', 'payment', 'bill', 'expense', 'ledger'];
-        if (!in_array($transactionType, $validTypes)) {
-            Log::warning("Invalid transaction type for manual override", [
+        if (! in_array($transactionType, $validTypes)) {
+            Log::warning('Invalid transaction type for manual override', [
                 'transaction_type' => $transactionType,
                 'bank_transaction_id' => $bankTransaction->id,
             ]);
+
             return false;
         }
 
         // Validate that the transaction exists based on type
         $transaction = $this->findTransaction($transactionType, $transactionId);
-        if (!$transaction) {
-            Log::error("Transaction not found for manual override", [
+        if (! $transaction) {
+            Log::error('Transaction not found for manual override', [
                 'transaction_type' => $transactionType,
                 'transaction_id' => $transactionId,
             ]);
+
             return false;
         }
 
         // Validate transaction is not already matched
         if ($bankTransaction->status === BankTransaction::STATUS_MATCHED) {
-            Log::warning("Bank transaction already matched, cannot manually override", [
+            Log::warning('Bank transaction already matched, cannot manually override', [
                 'bank_transaction_id' => $bankTransaction->id,
             ]);
+
             return false;
         }
 
         try {
             // Build notes with explanation
             $linkNotes = $notes ?? "Manually linked to {$transactionType} #{$transactionId}";
-            $linkNotes .= " on " . now()->toDateTimeString();
+            $linkNotes .= ' on '.now()->toDateTimeString();
 
             // Mark the bank transaction as matched with manual override
             $bankTransaction->update([
@@ -958,12 +1251,12 @@ class ReconciliationService
                 'matched_transaction_id' => $transactionId,
                 'matched_transaction_type' => $transactionType,
                 'matched_at' => now(),
-                'notes' => $bankTransaction->notes 
-                    ? $bankTransaction->notes . "\n" . $linkNotes
+                'notes' => $bankTransaction->notes
+                    ? $bankTransaction->notes."\n".$linkNotes
                     : $linkNotes,
             ]);
 
-            Log::info("Bank transaction manually linked to IFRS transaction", [
+            Log::info('Bank transaction manually linked to IFRS transaction', [
                 'bank_transaction_id' => $bankTransaction->id,
                 'transaction_type' => $transactionType,
                 'transaction_id' => $transactionId,
@@ -983,13 +1276,13 @@ class ReconciliationService
             return true;
 
         } catch (\Exception $e) {
-            Log::error("Failed to manually link bank transaction", [
+            Log::error('Failed to manually link bank transaction', [
                 'bank_transaction_id' => $bankTransaction->id,
                 'transaction_type' => $transactionType,
                 'transaction_id' => $transactionId,
                 'error' => $e->getMessage(),
             ]);
-            
+
             $this->logHistory(
                 $bankTransaction,
                 ReconciliationHistory::ACTION_MANUAL_MATCH,
@@ -998,7 +1291,7 @@ class ReconciliationService
                 $transactionType,
                 $e->getMessage()
             );
-            
+
             return false;
         }
     }
@@ -1006,8 +1299,8 @@ class ReconciliationService
     /**
      * Find an IFRS transaction by type and ID
      *
-     * @param string $type Transaction type (invoice, payment, bill, ledger)
-     * @param int $id Transaction ID
+     * @param  string  $type  Transaction type (invoice, payment, bill, ledger)
+     * @param  int  $id  Transaction ID
      * @return mixed|null The transaction or null
      */
     protected function findTransaction(string $type, int $id): mixed
@@ -1023,10 +1316,10 @@ class ReconciliationService
 
     /**
      * Get available IFRS transactions for manual linking
-     * 
-     * @param BankTransaction $bankTransaction The bank transaction to match
-     * @param string $type Filter by transaction type (optional)
-     * @param int $limit Limit results
+     *
+     * @param  BankTransaction  $bankTransaction  The bank transaction to match
+     * @param  string  $type  Filter by transaction type (optional)
+     * @param  int  $limit  Limit results
      * @return Collection Available transactions
      */
     public function getAvailableTransactionsForLinking(
@@ -1043,9 +1336,9 @@ class ReconciliationService
         // Search invoices if type is null or 'invoice'
         if ($type === null || $type === 'invoice') {
             $invoices = Invoice::whereBetween('total', [
-                    $amount - self::AMOUNT_TOLERANCE,
-                    $amount + self::AMOUNT_TOLERANCE,
-                ])
+                $amount - self::AMOUNT_TOLERANCE,
+                $amount + self::AMOUNT_TOLERANCE,
+            ])
                 ->whereBetween('invoice_date', [$dateFrom, $dateTo])
                 ->whereIn('status', [Invoice::STATUS_SENT, Invoice::STATUS_PARTIALLY_PAID])
                 ->limit($limit)
@@ -1067,9 +1360,9 @@ class ReconciliationService
         // Search payments if type is null or 'payment'
         if ($type === null || $type === 'payment') {
             $payments = Payment::whereBetween('amount', [
-                    $amount - self::AMOUNT_TOLERANCE,
-                    $amount + self::AMOUNT_TOLERANCE,
-                ])
+                $amount - self::AMOUNT_TOLERANCE,
+                $amount + self::AMOUNT_TOLERANCE,
+            ])
                 ->whereBetween('payment_date', [$dateFrom, $dateTo])
                 ->where('status', Payment::STATUS_COMPLETED)
                 ->limit($limit)
@@ -1091,9 +1384,9 @@ class ReconciliationService
         // Search bills if type is null or 'bill'
         if ($type === null || $type === 'bill') {
             $bills = Bill::whereBetween('total', [
-                    $amount - self::AMOUNT_TOLERANCE,
-                    $amount + self::AMOUNT_TOLERANCE,
-                ])
+                $amount - self::AMOUNT_TOLERANCE,
+                $amount + self::AMOUNT_TOLERANCE,
+            ])
                 ->whereBetween('bill_date', [$dateFrom, $dateTo])
                 ->whereIn('status', [Bill::STATUS_OPEN, Bill::STATUS_PAID, Bill::STATUS_PARTIALLY_PAID])
                 ->limit($limit)
@@ -1115,9 +1408,9 @@ class ReconciliationService
         // Search ledger entries if type is null or 'ledger'
         if ($type === null || $type === 'ledger') {
             $ledgers = Ledger::whereBetween('amount', [
-                    $amount - self::AMOUNT_TOLERANCE,
-                    $amount + self::AMOUNT_TOLERANCE,
-                ])
+                $amount - self::AMOUNT_TOLERANCE,
+                $amount + self::AMOUNT_TOLERANCE,
+            ])
                 ->whereBetween('date', [$dateFrom, $dateTo])
                 ->with('account')
                 ->limit($limit)
@@ -1141,9 +1434,9 @@ class ReconciliationService
 
     /**
      * Unlink a previously matched bank transaction
-     * 
-     * @param BankTransaction $bankTransaction The bank transaction to unlink
-     * @param string|null $reason Reason for unlinking
+     *
+     * @param  BankTransaction  $bankTransaction  The bank transaction to unlink
+     * @param  string|null  $reason  Reason for unlinking
      * @return bool Success status
      */
     public function unlinkTransaction(BankTransaction $bankTransaction, ?string $reason = null): bool
@@ -1164,12 +1457,12 @@ class ReconciliationService
                 'matched_transaction_id' => null,
                 'matched_transaction_type' => null,
                 'matched_at' => null,
-                'notes' => $bankTransaction->notes 
-                    ? $bankTransaction->notes . "\n" . "Unlinked on " . now()->toDateTimeString() . ". Reason: " . ($reason ?? 'No reason provided')
-                    : "Unlinked on " . now()->toDateTimeString() . ". Reason: " . ($reason ?? 'No reason provided'),
+                'notes' => $bankTransaction->notes
+                    ? $bankTransaction->notes."\n".'Unlinked on '.now()->toDateTimeString().'. Reason: '.($reason ?? 'No reason provided')
+                    : 'Unlinked on '.now()->toDateTimeString().'. Reason: '.($reason ?? 'No reason provided'),
             ]);
 
-            Log::info("Bank transaction unlinked", [
+            Log::info('Bank transaction unlinked', [
                 'bank_transaction_id' => $bankTransaction->id,
                 'previous_match' => $previousMatch,
                 'reason' => $reason,
@@ -1182,7 +1475,7 @@ class ReconciliationService
                 ReconciliationHistory::STATUS_SUCCESS,
                 $previousMatch['previous_transaction_id'],
                 $previousMatch['previous_transaction_type'],
-                "Unlinked previous match. Reason: " . ($reason ?? 'No reason provided'),
+                'Unlinked previous match. Reason: '.($reason ?? 'No reason provided'),
                 null,
                 ['previous_match' => $previousMatch]
             );
@@ -1190,11 +1483,11 @@ class ReconciliationService
             return true;
 
         } catch (\Exception $e) {
-            Log::error("Failed to unlink bank transaction", [
+            Log::error('Failed to unlink bank transaction', [
                 'bank_transaction_id' => $bankTransaction->id,
                 'error' => $e->getMessage(),
             ]);
-            
+
             $this->logHistory(
                 $bankTransaction,
                 ReconciliationHistory::ACTION_UNMATCH,
@@ -1203,7 +1496,7 @@ class ReconciliationService
                 null,
                 $e->getMessage()
             );
-            
+
             return false;
         }
     }

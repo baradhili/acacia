@@ -1,82 +1,137 @@
 @extends('layouts.app')
-@section('title', 'Wise Reconciliation')
+@section('title', 'Bank Reconciliation')
 @section('content')
 
-    <div class="mb-6">
-        <h1 class="text-2xl font-bold text-gray-800">Wise Reconciliation</h1>
+    <div class="mb-6 flex justify-between items-center">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">Bank Reconciliation</h1>
+            <p class="text-sm text-gray-500 mt-1">
+                Import your bank's transaction CSV export, then match each movement against invoices, payments and bills.
+            </p>
+        </div>
+        <div class="flex gap-2">
+            <form action="{{ route('reconciliation.auto-match') }}" method="POST">
+                @csrf
+                <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm"
+                    @if ($stats['pending'] === 0) disabled title="Nothing pending" @endif>
+                    Auto-match pending
+                </button>
+            </form>
+            <a href="{{ route('reconciliation.import') }}"
+                class="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm">Import CSV</a>
+        </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Status Card -->
+    @if (session('success'))
+        <div class="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
+            {{ session('success') }}
+        </div>
+    @endif
+    @if (session('error'))
+        <div class="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            {{ session('error') }}
+        </div>
+    @endif
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <div class="bg-white rounded-lg shadow p-6">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-sm text-gray-500">Connection Status</p>
-                    <p class="text-2xl font-bold text-yellow-600">Not Configured</p>
-                </div>
-                <div class="p-3 bg-yellow-100 rounded-full">
-                    <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-                    </svg>
-                </div>
-            </div>
+            <p class="text-sm text-gray-500">Pending</p>
+            <p class="text-2xl font-bold text-amber-600">{{ number_format($stats['pending']) }}</p>
         </div>
-
         <div class="bg-white rounded-lg shadow p-6">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-sm text-gray-500">Pending Transactions</p>
-                    <p class="text-2xl font-bold text-gray-800">0</p>
-                </div>
-                <div class="p-3 bg-blue-100 rounded-full">
-                    <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
-                    </svg>
-                </div>
-            </div>
+            <p class="text-sm text-gray-500">Matched</p>
+            <p class="text-2xl font-bold text-green-600">{{ number_format($stats['matched']) }}</p>
         </div>
-
         <div class="bg-white rounded-lg shadow p-6">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-sm text-gray-500">Last Reconciled</p>
-                    <p class="text-2xl font-bold text-gray-800">Never</p>
-                </div>
-                <div class="p-3 bg-gray-100 rounded-full">
-                    <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                </div>
-            </div>
+            <p class="text-sm text-gray-500">Ignored</p>
+            <p class="text-2xl font-bold text-gray-500">{{ number_format($stats['ignored']) }}</p>
         </div>
     </div>
 
-    <!-- Instructions -->
-    <div class="mt-6 bg-white rounded-lg shadow p-6">
-        <h2 class="text-lg font-semibold text-gray-800 mb-4">Getting Started</h2>
-        <div class="prose text-gray-600">
-            <p>Wise Reconciliation allows you to import transactions from your Wise business account and match them against your internal records.</p>
-            <ol class="list-decimal ml-6 mt-4 space-y-2">
-                <li>Configure your Wise API credentials in the settings (coming in Phase 6)</li>
-                <li>Import transactions from Wise or upload a CSV export</li>
-                <li>Review and match transactions to invoices, bills and payments</li>
-                <li>Create any missing transactions automatically</li>
-            </ol>
+    <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+        <div class="px-4 py-3 border-b border-gray-200 flex justify-between items-center">
+            <h2 class="text-lg font-semibold text-gray-800">Pending transactions</h2>
+            <span class="text-xs text-gray-500">latest first</span>
         </div>
-        <div class="mt-6">
-            <a href="{{ route('reconciliation.import') }}" class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-                </svg>
-                Import Wise CSV
-            </a>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payer / Payee</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reference</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                        <th class="px-4 py-3"></th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    @forelse ($pending as $transaction)
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{{ $transaction->transaction_date?->format('d M Y') }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-900">{{ $transaction->description }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600">{{ $transaction->payer_name ?? $transaction->payee_name ?? '—' }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600">{{ $transaction->reference ?? '—' }}</td>
+                            <td class="px-4 py-3 text-sm text-right whitespace-nowrap {{ $transaction->amount < 0 ? 'text-red-600' : 'text-green-700' }}">
+                                {{ $transaction->amount < 0 ? '-' : '' }}${{ number_format(abs((float) $transaction->amount), 2) }} {{ $transaction->currency }}
+                            </td>
+                            <td class="px-4 py-3 text-right">
+                                <form action="{{ route('reconciliation.ignore', $transaction) }}" method="POST" class="inline"
+                                    onsubmit="return confirm('Ignore this transaction?');">
+                                    @csrf
+                                    <button class="text-gray-500 hover:text-red-600 text-sm font-medium">Ignore</button>
+                                </form>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="6" class="px-4 py-6 text-sm text-gray-500">
+                                Nothing pending — import a CSV export to bring in new bank movements.
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
         </div>
     </div>
 
-    <!-- Upcoming Features -->
-    <div class="mt-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100 p-6">
-        <h3 class="text-lg font-semibold text-blue-800 mb-2">Phase 6 Preview</h3>
-        <p class="text-blue-700">Full Wise API integration with automatic transaction matching and reconciliation will be available in Phase 6. This foundation prepares the system for those features.</p>
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-800">Recently matched</h2>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Matched to</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">When</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    @forelse ($matched as $transaction)
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{{ $transaction->transaction_date?->format('d M Y') }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-900">{{ $transaction->description }}</td>
+                            <td class="px-4 py-3 text-sm text-right whitespace-nowrap {{ $transaction->amount < 0 ? 'text-red-600' : 'text-green-700' }}">
+                                {{ $transaction->amount < 0 ? '-' : '' }}${{ number_format(abs((float) $transaction->amount), 2) }} {{ $transaction->currency }}
+                            </td>
+                            <td class="px-4 py-3 text-sm text-gray-600">
+                                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                                    {{ ucfirst($transaction->matched_transaction_type ?? '?') }} #{{ $transaction->matched_transaction_id }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-gray-600">{{ $transaction->matched_at?->format('d M Y H:i') }}</td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="5" class="px-4 py-6 text-sm text-gray-500">Nothing matched yet.</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
     </div>
-
 @endsection

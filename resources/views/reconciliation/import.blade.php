@@ -39,9 +39,11 @@
             </div>
 
             <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                <h3 class="text-sm font-medium text-blue-800">CSV Format Requirements</h3>
+                <h3 class="text-sm font-medium text-blue-800">Accepted formats</h3>
                 <p class="text-sm text-blue-700 mt-1">
-                    Upload a Wise transactions export in CSV format. The import will extract date, amount, currency, and description fields.
+                    The transactions CSV exported from your Wise account (transaction-history.csv) or the older
+                    statement export. Already-imported rows and non-completed movements (e.g. refunds) are skipped
+                    automatically, so re-uploading the same file is safe.
                 </p>
             </div>
 

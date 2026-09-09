@@ -279,6 +279,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/reconciliation', [ReconciliationController::class, 'index'])->name('reconciliation.index');
     Route::get('/reconciliation/import', [ReconciliationController::class, 'import'])->name('reconciliation.import');
     Route::post('/reconciliation/import', [ReconciliationController::class, 'processImport'])->name('reconciliation.process-import');
+    Route::post('/reconciliation/auto-match', [ReconciliationController::class, 'autoMatch'])->name('reconciliation.auto-match');
+    Route::post('/reconciliation/transactions/{transaction}/ignore', [ReconciliationController::class, 'ignore'])->name('reconciliation.ignore');
 
     // Chart of Accounts
     Route::get('/chart-of-accounts', [ChartOfAccountsController::class, 'index'])->name('chart-of-accounts.index');
