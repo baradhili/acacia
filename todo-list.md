@@ -70,7 +70,7 @@
     (time frozen so both runs share one second); the dump fallback runs in every
     backup-creating test since tests execute inside a transaction.
 
-- [ ] In `@app/Services/BasSettlementService.php`:
+- [x] In `@app/Services/BasSettlementService.php`:
   Around line 259-269: Wrap the reverseTransaction call and the subsequent
   settlement forceFill/save operation in a single database transaction, preserving
   the existing reversal ID and timestamp updates so both ledger posting and
@@ -80,6 +80,12 @@
   assertDatePostable() guard before calling IfrsPosting::reverseTransaction().
   Preserve the current reversal checks and posting flow, ensuring locked
   FiscalPeriod entries cannot be bypassed.
+  - (Sep 2026) Done. reverse() now runs assertDatePostable(settled_at,
+    settlement->entity) before posting — a period locked since the settlement
+    was recorded refuses with the usual error and nothing posts — and the
+    reverseTransaction + reversal-id/timestamp save are wrapped in one
+    DB::transaction. Covered by
+    test_a_settlement_cannot_be_reversed_into_a_locked_period.
 
 - [ ] In `@docs/runbooks/backup-restore.md`:
   Around line 11-12: Update the backup table to list only MySQL and SQLite as

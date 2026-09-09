@@ -243,8 +243,11 @@ class BasSettlementService
     /**
      * Mirror a settlement's journal back out (a recorded mistake) and
      * mark the settlement reversed, restoring the GST balances. The
-     * reversal keeps the original transaction date — a period closed
-     * since posting refuses with a clear error instead.
+     * reversal keeps the original transaction date, so the same
+     * date/period guards as posting apply first — a period locked
+     * since the settlement was recorded refuses with a clear error —
+     * and the ledger reversal and the settlement state commit or roll
+     * back together.
      */
     public function reverse(BasSettlement $settlement): BasSettlement
     {
@@ -256,24 +259,28 @@ class BasSettlementService
             throw new \InvalidArgumentException('This settlement has no posted journal to reverse.');
         }
 
-        $reversalId = IfrsPosting::reverseTransaction(
-            $settlement->ifrs_transaction_id,
-            'Reversal of BAS settlement — '.$settlement->label(),
-            'BAS-SETT-'.static::typeCode($settlement->type).'-'.$settlement->as_at->format('Ymd').'-REV',
-            throw: true,
-        );
+        $this->assertDatePostable($settlement->settled_at, $settlement->entity, 'bank date');
 
-        $settlement->forceFill([
-            'reversal_transaction_id' => $reversalId,
-            'reversed_at' => now(),
-        ])->save();
+        return DB::transaction(function () use ($settlement) {
+            $reversalId = IfrsPosting::reverseTransaction(
+                $settlement->ifrs_transaction_id,
+                'Reversal of BAS settlement — '.$settlement->label(),
+                'BAS-SETT-'.static::typeCode($settlement->type).'-'.$settlement->as_at->format('Ymd').'-REV',
+                throw: true,
+            );
 
-        Log::info('BAS settlement reversed', [
-            'settlement_id' => $settlement->id,
-            'reversal_id' => $reversalId,
-        ]);
+            $settlement->forceFill([
+                'reversal_transaction_id' => $reversalId,
+                'reversed_at' => now(),
+            ])->save();
 
-        return $settlement;
+            Log::info('BAS settlement reversed', [
+                'settlement_id' => $settlement->id,
+                'reversal_id' => $reversalId,
+            ]);
+
+            return $settlement;
+        });
     }
 
     /**

@@ -386,6 +386,38 @@ class BasSettlementTest extends TestCase
         $this->service->reverse($settlement);
     }
 
+    public function test_a_settlement_cannot_be_reversed_into_a_locked_period(): void
+    {
+        $this->collect(1000);
+        $settlement = $this->settle();
+
+        // The bank month locks after the settlement was recorded.
+        $bankDate = Carbon::parse($settlement->settled_at);
+        FiscalPeriod::create([
+            'name' => 'Locked month',
+            'year' => $bankDate->year,
+            'period_type' => FiscalPeriod::TYPE_MONTHLY,
+            'start_date' => $bankDate->copy()->startOfMonth(),
+            'end_date' => $bankDate->copy()->endOfMonth(),
+            'is_locked' => true,
+            'locked_at' => now(),
+        ]);
+
+        try {
+            $this->service->reverse($settlement);
+            $this->fail('The reversal should have been refused for a locked period.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('locked period', $e->getMessage());
+        }
+
+        // Refused before anything posted: the settlement stands as
+        // settled and the cleared balance is untouched.
+        $settlement->refresh();
+        $this->assertFalse($settlement->isReversed());
+        $this->assertNull($settlement->reversal_transaction_id);
+        $this->assertEqualsWithDelta(0.0, $this->balance($this->gstPayable), 0.001);
+    }
+
     public function test_quarter_ends_offers_completed_quarters_only(): void
     {
         $ends = $this->service->quarterEnds($this->entity);
