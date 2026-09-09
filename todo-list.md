@@ -87,12 +87,19 @@
     DB::transaction. Covered by
     test_a_settlement_cannot_be_reversed_into_a_locked_period.
 
-- [ ] In `@docs/runbooks/backup-restore.md`:
+- [x] In `@docs/runbooks/backup-restore.md`:
   Around line 11-12: Update the backup table to list only MySQL and SQLite as
   supported database drivers, then revise the restore procedure to provide
   actionable commands for both SQLite archive formats: .sqlite.gz snapshots and
   .sql.gz textual dumps, while retaining the existing MySQL restore command for
   SQL archives.
+  - (Sep 2026) Done. The overview table lists MySQL/SQLite only; the built-in
+    command's restore snippet and the Restore Procedures section now give copy-
+    paste commands for .sqlite.gz (decompress over DB_DATABASE) and .sql.gz
+    (rebuild via sqlite3 from a fresh file, with integrity_check/migrate:status
+    sanity checks) alongside the retained MySQL gunzip-into-mysql command, and
+    the backup description matches the dumpSqliteStatements fallback and the
+    new millisecond+random archive stamps.
 
 - [x] Time entry - must not enter time against an already entered date/client combination - but if it is not allocated to an invoice can unapprove it and edit again - (Sep 2026, branch add-services) Done. One entry per staff member per client per day: store/update are refused with a pointer to the existing entry when the (effective — project precedence) date/client combination is already taken; internal time (no client) is exempt and other staff are unaffected. Approved entries gained an Unapprove action (POST time-entries/{entry}/unapprove, button on the entry screen) that returns them to draft for editing — refused while the entry is allocated to a (non-cancelled) invoice; cancelling the invoice releases it. Covered by TimeEntryLifecycleTest.
 

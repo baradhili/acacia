@@ -8,7 +8,7 @@ This runbook documents the backup and restore procedures for the Professional Se
 
 | Component | Location | Frequency | Retention |
 |-----------|----------|-----------|-----------|
-| Database | MySQL/PostgreSQL | Per admin schedule (default daily) | Last 30 backups (configurable) |
+| Database | MySQL/SQLite (the two drivers `backup:create` supports) | Per admin schedule (default daily) | Last 30 backups (configurable) |
 | Files | `storage/app/public/` | Per admin schedule (default daily) | Last 30 backups (configurable) |
 | Configuration | `.env` (encrypted) | Weekly | 90 days |
 | Application | Git repository | N/A (version controlled) | N/A |
@@ -121,8 +121,9 @@ php artisan backup:create --force --keep=7
 What it does:
 
 - Dumps the database to a gzipped archive — `mysqldump` (single
-  transaction, routines included) for MySQL, a `VACUUM INTO` snapshot
-  for SQLite — under `{BACKUP_PATH}/db/` (default
+  transaction, routines included) for MySQL; for SQLite a `VACUUM INTO`
+  binary snapshot (`.sqlite.gz`) or, when that cannot run, a textual
+  dump (`.sql.gz`) — under `{BACKUP_PATH}/db/` (default
   `storage/app/backups/db/`).
 - Archives everything on the public storage disk (uploads, client and
   company logos, profile photos) to `{BACKUP_PATH}/files/*.tar.gz`.
@@ -152,12 +153,25 @@ BACKUP_PATH=/backups
 Restoring from these archives:
 
 ```bash
-# Database
-gunzip < db/erp_20260903_040000.sql.gz | mysql -u root -p erp
+# Database — MySQL (.sql.gz textual dump)
+gunzip < db/erp_20260903_040000_512_9f3ab2.sql.gz | mysql -u root -p erp
+
+# Database — SQLite binary snapshot (.sqlite.gz, from VACUUM INTO):
+# decompress straight over the database file the app is configured
+# with (DB_DATABASE, default database/database.sqlite)
+gunzip -c db/database_20260903_040000_512_9f3ab2.sqlite.gz > database/database.sqlite
+
+# Database — SQLite textual dump (.sql.gz, the VACUUM-INTO-unavailable
+# fallback): rebuild the database file through sqlite3
+gunzip -c db/database_20260903_040000_512_9f3ab2.sql.gz | sqlite3 database/database.sqlite
 
 # Stored files (extract under storage/app)
-tar -xzvf files/files_20260903_040000.tar.gz -C storage/app
+tar -xzvf files/files_20260903_040000_512_9f3ab2.tar.gz -C storage/app
 ```
+
+Whichever database route you take, stop the app first (queue workers
+and the scheduler hold the old schema/data open), restore, then run
+`php artisan migrate:status` before letting traffic back in.
 
 Out of scope for the built-in command (still handled manually per
 above/below): encrypted `.env` config backups and off-site S3 copies.
@@ -210,7 +224,7 @@ echo "Backup completed: $DATE"
 
 ### 1. Database Restore
 
-#### Standard Restore
+#### Standard Restore (MySQL)
 
 ```bash
 # Restore from uncompressed backup
@@ -222,6 +236,29 @@ gunzip < backup_20250101_120000.sql.gz | mysql -u root -p psa
 # Restore specific table
 mysql -u root -p psa -e "DROP TABLE invoices;"
 mysql -u root -p psa < backup_20250101_120000.sql
+```
+
+#### Standard Restore (SQLite)
+
+`backup:create` produces two SQLite archive formats; restore the one
+you have (check the extension):
+
+```bash
+# .sqlite.gz — a consistent binary snapshot (VACUUM INTO): decompress
+# over the database file the app uses (DB_DATABASE). Stop the app
+# first, and keep a copy of the current file until verified.
+cp database/database.sqlite database/database.sqlite.bak
+gunzip -c db/database_20260903_040000_512_9f3ab2.sqlite.gz > database/database.sqlite
+
+# .sql.gz — a textual dump (the fallback when VACUUM INTO cannot run):
+# rebuild the database through sqlite3. Start from a fresh file so old
+# tables don't linger.
+rm database/database.sqlite
+gunzip -c db/database_20260903_040000_512_9f3ab2.sql.gz | sqlite3 database/database.sqlite
+
+# Sanity check either restore
+sqlite3 database/database.sqlite 'PRAGMA integrity_check;'
+php artisan migrate:status
 ```
 
 #### Docker Restore
