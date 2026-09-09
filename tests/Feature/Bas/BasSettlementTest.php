@@ -146,6 +146,27 @@ class BasSettlementTest extends TestCase
             ->assertSee('Record BAS settlement');
     }
 
+    public function test_the_screen_shares_one_as_at_across_positions_filter_and_form(): void
+    {
+        $ends = $this->service->quarterEnds($this->entity);
+
+        // No requested date: the latest completed quarter end (not
+        // "today") drives the position filter and the settle form.
+        $latest = last($ends)['end']->toDateString();
+        $this->actingAs($this->admin())
+            ->get('/bas-settlements')
+            ->assertOk()
+            ->assertSee('value="'.$latest.'"', false);
+
+        // A requested as_at replaces it everywhere.
+        $requested = $ends[0]['end']->toDateString();
+        $this->actingAs($this->admin())
+            ->get('/bas-settlements?as_at='.$requested)
+            ->assertOk()
+            ->assertSee('value="'.$requested.'"', false)
+            ->assertDontSee('value="'.$latest.'"', false);
+    }
+
     public function test_staff_cannot_record_a_settlement(): void
     {
         $this->actingAs($this->staff())

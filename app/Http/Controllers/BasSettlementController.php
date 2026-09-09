@@ -27,13 +27,17 @@ class BasSettlementController extends Controller
         $asAt = $request->get('as_at') ? Carbon::parse($request->get('as_at')) : null;
         $quarterEnds = $this->service->quarterEnds($entity);
 
+        // One as-at for the whole screen: the requested date, else the
+        // latest completed quarter end (falling back to today before
+        // any quarter has completed), so the positions shown, the date
+        // filter and the settle form's default can never disagree.
+        $effectiveAsAt = $asAt ?? ($quarterEnds !== [] ? last($quarterEnds)['end'] : now());
+
         return view('bas-settlements.index', [
-            'positions' => $this->service->positions($asAt),
-            'positionAsAt' => ($asAt ?? now())->toDateString(),
+            'positions' => $this->service->positions($effectiveAsAt),
+            'positionAsAt' => $effectiveAsAt->toDateString(),
             'quarterEnds' => $quarterEnds,
-            'defaultAsAt' => $quarterEnds !== []
-                ? last($quarterEnds)['end']->toDateString()
-                : now()->toDateString(),
+            'defaultAsAt' => $effectiveAsAt->toDateString(),
             'settlements' => BasSettlement::where('entity_id', $entity->id)
                 ->orderByDesc('as_at')
                 ->get(),

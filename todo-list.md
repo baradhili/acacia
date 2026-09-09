@@ -15,11 +15,16 @@
     the `backup:create` command warns and exits without stamping success.
     Covered by BackupTest::test_overlapping_runs_report_already_running_instead_of_backing_up.
 
-- [ ] In `@app/Http/Controllers/BasSettlementController.php`:
+- [x] In `@app/Http/Controllers/BasSettlementController.php`:
   Around line 31-36: Update BasSettlementController::index to derive the default
   as-at date once, using the requested as_at when present or the latest completed
   quarter end otherwise, and reuse that value for service->positions(),
   positionAsAt, and defaultAsAt.
+  - (Sep 2026) Done. index() derives one `$effectiveAsAt` (requested as_at, else
+    the latest completed quarter end from quarterEnds(), else today) and feeds it
+    to positions(), positionAsAt and defaultAsAt, so the shown balances, the
+    date filter and the settle form default can never disagree. Covered by
+    BasSettlementTest::test_the_screen_shares_one_as_at_across_positions_filter_and_form.
 
 - [ ] In `@app/Http/Controllers/ReportController.php`:
   Line 1073: Update unfreezeBasQuarter to verify the route-bound BasStatement
