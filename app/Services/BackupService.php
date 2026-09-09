@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\BackupSetting;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Process;
 
@@ -17,6 +18,19 @@ use Illuminate\Support\Facades\Process;
  */
 class BackupService
 {
+    /**
+     * Cross-process guard for the whole backup-and-prune run: the
+     * scheduled command and the admin "run now" button must not create
+     * archives or prune concurrently (retention counts archives as they
+     * land, so overlapping runs would prune each other's output). The
+     * TTL only bounds a crashed run — a healthy run releases the lock
+     * itself.
+     */
+    protected const RUN_LOCK = 'backups:run-and-prune';
+
+    /** Matches the per-process timeout on dump/archive commands. */
+    protected const RUN_LOCK_TTL = 3600;
+
     /**
      * Whether a scheduled run should take a backup, per the configured
      * frequency and the last successful run. Manual runs bypass this.
@@ -32,19 +46,36 @@ class BackupService
     }
 
     /**
-     * Full run: create both archives, stamp the last-success time and
-     * prune per the configured (or given) retention. Shared by the
-     * scheduled command and the admin "run now" button.
+     * Full run under an exclusive cross-process lock: create both
+     * archives (and their temporary files), stamp the last-success time
+     * and prune per the configured (or given) retention. Shared by the
+     * scheduled command and the admin "run now" button. When another
+     * process holds the lock, reports `already_running` instead of
+     * running anything.
      *
-     * @return array{created: array<string, array{name: string, bytes: int}>, removed: list<string>}
+     * @return array{created: array<string, array{name: string, bytes: int}>, removed: list<string>, already_running: bool}
      */
     public function runAndPrune(?int $keep = null): array
     {
-        $setting = BackupSetting::current();
-        $created = $this->run();
-        $setting->recordSuccess();
+        $lock = Cache::lock(static::RUN_LOCK, static::RUN_LOCK_TTL);
 
-        return ['created' => $created, 'removed' => $this->prune($keep ?? $setting->retention_count)];
+        if (! $lock->get()) {
+            return ['created' => [], 'removed' => [], 'already_running' => true];
+        }
+
+        try {
+            $setting = BackupSetting::current();
+            $created = $this->run();
+            $setting->recordSuccess();
+
+            return [
+                'created' => $created,
+                'removed' => $this->prune($keep ?? $setting->retention_count),
+                'already_running' => false,
+            ];
+        } finally {
+            $lock->release();
+        }
     }
 
     /**

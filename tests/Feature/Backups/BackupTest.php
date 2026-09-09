@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\BackupService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -94,6 +95,29 @@ class BackupTest extends TestCase
 
         $this->assertNotEmpty(glob($this->backupPath.'/db/*.gz'));
         $this->assertNotEmpty(glob($this->backupPath.'/files/*.tar.gz'));
+        $this->assertNotNull(BackupSetting::query()->first()->last_backup_at);
+    }
+
+    public function test_overlapping_runs_report_already_running_instead_of_backing_up(): void
+    {
+        // Held by "another process": same shared lock key, different owner.
+        $lock = Cache::lock('backups:run-and-prune', 60);
+        $this->assertTrue($lock->get());
+
+        $result = $this->backups->runAndPrune();
+
+        $this->assertTrue($result['already_running']);
+        $this->assertSame([], $result['created']);
+        $this->assertSame([], $result['removed']);
+        $this->assertEmpty(glob($this->backupPath.'/db/*'));
+        $this->assertNull(BackupSetting::query()->first(), 'no run happened, so no settings row was stamped');
+
+        $lock->release();
+
+        $result = $this->backups->runAndPrune();
+
+        $this->assertFalse($result['already_running']);
+        $this->assertNotEmpty($result['created']);
         $this->assertNotNull(BackupSetting::query()->first()->last_backup_at);
     }
 

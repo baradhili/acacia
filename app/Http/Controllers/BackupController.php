@@ -43,12 +43,18 @@ class BackupController extends Controller
         set_time_limit(0);
 
         try {
-            ['created' => $created, 'removed' => $removed] = $this->backups->runAndPrune();
+            ['created' => $created, 'removed' => $removed, 'already_running' => $alreadyRunning] =
+                $this->backups->runAndPrune();
         } catch (\Throwable $e) {
             report($e);
 
             return redirect()->route('backups.index')
                 ->with('error', 'Backup failed: '.$e->getMessage());
+        }
+
+        if ($alreadyRunning) {
+            return redirect()->route('backups.index')
+                ->with('error', 'A backup is already running — nothing was created. Try again once it finishes.');
         }
 
         $summary = collect($created)

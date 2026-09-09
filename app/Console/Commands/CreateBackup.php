@@ -40,14 +40,22 @@ class CreateBackup extends Command
         $this->info('Creating backup (database + stored files)...');
 
         try {
-            ['created' => $created, 'removed' => $removed] = $backups->runAndPrune(
-                $this->option('keep') !== null ? (int) $this->option('keep') : null,
-            );
+            ['created' => $created, 'removed' => $removed, 'already_running' => $alreadyRunning] =
+                $backups->runAndPrune(
+                    $this->option('keep') !== null ? (int) $this->option('keep') : null,
+                );
         } catch (\Throwable $e) {
             $this->error('Backup failed: '.$e->getMessage());
             Log::error('Backup failed', ['error' => $e->getMessage()]);
 
             return Command::FAILURE;
+        }
+
+        if ($alreadyRunning) {
+            $this->warn('Another backup is already running; this run did nothing.');
+            Log::warning('Backup skipped: another run holds the lock.');
+
+            return Command::SUCCESS;
         }
 
         foreach ($created as $type => $file) {

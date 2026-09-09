@@ -1,12 +1,19 @@
 # Todo list
 
-- [ ] In `@app/Http/Controllers/BackupController.php`:
+- [x] In `@app/Http/Controllers/BackupController.php`:
   Line 46: Update BackupService::runAndPrune() to acquire one shared
   cross-process atomic lock before running the complete backup-and-prune
   operation, including temporary/archive creation and pruning, and release it
   afterward. Return an explicit “backup already running” result when the lock is
   unavailable, then update BackupController::run() and CreateBackup::handle() to
   handle that result without proceeding as if the backup succeeded.
+  - (Sep 2026) Done. runAndPrune() now takes a `backups:run-and-prune` atomic
+    cache lock (TTL 3600s, matching the process timeouts; released in `finally`)
+    around the whole run — archives, temp files, success stamp and prune. When
+    the lock is held it returns `already_running: true` with empty
+    created/removed. The Backups page "run now" button shows an error flash and
+    the `backup:create` command warns and exits without stamping success.
+    Covered by BackupTest::test_overlapping_runs_report_already_running_instead_of_backing_up.
 
 - [ ] In `@app/Http/Controllers/BasSettlementController.php`:
   Around line 31-36: Update BasSettlementController::index to derive the default
@@ -73,7 +80,7 @@
 
 - [ ] allow abn/acn/tfn to be display formatted in the way they normally are - also allow entry with the usual spaces
 
-- [ ] THINK ABOUT THIS - no need to enter both project and po project should have po
+- [ ] DO NOT EXECUTE THIS ITEM - no need to enter both project and po project should have po
 
 - [ ] When Credit note is issued against an invoice - the invoice should no longer be marked overdue - also if invoice is cancelled then amount due should be zero dollars
 
