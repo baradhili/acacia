@@ -26,12 +26,18 @@
     date filter and the settle form default can never disagree. Covered by
     BasSettlementTest::test_the_screen_shares_one_as_at_across_positions_filter_and_form.
 
-- [ ] In `@app/Http/Controllers/ReportController.php`:
+- [x] In `@app/Http/Controllers/ReportController.php`:
   Line 1073: Update unfreezeBasQuarter to verify the route-bound BasStatement
   belongs to the authenticated entity before deletion, preferably by loading it
   through the current entity relationship or enforcing the entity-scoped
   authorization policy. Preserve authorized same-entity behavior and add a feature
   test confirming a user cannot unfreeze another entity’s statement.
+  - (Sep 2026) Done. unfreezeBasQuarter now aborts 404 unless the bound
+    BasStatement's entity matches ifrsEntity() (the caller's entity) — the route
+    binding resolves by id alone, so the check stops one entity's admin deleting
+    another's frozen quarter; 404 rather than 403 so foreign ids aren't confirmed.
+    Same-entity unfreezing is unchanged. Covered by
+    BasStatementFreezeTest::test_another_entitys_statement_cannot_be_unfrozen.
 
 - [ ] In `@app/Models/BackupSetting.php`:
   Around line 33-37: Update BackupSetting::current() to use a fixed singleton

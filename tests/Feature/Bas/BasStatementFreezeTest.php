@@ -8,6 +8,7 @@ use App\Services\IfrsPosting;
 use Carbon\Carbon;
 use Database\Seeders\IFRSSeeder;
 use IFRS\Models\Account;
+use IFRS\Models\Currency;
 use IFRS\Models\Entity;
 use IFRS\Models\LineItem;
 use IFRS\Models\ReportingPeriod;
@@ -168,6 +169,40 @@ class BasStatementFreezeTest extends TestCase
             ->assertOk()
             ->assertDontSee('Lodged')
             ->assertSee('1,500.00');
+    }
+
+    public function test_another_entitys_statement_cannot_be_unfrozen(): void
+    {
+        $this->collect(1000);
+        $this->actingAs($this->admin())
+            ->post('/bas-statements/freeze', ['fy' => $this->fyEnd, 'quarter' => 1]);
+        $frozen = BasStatement::query()->firstOrFail();
+
+        $other = Entity::create([
+            'name' => 'Other Co',
+            'locale' => 'en_AU',
+            'year_start' => 7,
+            'multi_currency' => false,
+        ]);
+        $currency = Currency::create([
+            'name' => 'Australian Dollar',
+            'currency_code' => 'AUD',
+            'entity_id' => $other->id,
+        ]);
+        $other->update(['currency_id' => $currency->id]);
+        $otherAdmin = tap(User::factory()->create(['entity_id' => $other->id]))->assignRole('admin');
+
+        $this->actingAs($otherAdmin)
+            ->delete("/bas-statements/{$frozen->id}/unfreeze")
+            ->assertNotFound();
+        $this->assertDatabaseHas('bas_statements', ['id' => $frozen->id]);
+
+        // The owner entity's admin keeps the authorised behaviour.
+        $this->actingAs($this->admin())
+            ->delete("/bas-statements/{$frozen->id}/unfreeze")
+            ->assertRedirect(route('reports.bas', ['fy' => $this->fyEnd]))
+            ->assertSessionHas('success');
+        $this->assertDatabaseCount('bas_statements', 0);
     }
 
     public function test_a_quarter_that_has_not_ended_cannot_be_frozen(): void

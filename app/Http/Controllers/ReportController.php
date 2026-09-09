@@ -1068,10 +1068,15 @@ class ReportController extends Controller
 
     /**
      * Unfreeze a lodged quarter — delete the frozen record and return
-     * the quarter to live recomputation. Admin/accountant only.
+     * the quarter to live recomputation. Admin/accountant only, and
+     * only for the caller's own entity: the route binding resolves by
+     * id alone, so the entity is verified here (404 rather than 403 so
+     * other entities' statement ids are not confirmed to exist).
      */
     public function unfreezeBasQuarter(BasStatement $statement)
     {
+        abort_unless($statement->entity_id === $this->ifrsEntity()?->id, 404, 'Unknown BAS statement.');
+
         $fyEnd = $statement->fy_end;
         $label = $statement->label();
         $statement->delete();
