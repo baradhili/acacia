@@ -16,10 +16,16 @@ class EntitySetting extends Model
     protected $fillable = [
         'entity_id',
         'open_year',
+        'psi_mode',
+        'psb_results',
+        'psi_assessed_at',
     ];
 
     protected $casts = [
         'open_year' => 'integer',
+        'psi_mode' => 'boolean',
+        'psb_results' => 'array',
+        'psi_assessed_at' => 'datetime',
     ];
 
     public function entity(): BelongsTo

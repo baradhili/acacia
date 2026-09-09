@@ -122,13 +122,27 @@
     per-transaction Value column all display it. Covered by
     SharesAndDividendsTest::test_holdings_carry_the_value_they_are_held_at.
 
-- [ ] Add handling for payroll - australian rules - handle closely linked people as well, personal services income
+- [x] Add handling for payroll - australian rules - handle closely linked people as well, personal services income
+  - (Sep 2026) Done per the .zcode/wages_and_psi-spec.md modules A–E. **Payroll** (A/B): employees/directors/contractors
+    master data; pay runs with payslips — PAYG withheld from the ATO NAT 1004 Schedule 1 weekly coefficient tables
+    (config/payroll.php, 2026-27: scale 2 w/ threshold, scale 1 w/o, 47% no-TFN, weekly-equivalent conversion for
+    fortnight/month; fortnightly may differ $1 from the ATO's fortnightly-specific table); SG 12% on OTE from 1 Jul
+    2026 (11.5% before; payday super — accrued per run); director fees withhold AND earn super; labour-only
+    individual contractors earn super, company contractors don't; closely-linked + PSI flags snapshot onto
+    payslips. Processing posts three journals (Dr Wages+Super expense / Cr PAYG 2210 — nets in the BAS settlement
+    screen — + Cr Wages Payable 2235 + Cr Super Payable 2220 + Cr Bank) with reversal and locked-period guards.
+    **PSI** (C/E): /psi screen — 80% rule over time-entry-backed (service work) invoice income by client, PSB
+    Results Test checklist gating PSI mode (entity_settings.psb_results/psi_mode), attribution (PSI received −
+    wages paid to PSI workers = net PSI to the individual), and PSI-mode deduction guidance (no occupancy costs,
+    no associate payments for non-principal work). Not yet: STP lodgement API (data is STP-shaped), Module D
+    hard-blocking of PSI-disallowed bill categories (currently guidance), fortnightly-specific coefficient table.
+    Covered by tests/Feature/Payroll/PayrollTest.php + PsiTest.php.
 
 - [x] add crud/ui etc for services controller and model - fix any bugs. - (Sep 2026, branch add-services) Done. Services catalogue (name, description, standard hourly rate — nullable for fixed-fee, 4dp) with full CRUD at /services, admin/accountant only, nav link under Time & Projects; covered by tests/Feature/ServiceTest.php. Skeleton bugs fixed: removed references to the non-existent Skill model and to PhpWord/Markdown (packages not installed — every route fataled); dropped the required_skills JSON (two incompatible shapes between store/index/update); plain `find()` crashes on unknown ids → route-model binding 404s; duplicated conflicting validation → single ServiceRequest.
 
-- [ ] Need to handle clients who want timesheet reports for project by month and week sum
+- [ ] Need to handle clients who want timesheet reports for project by calendar month and week sum
 
-- [ ] need to handle client who "reverse invoice" as in I fill their timesheet system and they send me a payment that is itemised like my time-based invoice timesheet
+- [ ] need to handle client who "reverse invoice" - as in I fill their timesheet system and they send me a payment that is itemised like my time-based invoice timesheet
 
 - [ ] allow abn/acn/tfn to be display formatted in the way they normally are - also allow entry with the usual spaces
 
@@ -146,7 +160,9 @@
 
 - [ ] Balance Sheet report
 
-- [ ] Make things modular using nwidart
+- [ ] DO NOT EXECUTE THIS ITEM - Make things modular using nwidart
+
+- [ ] Add "Admin" section to profile dropdown and move rarely executed amd setup items from the sidebar to here
 
 - [x] Need an option in bills to "add GST" per line item as well - for suppliers who show "ex-GST" for line items and then calculate it at subtotal. Make it another checkbox
 

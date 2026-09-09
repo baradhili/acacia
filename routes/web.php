@@ -26,6 +26,7 @@ use App\Http\Controllers\PayrollEmployeeController;
 use App\Http\Controllers\PrepaymentController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\PsiController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\ReconciliationController;
 use App\Http\Controllers\ReportController;
@@ -109,6 +110,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/payroll/runs/{run}/reverse', [PayrollController::class, 'reverse'])->name('payroll.runs.reverse');
         Route::delete('/payroll/runs/{run}', [PayrollController::class, 'destroy'])->name('payroll.runs.destroy');
         Route::resource('payroll-employees', PayrollEmployeeController::class)->except(['show'])->names('payroll.employees');
+
+        // PSI assessment: 80% rule, PSB results test, attribution
+        Route::get('/psi', [PsiController::class, 'index'])->name('psi.index');
+        Route::post('/psi/assess', [PsiController::class, 'assess'])->name('psi.assess');
 
         // Year-end close workflow (four-eyes hand-off enforced in the service)
         Route::get('/financial-years', [FinancialYearController::class, 'index'])->name('financial-years.index');
