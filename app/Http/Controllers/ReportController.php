@@ -19,6 +19,7 @@ use App\Models\Prepayment;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Services\BasSettlementService;
 use App\Services\FiscalYearService;
 use App\Services\FrankingService;
 use App\Services\OpeningBalances;
@@ -807,11 +808,19 @@ class ReportController extends Controller
 
         $netGst = $gstCollected - $gstPaid;
 
+        // The unlodged position at the report's end date — the balances
+        // sitting on the GST accounts awaiting settlement, both sides
+        // (the BAS settlement screen nets exactly these).
+        $unlodged = $entity
+            ? app(BasSettlementService::class)->position($endDate)
+            : ['payable' => 0.0, 'receivable' => 0.0, 'net' => 0.0];
+
         return view('reports.gst', compact(
             'startDate', 'endDate',
             'gstCollected', 'totalReceipts',
             'gstPaid', 'totalPayments',
-            'netGst'
+            'netGst',
+            'unlodged'
         ));
     }
 

@@ -105,7 +105,14 @@
 
 - [x] Bank reconciliation doesn't upload - also remove API integration, its too much of a hassle. - (Sep 2026) Done. The upload works: ReconciliationController::processImport now really imports via ReconciliationService::importFromCsv, and the importer handles the bank's current transaction-history.csv download (ID/Status/Direction/Source-Target format — IN credits as target amount, OUT debits as the AUD source amount even for multi-currency card spend, REFUNDED/zero rows skipped, NOTPROVIDED references cleared) as well as the older statement export; already-imported rows are skipped so re-uploading is safe. The reconciliation screen is real now (pending/matched/ignored counts, pending + recently-matched tables, Auto-match and Ignore actions) instead of the "Phase 6" placeholder. Wise API integration removed entirely: WiseService (API client), reconcile:wise command + daily schedule, services.wise config, WISE_* env keys and WiseApiSyncTest are gone; CSV import is the only feed. Fixture: tests/transaction_history_sample.csv (a real export).
 
-- [ ] Update dashboard widget and report to pick up unlodged GST balances both receivable and payable
+- [x] Update dashboard widget and report to pick up unlodged GST balances both receivable and payable
+  - (Sep 2026) Done. The dashboard widget (now "Unlodged GST") reads the ledger via
+    BasSettlementService::position() — the same balances the BAS settlement screen
+    nets — instead of estimating payable from outstanding invoices; it shows the
+    net to pay/refund plus both sides (payable · receivable) and flips colour when
+    a refund is due. The GST/BAS report gained an "Unlodged GST position" card
+    (as at the report end date) with payable, receivable and net rows. Covered by
+    tests/Feature/Bas/GstPositionDisplayTest.php.
 
 - [ ] shareholders - share held at what value? $10 for 1000
 

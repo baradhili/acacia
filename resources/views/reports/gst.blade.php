@@ -85,6 +85,33 @@
             @endhasanyrole
         </div>
 
+        <!-- Unlodged position: the account balances awaiting settlement -->
+        <div class="mt-6 bg-white border border-indigo-100 rounded-lg p-6">
+            <h3 class="text-lg font-semibold text-gray-800 mb-1">
+                Unlodged GST position as at {{ $endDate->format('d/m/Y') }}
+            </h3>
+            <p class="text-sm text-gray-500 mb-4">
+                Both sides of the balances sitting on the GST accounts awaiting settlement —
+                what a BAS settlement would net as at this date.
+            </p>
+            <table class="w-full max-w-md">
+                <tr>
+                    <td class="py-2">GST payable (owed to the ATO)</td>
+                    <td class="text-right">${{ number_format($unlodged['payable'], 2) }}</td>
+                </tr>
+                <tr>
+                    <td class="py-2">GST receivable (refund due)</td>
+                    <td class="text-right">${{ number_format($unlodged['receivable'], 2) }}</td>
+                </tr>
+                <tr class="border-t border-gray-200">
+                    <td class="py-2 font-semibold">
+                        Net {{ $unlodged['net'] >= 0 ? 'payable to the ATO' : 'refundable from the ATO' }}
+                    </td>
+                    <td class="text-right font-bold">${{ number_format(abs($unlodged['net']), 2) }}</td>
+                </tr>
+            </table>
+        </div>
+
         <div class="mt-6 text-sm text-gray-500">
             <p><strong>Note:</strong> Cash basis — GST is recognised when payments are received or made (the posted
             ledger legs), not when invoices or bills are issued. Unposted payments appear once backfilled
