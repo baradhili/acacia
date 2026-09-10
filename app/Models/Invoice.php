@@ -218,6 +218,32 @@ class Invoice extends Model
         return $this->hasMany(CreditNote::class);
     }
 
+    /**
+     * Whether a non-void credit note stands against this invoice.
+     */
+    public function hasActiveCreditNote(): bool
+    {
+        return $this->creditNotes()
+            ->where('status', '!=', CreditNote::STATUS_VOID)
+            ->exists();
+    }
+
+    /**
+     * Take an overdue invoice back to sent/partially_paid — used when a
+     * credit note is issued against it (the balance is being adjusted,
+     * so it stops being dunned).
+     */
+    public function unmarkOverdue(): void
+    {
+        if ($this->status === self::STATUS_OVERDUE) {
+            $this->update([
+                'status' => $this->amount_paid > 0
+                    ? self::STATUS_PARTIALLY_PAID
+                    : self::STATUS_SENT,
+            ]);
+        }
+    }
+
     public function documents(): MorphMany
     {
         return $this->morphMany(Document::class, 'documentable');
@@ -290,6 +316,11 @@ class Invoice extends Model
      */
     public function getAmountDueAttribute(): float
     {
+        // A cancelled invoice owes nothing, whatever was allocated.
+        if ($this->status === self::STATUS_CANCELLED) {
+            return 0.0;
+        }
+
         return max(0, (float) $this->total - $this->amount_paid);
     }
 
@@ -331,6 +362,12 @@ class Invoice extends Model
     public function getIsOverdueAttribute(): bool
     {
         if (in_array($this->status, [self::STATUS_PAID, self::STATUS_CANCELLED])) {
+            return false;
+        }
+
+        // A credit note issued against the invoice means the balance is
+        // under dispute/adjustment — it is not dunned as overdue.
+        if ($this->hasActiveCreditNote()) {
             return false;
         }
 
@@ -475,8 +512,13 @@ class Invoice extends Model
      */
     public function scopeOverdue($query)
     {
-        return $query->where('status', self::STATUS_OVERDUE)
-            ->orWhere(function ($q) {
+        // Invoices with an active credit note are never overdue (the
+        // balance is under adjustment — see hasActiveCreditNote()).
+        $noActiveCreditNote = fn ($q) => $q->whereDoesntHave('creditNotes', fn ($cn) => $cn->where('status', '!=', CreditNote::STATUS_VOID));
+
+        return $query->where(fn ($q) => $q->where('status', self::STATUS_OVERDUE)->where($noActiveCreditNote))
+            ->orWhere(function ($q) use ($noActiveCreditNote) {
+                $q->where($noActiveCreditNote);
                 $q->whereIn('status', [self::STATUS_SENT, self::STATUS_PARTIALLY_PAID])
                     ->where('due_date', '<', now()->toDateString())
                   // For invoices with a positive total, require an outstanding
@@ -566,7 +608,9 @@ class Invoice extends Model
             // while the model is still marked paid, which we are about to
             // revert from.
             if (! in_array($this->status, [self::STATUS_DRAFT, self::STATUS_CANCELLED])) {
-                $overdue = $this->due_date && $this->due_date->isBefore(now()->startOfDay());
+                $overdue = $this->due_date
+                    && $this->due_date->isBefore(now()->startOfDay())
+                    && ! $this->hasActiveCreditNote();
                 $this->update([
                     'status' => $overdue ? self::STATUS_OVERDUE : self::STATUS_SENT,
                     'paid_at' => null,

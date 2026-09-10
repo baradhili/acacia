@@ -2,15 +2,14 @@
 
 namespace Tests\Feature;
 
-use App\Console\Commands\MarkOverdueInvoices;
 use App\Mail\InvoiceMail;
 use App\Models\Client;
+use App\Models\CreditNote;
 use App\Models\Invoice;
-use App\Models\InvoiceItem;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class InvoiceAdvancedTest extends TestCase
@@ -18,6 +17,7 @@ class InvoiceAdvancedTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected Client $client;
 
     protected function setUp(): void
@@ -189,5 +189,63 @@ class InvoiceAdvancedTest extends TestCase
         // Overdue can transition to paid
         $invoice->update(['status' => Invoice::STATUS_PAID]);
         $this->assertEquals(Invoice::STATUS_PAID, $invoice->status);
+    }
+
+    public function test_a_credit_note_takes_an_overdue_invoice_out_of_overdue(): void
+    {
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->subDays(60)->toDateString(),
+            'due_date' => now()->subDays(30)->toDateString(),
+            'status' => Invoice::STATUS_SENT,
+            'subtotal' => 1000,
+            'total' => 1000,
+        ]);
+
+        Artisan::call('invoices:mark-overdue');
+        $this->assertSame(Invoice::STATUS_OVERDUE, $invoice->refresh()->status);
+
+        // A credit note is issued against the disputed invoice.
+        $creditNote = CreditNote::create([
+            'client_id' => $this->client->id,
+            'invoice_id' => $invoice->id,
+            'issue_date' => now()->toDateString(),
+            'reason' => 'Pricing dispute',
+            'total' => 200,
+            'remaining_amount' => 200,
+        ]);
+
+        // The invoice stops being overdue immediately...
+        $this->assertSame(Invoice::STATUS_SENT, $invoice->refresh()->status);
+        $this->assertFalse($invoice->refresh()->is_overdue);
+        $this->assertFalse(Invoice::overdue()->get()->contains($invoice));
+
+        // ...and the scheduler never re-marks it while the note stands.
+        Artisan::call('invoices:mark-overdue');
+        $this->assertSame(Invoice::STATUS_SENT, $invoice->refresh()->status);
+
+        // Voiding the credit note returns the invoice to normal dunning.
+        $creditNote->void();
+        Artisan::call('invoices:mark-overdue');
+        $this->assertSame(Invoice::STATUS_OVERDUE, $invoice->refresh()->status);
+    }
+
+    public function test_a_cancelled_invoice_owes_nothing(): void
+    {
+        $invoice = Invoice::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->subDays(10)->toDateString(),
+            'due_date' => now()->addDays(20)->toDateString(),
+            'status' => Invoice::STATUS_SENT,
+            'subtotal' => 1000,
+            'total' => 1100,
+            'tax_amount' => 100,
+        ]);
+
+        $this->assertEquals(1100.0, $invoice->amount_due);
+
+        $invoice->update(['status' => Invoice::STATUS_CANCELLED]);
+
+        $this->assertEquals(0.0, $invoice->refresh()->amount_due);
     }
 }

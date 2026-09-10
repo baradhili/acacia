@@ -159,7 +159,14 @@
 
 - [ ] DO NOT EXECUTE THIS ITEM - no need to enter both project and po project should have po
 
-- [ ] When Credit note is issued against an invoice - the invoice should no longer be marked overdue - also if invoice is cancelled then amount due should be zero dollars
+- [x] When Credit note is issued against an invoice - the invoice should no longer be marked overdue - also if invoice is cancelled then amount due should be zero dollars
+  - (Sep 2026) Done. Issuing a credit note against an invoice now un-marks it: the CreditNote
+    created-hook calls invoice->unmarkOverdue() (overdue → sent/partially_paid), is_overdue returns
+    false, the overdue scope excludes it and invoices:mark-overdue skips it while any non-void
+    credit note stands (voiding the note returns the invoice to normal dunning); the payment-status
+    refresh also refuses to re-flag overdue when a credit note is active. Cancelled invoices owe
+    nothing: amount_due returns 0 regardless of total/allocations. Covered by two new
+    InvoiceAdvancedTest tests.
 
 - [x] Add "select all" for create invoice from time entries against time entries
 

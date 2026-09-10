@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\CreditNote;
 use App\Models\Invoice;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -9,6 +10,7 @@ use Illuminate\Support\Facades\Log;
 class MarkOverdueInvoices extends Command
 {
     protected $signature = 'invoices:mark-overdue';
+
     protected $description = 'Mark sent invoices as overdue if past due date';
 
     public function handle(): int
@@ -19,8 +21,11 @@ class MarkOverdueInvoices extends Command
             Invoice::STATUS_SENT,
             Invoice::STATUS_PARTIALLY_PAID,
         ])
-        ->where('due_date', '<', now()->toDateString())
-        ->get();
+            ->where('due_date', '<', now()->toDateString())
+        // Invoices with an active credit note are under adjustment —
+        // they are not dunned as overdue.
+            ->whereDoesntHave('creditNotes', fn ($q) => $q->where('status', '!=', CreditNote::STATUS_VOID))
+            ->get();
 
         $count = 0;
         foreach ($overdueInvoices as $invoice) {

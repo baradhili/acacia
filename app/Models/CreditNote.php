@@ -37,7 +37,9 @@ class CreditNote extends Model
 
     // Status constants
     const STATUS_ISSUED = 'issued';
+
     const STATUS_APPLIED = 'applied';
+
     const STATUS_VOID = 'void';
 
     protected static function boot()
@@ -55,6 +57,14 @@ class CreditNote extends Model
                 $creditNote->status = self::STATUS_ISSUED;
             }
         });
+
+        // Issuing a credit note against an invoice takes it out of
+        // overdue — the balance is being adjusted, not dodged.
+        static::created(function ($creditNote) {
+            if ($creditNote->invoice_id && $creditNote->status !== self::STATUS_VOID) {
+                $creditNote->invoice?->unmarkOverdue();
+            }
+        });
     }
 
     public static function generateCreditNoteNumber(): string
@@ -65,7 +75,7 @@ class CreditNote extends Model
             ->first();
 
         if ($lastCN) {
-            preg_match('/CN-' . $year . '-(\d+)/', $lastCN->credit_note_number, $matches);
+            preg_match('/CN-'.$year.'-(\d+)/', $lastCN->credit_note_number, $matches);
             $nextNumber = isset($matches[1]) ? ((int) $matches[1]) + 1 : 1;
         } else {
             $nextNumber = 1;
@@ -149,8 +159,8 @@ class CreditNote extends Model
             'amount' => -$amountToApply, // Negative to indicate credit
             'payment_date' => now()->toDateString(),
             'payment_method' => Payment::METHOD_OTHER,
-            'reference' => 'Credit Note ' . $this->credit_note_number,
-            'notes' => 'Credit note ' . $this->credit_note_number . ' applied to invoice ' . $invoice->invoice_number,
+            'reference' => 'Credit Note '.$this->credit_note_number,
+            'notes' => 'Credit note '.$this->credit_note_number.' applied to invoice '.$invoice->invoice_number,
         ]);
 
         // Link the payment to this credit note
@@ -165,7 +175,6 @@ class CreditNote extends Model
 
         // Set status to APPLIED when credit note is fully used (remaining = 0)
         $newStatus = $newRemainingAmount <= 0 ? self::STATUS_APPLIED : $this->status;
-
 
         $this->update([
             'invoice_id' => $invoice->id,
@@ -194,6 +203,7 @@ class CreditNote extends Model
         }
 
         $this->update(['status' => self::STATUS_VOID]);
+
         return true;
     }
 
@@ -210,7 +220,7 @@ class CreditNote extends Model
      */
     public function getFormattedTotalAttribute(): string
     {
-        return '-$' . number_format($this->total, 2);
+        return '-$'.number_format($this->total, 2);
     }
 
     /**
@@ -218,7 +228,7 @@ class CreditNote extends Model
      */
     public function getFormattedRemainingAttribute(): string
     {
-        return '-$' . number_format($this->remaining_amount, 2);
+        return '-$'.number_format($this->remaining_amount, 2);
     }
 
     /**
