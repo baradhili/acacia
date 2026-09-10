@@ -195,7 +195,12 @@
     moves only the GST; calculateTotals() applies the override ahead of the GST treatments. Covered by
     tests/Feature/NegativeAdjustmentTest.php (model + bill/invoice form flows).
 
-- [ ] Balance Sheet report
+- [x] Balance Sheet report
+  - (Sep 2026) Done — the report itself was already implemented (assets / liabilities / equity with a
+    Net Assets = Liabilities + Equity check, opening-snapshot-aware as-at balances and close-aware
+    profit, covered by IfrsReportsFinancialTest) but unreachable: no nav link existed. The IFRS
+    Reports nav section now links Balance Sheet along with the equally-orphaned Trial Balance,
+    Income Statement and Cash Flow reports.
 
 - [ ] DO NOT EXECUTE THIS ITEM - Make things modular using nwidart
 

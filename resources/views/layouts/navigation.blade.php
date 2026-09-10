@@ -447,6 +447,42 @@
 
         <div class="border-t border-slate-700 my-2"></div>
         <p class="px-3 py-1 text-xs font-semibold text-slate-500 uppercase">IFRS Reports</p>
+        <a href="{{ route('reports.balance-sheet') }}"
+            class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('reports.balance-sheet') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M3 21h18M3 10h18M3 14h18M5 10V7a2 2 0 012-2h10a2 2 0 012 2v3M5 14v3a2 2 0 002 2h10a2 2 0 002-2v-3">
+                </path>
+            </svg>
+            Balance Sheet
+        </a>
+        <a href="{{ route('reports.trial-balance') }}"
+            class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('reports.trial-balance') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 17V9m3 8V5m3 12v-6M4 21h16a1 1 0 001-1v-2H3v2a1 1 0 001 1zM6 3h12v4H6z">
+                </path>
+            </svg>
+            Trial Balance
+        </a>
+        <a href="{{ route('reports.income-statement') }}"
+            class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('reports.income-statement') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M7 12l3-3 3 3 4-4M3 21h18M3 15a9 9 0 0118 0">
+                </path>
+            </svg>
+            Income Statement
+        </a>
+        <a href="{{ route('reports.cash-flow') }}"
+            class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('reports.cash-flow') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
+            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M3 12c2 0 2-4 4-4s2 8 4 8 2-8 4-8 2 4 4 4">
+                </path>
+            </svg>
+            Cash Flow
+        </a>
         <a href="{{ route('reports.account-statement') }}"
             class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs('reports.account-statement') ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
             <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
