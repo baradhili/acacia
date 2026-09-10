@@ -59,3 +59,10 @@ Schedule::command('backup:create')
     ->dailyAt('04:00')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/backups.log'));
+
+// Prune closed-year ledger transactions past the retention window
+// (writes an opening-balance snapshot at the boundary first)
+Schedule::command('ledger:prune')
+    ->yearlyOn(1, 1, '05:00')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/ledger-prune.log'));

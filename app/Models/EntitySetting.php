@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Console\Commands\PruneClosedYearLedgers;
 use IFRS\Models\Entity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -19,6 +20,7 @@ class EntitySetting extends Model
         'psi_mode',
         'psb_results',
         'psi_assessed_at',
+        'retention_years',
     ];
 
     protected $casts = [
@@ -26,7 +28,19 @@ class EntitySetting extends Model
         'psi_mode' => 'boolean',
         'psb_results' => 'array',
         'psi_assessed_at' => 'datetime',
+        'retention_years' => 'integer',
     ];
+
+    /**
+     * The configured data-retention window in years (closed years
+     * older than this are pruned by ledger:prune). Null means the
+     * documented default of 7.
+     */
+    public static function retentionYears(Entity $entity): int
+    {
+        return static::forEntity($entity)->retention_years
+            ?? PruneClosedYearLedgers::DEFAULT_RETENTION_YEARS;
+    }
 
     public function entity(): BelongsTo
     {

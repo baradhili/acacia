@@ -177,7 +177,15 @@
     with no entity yet skip the link). Covered by the updated RoleMiddlewareTest (creates assert
     the linkage; a new test refuses creation without an entity).
 
-- [ ] setting to prune transactions in closed years after x years (default 7 years)
+- [x] setting to prune transactions in closed years after x years (default 7 years)
+  - (Sep 2026) Done. `ledger:prune` (scheduled yearly 1 Jan, or by hand; --dry-run, --years overrides)
+    removes the double-entry trail (ifrs transactions/line items/ledgers/assignments) of CLOSED
+    financial years that ended before today−N years — after writing an opening-balance snapshot at
+    the prune boundary (reference PRUNE-{year}-OB, or reusing a close-generated set standing there),
+    so OpeningBalances::balanceAt() returns identical figures for every date after the boundary;
+    open years are never pruned and business documents (invoices/bills/payments) are kept as the
+    GST/audit record. N = entity_settings.retention_years, managed on the Administration page
+    (blank = default 7). Covered by tests/Feature/LedgerPruneTest.php.
 
 - [ ] allow bill and invoice adjustment items that might be negative. allow adjustments to subtotal and gst separately.
 

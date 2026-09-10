@@ -68,6 +68,7 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:admin')->group(function () {
         Route::get('/administration', [AdministrationController::class, 'index'])->name('administration.index');
         Route::put('/administration/open-year', [AdministrationController::class, 'updateOpenYear'])->name('administration.open-year.update');
+        Route::put('/administration/retention', [AdministrationController::class, 'updateRetention'])->name('administration.retention.update');
     });
 
     // Backups (admin only) — run backup:create on demand, manage its schedule

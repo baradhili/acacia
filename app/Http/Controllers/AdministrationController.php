@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Console\Commands\PruneClosedYearLedgers;
 use App\Models\EntitySetting;
 use App\Services\FiscalYearService;
 use App\Services\IfrsPosting;
@@ -31,6 +32,7 @@ class AdministrationController extends Controller
             'clockYear' => $this->service->clockYear($entity),
             'storedOpenYear' => EntitySetting::storedOpenYear($entity),
             'window' => $this->service->openYearWindow($entity),
+            'setting' => EntitySetting::forEntity($entity),
         ]);
     }
 
@@ -66,5 +68,31 @@ class AdministrationController extends Controller
     protected function entity(): ?Entity
     {
         return IfrsPosting::resolveEntity();
+    }
+
+    /**
+     * Data retention: closed financial years older than this many
+     * years are pruned by `ledger:prune` (after an opening-balance
+     * snapshot is written at the boundary). Blank keeps the default.
+     */
+    public function updateRetention(Request $request)
+    {
+        $entity = $this->entity();
+        abort_unless((bool) $entity, 404, 'No IFRS entity configured.');
+
+        $validated = $request->validate([
+            'retention_years' => ['nullable', 'integer', 'min:1', 'max:50'],
+        ]);
+
+        EntitySetting::updateOrCreate(
+            ['entity_id' => $entity->id],
+            ['retention_years' => $validated['retention_years']],
+        );
+
+        $years = $validated['retention_years']
+            ?? PruneClosedYearLedgers::DEFAULT_RETENTION_YEARS;
+
+        return redirect()->route('administration.index')
+            ->with('success', "Retention set: closed financial years older than {$years} years will be pruned (ledger:prune).");
     }
 }
