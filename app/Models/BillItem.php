@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use IFRS\Models\Account;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -18,6 +19,7 @@ class BillItem extends Model
         'tax_rate',
         'gst_added',
         'tax_amount',
+        'gst_override',
         'discount_percent',
         'discount_amount',
         'total',
@@ -35,6 +37,7 @@ class BillItem extends Model
         'tax_rate' => 'decimal:2',
         'gst_added' => 'boolean',
         'tax_amount' => 'decimal:2',
+        'gst_override' => 'decimal:2',
         'discount_percent' => 'decimal:2',
         'discount_amount' => 'decimal:2',
         'total' => 'decimal:2',
@@ -76,7 +79,7 @@ class BillItem extends Model
      */
     public function expenseAccount(): BelongsTo
     {
-        return $this->belongsTo(\IFRS\Models\Account::class, 'expense_account_id');
+        return $this->belongsTo(Account::class, 'expense_account_id');
     }
 
     /**
@@ -85,7 +88,7 @@ class BillItem extends Model
      */
     public function amortiseAccount(): BelongsTo
     {
-        return $this->belongsTo(\IFRS\Models\Account::class, 'amortise_to_account_id');
+        return $this->belongsTo(Account::class, 'amortise_to_account_id');
     }
 
     /**
@@ -116,7 +119,7 @@ class BillItem extends Model
      */
     public function calculateTotals(): void
     {
-        $gross = $this->quantity * $this->unit_price;
+        $gross = $this->quantity * $this->unit_price; // may be negative (adjustment lines)
 
         // Calculate discount
         if ($this->discount_percent > 0) {
@@ -125,6 +128,16 @@ class BillItem extends Model
 
         $afterDiscount = $gross - $this->discount_amount;
         $rate = (float) $this->tax_rate;
+
+        // An explicit gst_override (negative allowed) replaces the
+        // derived GST so GST can be adjusted separately from the
+        // subtotal; the line is then treated as ex-GST.
+        if ($this->gst_override !== null) {
+            $this->tax_amount = round((float) $this->gst_override, 2);
+            $this->total = round($afterDiscount + $this->tax_amount, 2);
+
+            return;
+        }
 
         if ($rate <= 0) {
             $this->total = $afterDiscount;
@@ -161,7 +174,7 @@ class BillItem extends Model
      */
     public function getFormattedUnitPriceAttribute(): string
     {
-        return config('australian.currency.symbol', 'A$') . number_format($this->unit_price, 2);
+        return config('australian.currency.symbol', 'A$').number_format($this->unit_price, 2);
     }
 
     /**
@@ -169,6 +182,6 @@ class BillItem extends Model
      */
     public function getFormattedTotalAttribute(): string
     {
-        return config('australian.currency.symbol', 'A$') . number_format($this->total, 2);
+        return config('australian.currency.symbol', 'A$').number_format($this->total, 2);
     }
 }

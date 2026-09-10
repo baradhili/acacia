@@ -187,7 +187,13 @@
     GST/audit record. N = entity_settings.retention_years, managed on the Administration page
     (blank = default 7). Covered by tests/Feature/LedgerPruneTest.php.
 
-- [ ] allow bill and invoice adjustment items that might be negative. allow adjustments to subtotal and gst separately.
+- [x] allow bill and invoice adjustment items that might be negative. allow adjustments to subtotal and gst separately.
+  - (Sep 2026) Done. Item unit prices may be negative on bills and invoices (validation and the four
+    form views dropped the min=0 floor) — a negative-price, 0%-rate line adjusts the ex-GST subtotal.
+    New `gst_override` column on invoice_items/bill_items (optional input under the unit price) sets
+    that line's GST explicitly — negative for downward adjustments — so a zero-priced override line
+    moves only the GST; calculateTotals() applies the override ahead of the GST treatments. Covered by
+    tests/Feature/NegativeAdjustmentTest.php (model + bill/invoice form flows).
 
 - [ ] Balance Sheet report
 

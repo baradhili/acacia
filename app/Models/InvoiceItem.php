@@ -18,6 +18,7 @@ class InvoiceItem extends Model
         'unit_price',
         'tax_rate',
         'tax_amount',
+        'gst_override',
         'discount_percent',
         'discount_amount',
         'total',
@@ -31,6 +32,7 @@ class InvoiceItem extends Model
         'unit_price' => 'decimal:4',
         'tax_rate' => 'decimal:2',
         'tax_amount' => 'decimal:2',
+        'gst_override' => 'decimal:2',
         'discount_percent' => 'decimal:2',
         'discount_amount' => 'decimal:2',
         'total' => 'decimal:2',
@@ -73,18 +75,22 @@ class InvoiceItem extends Model
      */
     public function calculateTotals(): void
     {
-        $subtotal = $this->quantity * $this->unit_price;
-        
+        $subtotal = $this->quantity * $this->unit_price; // unit_price may be negative (adjustment lines)
+
         // Calculate discount
         if ($this->discount_percent > 0) {
             $this->discount_amount = $subtotal * ($this->discount_percent / 100);
         }
-        
+
         $afterDiscount = $subtotal - $this->discount_amount;
-        
-        // Calculate tax
-        $this->tax_amount = $afterDiscount * ($this->tax_rate / 100);
-        
+
+        // Tax: an explicit gst_override (negative allowed) replaces the
+        // rate-derived amount so GST can be adjusted separately from the
+        // subtotal.
+        $this->tax_amount = $this->gst_override !== null
+            ? round((float) $this->gst_override, 2)
+            : round($afterDiscount * ($this->tax_rate / 100), 2);
+
         // Calculate total including tax
         $this->total = $afterDiscount + $this->tax_amount;
     }
@@ -108,9 +114,9 @@ class InvoiceItem extends Model
     {
         $description = $timeEntry->description ?: 'Professional services';
         if ($timeEntry->project) {
-            $description = $timeEntry->project->name . ' - ' . $description;
+            $description = $timeEntry->project->name.' - '.$description;
         }
-        
+
         $item = new self([
             'time_entry_id' => $timeEntry->id,
             'description' => $description,
@@ -119,9 +125,9 @@ class InvoiceItem extends Model
             'tax_rate' => config('australian.gst.rate', 10),
             'sort_order' => 0,
         ]);
-        
+
         $item->calculateTotals();
-        
+
         return $item;
     }
 
@@ -142,6 +148,6 @@ class InvoiceItem extends Model
      */
     public function getFormattedTotalAttribute(): string
     {
-        return config('australian.currency.symbol', 'A$') . number_format($this->total, 2);
+        return config('australian.currency.symbol', 'A$').number_format($this->total, 2);
     }
 }

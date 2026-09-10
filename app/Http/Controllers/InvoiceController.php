@@ -99,7 +99,11 @@ class InvoiceController extends Controller
             'items' => 'required_without:time_entry_ids|array',
             'items.*.description' => 'required|string',
             'items.*.quantity' => 'required|numeric|min:0',
-            'items.*.unit_price' => 'required|numeric|min:0',
+            // Negative prices are adjustment lines; gst_override (when
+            // present) replaces the derived GST so GST and subtotal can
+            // be adjusted separately.
+            'items.*.unit_price' => 'required|numeric',
+            'items.*.gst_override' => 'nullable|numeric',
             'items.*.tax_rate' => 'nullable|numeric|min:0|max:100',
             'items.*.discount_percent' => 'nullable|numeric|min:0|max:100',
             'time_entry_ids' => 'nullable|array',
@@ -134,6 +138,7 @@ class InvoiceController extends Controller
                     'description' => $item['description'],
                     'quantity' => $item['quantity'],
                     'unit_price' => $item['unit_price'],
+                    'gst_override' => $item['gst_override'] ?? null,
                     'tax_rate' => $item['tax_rate'] ?? config('australian.gst.rate', 10),
                     'discount_percent' => $item['discount_percent'] ?? 0,
                     'sort_order' => $sortOrder++,
@@ -204,7 +209,11 @@ class InvoiceController extends Controller
             'items.*.time_entry_id' => 'nullable|exists:time_entries,id',
             'items.*.description' => 'required|string',
             'items.*.quantity' => 'required|numeric|min:0',
-            'items.*.unit_price' => 'required|numeric|min:0',
+            // Negative prices are adjustment lines; gst_override (when
+            // present) replaces the derived GST so GST and subtotal can
+            // be adjusted separately.
+            'items.*.unit_price' => 'required|numeric',
+            'items.*.gst_override' => 'nullable|numeric',
             'items.*.tax_rate' => 'nullable|numeric|min:0|max:100',
             'items.*.discount_percent' => 'nullable|numeric|min:0|max:100',
         ]);
@@ -245,6 +254,7 @@ class InvoiceController extends Controller
                     'description' => $item['description'],
                     'quantity' => $item['quantity'],
                     'unit_price' => $item['unit_price'],
+                    'gst_override' => $item['gst_override'] ?? null,
                     'tax_rate' => $item['tax_rate'] ?? config('australian.gst.rate', 10),
                     'discount_percent' => $item['discount_percent'] ?? 0,
                     'sort_order' => $index,

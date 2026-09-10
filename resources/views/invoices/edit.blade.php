@@ -110,8 +110,9 @@
                         <div class="col-span-2">
                             <label class="block text-xs font-medium text-gray-700 mb-1">Unit Price</label>
                             <input type="number" name="items[{{ $index }}][unit_price]"
-                                value="{{ $item['unit_price'] ?? 0 }}" step="0.0001" min="0" required
+                                value="{{ $item['unit_price'] ?? 0 }}" step="0.0001" required
                                 class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm unit-price-input">
+                                <input type="number" name="items[{{ $index }}][gst_override]" value="{{ $item['gst_override'] ?? '' }}" step="0.01" placeholder="GST adj (optional)" title="Optional explicit GST for this line (overrides the calculated amount — negative for downward adjustments): a 0-priced line here adjusts only the GST, a negative price adjusts the subtotal" class="mt-1 rounded-md border-gray-300 shadow-sm text-xs w-full">
                         </div>
                         <div class="col-span-1">
                             <label class="block text-xs font-medium text-gray-700 mb-1">Tax %</label>
@@ -169,9 +170,10 @@
             </div>
             <div class="col-span-2">
                 <label class="block text-xs font-medium text-gray-700 mb-1">Unit Price</label>
-                <input type="number" name="items[__INDEX__][unit_price]" value="0" step="0.0001" min="0"
+                <input type="number" name="items[__INDEX__][unit_price]" value="0" step="0.0001"
                     required
                     class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm unit-price-input">
+                                <input type="number" name="items[__INDEX__][gst_override]" value="" step="0.01" placeholder="GST adj (optional)" title="Optional explicit GST for this line (overrides the calculated amount — negative for downward adjustments): a 0-priced line here adjusts only the GST, a negative price adjusts the subtotal" class="mt-1 rounded-md border-gray-300 shadow-sm text-xs w-full">
             </div>
             <div class="col-span-1">
                 <label class="block text-xs font-medium text-gray-700 mb-1">Tax %</label>

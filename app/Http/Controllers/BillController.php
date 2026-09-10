@@ -81,7 +81,11 @@ class BillController extends Controller
             'items' => 'required|array|min:1',
             'items.*.description' => 'required|string',
             'items.*.quantity' => 'required|numeric|min:0',
-            'items.*.unit_price' => 'required|numeric|min:0',
+            // Negative prices are adjustment lines; gst_override (when
+            // present) replaces the derived GST so GST and subtotal can
+            // be adjusted separately.
+            'items.*.unit_price' => 'required|numeric',
+            'items.*.gst_override' => 'nullable|numeric',
             // Per-line GST: 'gst' = the entered amount is GST-inclusive
             // (portion back-calculated); 'gst_add' = the entered amount is
             // ex-GST and GST is added on top; neither = GST-free.
@@ -121,6 +125,7 @@ class BillController extends Controller
                     'description' => $item['description'],
                     'quantity' => $item['quantity'],
                     'unit_price' => $item['unit_price'],
+                    'gst_override' => $item['gst_override'] ?? null,
                     'tax_rate' => (! empty($item['gst']) || ! empty($item['gst_add'])) ? config('australian.gst.rate', 10) : 0,
                     // "Incl. GST" wins if both boxes are somehow submitted
                     'gst_added' => empty($item['gst']) && ! empty($item['gst_add']),
@@ -229,7 +234,11 @@ class BillController extends Controller
             'items.*.id' => 'nullable|integer',
             'items.*.description' => 'required|string',
             'items.*.quantity' => 'required|numeric|min:0',
-            'items.*.unit_price' => 'required|numeric|min:0',
+            // Negative prices are adjustment lines; gst_override (when
+            // present) replaces the derived GST so GST and subtotal can
+            // be adjusted separately.
+            'items.*.unit_price' => 'required|numeric',
+            'items.*.gst_override' => 'nullable|numeric',
             // Same per-line GST treatment as store()
             'items.*.gst' => 'nullable|boolean',
             'items.*.gst_add' => 'nullable|boolean',
@@ -277,6 +286,7 @@ class BillController extends Controller
                     'description' => $item['description'],
                     'quantity' => $item['quantity'],
                     'unit_price' => $item['unit_price'],
+                    'gst_override' => $item['gst_override'] ?? null,
                     'tax_rate' => (! empty($item['gst']) || ! empty($item['gst_add'])) ? config('australian.gst.rate', 10) : 0,
                     // "Incl. GST" wins if both boxes are somehow submitted
                     'gst_added' => empty($item['gst']) && ! empty($item['gst_add']),
