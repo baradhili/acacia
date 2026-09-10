@@ -22,16 +22,51 @@
             <div x-show="open" @click.away="open = false"
                 class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
                 @role('admin')
-                    <p class="px-4 py-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Administration</p>
+                    <p class="px-4 py-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Admin</p>
                     <a href="{{ route('administration.index') }}"
                         class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                        Currently Open Year
+                        Administration
                     </a>
                     <a href="{{ route('backups.index') }}"
                         class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                         Backups
                     </a>
+                    <a href="{{ route('users.index') }}"
+                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                        Users
+                    </a>
                 @endrole
+                @hasanyrole('admin|accountant')
+                    <p class="px-4 py-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Setup &amp; maintenance</p>
+                    <a href="{{ route('company-profile.index') }}"
+                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                        Company Details
+                    </a>
+                    <a href="{{ route('chart-of-accounts.index') }}"
+                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                        Chart of Accounts
+                    </a>
+                    <a href="{{ route('opening-balances.index') }}"
+                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                        Opening Balances
+                    </a>
+                    <a href="{{ route('financial-years.index') }}"
+                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                        Financial Years
+                    </a>
+                    <a href="{{ route('services.index') }}"
+                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                        Services
+                    </a>
+                    <a href="{{ route('share-classes.index') }}"
+                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                        Share Classes
+                    </a>
+                    <a href="{{ route('psi.index') }}"
+                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                        PSI Assessment
+                    </a>
+                @endhasanyrole
                 <div class="border-t border-gray-100 my-1"></div>
                 <a href="{{ route('profile.edit') }}"
                     class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">

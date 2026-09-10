@@ -204,7 +204,13 @@
 
 - [ ] DO NOT EXECUTE THIS ITEM - Make things modular using nwidart
 
-- [ ] Add "Admin" section to profile dropdown and move rarely executed amd setup items from the sidebar to here
+- [x] Add "Admin" section to profile dropdown and move rarely executed amd setup items from the sidebar to here
+  - (Sep 2026) Done. The profile dropdown's Administration section became a proper Admin area: admin sees
+    Administration, Backups and Users; admin/accountant see a "Setup & maintenance" group with Company
+    Details, Chart of Accounts, Opening Balances, Financial Years, Services, Share Classes and PSI
+    Assessment. Those rarely-executed/setup links left the sidebar (the sidebar Administration section,
+    Services, PSI, Chart of Accounts, Company Details, Opening Balances, Financial Years and Share
+    Classes blocks), leaving the sidebar for daily work.
 
 - [x] Need an option in bills to "add GST" per line item as well - for suppliers who show "ex-GST" for line items and then calculate it at subtotal. Make it another checkbox
 
