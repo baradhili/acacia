@@ -19,7 +19,8 @@
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Position</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Entity</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Position</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Roles</th>
                             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                         </tr>
@@ -31,6 +32,7 @@
                                     <a href="{{ route('users.show', $user) }}" class="text-blue-600 hover:text-blue-900">{{ $user->name }}</a>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-gray-500">{{ $user->email }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-gray-500">{{ $user->entity?->name ?? '—' }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap text-gray-500">{{ $user->position ?? '-' }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     @foreach($user->roles as $role)

@@ -170,7 +170,12 @@
 
 - [x] Add "select all" for create invoice from time entries against time entries
 
-- [ ] refactor to ensure all users are created linked with an entity
+- [x] refactor to ensure all users are created linked with an entity
+  - (Sep 2026) Done. The admin user form requires an Entity (select prefilled with the creator's
+    entity, enforced by exists:ifrs_entities,id on store+update) and the users index shows the
+    entity column; self-registration links the new user to the instance's entity (fresh installs
+    with no entity yet skip the link). Covered by the updated RoleMiddlewareTest (creates assert
+    the linkage; a new test refuses creation without an entity).
 
 - [ ] setting to prune transactions in closed years after x years (default 7 years)
 

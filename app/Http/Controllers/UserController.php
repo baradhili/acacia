@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use IFRS\Models\Entity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
@@ -27,13 +28,18 @@ class UserController extends Controller
             $query->role($request->role);
         }
 
-        $users = $query->paginate(15);
+        $users = $query->with('entity')->paginate(15);
+
         return view('users.index', compact('users'));
     }
 
     public function create()
     {
-        return view('users.create');
+        return view('users.create', [
+            'entities' => Entity::orderBy('name')->get(),
+            // Prefill with the creator's entity — the common case.
+            'defaultEntityId' => auth()->user()?->entity_id ?? Entity::min('id'),
+        ]);
     }
 
     public function store(Request $request)
@@ -47,12 +53,16 @@ class UserController extends Controller
             'position' => 'nullable|string|max:100',
             'phone' => 'nullable|string|max:50',
             'roles' => 'array',
+            // Every user is linked to an entity — the IFRS ledger and
+            // every entity-scoped screen resolve through it.
+            'entity_id' => ['required', 'integer', 'exists:ifrs_entities,id'],
         ]);
 
         $user = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
             'password' => Hash::make($validated['password']),
+            'entity_id' => $validated['entity_id'],
             'salary' => $validated['salary'] ?? null,
             'charge_out_rate' => $validated['charge_out_rate'] ?? null,
             'position' => $validated['position'] ?? null,
@@ -60,7 +70,7 @@ class UserController extends Controller
         ]);
 
         // Assign roles if provided
-        if (!empty($validated['roles'])) {
+        if (! empty($validated['roles'])) {
             $user->assignRole($validated['roles']);
         }
 
@@ -70,32 +80,40 @@ class UserController extends Controller
     public function show(User $user)
     {
         $user->load('roles');
+
         return view('users.show', compact('user'));
     }
 
     public function edit(User $user)
     {
         $user->load('roles');
-        return view('users.edit', compact('user'));
+
+        return view('users.edit', [
+            'user' => $user,
+            'entities' => Entity::orderBy('name')->get(),
+            'defaultEntityId' => $user->entity_id,
+        ]);
     }
 
     public function update(Request $request, User $user)
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email,' . $user->id,
+            'email' => 'required|email|unique:users,email,'.$user->id,
             'password' => ['nullable', 'confirmed', Password::defaults()],
             'salary' => 'nullable|numeric|min:0',
             'charge_out_rate' => 'nullable|numeric|min:0',
             'position' => 'nullable|string|max:100',
             'phone' => 'nullable|string|max:50',
             'roles' => 'array',
+            'entity_id' => ['required', 'integer', 'exists:ifrs_entities,id'],
         ]);
 
         $user->name = $validated['name'];
+        $user->entity_id = $validated['entity_id'];
         $user->email = $validated['email'];
 
-        if (!empty($validated['password'])) {
+        if (! empty($validated['password'])) {
             $user->password = Hash::make($validated['password']);
         }
 

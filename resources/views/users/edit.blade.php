@@ -32,6 +32,19 @@
                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                 </div>
                 <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Entity *</label>
+                    <select name="entity_id" required
+                           class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        @foreach ($entities as $entity)
+                            <option value="{{ $entity->id }}"
+                                {{ (string) old('entity_id', $user->entity_id) === (string) $entity->id ? 'selected' : '' }}>
+                                {{ $entity->name }}
+                            </option>
+                        @endforeach
+                    </select>
+                    @error('entity_id') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+                </div>
+                <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Position</label>
                     <input type="text" name="position" value="{{ old('position', $user->position) }}"
                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use IFRS\Models\Entity;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -12,7 +13,9 @@ class RoleMiddlewareTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected User $accountant;
+
     protected User $staff;
 
     protected function setUp(): void
@@ -24,7 +27,13 @@ class RoleMiddlewareTest extends TestCase
         Role::firstOrCreate(['name' => 'accountant']);
         Role::firstOrCreate(['name' => 'staff']);
 
-        $this->admin = User::factory()->create();
+        $this->entity = Entity::create([
+            'name' => 'Role Test Co',
+            'year_start' => 7,
+            'multi_currency' => false,
+        ]);
+
+        $this->admin = User::factory()->create(['entity_id' => $this->entity->id]);
         $this->admin->assignRole('admin');
 
         $this->accountant = User::factory()->create();
@@ -65,6 +74,7 @@ class RoleMiddlewareTest extends TestCase
             'password' => 'password',
             'password_confirmation' => 'password',
             'roles' => ['staff'],
+            'entity_id' => $this->entity->id,
         ]);
 
         $response->assertSessionHasNoErrors();
@@ -72,9 +82,24 @@ class RoleMiddlewareTest extends TestCase
             'email' => 'newuser@example.com',
         ]);
 
-        // Verify user was created
+        // Verify user was created — every user is linked to an entity.
         $newUser = User::where('email', 'newuser@example.com')->first();
         $this->assertNotNull($newUser);
+        $this->assertSame($this->entity->id, $newUser->entity_id);
+    }
+
+    public function test_a_user_cannot_be_created_without_an_entity(): void
+    {
+        $response = $this->actingAs($this->admin)->post('/users', [
+            'name' => 'Unlinked User',
+            'email' => 'unlinked@example.com',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+            'roles' => ['staff'],
+        ]);
+
+        $response->assertSessionHasErrors(['entity_id']);
+        $this->assertDatabaseMissing('users', ['email' => 'unlinked@example.com']);
     }
 
     public function test_admin_can_delete_user(): void
@@ -198,7 +223,7 @@ class RoleMiddlewareTest extends TestCase
     public function test_roles_can_be_assigned_to_users(): void
     {
         $newUser = User::factory()->create();
-        
+
         // Assign role
         $newUser->assignRole('staff');
         $this->assertTrue($newUser->hasRole('staff'));
