@@ -134,7 +134,7 @@ class CompanyProfileTest extends TestCase
             ->get(route('company-profile.index'))
             ->assertSee('Test Entity Pty Ltd')
             ->assertSee('TestCo Services')
-            ->assertSee('51824753556')
+            ->assertSee('51 824 753 556')
             ->assertSee('Jane Doe')
             ->assertSee('Acme Super Fund');
     }
@@ -266,7 +266,7 @@ class CompanyProfileTest extends TestCase
         $this->actingAs($this->admin)
             ->get(route('reports.company-tax'))
             ->assertStatus(200)
-            ->assertSee('51824753556')
-            ->assertSee('987654321');
+            ->assertSee('51 824 753 556')
+            ->assertSee('987 654 321');
     }
 }

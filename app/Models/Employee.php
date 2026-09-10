@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\AuNumbers;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -129,5 +130,18 @@ class Employee extends Model
     public function taxScale(): int
     {
         return (($this->tax_free_threshold ?? true)) ? 2 : 1;
+    }
+
+    /**
+     * TFN is stored as bare digits; spaced entry is normalised.
+     */
+    public function setTfnAttribute($value): void
+    {
+        $this->attributes['tfn'] = AuNumbers::digits($value);
+    }
+
+    public function getFormattedTfnAttribute(): ?string
+    {
+        return AuNumbers::tfn($this->tfn);
     }
 }

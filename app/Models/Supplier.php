@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\AuNumbers;
 use App\Traits\HasCustomFields;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -9,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Supplier extends Model
 {
-    use HasFactory, HasCustomFields;
+    use HasCustomFields, HasFactory;
 
     protected $fillable = [
         'name',
@@ -47,6 +48,19 @@ class Supplier extends Model
         'custom_fields' => 'array',
     ];
 
+    /**
+     * ABN is stored as bare digits; spaced entry is normalised.
+     */
+    public function setAbnAttribute($value): void
+    {
+        $this->attributes['abn'] = AuNumbers::digits($value);
+    }
+
+    public function getFormattedAbnAttribute(): ?string
+    {
+        return AuNumbers::abn($this->abn);
+    }
+
     public function documents(): MorphMany
     {
         return $this->morphMany(Document::class, 'documentable');
@@ -57,9 +71,10 @@ class Supplier extends Model
      */
     public function getLogoUrlAttribute(): ?string
     {
-        if ($this->logo && file_exists(public_path('storage/' . $this->logo))) {
-            return asset('storage/' . $this->logo);
+        if ($this->logo && file_exists(public_path('storage/'.$this->logo))) {
+            return asset('storage/'.$this->logo);
         }
+
         return null;
     }
 }

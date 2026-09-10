@@ -29,7 +29,7 @@
                     </div>
                     <div class="flex justify-between">
                         <dt class="text-gray-600">ABN:</dt>
-                        <dd class="text-gray-900">{{ $supplier->abn ?? '-' }}</dd>
+                        <dd class="text-gray-900">{{ $supplier->formatted_abn ?? '-' }}</dd>
                     </div>
                 </dl>
             </div>

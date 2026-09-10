@@ -146,21 +146,21 @@
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1" for="abn">ABN</label>
-                    <input id="abn" name="abn" type="text" inputmode="numeric" maxlength="11" value="{{ old('abn', $profile->abn) }}"
+                    <input id="abn" name="abn" type="text" inputmode="numeric" maxlength="14" placeholder="12 345 678 901" value="{{ old('abn', $profile->formatted_abn) }}"
                         placeholder="11 digits"
                         class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 @error('abn') border-red-300 @enderror">
                     @error('abn') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1" for="tfn">TFN</label>
-                    <input id="tfn" name="tfn" type="text" inputmode="numeric" maxlength="9" value="{{ old('tfn', $profile->tfn) }}"
+                    <input id="tfn" name="tfn" type="text" inputmode="numeric" maxlength="11" placeholder="123 456 789" value="{{ old('tfn', $profile->formatted_tfn) }}"
                         placeholder="9 digits"
                         class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 @error('tfn') border-red-300 @enderror">
                     @error('tfn') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1" for="acn">ACN</label>
-                    <input id="acn" name="acn" type="text" inputmode="numeric" maxlength="9" value="{{ old('acn', $profile->acn) }}"
+                    <input id="acn" name="acn" type="text" inputmode="numeric" maxlength="11" placeholder="123 456 789" value="{{ old('acn', $profile->formatted_acn) }}"
                         placeholder="9 digits"
                         class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 @error('acn') border-red-300 @enderror">
                     @error('acn') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror

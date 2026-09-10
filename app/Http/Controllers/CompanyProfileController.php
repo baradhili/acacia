@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\CompanyProfile;
 use App\Models\CompanyShareholder;
 use App\Models\ShareClass;
+use App\Rules\AuNumber;
 use App\Services\IfrsPosting;
 use App\Services\ShareholdingService;
 use Illuminate\Http\Request;
@@ -83,9 +84,9 @@ class CompanyProfileController extends Controller
             // statements). Trading name is the optional business name.
             'name' => ['required', 'string', 'max:300'],
             'trading_name' => ['nullable', 'string', 'max:100'],
-            'abn' => ['nullable', 'digits:11'],
-            'tfn' => ['nullable', 'digits:9'],
-            'acn' => ['nullable', 'digits:9'],
+            'abn' => ['nullable', new AuNumber('abn')],
+            'tfn' => ['nullable', new AuNumber('tfn')],
+            'acn' => ['nullable', new AuNumber('acn')],
             'tax_rate_type' => ['nullable', Rule::in([CompanyProfile::TAX_RATE_SMALL, CompanyProfile::TAX_RATE_COMPANY])],
             'address_line1' => ['nullable', 'string', 'max:100'],
             'address_line2' => ['nullable', 'string', 'max:100'],

@@ -46,8 +46,8 @@
                     <h3 class="text-lg font-semibold text-gray-800">{{ $statement['entity']['name'] }}</h3>
                     <p class="text-sm text-gray-600">
                         Income year: {{ $statement['fyStart']->format('d/m/Y') }} to {{ $statement['fyEnd']->format('d/m/Y') }} ·
-                        ABN: {{ $statement['entity']['abn'] !== '' ? $statement['entity']['abn'] : 'not configured' }} ·
-                        TFN: {{ $statement['entity']['tfn'] !== '' ? $statement['entity']['tfn'] : 'not configured' }}
+                        ABN: {{ $statement['entity']['abn'] !== '' ? \App\Support\AuNumbers::abn($statement['entity']['abn']) : 'not configured' }} ·
+                        TFN: {{ $statement['entity']['tfn'] !== '' ? \App\Support\AuNumbers::tfn($statement['entity']['tfn']) : 'not configured' }}
                     </p>
                     @if ($statement['entity']['abn'] === '' || $statement['entity']['tfn'] === '')
                         <p class="mt-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">

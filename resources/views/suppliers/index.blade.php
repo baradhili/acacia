@@ -33,7 +33,7 @@
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-gray-500">{{ $supplier->email ?? '-' }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap text-gray-500">{{ $supplier->phone ?? '-' }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-gray-500">{{ $supplier->abn ?? '-' }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-gray-500">{{ $supplier->formatted_abn ?? '-' }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                     <a href="{{ route('suppliers.edit', $supplier) }}" class="text-indigo-600 hover:text-indigo-900 mr-3">Edit</a>
                                     <form action="{{ route('suppliers.destroy', $supplier) }}" method="POST" class="inline">

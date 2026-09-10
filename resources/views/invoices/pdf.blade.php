@@ -231,7 +231,7 @@
                         {{ $invoice->client->country }}<br>
                     @endif
                     @if($invoice->client->abn)
-                        ABN: {{ $invoice->client->abn }}<br>
+                        ABN: {{ $invoice->client->formatted_abn }}<br>
                     @endif
                     {{ $invoice->client->email }}
                 </div>

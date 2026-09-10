@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\AuNumbers;
 use IFRS\Models\Entity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -166,17 +167,40 @@ class CompanyProfile extends Model
     }
 
     /**
-     * ABN formatted the way the ATO writes it (11 digits grouped 2-3-3-3).
-     * Anything that isn't an 11-digit ABN is returned untouched.
+     * ABN formatted the way the ATO writes it (2-3-3-3); anything that
+     * isn't an 11-digit ABN shows as entered.
      */
     public function getFormattedAbnAttribute(): string
     {
-        $digits = preg_replace('/\D/', '', (string) $this->abn);
+        return (string) AuNumbers::abn($this->abn);
+    }
 
-        if (strlen($digits) !== 11) {
-            return (string) $this->abn;
-        }
+    public function getFormattedAcnAttribute(): string
+    {
+        return (string) AuNumbers::acn($this->acn);
+    }
 
-        return substr($digits, 0, 2).' '.substr($digits, 2, 3).' '.substr($digits, 5, 3).' '.substr($digits, 8, 3);
+    public function getFormattedTfnAttribute(): string
+    {
+        return (string) AuNumbers::tfn($this->tfn);
+    }
+
+    /**
+     * ABN/ACN/TFN are stored as bare digits; spaced entry
+     * ("12 345 678 901") is normalised on the way in.
+     */
+    public function setAbnAttribute($value): void
+    {
+        $this->attributes['abn'] = AuNumbers::digits($value);
+    }
+
+    public function setAcnAttribute($value): void
+    {
+        $this->attributes['acn'] = AuNumbers::digits($value);
+    }
+
+    public function setTfnAttribute($value): void
+    {
+        $this->attributes['tfn'] = AuNumbers::digits($value);
     }
 }

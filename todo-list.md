@@ -146,9 +146,16 @@
     and a By-month table side by side, each summing hours and amounts with totals; overall totals across
     projects; approved entries only. Covered by ReportTest::test_project_timesheet_sums_hours_by_week_and_month.
 
-- [ ] need to handle client who "reverse invoice" - as in I fill their timesheet system and they send me a payment that is itemised like my time-based invoice timesheet
+- [ ] SKIP - need to handle client who "reverse invoice" - as in I fill their timesheet system and they send me a payment that is itemised like my time-based invoice timesheet
 
-- [ ] allow abn/acn/tfn to be display formatted in the way they normally are - also allow entry with the usual spaces
+- [x] allow abn/acn/tfn to be display formatted in the way they normally are - also allow entry with the usual spaces
+  - (Sep 2026) Done. New `App\Support\AuNumbers` (ABN 2-3-3-3, ACN 3-3-3, TFN 3-3-3 / 3-5 for 8 digits;
+    unexpected shapes pass through untouched) + `App\Rules\AuNumber` validation that accepts spaced entry.
+    Client, Supplier, CompanyProfile, CompanyShareholder and payroll Employee models normalise ABN/ACN/TFN
+    to bare digits on save (mutators) and expose formatted_abn/acn/tfn accessors; displays updated on the
+    client/supplier index+show, shareholder register/show, invoice PDF, company-profile form and the company
+    tax report screen/PDF (CSV exports keep bare digits). Covered by tests/Unit/AuNumbersTest.php and
+    tests/Feature/AuNumberFormattingTest.php.
 
 - [ ] DO NOT EXECUTE THIS ITEM - no need to enter both project and po project should have po
 

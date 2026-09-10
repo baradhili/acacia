@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\AuNumbers;
 use App\Traits\HasCustomFields;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Client extends Model
 {
-    use HasFactory, HasCustomFields, SoftDeletes;
+    use HasCustomFields, HasFactory, SoftDeletes;
 
     protected $fillable = [
         'name',
@@ -49,6 +50,24 @@ class Client extends Model
     ];
 
     /**
+     * ABN is stored as bare digits; spaced entry ("12 345 678 901")
+     * is normalised on the way in.
+     */
+    public function setAbnAttribute($value): void
+    {
+        $this->attributes['abn'] = AuNumbers::digits($value);
+    }
+
+    /**
+     * ABN formatted the way the ATO writes it (2-3-3-3); anything
+     * that isn't an 11-digit ABN shows as entered.
+     */
+    public function getFormattedAbnAttribute(): ?string
+    {
+        return AuNumbers::abn($this->abn);
+    }
+
+    /**
      * Get the effective billing address (uses primary if same_as_billing)
      */
     public function getBillingAddressLineAttribute(): ?string
@@ -56,6 +75,7 @@ class Client extends Model
         if ($this->same_as_billing) {
             return $this->address;
         }
+
         return $this->billing_address;
     }
 
@@ -67,6 +87,7 @@ class Client extends Model
         if ($this->same_as_billing) {
             return $this->address;
         }
+
         return $this->shipping_address;
     }
 
@@ -151,9 +172,10 @@ class Client extends Model
      */
     public function getLogoUrlAttribute(): ?string
     {
-        if ($this->logo && file_exists(public_path('storage/' . $this->logo))) {
-            return asset('storage/' . $this->logo);
+        if ($this->logo && file_exists(public_path('storage/'.$this->logo))) {
+            return asset('storage/'.$this->logo);
         }
+
         return null;
     }
 }

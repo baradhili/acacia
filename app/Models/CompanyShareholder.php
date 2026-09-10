@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\AuNumbers;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -89,5 +90,28 @@ class CompanyShareholder extends Model
         return collect([$this->address_line1, $this->address_line2, $this->suburb, $this->state, $this->postcode, $this->country])
             ->filter()
             ->implode(', ');
+    }
+
+    /**
+     * ABN/TFN are stored as bare digits; spaced entry is normalised.
+     */
+    public function setAbnAttribute($value): void
+    {
+        $this->attributes['abn'] = AuNumbers::digits($value);
+    }
+
+    public function setTfnAttribute($value): void
+    {
+        $this->attributes['tfn'] = AuNumbers::digits($value);
+    }
+
+    public function getFormattedAbnAttribute(): ?string
+    {
+        return AuNumbers::abn($this->abn);
+    }
+
+    public function getFormattedTfnAttribute(): ?string
+    {
+        return AuNumbers::tfn($this->tfn);
     }
 }

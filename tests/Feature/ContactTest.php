@@ -14,6 +14,7 @@ class ContactTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected User $staff;
 
     protected function setUp(): void
@@ -207,13 +208,14 @@ class ContactTest extends TestCase
         $this->assertEquals('NSW', $client->state);
     }
 
-    public function test_client_abn_is_stored(): void
+    public function test_client_abn_is_stored_as_digits(): void
     {
+        // Spaced (or decorated) entry normalises to bare digits.
         $client = Client::factory()->create([
-            'abn' => 'ABN123456789',
+            'abn' => '51 824 753 556',
         ]);
 
         $client->refresh();
-        $this->assertEquals('ABN123456789', $client->abn);
+        $this->assertEquals('51824753556', $client->abn);
     }
 }

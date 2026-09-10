@@ -49,7 +49,7 @@
                                 <td class="px-4 py-3">
                                     <div class="font-medium text-gray-900">{{ $shareholder->name }}</div>
                                     @if($shareholder->abn)
-                                        <div class="text-xs text-gray-500">ABN {{ $shareholder->abn }}</div>
+                                        <div class="text-xs text-gray-500">ABN {{ $shareholder->formatted_abn }}</div>
                                     @endif
                                 </td>
                                 <td class="px-4 py-3 text-sm text-gray-600">

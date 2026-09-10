@@ -28,7 +28,7 @@
                 <div class="flex justify-between"><dt class="text-gray-500">Email</dt><dd>{{ $shareholder->email ?: '—' }}</dd></div>
                 <div class="flex justify-between"><dt class="text-gray-500">Phone</dt><dd>{{ $shareholder->phone ?: '—' }}</dd></div>
                 <div class="flex justify-between"><dt class="text-gray-500">Contact</dt><dd>{{ $shareholder->contact_name ?: '—' }}</dd></div>
-                <div class="flex justify-between"><dt class="text-gray-500">ABN</dt><dd>{{ $shareholder->abn ?: '—' }}</dd></div>
+                <div class="flex justify-between"><dt class="text-gray-500">ABN</dt><dd>{{ $shareholder->formatted_abn ?: '—' }}</dd></div>
                 <div class="flex justify-between"><dt class="text-gray-500">TFN</dt><dd>{{ $shareholder->tfn ? 'On file' : '—' }}</dd></div>
                 <div class="flex justify-between">
                     <dt class="text-gray-500">Bank</dt>

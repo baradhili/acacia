@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Employee;
+use App\Rules\AuNumber;
 use App\Services\IfrsPosting;
 use Illuminate\Http\Request;
 
@@ -64,7 +65,7 @@ class PayrollEmployeeController extends Controller
         return $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255'],
-            'tfn' => ['nullable', 'string', 'max:20'],
+            'tfn' => ['nullable', new AuNumber('tfn')],
             'employment_type' => ['required', 'in:employee,director,contractor'],
             'labour_only' => ['boolean'],
             'payment_basis' => ['required', 'in:hourly,salary'],

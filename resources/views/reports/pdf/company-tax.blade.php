@@ -38,8 +38,8 @@
         <h1>Company Tax Return {{ $fyEnd }} — Annual Report</h1>
         <p class="meta">
             {{ $statement['entity']['name'] }} ·
-            ABN: {{ $statement['entity']['abn'] !== '' ? $statement['entity']['abn'] : 'not configured' }} ·
-            TFN: {{ $statement['entity']['tfn'] !== '' ? $statement['entity']['tfn'] : 'not configured' }}<br>
+            ABN: {{ $statement['entity']['abn'] !== '' ? \App\Support\AuNumbers::abn($statement['entity']['abn']) : 'not configured' }} ·
+            TFN: {{ $statement['entity']['tfn'] !== '' ? \App\Support\AuNumbers::tfn($statement['entity']['tfn']) : 'not configured' }}<br>
             Income year: {{ $statement['fyStart']->format('d/m/Y') }} to {{ $statement['fyEnd']->format('d/m/Y') }} ·
             Cash basis — small business entity · Amounts GST-exclusive, whole dollars
         </p>
