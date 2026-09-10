@@ -1992,7 +1992,9 @@ class ReportController extends Controller
             'fyEndYear' => $fyEnd,
             'entity' => [
                 'name' => $entity?->name ?? '',
-                // Profile first, legacy env config as fallback.
+                // Profile first, legacy env config as fallback. Kept as
+                // bare digits — the CSV/Excel export shares this array;
+                // the screens format for display.
                 'abn' => CompanyProfile::effectiveAbn($entity?->id),
                 'tfn' => CompanyProfile::effectiveTfn($entity?->id),
             ],
