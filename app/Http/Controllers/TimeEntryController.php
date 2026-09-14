@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Client;
 use App\Models\Project;
-use App\Models\PurchaseOrder;
 use App\Models\TimeEntry;
 use App\Models\TimeEntryBreak;
 use Carbon\Carbon;
@@ -27,13 +26,12 @@ class TimeEntryController extends Controller
 
     public function create()
     {
-        $clients = Client::orderBy('name')->pluck('name', 'id');
-        $projects = Project::where('status', 'active')->orderBy('name')->get();
-        $purchaseOrders = PurchaseOrder::whereNotIn('status', ['cancelled'])
-            ->orderBy('po_number')
-            ->pluck('po_number', 'id');
+        $projects = Project::with(['client', 'purchaseOrder'])
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get();
 
-        return view('time-entries.create', compact('clients', 'projects', 'purchaseOrders'));
+        return view('time-entries.create', compact('projects'));
     }
 
     /**
@@ -79,15 +77,14 @@ class TimeEntryController extends Controller
                 ->with('error', 'Only draft entries can be edited.');
         }
 
-        $clients = Client::orderBy('name')->pluck('name', 'id');
-        $projects = Project::where('status', 'active')->orderBy('name')->get();
-        $purchaseOrders = PurchaseOrder::whereNotIn('status', ['cancelled'])
-            ->orderBy('po_number')
-            ->pluck('po_number', 'id');
+        $projects = Project::with(['client', 'purchaseOrder'])
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get();
 
         $timeEntry->load('breaks');
 
-        return view('time-entries.edit', compact('timeEntry', 'clients', 'projects', 'purchaseOrders'));
+        return view('time-entries.edit', compact('timeEntry', 'projects'));
     }
 
     public function update(Request $request, TimeEntry $timeEntry)
@@ -193,14 +190,14 @@ class TimeEntryController extends Controller
      * Shared validation for store/update. Times and breaks are optional
      * HH:MM values on the entry date; hours are required unless times
      * are given (they are then derived server-side). Pass the entry
-     * being updated so the duplicate check can exclude it.
+     * being updated so the duplicate check can exclude it. The client
+     * and purchase order are never submitted — the model derives both
+     * from the required project.
      */
     protected function validateEntry(Request $request, ?TimeEntry $entry = null): array
     {
         $validated = $request->validate([
-            'client_id' => 'nullable|exists:clients,id',
-            'project_id' => 'nullable|exists:projects,id',
-            'purchase_order_id' => 'nullable|exists:purchase_orders,id',
+            'project_id' => 'required|exists:projects,id',
             'entry_date' => 'required|date',
             'start_time' => 'required_with:end_time|nullable|date_format:H:i',
             'end_time' => 'required_with:start_time|nullable|date_format:H:i|after:start_time',
@@ -223,7 +220,6 @@ class TimeEntryController extends Controller
             fn ($b) => ! empty($b['start']) && ! empty($b['end'])
         ));
 
-        $this->validatePurchaseOrderFit($validated);
         $this->validateNoDuplicate($validated, $entry);
 
         if (! empty($validated['breaks'])) {
@@ -257,55 +253,20 @@ class TimeEntryController extends Controller
     }
 
     /**
-     * A purchase order belongs to one client (and possibly one project),
-     * so an entry booked against it must target that same client. The
-     * effective client applies project precedence — mirroring the model's
-     * saving hook, a project's client always wins over the submitted
-     * client_id. Entries without a purchase order are unchecked.
-     */
-    protected function validatePurchaseOrderFit(array $validated): void
-    {
-        if (empty($validated['purchase_order_id'])) {
-            return;
-        }
-
-        $purchaseOrder = PurchaseOrder::find($validated['purchase_order_id']);
-        $effectiveClientId = $this->effectiveClientId($validated);
-
-        if ((int) $purchaseOrder->client_id !== (int) $effectiveClientId) {
-            throw ValidationException::withMessages([
-                'purchase_order_id' => 'This purchase order belongs to a different client'
-                    .(! empty($validated['project_id']) ? ' than the selected project' : '').'.',
-            ]);
-        }
-
-        if ($purchaseOrder->project_id
-            && (int) $purchaseOrder->project_id !== (int) ($validated['project_id'] ?? 0)) {
-            throw ValidationException::withMessages([
-                'project_id' => 'This purchase order is tied to a specific project — select that project or remove the purchase order.',
-            ]);
-        }
-    }
-
-    /**
-     * The client an entry counts against: a project's client always
-     * wins over a supplied client_id, mirroring the model's saving hook.
+     * The client an entry counts against — always the required
+     * project's client.
      */
     protected function effectiveClientId(array $validated): ?int
     {
-        $project = ! empty($validated['project_id'])
-            ? Project::find($validated['project_id'])
-            : null;
-
-        return $project?->client_id ?? ($validated['client_id'] ?? null);
+        return Project::whereKey($validated['project_id'])->value('client_id');
     }
 
     /**
      * One entry per staff member per client per day: a second entry for
      * an already-entered date/client combination is refused — edit the
      * existing entry instead (unapprove it first if it is approved).
-     * Internal entries (no client) are exempt, and other staff may
-     * still record their own time for the same client and date.
+     * Other staff may still record their own time for the same client
+     * and date.
      */
     protected function validateNoDuplicate(array $validated, ?TimeEntry $entry): void
     {
@@ -325,7 +286,7 @@ class TimeEntryController extends Controller
             $date = Carbon::parse($validated['entry_date'])->format('d M Y');
 
             throw ValidationException::withMessages([
-                'client_id' => "Time has already been entered for {$client?->name} on {$date}."
+                'project_id' => "Time has already been entered for {$client?->name} on {$date}."
                     .' Edit that entry instead — unapprove it first if it has been approved.',
             ]);
         }
@@ -341,9 +302,7 @@ class TimeEntryController extends Controller
         $date = Carbon::parse($validated['entry_date'])->startOfDay();
 
         $payload = [
-            'client_id' => $validated['client_id'] ?? null,
-            'project_id' => $validated['project_id'] ?? null,
-            'purchase_order_id' => $validated['purchase_order_id'] ?? null,
+            'project_id' => $validated['project_id'],
             'entry_date' => $validated['entry_date'],
             'start_time' => null,
             'end_time' => null,

@@ -87,59 +87,54 @@ class TimeEntryLifecycleTest extends TestCase
         $this->assertSame($other->id, $entry->fresh()->client_id);
     }
 
-    public function test_purchase_order_must_match_the_effective_client(): void
+    public function test_client_and_purchase_order_derive_from_the_project(): void
     {
-        $otherClient = Client::factory()->create();
         $po = PurchaseOrder::create([
             'client_id' => $this->client->id,
-            'title' => 'PO for the project client',
+            'title' => 'PO for the project',
             'budgeted_amount' => 10000,
             'status' => 'open',
         ]);
+        $this->project->update(['purchase_order_id' => $po->id]);
 
-        $base = [
+        // Linking a project to a PO mirrors it onto the PO row.
+        $this->assertEquals($this->project->id, $po->fresh()->project_id);
+
+        $decoy = PurchaseOrder::create([
+            'client_id' => $this->client->id,
+            'title' => 'Another PO',
+            'budgeted_amount' => 5000,
+            'status' => 'open',
+        ]);
+
+        // Submitted client/PO values are ignored — the project decides.
+        $this->actingAs($this->user)->post(route('time-entries.store'), [
+            'project_id' => $this->project->id,
+            'client_id' => 999999,
+            'purchase_order_id' => $decoy->id,
             'entry_date' => '2024-01-15',
             'hours' => 2,
             'description' => 'PO work',
             'billable' => true,
-        ];
+        ])->assertRedirect(route('time-entries.index'));
 
-        // Direct match still works (client or project supplying it).
-        // Distinct dates: one entry per staff member per client per day.
-        $this->actingAs($this->user)->post(route('time-entries.store'),
-            $base + ['purchase_order_id' => $po->id, 'client_id' => $this->client->id]
-        )->assertRedirect(route('time-entries.index'));
+        $entry = TimeEntry::first();
+        $this->assertEquals($this->client->id, $entry->client_id);
+        $this->assertEquals($po->id, $entry->purchase_order_id);
 
-        $this->actingAs($this->user)->post(route('time-entries.store'),
-            ['entry_date' => '2024-01-16'] + $base + ['purchase_order_id' => $po->id, 'project_id' => $this->project->id]
-        )->assertRedirect(route('time-entries.index'));
+        // A legacy project without a PO leaves the entry without one.
+        $bare = Project::factory()->create(['client_id' => $this->client->id]);
+        $this->actingAs($this->user)->post(route('time-entries.store'), [
+            'project_id' => $bare->id,
+            'entry_date' => '2024-01-16',
+            'hours' => 1,
+        ])->assertRedirect(route('time-entries.index'));
 
-        // A client from elsewhere is rejected.
-        $this->actingAs($this->user)->post(route('time-entries.store'),
-            $base + ['purchase_order_id' => $po->id, 'client_id' => $otherClient->id]
-        )->assertSessionHasErrors('purchase_order_id');
-
-        // Project precedence: the project's client decides, so a matching
-        // client_id cannot smuggle a foreign project onto the PO's work.
-        $foreignProject = Project::factory()->create(['client_id' => $otherClient->id]);
-        $this->actingAs($this->user)->post(route('time-entries.store'),
-            $base + [
-                'purchase_order_id' => $po->id,
-                'client_id' => $this->client->id,
-                'project_id' => $foreignProject->id,
-            ]
-        )->assertSessionHasErrors('purchase_order_id');
-
-        // A PO tied to a specific project only accepts that project
-        // (a sibling project of the same client still misses the tie).
-        $po->update(['project_id' => $this->project->id]);
-        $siblingProject = Project::factory()->create(['client_id' => $this->client->id]);
-        $this->actingAs($this->user)->post(route('time-entries.store'),
-            $base + [
-                'purchase_order_id' => $po->id,
-                'project_id' => $siblingProject->id,
-            ]
-        )->assertSessionHasErrors('project_id');
+        $this->assertNull($bare->fresh()->purchase_order_id);
+        $this->assertDatabaseHas('time_entries', [
+            'project_id' => $bare->id,
+            'purchase_order_id' => null,
+        ]);
     }
 
     public function test_can_create_manual_hours_entry_without_times(): void
@@ -718,39 +713,26 @@ class TimeEntryLifecycleTest extends TestCase
         $this->assertEquals($this->user->id, $entry->user->id);
     }
 
-    public function test_time_entry_can_target_a_client_directly(): void
+    public function test_an_entry_requires_a_project(): void
     {
-        $response = $this->actingAs($this->user)->post(route('time-entries.store'), [
+        // Ad-hoc client time (no project) is gone...
+        $this->actingAs($this->user)->post(route('time-entries.store'), [
             'client_id' => $this->client->id,
             'entry_date' => '2024-01-15',
             'hours' => 3,
             'description' => 'Ad-hoc client call',
             'billable' => true,
-        ]);
+        ])->assertSessionHasErrors('project_id');
 
-        $response->assertRedirect(route('time-entries.index'));
-        $this->assertDatabaseHas('time_entries', [
-            'client_id' => $this->client->id,
-            'project_id' => null,
-            'hours' => 3,
-        ]);
-    }
-
-    public function test_time_entry_can_be_internal_with_no_target(): void
-    {
-        $response = $this->actingAs($this->user)->post(route('time-entries.store'), [
+        // ...and so is internal (no-target) time.
+        $this->actingAs($this->user)->post(route('time-entries.store'), [
             'entry_date' => '2024-01-15',
             'hours' => 2,
             'description' => 'Internal admin',
             'billable' => false,
-        ]);
+        ])->assertSessionHasErrors('project_id');
 
-        $response->assertRedirect(route('time-entries.index'));
-        $this->assertDatabaseHas('time_entries', [
-            'client_id' => null,
-            'project_id' => null,
-            'billable' => false,
-        ]);
+        $this->assertSame(0, TimeEntry::count());
     }
 
     public function test_project_selection_forces_the_projects_client(): void
@@ -773,8 +755,16 @@ class TimeEntryLifecycleTest extends TestCase
         ]);
     }
 
-    public function test_changing_the_project_updates_the_denormalised_client(): void
+    public function test_changing_the_project_updates_the_derived_client_and_po(): void
     {
+        $po = PurchaseOrder::create([
+            'client_id' => $this->client->id,
+            'title' => 'PO for the first project',
+            'budgeted_amount' => 10000,
+            'status' => 'open',
+        ]);
+        $this->project->update(['purchase_order_id' => $po->id]);
+
         $entry = TimeEntry::create([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
@@ -783,24 +773,66 @@ class TimeEntryLifecycleTest extends TestCase
             'status' => TimeEntry::STATUS_DRAFT,
         ]);
         $this->assertEquals($this->client->id, $entry->client_id);
+        $this->assertEquals($po->id, $entry->purchase_order_id);
 
         $otherClient = Client::factory()->create();
-        $otherProject = Project::factory()->create(['client_id' => $otherClient->id]);
+        $otherPo = PurchaseOrder::create([
+            'client_id' => $otherClient->id,
+            'title' => 'PO for the other project',
+            'budgeted_amount' => 8000,
+            'status' => 'open',
+        ]);
+        $otherProject = Project::factory()->create([
+            'client_id' => $otherClient->id,
+            'purchase_order_id' => $otherPo->id,
+        ]);
 
         $entry->update(['project_id' => $otherProject->id]);
 
-        $this->assertEquals($otherClient->id, $entry->refresh()->client_id);
+        $entry = $entry->refresh();
+        $this->assertEquals($otherClient->id, $entry->client_id);
+        $this->assertEquals($otherPo->id, $entry->purchase_order_id);
     }
 
-    public function test_create_form_lists_clients_and_projects(): void
+    public function test_create_form_shows_the_project_with_its_client(): void
     {
         $response = $this->actingAs($this->user)->get(route('time-entries.create'));
 
         $response->assertOk();
-        $response->assertSee('No client (internal time)');
-        $response->assertSee($this->project->name);
-        // Project options carry their client for the JS auto-fill.
-        $response->assertSee('data-client-id="'.$this->client->id.'"', false);
+        $response->assertSee($this->project->name.' ('.$this->client->name.')');
+        // Project options carry their client/PO for the read-only displays.
+        $response->assertSee('data-client="'.$this->client->name.'"', false);
+        // The client and PO are derived, not submitted inputs.
+        $response->assertDontSee('name="client_id"');
+        $response->assertDontSee('name="purchase_order_id"');
+    }
+
+    public function test_a_legacy_draft_without_a_project_needs_one_to_be_edited(): void
+    {
+        $entry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'client_id' => $this->client->id,
+            'entry_date' => '2024-03-05',
+            'hours' => 2,
+            'status' => TimeEntry::STATUS_DRAFT,
+        ]);
+
+        $this->actingAs($this->user)->get(route('time-entries.edit', $entry))->assertOk();
+
+        $this->actingAs($this->user)->put(route('time-entries.update', $entry), [
+            'entry_date' => '2024-03-05',
+            'hours' => 4,
+        ])->assertSessionHasErrors('project_id');
+
+        $this->actingAs($this->user)->put(route('time-entries.update', $entry), [
+            'project_id' => $this->project->id,
+            'entry_date' => '2024-03-05',
+            'hours' => 4,
+        ])->assertSessionHas('success');
+
+        $entry = $entry->refresh();
+        $this->assertEquals($this->project->id, $entry->project_id);
+        $this->assertEquals($this->client->id, $entry->client_id);
     }
 
     // ============================================================
@@ -810,24 +842,28 @@ class TimeEntryLifecycleTest extends TestCase
     public function test_duplicate_date_client_combination_is_rejected(): void
     {
         $this->actingAs($this->user)->post(route('time-entries.store'), [
-            'client_id' => $this->client->id,
+            'project_id' => $this->project->id,
             'entry_date' => '2024-03-05',
             'hours' => 2,
             'billable' => true,
         ])->assertRedirect(route('time-entries.index'));
 
+        // A sibling project of the same client still clashes: the rule
+        // is one entry per staff member per client per day.
+        $sibling = Project::factory()->create(['client_id' => $this->client->id]);
         $this->actingAs($this->user)->post(route('time-entries.store'), [
-            'client_id' => $this->client->id,
+            'project_id' => $sibling->id,
             'entry_date' => '2024-03-05',
             'hours' => 1,
             'billable' => true,
-        ])->assertSessionHasErrors('client_id');
+        ])->assertSessionHasErrors('project_id');
 
         $this->assertSame(1, TimeEntry::count());
     }
 
-    public function test_project_of_the_same_client_counts_as_the_duplicate(): void
+    public function test_a_legacy_client_row_counts_as_the_duplicate(): void
     {
+        // History from before the project requirement.
         TimeEntry::create([
             'user_id' => $this->user->id,
             'client_id' => $this->client->id,
@@ -835,13 +871,12 @@ class TimeEntryLifecycleTest extends TestCase
             'hours' => 2,
         ]);
 
-        // The project's client is the effective client, so this clashes
-        // even though no client_id was submitted.
+        // The project's client is the effective client, so this clashes.
         $this->actingAs($this->user)->post(route('time-entries.store'), [
             'project_id' => $this->project->id,
             'entry_date' => '2024-03-05',
             'hours' => 1,
-        ])->assertSessionHasErrors('client_id');
+        ])->assertSessionHasErrors('project_id');
 
         // A different day for the same project is fine.
         $this->actingAs($this->user)->post(route('time-entries.store'), [
@@ -851,82 +886,89 @@ class TimeEntryLifecycleTest extends TestCase
         ])->assertRedirect(route('time-entries.index'));
     }
 
+    public function test_projects_of_different_clients_can_share_a_date(): void
+    {
+        $otherClient = Client::factory()->create();
+        $otherProject = Project::factory()->create(['client_id' => $otherClient->id]);
+
+        $this->actingAs($this->user)->post(route('time-entries.store'), [
+            'project_id' => $this->project->id,
+            'entry_date' => '2024-03-05',
+            'hours' => 4,
+        ])->assertRedirect(route('time-entries.index'));
+
+        $this->actingAs($this->user)->post(route('time-entries.store'), [
+            'project_id' => $otherProject->id,
+            'entry_date' => '2024-03-05',
+            'hours' => 3,
+        ])->assertRedirect(route('time-entries.index'));
+
+        $this->assertSame(2, TimeEntry::count());
+    }
+
     public function test_other_users_clients_and_dates_are_not_blocked(): void
     {
-        TimeEntry::create([
-            'user_id' => $this->user->id,
-            'client_id' => $this->client->id,
-            'entry_date' => '2024-03-05',
-            'hours' => 2,
-        ]);
-
         $otherUser = User::factory()->create();
         $otherClient = Client::factory()->create();
+        $otherProject = Project::factory()->create(['client_id' => $otherClient->id]);
+
+        $this->actingAs($this->user)->post(route('time-entries.store'), [
+            'project_id' => $this->project->id,
+            'entry_date' => '2024-03-05',
+            'hours' => 2,
+        ])->assertRedirect(route('time-entries.index'));
 
         // Another staff member may log their own time for the same
         // client and date.
         $this->actingAs($otherUser)->post(route('time-entries.store'), [
-            'client_id' => $this->client->id,
+            'project_id' => $this->project->id,
             'entry_date' => '2024-03-05',
             'hours' => 3,
         ])->assertRedirect(route('time-entries.index'));
 
         // Same staff member, different client or different date.
         $this->actingAs($this->user)->post(route('time-entries.store'), [
-            'client_id' => $otherClient->id,
+            'project_id' => $otherProject->id,
             'entry_date' => '2024-03-05',
             'hours' => 1,
         ])->assertRedirect(route('time-entries.index'));
 
         $this->actingAs($this->user)->post(route('time-entries.store'), [
-            'client_id' => $this->client->id,
+            'project_id' => $this->project->id,
             'entry_date' => '2024-03-06',
             'hours' => 1,
         ])->assertRedirect(route('time-entries.index'));
     }
 
-    public function test_internal_entries_may_repeat_on_a_date(): void
-    {
-        $base = ['entry_date' => '2024-03-05', 'billable' => false];
-
-        $this->actingAs($this->user)->post(route('time-entries.store'),
-            ['hours' => 1, 'description' => 'Morning admin'] + $base
-        )->assertRedirect(route('time-entries.index'));
-
-        $this->actingAs($this->user)->post(route('time-entries.store'),
-            ['hours' => 1, 'description' => 'Evening training'] + $base
-        )->assertRedirect(route('time-entries.index'));
-
-        $this->assertSame(2, TimeEntry::count());
-    }
-
     public function test_update_cannot_move_an_entry_onto_a_taken_combination(): void
     {
+        $otherClient = Client::factory()->create();
+        $otherProject = Project::factory()->create(['client_id' => $otherClient->id]);
+
         $first = TimeEntry::create([
             'user_id' => $this->user->id,
-            'client_id' => $this->client->id,
+            'project_id' => $this->project->id,
             'entry_date' => '2024-03-05',
             'hours' => 2,
         ]);
-        $otherClient = Client::factory()->create();
         $second = TimeEntry::create([
             'user_id' => $this->user->id,
-            'client_id' => $otherClient->id,
+            'project_id' => $otherProject->id,
             'entry_date' => '2024-03-05',
             'hours' => 1,
         ]);
 
         // Moving onto the first entry's date/client is refused.
         $this->actingAs($this->user)->put(route('time-entries.update', $second), [
-            'client_id' => $this->client->id,
+            'project_id' => $this->project->id,
             'entry_date' => '2024-03-05',
             'hours' => 4,
             'billable' => true,
-        ])->assertSessionHasErrors('client_id');
+        ])->assertSessionHasErrors('project_id');
 
         // Keeping its own combination (self-exclusion) still saves.
         $this->actingAs($this->user)->put(route('time-entries.update', $second), [
-            'client_id' => $otherClient->id,
+            'project_id' => $otherProject->id,
             'entry_date' => '2024-03-05',
             'hours' => 4,
             'billable' => true,

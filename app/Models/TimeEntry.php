@@ -60,14 +60,18 @@ class TimeEntry extends Model
                 $entry->hours = $entry->calculateHours();
             }
 
-            // A project belongs to exactly one client — keep the
-            // denormalised client_id in sync so reporting and the
-            // unbilled-time queries can rely on the column alone.
-            // Whenever a project is set it wins, even when a (changed)
-            // client_id was supplied: letting a stale manual client_id
-            // bypass the sync would desynchronise the column.
+            // A project is the single source of truth for an entry's
+            // client and purchase order — keep both denormalised
+            // columns in sync so reporting and the unbilled-time
+            // queries can rely on them alone. Whenever a project is
+            // set it wins, even when a stale value was supplied.
             if ($entry->project_id) {
-                $entry->client_id = Project::whereKey($entry->project_id)->value('client_id');
+                $project = Project::whereKey($entry->project_id)
+                    ->first(['client_id', 'purchase_order_id']);
+                if ($project) {
+                    $entry->client_id = $project->client_id;
+                    $entry->purchase_order_id = $project->purchase_order_id;
+                }
             }
         });
     }
@@ -97,10 +101,9 @@ class TimeEntry extends Model
     }
 
     /**
-     * Direct client target. Entries on a project always carry the
-     * project's client (enforced by the saving hook); entries without
-     * a project may target a client directly or stand alone as
-     * internal time (both null).
+     * The entry's client — always the project's client (enforced by
+     * the saving hook; entries are created against a project only).
+     * Legacy rows predating that rule may lack a client.
      */
     public function client(): BelongsTo
     {
