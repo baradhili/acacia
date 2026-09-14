@@ -796,12 +796,20 @@ class TimeEntryLifecycleTest extends TestCase
 
     public function test_create_form_shows_the_project_with_its_client(): void
     {
+        // Fixed names: random factory company names can escape into
+        // entities and make the raw data-attribute assertion flaky.
+        $client = Client::factory()->create(['name' => 'Fixed Client Co']);
+        $project = Project::factory()->create([
+            'client_id' => $client->id,
+            'name' => 'Fixed Project',
+        ]);
+
         $response = $this->actingAs($this->user)->get(route('time-entries.create'));
 
         $response->assertOk();
-        $response->assertSee($this->project->name.' ('.$this->client->name.')');
+        $response->assertSee('Fixed Project (Fixed Client Co)');
         // Project options carry their client/PO for the read-only displays.
-        $response->assertSee('data-client="'.$this->client->name.'"', false);
+        $response->assertSee('data-client="Fixed Client Co"', false);
         // The client and PO are derived, not submitted inputs.
         $response->assertDontSee('name="client_id"');
         $response->assertDontSee('name="purchase_order_id"');
