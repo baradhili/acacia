@@ -26,17 +26,20 @@
                 </div>
 
                 <div>
-                    <label for="purchase_order_id" class="block text-sm font-medium text-gray-700">Purchase Order</label>
-                    <select name="purchase_order_id" id="purchase_order_id"
+                    <label for="purchase_order_id" class="block text-sm font-medium text-gray-700">Purchase Order *</label>
+                    <select name="purchase_order_id" id="purchase_order_id" required
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                        <option value="">-- No Purchase Order --</option>
+                        <option value="">-- Select Purchase Order --</option>
                         @foreach($purchaseOrders as $po)
                             <option value="{{ $po->id }}" {{ old('purchase_order_id') == $po->id ? 'selected' : '' }}>
                                 {{ $po->po_number }} - {{ $po->title }} (${{ number_format($po->remaining, 2) }} remaining)
                             </option>
                         @endforeach
                     </select>
-                    <p class="mt-1 text-xs text-gray-500">Select a purchase order after choosing a client</p>
+                    <p class="mt-1 text-xs text-gray-500">Choose the client first — every project is billed against one of its purchase orders</p>
+                    <p id="noPoHint" class="mt-1 text-xs text-amber-600 hidden">
+                        No open purchase orders for this client — <a id="createPoLink" href="{{ route('purchase-orders.create') }}" class="underline">create one</a> first.
+                    </p>
                     @error('purchase_order_id')
                         <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                     @enderror
@@ -174,17 +177,19 @@
             // Load purchase orders when client changes
             const clientSelect = document.getElementById('client_id');
             const poSelect = document.getElementById('purchase_order_id');
-            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+            const noPoHint = document.getElementById('noPoHint');
+            const createPoLink = document.getElementById('createPoLink');
 
             if (clientSelect && poSelect) {
                 clientSelect.addEventListener('change', function() {
                     const clientId = this.value;
-                    
+
                     // Clear existing options
-                    poSelect.innerHTML = '<option value="">-- No Purchase Order --</option>';
-                    
+                    poSelect.innerHTML = '<option value="">-- Select Purchase Order --</option>';
+                    noPoHint.classList.add('hidden');
+
                     if (!clientId) return;
-                    
+
                     // Fetch purchase orders for the selected client
                     fetch(`/clients/${clientId}/purchase-orders?available=1`, {
                         headers: {
@@ -200,6 +205,11 @@
                             option.textContent = `${po.po_number} - ${po.title} ($${parseFloat(po.remaining).toFixed(2)} remaining)`;
                             poSelect.appendChild(option);
                         });
+
+                        if (data.length === 0) {
+                            createPoLink.href = '{{ route('purchase-orders.create') }}?client_id=' + clientId;
+                            noPoHint.classList.remove('hidden');
+                        }
                     })
                     .catch(error => console.error('Error loading purchase orders:', error));
                 });
