@@ -96,15 +96,17 @@
             @csrf
 
             <div>
-                <label for="type" class="block text-sm font-medium text-gray-700 mb-1">Type</label>
-                <select name="type" id="type"
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                <div class="mt-1 flex flex-col gap-1.5">
                     @foreach (\App\Models\BasSettlement::TYPES as $type)
-                        <option value="{{ $type }}" {{ old('type', \App\Models\BasSettlement::TYPE_GST) === $type ? 'selected' : '' }}>
-                            {{ \App\Models\BasSettlement::typeLabel($type) }}
-                        </option>
+                        <label class="flex items-center">
+                            <input type="radio" name="type" value="{{ $type }}"
+                                {{ old('type', \App\Models\BasSettlement::TYPE_GST) === $type ? 'checked' : '' }}
+                                class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                            <span class="ml-2 text-sm text-gray-700">{{ \App\Models\BasSettlement::typeLabel($type) }}</span>
+                        </label>
                     @endforeach
-                </select>
+                </div>
                 @error('type') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
             </div>
 
