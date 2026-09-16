@@ -159,6 +159,11 @@
                     <a href="{{ route('administration.index') }}"
                         class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                         Administration
+                        @if ($entity = \App\Services\IfrsPosting::resolveEntity())
+                            <span class="block text-xs text-gray-400">
+                                Currently Open Year: FY {{ app(\App\Services\FiscalYearService::class)->currentYear($entity) }}
+                            </span>
+                        @endif
                     </a>
                     <a href="{{ route('backups.index') }}"
                         class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
