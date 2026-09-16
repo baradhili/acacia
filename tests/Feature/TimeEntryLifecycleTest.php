@@ -987,6 +987,60 @@ class TimeEntryLifecycleTest extends TestCase
             ->whereDate('entry_date', '2024-03-05')->first()->id);
     }
 
+    public function test_an_inactive_project_still_carries_its_own_draft_entry(): void
+    {
+        $entry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $this->project->id,
+            'entry_date' => '2024-03-05',
+            'hours' => 4,
+            'status' => TimeEntry::STATUS_DRAFT,
+        ]);
+        $this->project->update(['status' => Project::STATUS_ON_HOLD]);
+
+        // The form keeps listing the entry's own project...
+        $this->actingAs($this->user)->get(route('time-entries.edit', $entry))
+            ->assertOk()
+            ->assertSee($this->project->name);
+
+        // ...and the entry may stay on it.
+        $this->actingAs($this->user)->put(route('time-entries.update', $entry), [
+            'project_id' => $this->project->id,
+            'entry_date' => '2024-03-05',
+            'hours' => 5,
+        ])->assertSessionHas('success');
+
+        $this->assertEquals(5, (float) $entry->fresh()->hours);
+    }
+
+    public function test_inactive_projects_are_rejected_for_new_entries_and_switches(): void
+    {
+        $this->project->update(['status' => Project::STATUS_COMPLETED]);
+
+        $this->actingAs($this->user)->post(route('time-entries.store'), [
+            'project_id' => $this->project->id,
+            'entry_date' => '2024-03-05',
+            'hours' => 2,
+        ])->assertSessionHasErrors('project_id');
+
+        // An entry on an active project cannot move onto it either.
+        $otherClient = Client::factory()->create();
+        $active = Project::factory()->create(['client_id' => $otherClient->id]);
+        $entry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $active->id,
+            'entry_date' => '2024-03-05',
+            'hours' => 2,
+            'status' => TimeEntry::STATUS_DRAFT,
+        ]);
+
+        $this->actingAs($this->user)->put(route('time-entries.update', $entry), [
+            'project_id' => $this->project->id,
+            'entry_date' => '2024-03-05',
+            'hours' => 3,
+        ])->assertSessionHasErrors('project_id');
+    }
+
     // ============================================================
     // Unapprove — edit again unless allocated to an invoice
     // ============================================================

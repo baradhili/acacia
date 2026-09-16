@@ -8,6 +8,7 @@ use App\Models\ProjectStaff;
 use App\Models\PurchaseOrder;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class ProjectController extends Controller
@@ -59,11 +60,17 @@ class ProjectController extends Controller
             'staff.*.hourly_rate' => 'nullable|numeric|min:0',
         ]);
 
-        $this->assertPurchaseOrderFitsClient($validated);
-
         $validated['status'] = $validated['status'] ?? Project::STATUS_ACTIVE;
 
-        $project = Project::create($validated);
+        // The PO is claimed inside a transaction with a row lock: a
+        // concurrent project could otherwise take it between the
+        // existence validation and the create. Any revalidation
+        // failure inside throws and rolls back, leaving the PO free.
+        $project = DB::transaction(function () use ($validated) {
+            $this->assertPurchaseOrderFitsClient($validated, lock: true);
+
+            return Project::create($validated);
+        });
 
         // Assign staff if provided
         if (! empty($validated['staff'])) {
@@ -154,11 +161,17 @@ class ProjectController extends Controller
      * A project's purchase order must belong to the project's client and
      * not already be linked to another project — the client-filtered PO
      * list on the form is UI-only, so the same constraints are enforced
-     * server-side. Pass the project being updated so its own PO passes.
+     * server-side. A newly selected PO must also still be open (or
+     * partially used); the project's own PO stays selectable whatever
+     * its status, since a consumed budget shouldn't force a relink.
+     * Pass the project being updated so its own PO passes, and lock the
+     * PO row when claiming it for a new project.
      */
-    protected function assertPurchaseOrderFitsClient(array $validated, ?Project $project = null): void
+    protected function assertPurchaseOrderFitsClient(array $validated, ?Project $project = null, bool $lock = false): void
     {
-        $purchaseOrder = PurchaseOrder::find($validated['purchase_order_id']);
+        $purchaseOrder = PurchaseOrder::whereKey($validated['purchase_order_id'])
+            ->when($lock, fn ($query) => $query->lockForUpdate())
+            ->first();
 
         if ((int) $purchaseOrder->client_id !== (int) $validated['client_id']) {
             throw ValidationException::withMessages([
@@ -170,6 +183,14 @@ class ProjectController extends Controller
             && (int) $purchaseOrder->project_id !== (int) ($project?->id ?? 0)) {
             throw ValidationException::withMessages([
                 'purchase_order_id' => 'This purchase order is already linked to another project.',
+            ]);
+        }
+
+        $isOwnSelection = (int) $purchaseOrder->id === (int) ($project?->purchase_order_id ?? 0);
+        if (! $isOwnSelection
+            && ! in_array($purchaseOrder->status, [PurchaseOrder::STATUS_OPEN, PurchaseOrder::STATUS_PARTIALLY_USED])) {
+            throw ValidationException::withMessages([
+                'purchase_order_id' => 'This purchase order is no longer open.',
             ]);
         }
     }
@@ -202,6 +223,32 @@ class ProjectController extends Controller
         $project->staffAssignments()->where('user_id', $user->id)->delete();
 
         return back()->with('success', 'Staff member removed from project.');
+    }
+
+    /**
+     * Every project's profitability side by side — the landing screen
+     * behind the topbar's Project Profitability link; each row drills
+     * into the per-project breakdown.
+     */
+    public function profitabilityIndex()
+    {
+        $projects = Project::with(['client', 'timeEntries' => fn ($query) => $query->approved()])
+            ->orderBy('name')
+            ->get()
+            ->map(function (Project $project) {
+                $revenue = $project->timeEntries->where('billable', true)->sum('total');
+                $cost = $project->timeEntries->sum('total');
+
+                return (object) [
+                    'project' => $project,
+                    'revenue' => $revenue,
+                    'cost' => $cost,
+                    'profit' => $revenue - $cost,
+                    'margin' => $revenue > 0 ? (($revenue - $cost) / $revenue) * 100 : 0,
+                ];
+            });
+
+        return view('projects.profitability-index', compact('projects'));
     }
 
     public function profitability(Project $project)

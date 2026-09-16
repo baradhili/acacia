@@ -48,9 +48,13 @@ class Project extends Model
         // Mirror the project→PO link onto the PO row so "available PO"
         // filtering and PO screens see the linkage from both sides:
         // clear any PO still pointing at this project, then point the
-        // linked PO back. Mass updates keep this loop-free.
+        // linked PO back. Mass updates keep this loop-free. When the
+        // client or PO linkage moves, the project's entries follow so
+        // their denormalised client/PO columns never go stale.
         static::saved(function (Project $project) {
-            if (! $project->wasRecentlyCreated && ! $project->wasChanged('purchase_order_id')) {
+            if (! $project->wasRecentlyCreated
+                && ! $project->wasChanged('purchase_order_id')
+                && ! $project->wasChanged('client_id')) {
                 return;
             }
 
@@ -62,6 +66,11 @@ class Project extends Model
                 PurchaseOrder::whereKey($project->purchase_order_id)
                     ->update(['project_id' => $project->id]);
             }
+
+            TimeEntry::where('project_id', $project->id)->update([
+                'client_id' => $project->client_id,
+                'purchase_order_id' => $project->purchase_order_id,
+            ]);
         });
     }
 

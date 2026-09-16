@@ -10,6 +10,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class TimeEntryController extends Controller
@@ -77,8 +78,12 @@ class TimeEntryController extends Controller
                 ->with('error', 'Only draft entries can be edited.');
         }
 
+        // Active projects plus the entry's own — a draft on a project
+        // that has since gone on hold/completed stays editable rather
+        // than being stranded off the form.
         $projects = Project::with(['client', 'purchaseOrder'])
-            ->where('status', 'active')
+            ->where('status', Project::STATUS_ACTIVE)
+            ->orWhere('id', $timeEntry->project_id)
             ->orderBy('name')
             ->get();
 
@@ -190,14 +195,27 @@ class TimeEntryController extends Controller
      * Shared validation for store/update. Times and breaks are optional
      * HH:MM values on the entry date; hours are required unless times
      * are given (they are then derived server-side). Pass the entry
-     * being updated so the duplicate check can exclude it. The client
-     * and purchase order are never submitted — the model derives both
-     * from the required project.
+     * being updated so the duplicate check can exclude it and its own
+     * project can survive a status change. The client and purchase
+     * order are never submitted — the model derives both from the
+     * required project.
      */
     protected function validateEntry(Request $request, ?TimeEntry $entry = null): array
     {
         $validated = $request->validate([
-            'project_id' => 'required|exists:projects,id',
+            'project_id' => [
+                'required',
+                Rule::exists('projects', 'id')->where(function ($query) use ($entry) {
+                    $query->where('status', Project::STATUS_ACTIVE);
+
+                    if ($entry?->project_id) {
+                        // An edited entry may stay on its own project
+                        // even when that project is no longer active;
+                        // other inactive projects stay off-limits.
+                        $query->orWhere('id', $entry->project_id);
+                    }
+                }),
+            ],
             'entry_date' => 'required|date',
             'start_time' => 'required_with:end_time|nullable|date_format:H:i',
             'end_time' => 'required_with:start_time|nullable|date_format:H:i|after:start_time',

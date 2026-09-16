@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Models\Client;
 use App\Models\Project;
 use App\Models\PurchaseOrder;
+use App\Models\TimeEntry;
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -152,5 +154,114 @@ class ProjectPurchaseOrderLinkTest extends TestCase
             ->get(route('purchase-orders.create', ['client_id' => $this->client->id]))
             ->assertOk()
             ->assertSee('value="'.$this->client->id.'" selected', false);
+    }
+
+    public function test_a_newly_selected_po_must_still_be_open(): void
+    {
+        $completed = $this->makePo(status: PurchaseOrder::STATUS_COMPLETED);
+        $partiallyUsed = $this->makePo(status: PurchaseOrder::STATUS_PARTIALLY_USED);
+
+        // New projects can only claim open/partially_used POs.
+        $this->actingAs($this->user)->post(route('projects.store'), [
+            'client_id' => $this->client->id,
+            'purchase_order_id' => $completed->id,
+            'name' => 'Project on a completed PO',
+        ])->assertSessionHasErrors('purchase_order_id');
+
+        $this->actingAs($this->user)->post(route('projects.store'), [
+            'client_id' => $this->client->id,
+            'purchase_order_id' => $partiallyUsed->id,
+            'name' => 'Project on a partially used PO',
+        ])->assertSessionHas('success');
+
+        // Keeping the project's own PO is fine whatever its status;
+        // switching to another completed PO is not.
+        $project = Project::where('purchase_order_id', $partiallyUsed->id)->first();
+        $partiallyUsed->update(['status' => PurchaseOrder::STATUS_COMPLETED]);
+
+        $this->actingAs($this->user)->put(route('projects.update', $project), [
+            'client_id' => $this->client->id,
+            'purchase_order_id' => $partiallyUsed->id,
+            'name' => $project->name,
+        ])->assertSessionHas('success');
+
+        $this->actingAs($this->user)->put(route('projects.update', $project), [
+            'client_id' => $this->client->id,
+            'purchase_order_id' => $completed->id,
+            'name' => $project->name,
+        ])->assertSessionHasErrors('purchase_order_id');
+    }
+
+    public function test_two_projects_cannot_share_a_po_at_the_database_level(): void
+    {
+        $po = $this->makePo();
+
+        Project::factory()->create([
+            'client_id' => $this->client->id,
+            'purchase_order_id' => $po->id,
+        ]);
+
+        $this->expectException(QueryException::class);
+
+        Project::factory()->create([
+            'client_id' => $this->client->id,
+            'purchase_order_id' => $po->id,
+        ]);
+    }
+
+    public function test_entries_follow_the_project_linkage(): void
+    {
+        $poA = $this->makePo();
+        $project = Project::factory()->create([
+            'client_id' => $this->client->id,
+            'purchase_order_id' => $poA->id,
+        ]);
+
+        $entry = TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $project->id,
+            'entry_date' => '2026-09-10',
+            'hours' => 2,
+            'status' => TimeEntry::STATUS_DRAFT,
+        ]);
+        $this->assertEquals($this->client->id, $entry->client_id);
+        $this->assertEquals($poA->id, $entry->purchase_order_id);
+
+        // Moving the project's PO moves its entries.
+        $poB = $this->makePo();
+        $project->update(['purchase_order_id' => $poB->id]);
+
+        $entry = $entry->fresh();
+        $this->assertEquals($poB->id, $entry->purchase_order_id);
+        $this->assertEquals($this->client->id, $entry->client_id);
+
+        // Reassigning the project's client carries the entries along.
+        $otherClient = Client::factory()->create();
+        $project->update(['client_id' => $otherClient->id]);
+
+        $this->assertEquals($otherClient->id, $entry->fresh()->client_id);
+    }
+
+    public function test_project_profitability_index_lists_projects(): void
+    {
+        $project = Project::factory()->create([
+            'client_id' => $this->client->id,
+            'name' => 'Index Screen Project',
+        ]);
+        TimeEntry::create([
+            'user_id' => $this->user->id,
+            'project_id' => $project->id,
+            'entry_date' => '2026-09-10',
+            'hours' => 4,
+            'rate' => 100,
+            'billable' => true,
+            'status' => TimeEntry::STATUS_APPROVED,
+        ]);
+
+        $this->actingAs($this->user)
+            ->get(route('projects.profitability'))
+            ->assertOk()
+            ->assertSee('Index Screen Project')
+            ->assertSee('$400.00');
     }
 }
