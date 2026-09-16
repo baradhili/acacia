@@ -2,13 +2,15 @@
 
 - [ ] Bank Reconciliation: Need a way to manually match (and have automatch learn it?)
 
-- [ ] When an invoice is cancelled, then if it has time entries associated with it - these should be freed up for re-assingment.
+- [ ] WAIT MIGHT BE FIXED - When an invoice is cancelled, then if it has time entries associated with it - these should be freed up for re-assingment.
 
 - [ ] Sales funnel/crm - targets, leads, plans
 
-- [ ] move setup section under profile to own dropdown alongside Reports, Accounting, Shares
+- [x] move setup section under profile to own dropdown alongside Reports, Accounting, Shares
 
-- [ ] Fix: "BAS Settlement" should be under Accounting - also where to handle "PAYG" tax calcs and settlements - especially since tax settlements drive Franking Credits
+- [x] Fix: "BAS Settlement" should be under Accounting
+
+- [x] where to handle "PAYG" tax calcs and settlements - especially since tax settlements drive Franking Credits - (Sep 2026) Done. PAYG stays in the BAS settlement engine — one ATO payment, one settlement row per label, each netting its own account. A payg_instalment type joins gst/payg_withholding/income_tax: instalments prepay income tax so both settle 2240, and the balance-based netting catches whatever mixture of instalments and assessment is accrued (the type select also became radio buttons). Settling the income tax types now drives the franking account in the same transaction — paying credits it (TC), a refund debits it (RF), dated the bank movement, reversal mirrors the entry back out — while GST and PAYG withholding (employees' tax) are gated out; previously the TC/RF entries were hand-recorded. The BAS report shows W1/W2 from processed pay runs attributed by pay day (W2 = the same 2210 the settlement screen nets; draft runs don't count) and freezing snapshots them. PAYG withholding calcs remain in PayrollService (NAT 1004). Not yet done: the quarterly PAYG-I accrual journal (Dr tax expense / Cr 2240) computed from the bas.installment_rate config stub — still dead config until that lands.
 
 - [ ] Company details: Bank info - bsb/account/name - also use on invoice 
 
