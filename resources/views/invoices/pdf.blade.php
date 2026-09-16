@@ -318,6 +318,26 @@
             </div>
         @endif
 
+        @if($companyProfile->bank_account_name || $companyProfile->bank_bsb || $companyProfile->bank_account_number)
+            <div class="notes">
+                <div class="notes-title">Payment Details</div>
+                <p>
+                    @if($companyProfile->bank_account_name)
+                        Account Name: {{ $companyProfile->bank_account_name }}<br>
+                    @endif
+                    @if($companyProfile->bank_bsb)
+                        BSB: {{ $companyProfile->formatted_bsb }}
+                    @endif
+                    @if($companyProfile->bank_bsb && $companyProfile->bank_account_number)
+                        &nbsp;·&nbsp;
+                    @endif
+                    @if($companyProfile->bank_account_number)
+                        Account Number: {{ $companyProfile->bank_account_number }}
+                    @endif
+                </p>
+            </div>
+        @endif
+
         @if($invoice->terms)
             <div class="footer">
                 <strong>Terms & Conditions</strong><br>

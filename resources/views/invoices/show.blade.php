@@ -255,6 +255,27 @@
                 </div>
             @endif
 
+            <!-- Payment details -->
+            @if($companyProfile->bank_account_name || $companyProfile->bank_bsb || $companyProfile->bank_account_number)
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h2 class="text-lg font-semibold text-gray-800 mb-2">Payment Details</h2>
+                    <p class="text-gray-600">
+                        @if($companyProfile->bank_account_name)
+                            Account Name: {{ $companyProfile->bank_account_name }}<br>
+                        @endif
+                        @if($companyProfile->bank_bsb)
+                            BSB: {{ $companyProfile->formatted_bsb }}
+                        @endif
+                        @if($companyProfile->bank_bsb && $companyProfile->bank_account_number)
+                            &nbsp;·&nbsp;
+                        @endif
+                        @if($companyProfile->bank_account_number)
+                            Account Number: {{ $companyProfile->bank_account_number }}
+                        @endif
+                    </p>
+                </div>
+            @endif
+
             <!-- Documents -->
             <div class="bg-white rounded-lg shadow p-6">
                 <div class="flex justify-between items-center mb-4">

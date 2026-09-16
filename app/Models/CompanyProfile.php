@@ -41,6 +41,9 @@ class CompanyProfile extends Model
         'country',
         'email',
         'phone',
+        'bank_bsb',
+        'bank_account_number',
+        'bank_account_name',
     ];
 
     /**
@@ -183,6 +186,17 @@ class CompanyProfile extends Model
     public function getFormattedTfnAttribute(): string
     {
         return (string) AuNumbers::tfn($this->tfn);
+    }
+
+    /**
+     * BSB formatted the way banks write it (123-456); a 6-digit BSB is
+     * stored bare, anything else shows as entered.
+     */
+    public function getFormattedBsbAttribute(): string
+    {
+        $bsb = trim((string) $this->bank_bsb);
+
+        return preg_match('/^\d{6}$/', $bsb) ? substr($bsb, 0, 3).'-'.substr($bsb, 3) : $bsb;
     }
 
     /**

@@ -96,6 +96,11 @@ class CompanyProfileController extends Controller
             'country' => ['nullable', 'string', 'size:2'],
             'email' => ['nullable', 'email', 'max:100'],
             'phone' => ['nullable', 'string', 'max:20'],
+            // Printed on invoices so clients can pay — same shapes the
+            // shareholder registry uses for dividend payments.
+            'bank_bsb' => ['nullable', 'string', 'max:7'],
+            'bank_account_number' => ['nullable', 'string', 'max:9'],
+            'bank_account_name' => ['nullable', 'string', 'max:60'],
 
             'directors' => ['nullable', 'array'],
             'directors.*.name' => ['nullable', 'string', 'max:100'],

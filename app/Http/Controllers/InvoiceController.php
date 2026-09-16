@@ -173,8 +173,9 @@ class InvoiceController extends Controller
     public function show(Invoice $invoice)
     {
         $invoice->load(['client', 'project', 'creator', 'items', 'allocations.payment', 'documents']);
+        $companyProfile = CompanyProfile::forEntity(IfrsPosting::resolveEntity()?->id);
 
-        return view('invoices.show', compact('invoice'));
+        return view('invoices.show', compact('invoice', 'companyProfile'));
     }
 
     public function edit(Invoice $invoice)

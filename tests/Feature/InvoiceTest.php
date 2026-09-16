@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Client;
+use App\Models\CompanyProfile;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Project;
@@ -10,6 +11,8 @@ use App\Models\PurchaseOrder;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Carbon\Carbon;
+use IFRS\Models\Currency;
+use IFRS\Models\Entity;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -59,6 +62,59 @@ class InvoiceTest extends TestCase
             'client_id' => $this->client->id,
             'status' => 'draft',
         ]);
+    }
+
+    public function test_invoice_screen_shows_company_bank_payment_details(): void
+    {
+        $this->actingAs($this->user)->post('/invoices', [
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'items' => [
+                [
+                    'description' => 'Test Service',
+                    'quantity' => 1,
+                    'unit_price' => 100,
+                    'tax_rate' => 10,
+                ],
+            ],
+        ])->assertSessionHas('success');
+
+        $invoice = Invoice::query()->firstOrFail();
+
+        // No bank details on the profile: no payment block.
+        $this->actingAs($this->user)
+            ->get('/invoices/'.$invoice->id)
+            ->assertOk()
+            ->assertDontSee('Payment Details');
+
+        $entity = Entity::create([
+            'name' => 'Invoicee Co',
+            'locale' => 'en_AU',
+            'year_start' => 7,
+            'multi_currency' => false,
+        ]);
+        $currency = Currency::create([
+            'name' => 'Australian Dollar',
+            'currency_code' => 'AUD',
+            'entity_id' => $entity->id,
+        ]);
+        $entity->update(['currency_id' => $currency->id]);
+        CompanyProfile::create([
+            'entity_id' => $entity->id,
+            'bank_bsb' => '123456',
+            'bank_account_number' => '12345678',
+            'bank_account_name' => 'Invoicee Co Operating',
+        ]);
+
+        // With them: the payment block appears below the notes area.
+        $this->actingAs($this->user)
+            ->get('/invoices/'.$invoice->id)
+            ->assertOk()
+            ->assertSee('Payment Details')
+            ->assertSee('Account Name: Invoicee Co Operating')
+            ->assertSee('BSB: 123-456')
+            ->assertSee('Account Number: 12345678');
     }
 
     public function test_invoice_generates_correct_invoice_number(): void
@@ -1158,7 +1214,7 @@ class InvoiceTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->user)
-            ->get('/invoices/create?client_id=' . $this->client->id);
+            ->get('/invoices/create?client_id='.$this->client->id);
 
         $response->assertOk();
         $response->assertSee('Consulting work');
@@ -1281,7 +1337,7 @@ class InvoiceTest extends TestCase
         $this->assertNotNull($linked, 'Checked entry must produce a linked invoice item.');
         $this->assertEquals(2, (float) $linked->quantity);
         $this->assertEquals(100, (float) $linked->unit_price);
-        $this->assertEquals($project->name . ' - Consulting work', $linked->description);
+        $this->assertEquals($project->name.' - Consulting work', $linked->description);
         $this->assertEquals(1, $linked->sort_order, 'Entry line follows manual lines.');
 
         // Manual 100 + entry 2h @ 100 = 200, GST 10% on 300.

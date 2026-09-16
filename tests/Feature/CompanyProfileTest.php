@@ -139,6 +139,46 @@ class CompanyProfileTest extends TestCase
             ->assertSee('Acme Super Fund');
     }
 
+    public function test_company_profile_update_saves_bank_details(): void
+    {
+        $this->actingAs($this->admin)
+            ->put(route('company-profile.update'), [
+                'name' => 'Bank Co Pty Ltd',
+                'bank_bsb' => '123456',
+                'bank_account_number' => '12345678',
+                'bank_account_name' => 'Bank Co Pty Ltd Operating',
+            ])
+            ->assertRedirect(route('company-profile.index'))
+            ->assertSessionHas('success');
+
+        $profile = CompanyProfile::where('entity_id', $this->entity->id)->firstOrFail();
+        $this->assertSame('123456', $profile->bank_bsb);
+        $this->assertSame('12345678', $profile->bank_account_number);
+        $this->assertSame('Bank Co Pty Ltd Operating', $profile->bank_account_name);
+        $this->assertSame('123-456', $profile->formatted_bsb);
+
+        // The saved screen re-displays the formatted BSB.
+        $this->actingAs($this->admin)
+            ->get(route('company-profile.index'))
+            ->assertOk()
+            ->assertSee('Bank account name')
+            ->assertSee('123-456')
+            ->assertSee('Bank Co Pty Ltd Operating');
+
+        // Clearing them blanks the columns (invoices then omit the block).
+        $this->actingAs($this->admin)
+            ->put(route('company-profile.update'), [
+                'name' => 'Bank Co Pty Ltd',
+                'bank_bsb' => '',
+                'bank_account_number' => '',
+                'bank_account_name' => '',
+            ])
+            ->assertSessionHas('success');
+
+        $this->assertNull($profile->fresh()->bank_bsb);
+        $this->assertNull($profile->fresh()->bank_account_number);
+    }
+
     public function test_company_profile_update_requires_a_legal_name_and_clears_trading_name(): void
     {
         // The legal name is mandatory on every save.

@@ -186,6 +186,30 @@
                         class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
             </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" for="bank_account_name">Bank account name</label>
+                    <input id="bank_account_name" name="bank_account_name" type="text" maxlength="60" value="{{ old('bank_account_name', $profile->bank_account_name) }}"
+                        placeholder="Exactly as the bank holds it"
+                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" for="bank_bsb">BSB</label>
+                    <input id="bank_bsb" name="bank_bsb" type="text" inputmode="numeric" maxlength="7" value="{{ old('bank_bsb', $profile->formatted_bsb) }}"
+                        placeholder="123-456"
+                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" for="bank_account_number">Bank account number</label>
+                    <input id="bank_account_number" name="bank_account_number" type="text" inputmode="numeric" maxlength="9" value="{{ old('bank_account_number', $profile->bank_account_number) }}"
+                        placeholder="12345678"
+                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+            </div>
+            <p class="text-xs text-gray-500 mt-3">
+                Bank details print on invoices below the notes as payment instructions; leaving them
+                blank omits the block.
+            </p>
         </div>
 
         <!-- Directors -->
