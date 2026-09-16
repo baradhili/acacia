@@ -27,9 +27,10 @@
         <p class="text-sm text-gray-500 mb-4">
             Everything never settled to date — the balances of the settlement accounts, across any
             number of quarters (and even closed financial years), because clearing them is only
-            ever recorded here. GST nets GST Payable against GST Receivable; PAYG withholding and
-            income tax settle their single liability account (a debit balance is an overpayment
-            refunded by the ATO). Claiming late simply means settling at a later date.
+            ever recorded here. GST nets GST Payable against GST Receivable; PAYG withholding,
+            PAYG instalments and income tax settle their single liability account (a debit
+            balance is an overpayment refunded by the ATO). Claiming late simply means settling
+            at a later date.
         </p>
 
         <form method="GET" class="flex items-end gap-3 mb-4">

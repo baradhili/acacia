@@ -278,6 +278,42 @@ class BasSettlementTest extends TestCase
         $this->assertEqualsWithDelta($bankBefore - 800.0, $this->balance($this->bank), 0.001);
     }
 
+    public function test_payg_instalments_settle_the_income_tax_account(): void
+    {
+        // Instalments prepay income tax: the quarterly accrual credits
+        // 2240 (Dr expense / Cr liability — bank side posted here as the
+        // fixture's other leg) and the instalment payment nets it.
+        $this->postJournal(320, 2240, 1500, now(), 'INSTALMENT');
+        $bankBefore = $this->balance($this->bank);
+
+        $settlement = $this->settle(['type' => BasSettlement::TYPE_PAYG_INSTALMENT]);
+
+        $this->assertSame(BasSettlement::TYPE_PAYG_INSTALMENT, $settlement->type);
+        $this->assertSame(BasSettlement::DIRECTION_PAY, $settlement->direction);
+        $this->assertEqualsWithDelta(1500.0, $settlement->net_amount, 0.001);
+        $this->assertEqualsWithDelta(0.0, $this->balance($this->incomeTaxPayable), 0.001);
+        $this->assertEqualsWithDelta($bankBefore - 1500.0, $this->balance($this->bank), 0.001);
+    }
+
+    public function test_payg_instalments_and_income_tax_share_one_account(): void
+    {
+        // Both types resolve 2240, so the balance-based netting sees
+        // whatever mixture of instalments and assessed tax is accrued.
+        $this->postJournal(320, 2240, 1500, now(), 'INSTALMENT');
+        $this->postJournal(320, 2240, 700, now(), 'ASSESSMENT');
+
+        $settlement = $this->settle(['type' => BasSettlement::TYPE_PAYG_INSTALMENT]);
+
+        $this->assertEqualsWithDelta(2200.0, $settlement->gst_payable, 0.001);
+        $this->assertEqualsWithDelta(0.0, $this->balance($this->incomeTaxPayable), 0.001);
+
+        // Nothing left for an income tax settlement to net.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('no unsettled income tax');
+
+        $this->settle(['type' => BasSettlement::TYPE_INCOME_TAX]);
+    }
+
     public function test_an_income_tax_overpayment_settles_as_a_refund(): void
     {
         // A debit balance on 2240 is an overpayment — the single account
@@ -302,7 +338,7 @@ class BasSettlementTest extends TestCase
 
         $positions = $this->service->positions();
 
-        $this->assertSame(['gst', 'payg_withholding', 'income_tax'], array_keys($positions));
+        $this->assertSame(['gst', 'payg_withholding', 'payg_instalment', 'income_tax'], array_keys($positions));
         $this->assertEqualsWithDelta(600.0, $positions['gst']['net'], 0.001);
         $this->assertEqualsWithDelta(800.0, $positions['payg_withholding']['payable'], 0.001);
         $this->assertEqualsWithDelta(0.0, $positions['income_tax']['net'], 0.001);

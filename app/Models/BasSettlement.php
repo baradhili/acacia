@@ -8,11 +8,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * A recorded BAS settlement — the ATO payment (or refund) that nets GST
- * Payable against GST Receivable and clears both accounts. Posting
- * logic lives in BasSettlementService; amounts are snapshots of what
- * was netted, so later backdated postings never rewrite a settled
- * history. Reversal mirrors the journal back out.
+ * A recorded BAS settlement — the ATO payment (or refund) that nets a
+ * settlement type's tax accounts and clears them: GST's Payable/
+ * Receivable pair, or the one liability account behind PAYG
+ * withholding, PAYG instalments and income tax. Posting logic lives in
+ * BasSettlementService; amounts are snapshots of what was netted, so
+ * later backdated postings never rewrite a settled history. Reversal
+ * mirrors the journal back out.
  */
 class BasSettlement extends Model
 {
@@ -20,11 +22,14 @@ class BasSettlement extends Model
 
     public const TYPE_PAYG = 'payg_withholding';
 
+    public const TYPE_PAYG_INSTALMENT = 'payg_instalment';
+
     public const TYPE_INCOME_TAX = 'income_tax';
 
     public const TYPES = [
         self::TYPE_GST,
         self::TYPE_PAYG,
+        self::TYPE_PAYG_INSTALMENT,
         self::TYPE_INCOME_TAX,
     ];
 
@@ -89,6 +94,7 @@ class BasSettlement extends Model
     {
         return match ($type) {
             self::TYPE_PAYG => 'PAYG withholding',
+            self::TYPE_PAYG_INSTALMENT => 'PAYG instalment',
             self::TYPE_INCOME_TAX => 'income tax',
             default => 'GST',
         };

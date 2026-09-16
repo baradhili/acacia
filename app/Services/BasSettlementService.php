@@ -16,9 +16,10 @@ use Illuminate\Support\Facades\Log;
 /**
  * Records BAS settlements: the ATO payment (or refund) that nets a tax
  * account pair and clears it — GST (Payable vs Receivable via the
- * seeded Vats), PAYG withholding (2210) or income tax payable (2240),
- * the single-liability types settled with the same recipe (a debit
- * balance on them is an overpayment, netted back as the refund side).
+ * seeded Vats), PAYG withholding (2210), or income tax payable (2240)
+ * which PAYG instalments prepay — the single-liability types settled
+ * with the same recipe (a debit balance on them is an overpayment,
+ * netted back as the refund side).
  *
  * The unsettled position is the accounts' as-at balances — not
  * per-quarter movement — so one settlement catches up any number of
@@ -105,7 +106,9 @@ class BasSettlementService
 
         $code = match ($type) {
             BasSettlement::TYPE_PAYG => config('australian.bas.payg_account_code', 2210),
-            BasSettlement::TYPE_INCOME_TAX => config('australian.bas.income_tax_account_code', 2240),
+            // Instalments prepay the assessed income tax liability, so
+            // both settle the same account.
+            BasSettlement::TYPE_PAYG_INSTALMENT, BasSettlement::TYPE_INCOME_TAX => config('australian.bas.income_tax_account_code', 2240),
         };
 
         $account = Account::where('entity_id', $entity->id)->where('code', $code)->first();
@@ -316,12 +319,13 @@ class BasSettlementService
     }
 
     /**
-     * Short code for journal references (GST/PAYG/TAX).
+     * Short code for journal references (GST/PAYG/PAYGI/TAX).
      */
     public static function typeCode(string $type): string
     {
         return match ($type) {
             BasSettlement::TYPE_PAYG => 'PAYG',
+            BasSettlement::TYPE_PAYG_INSTALMENT => 'PAYGI',
             BasSettlement::TYPE_INCOME_TAX => 'TAX',
             default => 'GST',
         };
