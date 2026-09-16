@@ -15,6 +15,7 @@ use App\Models\DividendDeclaration;
 use App\Models\FiscalYearClose;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\PayRun;
 use App\Models\Prepayment;
 use App\Models\Project;
 use App\Models\TimeEntry;
@@ -1134,6 +1135,8 @@ class ReportController extends Controller
                 'g1' => $quarter['g1'],
                 'g10' => $quarter['g10'],
                 'g11' => $quarter['g11'],
+                'w1' => $quarter['w1'],
+                'w2' => $quarter['w2'],
                 'gst_sales' => $quarter['gst_sales'],
                 'gst_purchases' => $quarter['gst_purchases'],
                 'net' => $quarter['net'],
@@ -1169,13 +1172,14 @@ class ReportController extends Controller
      * Quarterly BAS figures for the financial year ending 30 June
      * $fyEnd, on the cash basis the ledger keeps: G1 is posted client
      * payments (GST-inclusive, refunds netting via negative amounts),
-     * 1A/1B are the Vat account ledger legs (ledgerGst()), and G10/G11
-     * are bill payment allocations apportioned across bill lines via
+     * 1A/1B are the Vat account ledger legs (ledgerGst()), G10/G11 are
+     * bill payment allocations apportioned across bill lines via
      * BillPayment::allocationGroups() — the same shares the postings
      * use — split into capital (non-current-asset accounts) and
-     * non-capital. Every figure ties to the ledger because only posted
-     * payments count; unposted ones appear once ifrs:post-payments
-     * backfills them.
+     * non-capital, and W1/W2 are processed pay runs' gross and withheld
+     * by pay day. Every figure ties to the books because only posted
+     * payments and processed runs count; unposted ones appear once
+     * ifrs:post-payments backfills them.
      */
     protected function buildBasStatement(int $fyEnd, ?int $withoutFrozenQuarter = null): array
     {
@@ -1206,6 +1210,8 @@ class ReportController extends Controller
                 'gst_sales' => 0.0,
                 'g10' => 0.0,
                 'g11' => 0.0,
+                'w1' => 0.0,
+                'w2' => 0.0,
                 'gst_purchases' => 0.0,
             ];
         }
@@ -1258,6 +1264,21 @@ class ReportController extends Controller
             }
         }
 
+        // W1/W2 — processed pay runs' gross (W1) and PAYG withheld (W2),
+        // attributed by pay day like every other label here. The withheld
+        // leg of each run is the same Cr 2210 the BAS settlement screen
+        // nets, so W2 matches what settling PAYG withholding clears.
+        $payRuns = PayRun::where('entity_id', $entity->id)
+            ->whereBetween('payment_date', [$fyStart, $fyEndDate])
+            ->where('status', PayRun::STATUS_PROCESSED)
+            ->with('payslips')
+            ->get();
+        foreach ($payRuns as $run) {
+            $i = $quarterOf($run->payment_date);
+            $quarters[$i]['w1'] += (float) $run->payslips->sum('gross');
+            $quarters[$i]['w2'] += (float) $run->payslips->sum('payg_withheld');
+        }
+
         foreach ($quarters as &$q) {
             $q['net'] = $q['gst_sales'] - $q['gst_purchases'];
         }
@@ -1290,6 +1311,8 @@ class ReportController extends Controller
             'gst_sales' => array_sum(array_column($quarters, 'gst_sales')),
             'g10' => array_sum(array_column($quarters, 'g10')),
             'g11' => array_sum(array_column($quarters, 'g11')),
+            'w1' => array_sum(array_column($quarters, 'w1')),
+            'w2' => array_sum(array_column($quarters, 'w2')),
             'gst_purchases' => array_sum(array_column($quarters, 'gst_purchases')),
         ];
         $totals['net'] = $totals['gst_sales'] - $totals['gst_purchases'];

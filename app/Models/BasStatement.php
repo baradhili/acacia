@@ -26,6 +26,8 @@ class BasStatement extends Model
         'g1',
         'g10',
         'g11',
+        'w1',
+        'w2',
         'gst_sales',
         'gst_purchases',
         'net',
@@ -42,6 +44,8 @@ class BasStatement extends Model
         'g1' => 'float',
         'g10' => 'float',
         'g11' => 'float',
+        'w1' => 'float',
+        'w2' => 'float',
         'gst_sales' => 'float',
         'gst_purchases' => 'float',
         'net' => 'float',
@@ -61,7 +65,7 @@ class BasStatement extends Model
     /**
      * The BAS report's quarter figure keys, as frozen.
      *
-     * @return array{g1: float, g10: float, g11: float, gst_sales: float, gst_purchases: float, net: float}
+     * @return array{g1: float, g10: float, g11: float, w1: float, w2: float, gst_sales: float, gst_purchases: float, net: float}
      */
     public function frozenFigures(): array
     {
@@ -69,6 +73,8 @@ class BasStatement extends Model
             'g1' => (float) $this->g1,
             'g10' => (float) $this->g10,
             'g11' => (float) $this->g11,
+            'w1' => (float) $this->w1,
+            'w2' => (float) $this->w2,
             'gst_sales' => (float) $this->gst_sales,
             'gst_purchases' => (float) $this->gst_purchases,
             'net' => (float) $this->net,

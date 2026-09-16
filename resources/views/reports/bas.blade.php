@@ -93,6 +93,8 @@
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">G1 Total sales (incl GST)</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">G10 Capital purchases (incl GST)</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">G11 Non-capital purchases (incl GST)</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">W1 Total salary/wages</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">W2 Amounts withheld</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">1A GST on sales</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">1B GST on purchases</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Net GST</th>
@@ -107,6 +109,8 @@
                                     <td class="px-4 py-3 text-sm text-gray-900 text-right">${{ number_format($q['g1'], 2) }}</td>
                                     <td class="px-4 py-3 text-sm text-gray-900 text-right">${{ number_format($q['g10'], 2) }}</td>
                                     <td class="px-4 py-3 text-sm text-gray-900 text-right">${{ number_format($q['g11'], 2) }}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-900 text-right">${{ number_format($q['w1'], 2) }}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-900 text-right">${{ number_format($q['w2'], 2) }}</td>
                                     <td class="px-4 py-3 text-sm text-green-600 text-right font-medium">${{ number_format($q['gst_sales'], 2) }}</td>
                                     <td class="px-4 py-3 text-sm text-red-600 text-right font-medium">${{ number_format($q['gst_purchases'], 2) }}</td>
                                     <td class="px-4 py-3 text-sm text-right font-medium {{ $q['net'] >= 0 ? 'text-gray-900' : 'text-indigo-600' }}">
@@ -154,6 +158,8 @@
                                 <td class="px-4 py-3 text-sm font-semibold text-gray-800 text-right">${{ number_format($statement['totals']['g1'], 2) }}</td>
                                 <td class="px-4 py-3 text-sm font-semibold text-gray-800 text-right">${{ number_format($statement['totals']['g10'], 2) }}</td>
                                 <td class="px-4 py-3 text-sm font-semibold text-gray-800 text-right">${{ number_format($statement['totals']['g11'], 2) }}</td>
+                                <td class="px-4 py-3 text-sm font-semibold text-gray-800 text-right">${{ number_format($statement['totals']['w1'], 2) }}</td>
+                                <td class="px-4 py-3 text-sm font-semibold text-gray-800 text-right">${{ number_format($statement['totals']['w2'], 2) }}</td>
                                 <td class="px-4 py-3 text-sm font-semibold text-green-600 text-right">${{ number_format($statement['totals']['gst_sales'], 2) }}</td>
                                 <td class="px-4 py-3 text-sm font-semibold text-red-600 text-right">${{ number_format($statement['totals']['gst_purchases'], 2) }}</td>
                                 <td class="px-4 py-3 text-sm font-semibold text-gray-800 text-right">${{ number_format($statement['totals']['net'], 2) }}</td>
@@ -166,7 +172,7 @@
                 <div class="mt-6 text-xs text-gray-500 space-y-1">
                     <p>Capital purchases (G10) are bill lines categorised to a non-current-asset account; all other bill lines are non-capital (G11).</p>
                     <p>Cash basis — only posted payments count: G1 is client receipts (GST-inclusive, refunds netting), 1A/1B are the GST ledger legs, and G10/G11 apportion supplier payments across their bills' lines. Unposted payments appear once backfilled (ifrs:post-payments).</p>
-                    <p>W1/W2 (PAYG withholding) is not shown — the system keeps no payroll ledger.</p>
+                    <p>W1/W2 (PAYG withholding) are processed pay runs' gross and withheld, attributed by pay day — W2 is the same 2210 liability the BAS settlement screen nets.</p>
                 </div>
             </div>
         </div>
