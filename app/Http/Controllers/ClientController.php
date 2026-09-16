@@ -3,16 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Models\Client;
-use App\Models\Document;
 use App\Models\PurchaseOrder;
-use Illuminate\Http\Request;
 use IFRS\Models\Entity;
+use Illuminate\Http\Request;
 
 class ClientController extends Controller
 {
     public function index()
     {
         $clients = Client::withCount('documents')->paginate(15);
+
         return view('clients.index', compact('clients'));
     }
 
@@ -44,7 +44,7 @@ class ClientController extends Controller
     public function show(Client $client)
     {
         // Get IFRS Entity linked to this client
-        $entity = Entity::where('name', 'like', '%' . $client->name . '%')->first();
+        $entity = Entity::where('name', 'like', '%'.$client->name.'%')->first();
 
         // Get recent transactions if entity exists
         $transactions = collect();
@@ -117,24 +117,42 @@ class ClientController extends Controller
     public function destroy(Client $client)
     {
         $client->delete();
+
         return redirect()->route('clients.index')->with('success', 'Client deleted successfully.');
     }
 
     /**
-     * Get purchase orders for a client (for AJAX calls)
+     * Get purchase orders for a client (for AJAX calls). With
+     * ?available=1 only POs not linked to any project are returned;
+     * ?for_project= additionally keeps that project's own PO in the
+     * list regardless of status so editing never loses the selection.
      */
     public function purchaseOrders(Request $request, Client $client)
     {
+        $forProject = $request->integer('for_project');
+
         $query = PurchaseOrder::where('client_id', $client->id)
-            ->whereIn('status', [PurchaseOrder::STATUS_OPEN, PurchaseOrder::STATUS_PARTIALLY_USED]);
-        
-        // If filtering for available POs (not linked to any project)
+            ->where(function ($q) use ($forProject) {
+                $q->whereIn('status', [PurchaseOrder::STATUS_OPEN, PurchaseOrder::STATUS_PARTIALLY_USED]);
+
+                if ($forProject) {
+                    $q->orWhere('project_id', $forProject);
+                }
+            });
+
+        // If filtering for available POs (not linked to another project)
         if ($request->boolean('available')) {
-            $query->whereNull('project_id');
+            $query->where(function ($q) use ($forProject) {
+                $q->whereNull('project_id');
+
+                if ($forProject) {
+                    $q->orWhere('project_id', $forProject);
+                }
+            });
         }
-        
+
         $purchaseOrders = $query->orderBy('po_number')->get();
-        
+
         return response()->json($purchaseOrders);
     }
 }

@@ -17,7 +17,7 @@
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                         <option value="">Select Client</option>
                         @foreach($clients as $id => $name)
-                            <option value="{{ $id }}" {{ old('client_id') == $id ? 'selected' : '' }}>{{ $name }}</option>
+                            <option value="{{ $id }}" {{ old('client_id', $selectedClient?->id) == $id ? 'selected' : '' }}>{{ $name }}</option>
                         @endforeach
                     </select>
                     @error('client_id')
