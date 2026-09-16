@@ -8,7 +8,7 @@
         <div class="relative" x-data="{ open: false }">
             <button @click="open = !open"
                 class="flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md transition-colors
-                    {{ request()->routeIs('reports.*', 'bas-settlements.*', 'projects.profitability') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100' }}">
+                    {{ request()->routeIs('reports.*', 'projects.profitability') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100' }}">
                 Reports
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
@@ -68,12 +68,6 @@
                     class="block px-4 py-2 text-sm {{ request()->routeIs('reports.bas') ? 'text-indigo-600 font-medium' : 'text-gray-700 hover:bg-gray-100' }}">
                     BAS (GST)
                 </a>
-                @hasanyrole('admin|accountant')
-                    <a href="{{ route('bas-settlements.index') }}"
-                        class="block px-4 py-2 text-sm {{ request()->routeIs('bas-settlements.*') ? 'text-indigo-600 font-medium' : 'text-gray-700 hover:bg-gray-100' }}">
-                        BAS Settlements
-                    </a>
-                @endhasanyrole
                 <a href="{{ route('reports.company-tax') }}"
                     class="block px-4 py-2 text-sm {{ request()->routeIs('reports.company-tax') ? 'text-indigo-600 font-medium' : 'text-gray-700 hover:bg-gray-100' }}">
                     Company Tax Return
@@ -90,7 +84,7 @@
             <div class="relative" x-data="{ open: false }">
                 <button @click="open = !open"
                     class="flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md transition-colors
-                        {{ request()->routeIs('prepayments.*', 'domains.*') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100' }}">
+                        {{ request()->routeIs('prepayments.*', 'domains.*', 'bas-settlements.*') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100' }}">
                     Accounting
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
@@ -105,6 +99,10 @@
                     <a href="{{ route('domains.index') }}"
                         class="block px-4 py-2 text-sm {{ request()->routeIs('domains.*') ? 'text-indigo-600 font-medium' : 'text-gray-700 hover:bg-gray-100' }}">
                         Domain Names
+                    </a>
+                    <a href="{{ route('bas-settlements.index') }}"
+                        class="block px-4 py-2 text-sm {{ request()->routeIs('bas-settlements.*') ? 'text-indigo-600 font-medium' : 'text-gray-700 hover:bg-gray-100' }}">
+                        BAS Settlements
                     </a>
                 </div>
             </div>
