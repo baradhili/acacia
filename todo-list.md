@@ -1,10 +1,22 @@
 # Todo list
 
-- [ ] SKIP - need to handle client who "reverse invoice" - as in I fill their timesheet system and they send me a payment that is itemised like my time-based invoice timesheet
+- [ ] Bank Reconciliation: Need a way to manually match (and have automatch learn it?)
+
+- [ ] When an invoice is cancelled, then if it has time entries associated with it - these should be freed up for re-assingment.
+
+- [ ] Sales funnel/crm - targets, leads, plans
+
+- [ ] move setup section under profile to own dropdown alongside Reports, Accounting, Shares
+
+- [ ] Fix: "BAS Settlement" should be under Accounting - also where to handle "PAYG" tax calcs and settlements - especially since tax settlements drive Franking Credits
+
+- [ ] Company details: Bank info - bsb/account/name - also use on invoice 
+
+- [ ] Look at and [GitHub - tiagofcp/laraestimate: LaraEstimate is a complete Estimates/Quotes System made with Laravel 7 and VueJS. · GitHub](https://github.com/tiagofcp/laraestimate) update estimates to use concepts - link it with services
+
+- [ ] Make things modular using nwidart - for plugins from somewhere - maybe just github first off?
 
 - [x] Better handling of Project, PO, Client on forms. - (Sep 2026, branch feat/time-entry-project-linkage) Done, scoped to time entries. Entries go against a project only: the Client and PO selects left the entry form (they render as read-only displays filled from the chosen project), ad-hoc client time and internal/no-project time are refused, and TimeEntry's saving hook derives client_id and purchase_order_id from the project (submitted values ignored; legacy projects without a PO leave the entry PO-less). The one-entry-per-staff-per-client-per-day rule now keys on the project's client and reports the duplicate error under project_id. Projects must link one of their client's POs — enforced server-side (client match + not already linked to another project) behind the AJAX filter — and saving a project mirrors the link onto purchase_orders.project_id so available-PO lists and PO screens see it from both sides. The project form's PO select is required with a "no open POs — create one" hint (create-PO link carries the client preselect), and editing keeps the project's own PO selectable whatever its status. Manual "allocate time to PO" removed (controller action, route and test) — an entry's PO comes solely from its project. Historical project-less entries stay as history; their drafts must pick a project to be edited. Covered by TimeEntryLifecycleTest + new ProjectPurchaseOrderLinkTest.
-
-- [ ] DO NOT EXECUTE THIS ITEM - Make things modular using nwidart
 
 - [x] In `@app/Http/Controllers/BackupController.php`:
   Line 46: Update BackupService::runAndPrune() to acquire one shared
@@ -306,3 +318,7 @@
 - [x] display the uploaded logo in the top left if it exists when viewing the bill record
 
 - [x] use company logo that is uploaded on pdf invoice
+
+- [ ] 
+
+- [ ] 
