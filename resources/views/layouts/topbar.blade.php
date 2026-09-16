@@ -111,7 +111,7 @@
             <div class="relative" x-data="{ open: false }">
                 <button @click="open = !open"
                     class="flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md transition-colors
-                        {{ request()->routeIs('shareholders.*', 'franking-account.*', 'dividends.*', 'share-classes.*') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100' }}">
+                        {{ request()->routeIs('shareholders.*', 'franking-account.*', 'dividends.*') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100' }}">
                     Shares
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
@@ -130,6 +130,49 @@
                     <a href="{{ route('dividends.index') }}"
                         class="block px-4 py-2 text-sm {{ request()->routeIs('dividends.*') ? 'text-indigo-600 font-medium' : 'text-gray-700 hover:bg-gray-100' }}">
                         Dividends
+                    </a>
+                </div>
+            </div>
+
+            {{-- Setup dropdown --}}
+            <div class="relative" x-data="{ open: false }">
+                <button @click="open = !open"
+                    class="flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md transition-colors
+                        {{ request()->routeIs('company-profile.*', 'chart-of-accounts.*', 'opening-balances.*', 'financial-years.*', 'services.*', 'share-classes.*', 'psi.*') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100' }}">
+                    Setup
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                </button>
+                <div x-show="open" @click.away="open = false"
+                    class="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50">
+                    <a href="{{ route('company-profile.index') }}"
+                        class="block px-4 py-2 text-sm {{ request()->routeIs('company-profile.*') ? 'text-indigo-600 font-medium' : 'text-gray-700 hover:bg-gray-100' }}">
+                        Company Details
+                    </a>
+                    <a href="{{ route('chart-of-accounts.index') }}"
+                        class="block px-4 py-2 text-sm {{ request()->routeIs('chart-of-accounts.*') ? 'text-indigo-600 font-medium' : 'text-gray-700 hover:bg-gray-100' }}">
+                        Chart of Accounts
+                    </a>
+                    <a href="{{ route('opening-balances.index') }}"
+                        class="block px-4 py-2 text-sm {{ request()->routeIs('opening-balances.*') ? 'text-indigo-600 font-medium' : 'text-gray-700 hover:bg-gray-100' }}">
+                        Opening Balances
+                    </a>
+                    <a href="{{ route('financial-years.index') }}"
+                        class="block px-4 py-2 text-sm {{ request()->routeIs('financial-years.*') ? 'text-indigo-600 font-medium' : 'text-gray-700 hover:bg-gray-100' }}">
+                        Financial Years
+                    </a>
+                    <a href="{{ route('services.index') }}"
+                        class="block px-4 py-2 text-sm {{ request()->routeIs('services.*') ? 'text-indigo-600 font-medium' : 'text-gray-700 hover:bg-gray-100' }}">
+                        Services
+                    </a>
+                    <a href="{{ route('share-classes.index') }}"
+                        class="block px-4 py-2 text-sm {{ request()->routeIs('share-classes.*') ? 'text-indigo-600 font-medium' : 'text-gray-700 hover:bg-gray-100' }}">
+                        Share Classes
+                    </a>
+                    <a href="{{ route('psi.index') }}"
+                        class="block px-4 py-2 text-sm {{ request()->routeIs('psi.*') ? 'text-indigo-600 font-medium' : 'text-gray-700 hover:bg-gray-100' }}">
+                        PSI Assessment
                     </a>
                 </div>
             </div>
@@ -172,37 +215,6 @@
                         Users
                     </a>
                 @endrole
-                @hasanyrole('admin|accountant')
-                    <p class="px-4 py-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Setup &amp; maintenance</p>
-                    <a href="{{ route('company-profile.index') }}"
-                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                        Company Details
-                    </a>
-                    <a href="{{ route('chart-of-accounts.index') }}"
-                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                        Chart of Accounts
-                    </a>
-                    <a href="{{ route('opening-balances.index') }}"
-                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                        Opening Balances
-                    </a>
-                    <a href="{{ route('financial-years.index') }}"
-                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                        Financial Years
-                    </a>
-                    <a href="{{ route('services.index') }}"
-                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                        Services
-                    </a>
-                    <a href="{{ route('share-classes.index') }}"
-                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                        Share Classes
-                    </a>
-                    <a href="{{ route('psi.index') }}"
-                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                        PSI Assessment
-                    </a>
-                @endhasanyrole
                 <div class="border-t border-gray-100 my-1"></div>
                 <a href="{{ route('profile.edit') }}"
                     class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
