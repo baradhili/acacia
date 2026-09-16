@@ -1,6 +1,6 @@
 # Todo list
 
-- [ ] Bank Reconciliation: Need a way to manually match (and have automatch learn it?)
+- [x] Bank Reconciliation: Need a way to manually match (and have automatch learn it?) - (Sep 2026) Done. Pending bank lines gained a Match screen (candidates ±14 days across payments/invoices/bills/ledger entries, a reference/counterparty search that ignores the amount for grossed-up or split lines, and match-by-id), plus Unmatch on matched lines. Matching learns: the counterparty (payer for money in, payee/merchant for money out) is remembered with the client/supplier it resolved to (reconciliation_counterparty_rules); when the strict ±$0.01/±3-day ledger pass misses, the auto-matcher pairs later lines from the same counterparty with a fresh unconsumed payment or bill of theirs, and the auto-create receipt/bill flows resolve the counterparty from the rule before name matching. Covered by ManualMatchAndLearningTest. Note: three legacy reconciliation test files (ReconciliationMatching/Service/AutoCreateCashReceipt) stay excluded per-file in phpunit.xml — they drifted while the whole directory was excluded; fixing them is a separate cleanup.
 
 - [ ] WAIT MIGHT BE FIXED - When an invoice is cancelled, then if it has time entries associated with it - these should be freed up for re-assingment.
 
