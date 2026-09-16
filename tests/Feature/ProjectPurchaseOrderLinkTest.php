@@ -9,6 +9,7 @@ use App\Models\TimeEntry;
 use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class ProjectPurchaseOrderLinkTest extends TestCase
@@ -235,18 +236,30 @@ class ProjectPurchaseOrderLinkTest extends TestCase
         $this->assertEquals($poB->id, $entry->purchase_order_id);
         $this->assertEquals($this->client->id, $entry->client_id);
 
-        // Reassigning the project's client carries the entries along.
+        // Reassigning the project's client and PO together — to
+        // compatible records — carries both derived columns along on
+        // the entries.
         $otherClient = Client::factory()->create();
-        $project->update(['client_id' => $otherClient->id]);
+        $otherPo = $this->makePo($otherClient);
+        $project->update([
+            'client_id' => $otherClient->id,
+            'purchase_order_id' => $otherPo->id,
+        ]);
 
-        $this->assertEquals($otherClient->id, $entry->fresh()->client_id);
+        $entry = $entry->fresh();
+        $this->assertEquals($otherClient->id, $entry->client_id);
+        $this->assertEquals($otherPo->id, $entry->purchase_order_id);
     }
 
     public function test_project_profitability_index_lists_projects(): void
     {
+        Role::firstOrCreate(['name' => 'accountant']);
+        $this->user->assignRole('accountant');
+
         $project = Project::factory()->create([
             'client_id' => $this->client->id,
             'name' => 'Index Screen Project',
+            'hourly_rate' => 50,
         ]);
         TimeEntry::create([
             'user_id' => $this->user->id,
@@ -258,10 +271,13 @@ class ProjectPurchaseOrderLinkTest extends TestCase
             'status' => TimeEntry::STATUS_APPROVED,
         ]);
 
+        // Revenue charges at the entry's $100 rate; the staff cost
+        // falls back to the project's $50 rate with no assignment.
         $this->actingAs($this->user)
             ->get(route('projects.profitability'))
             ->assertOk()
             ->assertSee('Index Screen Project')
-            ->assertSee('$400.00');
+            ->assertSee('$400.00')
+            ->assertSee('$200.00');
     }
 }

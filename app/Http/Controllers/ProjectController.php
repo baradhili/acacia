@@ -136,9 +136,14 @@ class ProjectController extends Controller
             'staff.*.hourly_rate' => 'nullable|numeric|min:0',
         ]);
 
-        $this->assertPurchaseOrderFitsClient($validated, $project);
+        // Same claim discipline as store: revalidate under a row lock so
+        // the PO can't be taken (or its status change) between the check
+        // and the save, rolling both back together if it was.
+        DB::transaction(function () use ($validated, $project) {
+            $this->assertPurchaseOrderFitsClient($validated, $project, lock: true);
 
-        $project->update($validated);
+            $project->update($validated);
+        });
 
         // Sync staff assignments
         $project->staffAssignments()->delete();
@@ -232,12 +237,16 @@ class ProjectController extends Controller
      */
     public function profitabilityIndex()
     {
-        $projects = Project::with(['client', 'timeEntries' => fn ($query) => $query->approved()])
+        $projects = Project::with([
+            'client',
+            'staffAssignments',
+            'timeEntries' => fn ($query) => $query->approved(),
+        ])
             ->orderBy('name')
             ->get()
             ->map(function (Project $project) {
                 $revenue = $project->timeEntries->where('billable', true)->sum('total');
-                $cost = $project->timeEntries->sum('total');
+                $cost = $project->timeEntries->sum('staff_cost');
 
                 return (object) [
                     'project' => $project,
@@ -253,12 +262,16 @@ class ProjectController extends Controller
 
     public function profitability(Project $project)
     {
-        $project->load(['client', 'timeEntries' => function ($q) {
-            $q->approved();
-        }]);
+        $project->load([
+            'client',
+            'staffAssignments',
+            'timeEntries' => function ($q) {
+                $q->approved();
+            },
+        ]);
 
         $totalRevenue = $project->timeEntries->where('billable', true)->sum('total');
-        $totalCost = $project->timeEntries->sum('total');
+        $totalCost = $project->timeEntries->sum('staff_cost');
         $profit = $totalRevenue - $totalCost;
         $profitMargin = $totalRevenue > 0 ? ($profit / $totalRevenue) * 100 : 0;
 

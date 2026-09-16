@@ -187,6 +187,36 @@ class TimeEntry extends Model
     }
 
     /**
+     * What the hour costs, not what it bills for: the staff member's
+     * assignment rate on the entry's project (falling back to the
+     * project rate), so profit holds for billable and non-billable
+     * work alike — total, by contrast, is the charge-out figure.
+     */
+    public function getStaffCostRateAttribute(): float
+    {
+        if (! $this->project_id || ! $this->project) {
+            return 0.0;
+        }
+
+        $assignment = $this->project->staffAssignments
+            ->first(fn ($staff) => $staff->user_id === $this->user_id && $staff->is_active);
+
+        if ($assignment) {
+            return (float) ($assignment->hourly_rate ?: $this->project->hourly_rate ?: 0);
+        }
+
+        return (float) ($this->project->hourly_rate ?? 0);
+    }
+
+    /**
+     * Get staff cost for this entry
+     */
+    public function getStaffCostAttribute(): float
+    {
+        return round($this->hours * $this->staff_cost_rate, 2);
+    }
+
+    /**
      * Submit for approval
      */
     public function submit(): void

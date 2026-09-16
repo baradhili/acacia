@@ -269,7 +269,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/time-by-staff', [ReportController::class, 'timeByStaff'])->name('reports.time-by-staff');
     Route::get('/reports/time-by-project', [ReportController::class, 'timeByProject'])->name('reports.time-by-project');
     Route::get('/reports/project-timesheet', [ReportController::class, 'projectTimesheet'])->name('reports.project-timesheet');
-    Route::get('/reports/project-profitability', [ProjectController::class, 'profitabilityIndex'])->name('projects.profitability');
+    Route::get('/reports/project-profitability', [ProjectController::class, 'profitabilityIndex'])
+        ->middleware('role:admin|accountant')
+        ->name('projects.profitability');
 
     // Financial Reports
     Route::get('/reports/trial-balance', [ReportController::class, 'trialBalance'])->name('reports.trial-balance');

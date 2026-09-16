@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\Project;
+use App\Models\ProjectStaff;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Carbon\Carbon;
@@ -161,6 +162,45 @@ class ReportTest extends TestCase
         $response = $this->get(route('projects.profitability.show', $this->project));
 
         $response->assertStatus(200);
+    }
+
+    public function test_project_profitability_costs_staff_rates_not_charge_rates(): void
+    {
+        // The staff member's assignment costs $60/h while the work
+        // charges out at $100/h: cost follows the assignment, revenue
+        // the charge rate, and non-billable work still costs.
+        ProjectStaff::create([
+            'project_id' => $this->project->id,
+            'user_id' => $this->staff->id,
+            'hourly_rate' => 60,
+            'is_active' => true,
+        ]);
+
+        TimeEntry::create([
+            'user_id' => $this->staff->id,
+            'project_id' => $this->project->id,
+            'entry_date' => '2024-01-15',
+            'hours' => 4,
+            'rate' => 100,
+            'billable' => true,
+            'status' => TimeEntry::STATUS_APPROVED,
+        ]);
+        TimeEntry::create([
+            'user_id' => $this->staff->id,
+            'project_id' => $this->project->id,
+            'entry_date' => '2024-01-16',
+            'hours' => 2,
+            'billable' => false,
+            'status' => TimeEntry::STATUS_APPROVED,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->get(route('projects.profitability.show', $this->project));
+
+        $response->assertOk()
+            ->assertSee('$400.00') // revenue: 4 billable hours @ $100
+            ->assertSee('$360.00') // staff cost: 6 hours @ $60
+            ->assertSee('$40.00'); // profit
     }
 
     public function test_time_report_with_date_range(): void
