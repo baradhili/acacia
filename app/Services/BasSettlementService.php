@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\BasSettlement;
 use App\Models\BillPayment;
+use App\Models\FrankingAccountEntry;
 use Carbon\Carbon;
 use IFRS\Models\Account;
 use IFRS\Models\Entity;
@@ -28,6 +29,12 @@ use Illuminate\Support\Facades\Log;
  * claiming late (the sub-$10k deferral) is simply settling at a later
  * date. The BAS report itself stays movement-based; settlements are
  * the balance-side action.
+ *
+ * Income tax settlements (instalments or assessed tax) also drive the
+ * franking account: paying the ATO credits it (TC), a refund debits it
+ * (RF), dated the bank movement — the same payment-date rule
+ * DividendService applies to FD entries. GST and PAYG withholding are
+ * never the company's own income tax and never touch franking.
  *
  * Pay (X > Y):    Dr Payable X / Cr Receivable Y / Cr Bank X-Y
  * Refund (Y > X): Cr Receivable Y / Dr Payable X / Dr Bank Y-X
@@ -229,6 +236,10 @@ class BasSettlementService
                 'notes' => $data['notes'] ?? null,
             ]);
 
+            if (in_array($type, BasSettlement::INCOME_TAX_TYPES, true) && abs($net) >= 0.005) {
+                $this->recordFrankingEntry($settlement, $journal, $entity);
+            }
+
             Log::info('BAS settlement posted', [
                 'settlement_id' => $settlement->id,
                 'type' => $type,
@@ -272,6 +283,8 @@ class BasSettlementService
                 throw: true,
             );
 
+            $this->reverseFrankingEntry($settlement, $reversalId);
+
             $settlement->forceFill([
                 'reversal_transaction_id' => $reversalId,
                 'reversed_at' => now(),
@@ -284,6 +297,67 @@ class BasSettlementService
 
             return $settlement;
         });
+    }
+
+    /**
+     * The franking entry an income tax settlement drives: paying the
+     * ATO credits the account (TC), a refund debits it (RF) — dated the
+     * bank movement, like DividendService dates FD entries at payment.
+     * The amount is the settlement's bank leg: an exact offset pays and
+     * refunds nothing, so it posts no entry.
+     */
+    protected function recordFrankingEntry(BasSettlement $settlement, JournalEntry $journal, Entity $entity): FrankingAccountEntry
+    {
+        $pay = $settlement->direction === BasSettlement::DIRECTION_PAY;
+
+        return FrankingAccountEntry::create([
+            'entity_id' => $entity->id,
+            'financial_year' => FrankingService::financialYearFor($settlement->settled_at, $entity),
+            'entry_date' => $settlement->settled_at->toDateString(),
+            'entry_type' => $pay ? FrankingAccountEntry::TYPE_TAX_PAYMENT : FrankingAccountEntry::TYPE_REFUND_RECEIVED,
+            'reference' => 'BAS-SETT-'.$settlement->id,
+            'description' => ucfirst(BasSettlement::typeLabel($settlement->type)).($pay ? ' paid to ' : ' refund to ')
+                .$settlement->as_at->format('d M Y'),
+            'credit_amount' => $pay ? $settlement->bank_amount : 0,
+            'debit_amount' => $pay ? 0 : $settlement->bank_amount,
+            'is_estimated' => false,
+            'ifrs_transaction_id' => $journal->id,
+            'created_by' => auth()->id(),
+        ]);
+    }
+
+    /**
+     * Mirror a settlement's franking entry back out — same type,
+     * opposite side, same date — so the notional balance reads as if
+     * the mistaken settlement never happened, the same way the ledger
+     * reversal keeps the original journal and its mirror. Settlements
+     * that drove no franking (GST, PAYG withholding, an exact offset)
+     * find no entry and post none.
+     */
+    protected function reverseFrankingEntry(BasSettlement $settlement, int|string $reversalId): void
+    {
+        $entry = FrankingAccountEntry::query()
+            ->where('entity_id', $settlement->entity_id)
+            ->where('ifrs_transaction_id', $settlement->ifrs_transaction_id)
+            ->first();
+
+        if (! $entry) {
+            return;
+        }
+
+        FrankingAccountEntry::create([
+            'entity_id' => $entry->entity_id,
+            'financial_year' => $entry->financial_year,
+            'entry_date' => $entry->entry_date->toDateString(),
+            'entry_type' => $entry->entry_type,
+            'reference' => 'BAS-SETT-'.$settlement->id.'-REV',
+            'description' => 'Reversal — '.lcfirst((string) $entry->description),
+            'credit_amount' => $entry->debit_amount,
+            'debit_amount' => $entry->credit_amount,
+            'is_estimated' => $entry->is_estimated,
+            'ifrs_transaction_id' => $reversalId,
+            'created_by' => auth()->id(),
+        ]);
     }
 
     /**

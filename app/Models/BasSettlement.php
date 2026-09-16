@@ -33,6 +33,16 @@ class BasSettlement extends Model
         self::TYPE_INCOME_TAX,
     ];
 
+    /**
+     * The types that pay the company's own income tax (instalments and
+     * assessed tax) — settling them drives the franking account, unlike
+     * GST or PAYG withholding, which are never income tax paid.
+     */
+    public const INCOME_TAX_TYPES = [
+        self::TYPE_PAYG_INSTALMENT,
+        self::TYPE_INCOME_TAX,
+    ];
+
     public const DIRECTION_PAY = 'pay';
 
     public const DIRECTION_REFUND = 'refund';
