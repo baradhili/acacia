@@ -158,7 +158,7 @@ class ReportTest extends TestCase
             'tax_rate' => 10, // $1100 revenue
         ]);
 
-        $response = $this->get(route('projects.profitability', $this->project));
+        $response = $this->get(route('projects.profitability.show', $this->project));
 
         $response->assertStatus(200);
     }

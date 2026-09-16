@@ -33,7 +33,7 @@
                     class="block px-4 py-2 text-sm {{ request()->routeIs('reports.project-timesheet') ? 'text-indigo-600 font-medium' : 'text-gray-700 hover:bg-gray-100' }}">
                     Project Timesheet
                 </a>
-                <a href="{{ route('projects.index') }}"
+                <a href="{{ route('projects.profitability') }}"
                     class="block px-4 py-2 text-sm {{ request()->routeIs('projects.profitability') ? 'text-indigo-600 font-medium' : 'text-gray-700 hover:bg-gray-100' }}">
                     Project Profitability
                 </a>

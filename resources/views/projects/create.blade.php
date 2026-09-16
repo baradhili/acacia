@@ -180,6 +180,34 @@
             const noPoHint = document.getElementById('noPoHint');
             const createPoLink = document.getElementById('createPoLink');
 
+            function loadPurchaseOrders(clientId, selectedId) {
+                fetch(`/clients/${clientId}/purchase-orders?available=1`, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(po => {
+                        const option = document.createElement('option');
+                        option.value = po.id;
+                        option.textContent = `${po.po_number} - ${po.title} ($${parseFloat(po.remaining).toFixed(2)} remaining)`;
+                        poSelect.appendChild(option);
+                    });
+
+                    if (selectedId && data.some(po => String(po.id) === String(selectedId))) {
+                        poSelect.value = selectedId;
+                    }
+
+                    if (data.length === 0) {
+                        createPoLink.href = '{{ route('purchase-orders.create') }}?client_id=' + clientId;
+                        noPoHint.classList.remove('hidden');
+                    }
+                })
+                .catch(error => console.error('Error loading purchase orders:', error));
+            }
+
             if (clientSelect && poSelect) {
                 clientSelect.addEventListener('change', function() {
                     const clientId = this.value;
@@ -190,29 +218,17 @@
 
                     if (!clientId) return;
 
-                    // Fetch purchase orders for the selected client
-                    fetch(`/clients/${clientId}/purchase-orders?available=1`, {
-                        headers: {
-                            'Accept': 'application/json',
-                            'X-Requested-With': 'XMLHttpRequest',
-                        }
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        data.forEach(po => {
-                            const option = document.createElement('option');
-                            option.value = po.id;
-                            option.textContent = `${po.po_number} - ${po.title} ($${parseFloat(po.remaining).toFixed(2)} remaining)`;
-                            poSelect.appendChild(option);
-                        });
-
-                        if (data.length === 0) {
-                            createPoLink.href = '{{ route('purchase-orders.create') }}?client_id=' + clientId;
-                            noPoHint.classList.remove('hidden');
-                        }
-                    })
-                    .catch(error => console.error('Error loading purchase orders:', error));
+                    loadPurchaseOrders(clientId);
                 });
+
+                // After a validation redirect the client select re-renders
+                // selected, but the PO list is gone (no ?client_id on the
+                // redirect) — refetch it and restore the submitted PO.
+                const oldClientId = '{{ old('client_id') }}';
+                const oldPoId = '{{ old('purchase_order_id') }}';
+                if (oldClientId) {
+                    loadPurchaseOrders(oldClientId, oldPoId);
+                }
             }
         });
     </script>

@@ -190,7 +190,7 @@ Route::middleware('auth')->group(function () {
     Route::resource('projects', ProjectController::class);
     Route::post('/projects/{project}/staff/assign', [ProjectController::class, 'assignStaff'])->name('projects.staff.assign');
     Route::delete('/projects/{project}/staff/{user}', [ProjectController::class, 'removeStaff'])->name('projects.staff.remove');
-    Route::get('/projects/{project}/profitability', [ProjectController::class, 'profitability'])->name('projects.profitability');
+    Route::get('/projects/{project}/profitability', [ProjectController::class, 'profitability'])->name('projects.profitability.show');
 
     // Time Entries
     Route::resource('time-entries', TimeEntryController::class);
@@ -269,6 +269,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/time-by-staff', [ReportController::class, 'timeByStaff'])->name('reports.time-by-staff');
     Route::get('/reports/time-by-project', [ReportController::class, 'timeByProject'])->name('reports.time-by-project');
     Route::get('/reports/project-timesheet', [ReportController::class, 'projectTimesheet'])->name('reports.project-timesheet');
+    Route::get('/reports/project-profitability', [ProjectController::class, 'profitabilityIndex'])->name('projects.profitability');
 
     // Financial Reports
     Route::get('/reports/trial-balance', [ReportController::class, 'trialBalance'])->name('reports.trial-balance');
