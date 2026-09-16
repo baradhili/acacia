@@ -91,4 +91,69 @@ class ReconciliationController extends Controller
             ? 'Transaction ignored.'
             : 'Transaction could not be ignored (it may already be matched or ignored).');
     }
+
+    /**
+     * The manual match screen for one pending bank line: likely
+     * candidates (±14 days to allow for bank lag, amount-close) plus a
+     * reference/counterparty search that ignores the amount for the
+     * lines the bank grossed up or split.
+     */
+    public function matchScreen(Request $request, BankTransaction $transaction)
+    {
+        if ($transaction->status !== BankTransaction::STATUS_PENDING) {
+            return redirect()->route('reconciliation.index')
+                ->with('error', 'Only pending transactions can be matched.');
+        }
+
+        $search = trim((string) $request->query('q', ''));
+
+        $candidates = $this->reconciliation->getAvailableTransactionsForLinking(
+            $transaction,
+            null,
+            50,
+            $search !== '' ? ['days' => 60, 'q' => $search] : ['days' => 14]
+        );
+
+        return view('reconciliation.match', compact('transaction', 'candidates', 'search'));
+    }
+
+    /**
+     * Record a manual match and learn from it: the counterparty is
+     * remembered so the auto-matcher can pair its future bank lines.
+     */
+    public function storeMatch(Request $request, BankTransaction $transaction)
+    {
+        $validated = $request->validate([
+            'type' => ['required', 'in:invoice,payment,bill,ledger'],
+            'target_id' => ['required', 'integer'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $ok = $this->reconciliation->manualOverrideLink(
+            $transaction,
+            $validated['type'],
+            $validated['target_id'],
+            $validated['notes'] ?? null
+        );
+
+        if (! $ok) {
+            return back()->withInput()
+                ->with('error', "Could not match to {$validated['type']} #{$validated['target_id']} — it may not exist, or the bank line is already matched.");
+        }
+
+        return redirect()->route('reconciliation.index')
+            ->with('success', "Matched to {$validated['type']} #{$validated['target_id']} — noted for future auto-matching.");
+    }
+
+    /**
+     * Unlink a matched bank line, returning it to pending.
+     */
+    public function unmatch(BankTransaction $transaction)
+    {
+        $ok = $this->reconciliation->unlinkTransaction($transaction);
+
+        return back()->with($ok ? 'success' : 'error', $ok
+            ? 'Transaction unlinked — it is pending again.'
+            : 'Transaction could not be unlinked (it may not be matched).');
+    }
 }

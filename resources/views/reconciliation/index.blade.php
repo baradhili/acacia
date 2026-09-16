@@ -75,8 +75,10 @@
                             <td class="px-4 py-3 text-sm text-right whitespace-nowrap {{ $transaction->amount < 0 ? 'text-red-600' : 'text-green-700' }}">
                                 {{ $transaction->amount < 0 ? '-' : '' }}${{ number_format(abs((float) $transaction->amount), 2) }} {{ $transaction->currency }}
                             </td>
-                            <td class="px-4 py-3 text-right">
-                                <form action="{{ route('reconciliation.ignore', $transaction) }}" method="POST" class="inline"
+                            <td class="px-4 py-3 text-right whitespace-nowrap">
+                                <a href="{{ route('reconciliation.match', $transaction) }}"
+                                    class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">Match</a>
+                                <form action="{{ route('reconciliation.ignore', $transaction) }}" method="POST" class="inline ml-3"
                                     onsubmit="return confirm('Ignore this transaction?');">
                                     @csrf
                                     <button class="text-gray-500 hover:text-red-600 text-sm font-medium">Ignore</button>
@@ -108,6 +110,7 @@
                         <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Matched to</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">When</th>
+                        <th class="px-4 py-3"></th>
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">
@@ -124,10 +127,17 @@
                                 </span>
                             </td>
                             <td class="px-4 py-3 text-sm text-gray-600">{{ $transaction->matched_at?->format('d M Y H:i') }}</td>
+                            <td class="px-4 py-3 text-right">
+                                <form action="{{ route('reconciliation.unmatch', $transaction) }}" method="POST" class="inline"
+                                    onsubmit="return confirm('Unmatch this transaction? It returns to pending.');">
+                                    @csrf
+                                    <button class="text-gray-500 hover:text-red-600 text-sm font-medium">Unmatch</button>
+                                </form>
+                            </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="px-4 py-6 text-sm text-gray-500">Nothing matched yet.</td>
+                            <td colspan="6" class="px-4 py-6 text-sm text-gray-500">Nothing matched yet.</td>
                         </tr>
                     @endforelse
                 </tbody>

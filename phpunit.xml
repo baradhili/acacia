@@ -10,7 +10,13 @@
         </testsuite>
         <testsuite name="Feature">
             <directory>tests/Feature</directory>
-            <exclude>tests/Feature/Reconciliation</exclude>
+            <!-- The three legacy reconciliation files drifted while the
+                 whole directory was excluded (IFRS ledger expectations,
+                 entry_type casing) — excluded per file so new
+                 reconciliation coverage runs with the suite. -->
+            <exclude>tests/Feature/Reconciliation/ReconciliationMatchingTest.php</exclude>
+            <exclude>tests/Feature/Reconciliation/ReconciliationServiceTest.php</exclude>
+            <exclude>tests/Feature/Reconciliation/AutoCreateCashReceiptTest.php</exclude>
         </testsuite>
     </testsuites>
     <source>

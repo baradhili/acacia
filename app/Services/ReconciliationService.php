@@ -8,6 +8,7 @@ use App\Models\BillPayment;
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\ReconciliationCounterpartyRule;
 use App\Models\ReconciliationHistory;
 use App\Models\Supplier;
 use App\Models\User;
@@ -386,7 +387,11 @@ class ReconciliationService
     }
 
     /**
-     * Attempt to auto-match a Wise transaction against IFRS ledgers
+     * Attempt to auto-match a Wise transaction against IFRS ledgers,
+     * then — when the strict pass misses — via a learned counterparty
+     * rule (a previous match from the same payer/payee resolved to a
+     * client or supplier; a fresh unconsumed payment/bill of theirs
+     * with a matching amount counts).
      */
     public function matchTransaction(BankTransaction $wiseTransaction): ?int
     {
@@ -404,7 +409,25 @@ class ReconciliationService
                 "Auto-matched to ledger entry #{$matchedLedger->id} ({$matchedLedger->reference})"
             );
 
+            $this->learnFromMatch($wiseTransaction);
+
             return $matchedLedger->id;
+        }
+
+        $learned = $this->learnedMatchFor($wiseTransaction);
+        if ($learned !== null) {
+            $wiseTransaction->markAsMatched($learned['id'], $learned['type']);
+
+            $this->logHistory(
+                $wiseTransaction,
+                ReconciliationHistory::ACTION_AUTO_MATCH,
+                ReconciliationHistory::STATUS_SUCCESS,
+                $learned['id'],
+                $learned['type'],
+                "Auto-matched to {$learned['type']} #{$learned['id']} via learned counterparty {$this->counterpartyKey($wiseTransaction)}"
+            );
+
+            return $learned['id'];
         }
 
         $this->logHistory(
@@ -415,6 +438,161 @@ class ReconciliationService
             null,
             'No matching ledger entry found'
         );
+
+        return null;
+    }
+
+    /**
+     * The normalised counterparty behind a bank line: the payer for
+     * money in, the payee (or merchant) for money out. Null when the
+     * bank line names nobody — nothing to learn or look up.
+     */
+    public function counterpartyKey(BankTransaction $transaction): ?string
+    {
+        $name = $transaction->type === BankTransaction::TYPE_CREDIT
+            ? ($transaction->payer_name ?: $transaction->merchant_name)
+            : ($transaction->payee_name ?: $transaction->merchant_name);
+
+        if (! $name) {
+            return null;
+        }
+
+        $key = preg_replace('/\s+/u', ' ', mb_strtolower(trim((string) $name)));
+
+        return $key === '' ? null : Str::limit($key, 150, '');
+    }
+
+    /**
+     * Record what a match taught: which client or supplier the bank
+     * counterparty resolved to. Best effort — a learning failure must
+     * never fail the match around it.
+     */
+    protected function learnFromMatch(BankTransaction $transaction): void
+    {
+        try {
+            [$clientId, $supplierId] = match ($transaction->matched_transaction_type) {
+                'payment', 'invoice' => [
+                    $transaction->matched_transaction_type === 'payment'
+                        ? Payment::find($transaction->matched_transaction_id)?->client_id
+                        : Invoice::find($transaction->matched_transaction_id)?->client_id,
+                    null,
+                ],
+                'bill' => [null, Bill::find($transaction->matched_transaction_id)?->supplier_id],
+                default => [null, null], // ledger matches carry no counterparty identity
+            };
+
+            if (! $clientId && ! $supplierId) {
+                return;
+            }
+
+            $key = $this->counterpartyKey($transaction);
+            if (! $key) {
+                return;
+            }
+
+            $rule = ReconciliationCounterpartyRule::firstOrNew(
+                ['match_key' => $key, 'direction' => $transaction->type]
+            );
+            $rule->fill([
+                'client_id' => $clientId,
+                'supplier_id' => $supplierId,
+                'last_matched_at' => now(),
+            ]);
+            $rule->times_matched = ($rule->times_matched ?? 0) + 1;
+            $rule->save();
+        } catch (\Exception $e) {
+            Log::warning('Failed to learn reconciliation counterparty rule', [
+                'bank_transaction_id' => $transaction->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * The rule learned for a bank line's counterparty, when its
+     * direction matches the rule's.
+     */
+    protected function counterpartyRuleFor(BankTransaction $transaction, string $direction): ?ReconciliationCounterpartyRule
+    {
+        $key = $this->counterpartyKey($transaction);
+        if (! $key || $transaction->type !== $direction) {
+            return null;
+        }
+
+        return ReconciliationCounterpartyRule::where('match_key', $key)
+            ->where('direction', $direction)
+            ->first();
+    }
+
+    /**
+     * The learned pass for one bank line: if its counterparty previously
+     * resolved to a client (credits) or supplier (debits), look for a
+     * fresh payment/bill of theirs — matching amount and date window,
+     * not already consumed by another matched bank line.
+     *
+     * @return array{type: string, id: int}|null
+     */
+    protected function learnedMatchFor(BankTransaction $transaction): ?array
+    {
+        $key = $this->counterpartyKey($transaction);
+        if (! $key) {
+            return null;
+        }
+
+        $rule = $this->counterpartyRuleFor($transaction, $transaction->type);
+        if (! $rule) {
+            return null;
+        }
+
+        // Bank debits are stored negative while bill totals (and
+        // payment amounts) are positive — compare magnitudes.
+        $amount = abs((float) $transaction->amount);
+        $dateFrom = $transaction->transaction_date->copy()->subDays(self::DATE_TOLERANCE_DAYS);
+        $dateTo = $transaction->transaction_date->copy()->addDays(self::DATE_TOLERANCE_DAYS);
+
+        if ($rule->client_id && $transaction->type === BankTransaction::TYPE_CREDIT) {
+            $payment = Payment::query()
+                ->where('client_id', $rule->client_id)
+                ->where('status', Payment::STATUS_COMPLETED)
+                ->whereBetween('amount', [$amount - self::AMOUNT_TOLERANCE, $amount + self::AMOUNT_TOLERANCE])
+                ->whereBetween('payment_date', [$dateFrom, $dateTo])
+                ->whereNotExists(function ($query) use ($transaction) {
+                    $query->selectRaw('1')
+                        ->from('bank_transactions')
+                        ->whereColumn('matched_transaction_id', 'payments.id')
+                        ->where('matched_transaction_type', 'payment')
+                        ->where('status', BankTransaction::STATUS_MATCHED)
+                        ->when($transaction->exists, fn ($q) => $q->where('id', '!=', $transaction->id));
+                })
+                ->orderBy('payment_date')
+                ->first();
+
+            if ($payment) {
+                return ['type' => 'payment', 'id' => $payment->id];
+            }
+        }
+
+        if ($rule->supplier_id && $transaction->type === BankTransaction::TYPE_DEBIT) {
+            $bill = Bill::query()
+                ->where('supplier_id', $rule->supplier_id)
+                ->whereIn('status', [Bill::STATUS_OPEN, Bill::STATUS_PARTIALLY_PAID, Bill::STATUS_PAID])
+                ->whereBetween('total', [$amount - self::AMOUNT_TOLERANCE, $amount + self::AMOUNT_TOLERANCE])
+                ->whereBetween('bill_date', [$dateFrom, $dateTo])
+                ->whereNotExists(function ($query) use ($transaction) {
+                    $query->selectRaw('1')
+                        ->from('bank_transactions')
+                        ->whereColumn('matched_transaction_id', 'bills.id')
+                        ->where('matched_transaction_type', 'bill')
+                        ->where('status', BankTransaction::STATUS_MATCHED)
+                        ->when($transaction->exists, fn ($q) => $q->where('id', '!=', $transaction->id));
+                })
+                ->orderBy('bill_date')
+                ->first();
+
+            if ($bill) {
+                return ['type' => 'bill', 'id' => $bill->id];
+            }
+        }
 
         return null;
     }
@@ -674,6 +852,8 @@ class ReconciliationService
                 ['amount' => $payment->amount, 'client_id' => $clientId]
             );
 
+            $this->learnFromMatch($bankTransaction->refresh());
+
             return $payment;
 
         } catch (\Exception $e) {
@@ -783,6 +963,14 @@ class ReconciliationService
             }
         }
 
+        // A learned rule beats name matching — it is what this
+        // counterparty was last reconciled to.
+        if ($rule = $this->counterpartyRuleFor($transaction, BankTransaction::TYPE_CREDIT)) {
+            if ($rule->client_id && Client::find($rule->client_id)) {
+                return $rule->client_id;
+            }
+        }
+
         // Try to match by payer name
         if (! empty($transaction->payer_name)) {
             $client = Client::where('name', 'like', '%'.$transaction->payer_name.'%')->first();
@@ -876,6 +1064,8 @@ class ReconciliationService
                 'amount' => $bill->total,
                 'bank_transaction_id' => $bankTransaction->id,
             ]);
+
+            $this->learnFromMatch($bankTransaction->refresh());
 
             // Paid-at-entry: bill payment + allocation + IFRS posting.
             if ($markAsPaid) {
@@ -971,6 +1161,14 @@ class ReconciliationService
      */
     protected function findSupplierForTransaction(BankTransaction $transaction): ?int
     {
+        // A learned rule beats name matching — it is what this
+        // counterparty was last reconciled to.
+        if ($rule = $this->counterpartyRuleFor($transaction, BankTransaction::TYPE_DEBIT)) {
+            if ($rule->supplier_id && Supplier::find($rule->supplier_id)) {
+                return $rule->supplier_id;
+            }
+        }
+
         // Try to match by merchant name
         if (! empty($transaction->merchant_name)) {
             $supplier = Supplier::where('name', 'like', '%'.$transaction->merchant_name.'%')->first();
@@ -1273,6 +1471,9 @@ class ReconciliationService
                 $linkNotes
             );
 
+            // Teach the counterparty rule so future lines can auto-match.
+            $this->learnFromMatch($bankTransaction->refresh());
+
             return true;
 
         } catch (\Exception $e) {
@@ -1320,26 +1521,41 @@ class ReconciliationService
      * @param  BankTransaction  $bankTransaction  The bank transaction to match
      * @param  string  $type  Filter by transaction type (optional)
      * @param  int  $limit  Limit results
+     * @param  array{days?: int, q?: ?string}  $opts  days widens the date window
+     *                                                (the manual screen uses 14 —
+     *                                                bank lag exceeds the strict
+     *                                                matcher's 3); q filters
+     *                                                candidates by reference or
+     *                                                counterparty name, case-
+     *                                                insensitive, and drops the
+     *                                                amount constraint so partial
+     *                                                or grossed-up payments stay
+     *                                                findable.
      * @return Collection Available transactions
      */
     public function getAvailableTransactionsForLinking(
         BankTransaction $bankTransaction,
         ?string $type = null,
-        int $limit = 50
+        int $limit = 50,
+        array $opts = []
     ): Collection {
-        $amount = $bankTransaction->amount;
-        $dateFrom = $bankTransaction->transaction_date->copy()->subDays(self::DATE_TOLERANCE_DAYS);
-        $dateTo = $bankTransaction->transaction_date->copy()->addDays(self::DATE_TOLERANCE_DAYS);
+        $days = max(1, (int) ($opts['days'] ?? self::DATE_TOLERANCE_DAYS));
+        $q = isset($opts['q']) && trim((string) $opts['q']) !== '' ? mb_strtolower(trim((string) $opts['q'])) : null;
+        $amount = (float) $bankTransaction->amount;
+        $dateFrom = $bankTransaction->transaction_date->copy()->subDays($days);
+        $dateTo = $bankTransaction->transaction_date->copy()->addDays($days);
+        $tolerance = self::AMOUNT_TOLERANCE;
 
         $results = collect();
 
         // Search invoices if type is null or 'invoice'
         if ($type === null || $type === 'invoice') {
-            $invoices = Invoice::whereBetween('total', [
-                $amount - self::AMOUNT_TOLERANCE,
-                $amount + self::AMOUNT_TOLERANCE,
-            ])
-                ->whereBetween('invoice_date', [$dateFrom, $dateTo])
+            $invoices = Invoice::query()
+                ->when($tolerance !== null, fn ($query) => $query->whereBetween('total', [
+                    $amount - $tolerance,
+                    $amount + $tolerance,
+                ]))
+                ->whereBetween('issue_date', [$dateFrom, $dateTo])
                 ->whereIn('status', [Invoice::STATUS_SENT, Invoice::STATUS_PARTIALLY_PAID])
                 ->limit($limit)
                 ->get()
@@ -1349,7 +1565,7 @@ class ReconciliationService
                         'id' => $invoice->id,
                         'reference' => $invoice->invoice_number,
                         'amount' => $invoice->total,
-                        'date' => $invoice->invoice_date,
+                        'date' => $invoice->issue_date,
                         'client' => $invoice->client?->name ?? 'Unknown',
                         'status' => $invoice->status,
                     ];
@@ -1359,10 +1575,11 @@ class ReconciliationService
 
         // Search payments if type is null or 'payment'
         if ($type === null || $type === 'payment') {
-            $payments = Payment::whereBetween('amount', [
-                $amount - self::AMOUNT_TOLERANCE,
-                $amount + self::AMOUNT_TOLERANCE,
-            ])
+            $payments = Payment::query()
+                ->when($tolerance !== null, fn ($query) => $query->whereBetween('amount', [
+                    $amount - $tolerance,
+                    $amount + $tolerance,
+                ]))
                 ->whereBetween('payment_date', [$dateFrom, $dateTo])
                 ->where('status', Payment::STATUS_COMPLETED)
                 ->limit($limit)
@@ -1383,10 +1600,11 @@ class ReconciliationService
 
         // Search bills if type is null or 'bill'
         if ($type === null || $type === 'bill') {
-            $bills = Bill::whereBetween('total', [
-                $amount - self::AMOUNT_TOLERANCE,
-                $amount + self::AMOUNT_TOLERANCE,
-            ])
+            $bills = Bill::query()
+                ->when($tolerance !== null, fn ($query) => $query->whereBetween('total', [
+                    $amount - $tolerance,
+                    $amount + $tolerance,
+                ]))
                 ->whereBetween('bill_date', [$dateFrom, $dateTo])
                 ->whereIn('status', [Bill::STATUS_OPEN, Bill::STATUS_PAID, Bill::STATUS_PARTIALLY_PAID])
                 ->limit($limit)
@@ -1405,28 +1623,53 @@ class ReconciliationService
             $results = $results->merge($bills);
         }
 
-        // Search ledger entries if type is null or 'ledger'
+        // Search ledger entries if type is null or 'ledger'. The IFRS
+        // models carry an entity scope that fatals with no entity
+        // context (a caller whose entity was never set up), so the
+        // ledger tier degrades to "no candidates" instead of failing
+        // the whole screen.
         if ($type === null || $type === 'ledger') {
-            $ledgers = Ledger::whereBetween('amount', [
-                $amount - self::AMOUNT_TOLERANCE,
-                $amount + self::AMOUNT_TOLERANCE,
-            ])
-                ->whereBetween('date', [$dateFrom, $dateTo])
-                ->with('account')
-                ->limit($limit)
-                ->get()
-                ->map(function ($ledger) {
-                    return [
-                        'type' => 'ledger',
-                        'id' => $ledger->id,
-                        'reference' => $ledger->reference ?? "Ledger-{$ledger->id}",
-                        'amount' => $ledger->amount,
-                        'date' => $ledger->date,
-                        'account' => $ledger->account?->name ?? 'Unknown',
-                        'entry_type' => $ledger->entry_type,
-                    ];
-                });
-            $results = $results->merge($ledgers);
+            try {
+                $ledgers = Ledger::query()
+                    ->when($tolerance !== null, fn ($query) => $query->whereBetween('amount', [
+                        $amount - $tolerance,
+                        $amount + $tolerance,
+                    ]))
+                    ->whereBetween('date', [$dateFrom, $dateTo])
+                    ->with('account')
+                    ->limit($limit)
+                    ->get()
+                    ->map(function ($ledger) {
+                        return [
+                            'type' => 'ledger',
+                            'id' => $ledger->id,
+                            'reference' => $ledger->reference ?? "Ledger-{$ledger->id}",
+                            'amount' => $ledger->amount,
+                            'date' => $ledger->date,
+                            'account' => $ledger->account?->name ?? 'Unknown',
+                            'entry_type' => $ledger->entry_type,
+                        ];
+                    });
+                $results = $results->merge($ledgers);
+            } catch (\Throwable $e) {
+                Log::warning('Ledger candidates unavailable for manual matching', [
+                    'bank_transaction_id' => $bankTransaction->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        if ($q !== null) {
+            $results = $results->filter(function ($candidate) use ($q) {
+                $haystack = mb_strtolower(implode(' ', array_filter([
+                    $candidate['reference'] ?? null,
+                    $candidate['client'] ?? null,
+                    $candidate['supplier'] ?? null,
+                    $candidate['account'] ?? null,
+                ])));
+
+                return str_contains($haystack, $q);
+            });
         }
 
         return $results->take($limit);
