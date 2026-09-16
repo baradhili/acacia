@@ -259,7 +259,9 @@ class CreateInvoiceFromTimeEntriesTest extends TestCase
             ->assertRedirect()
             ->assertSessionHas('error');
 
-        $this->makeEntry(['purchase_order_id' => $po->id]);
+        // Entries reach the PO through their project.
+        $this->project->update(['purchase_order_id' => $po->id]);
+        $this->makeEntry();
 
         $this->actingAs($this->user)
             ->get(route('purchase-orders.create-invoice', $po))
@@ -275,7 +277,9 @@ class CreateInvoiceFromTimeEntriesTest extends TestCase
             'budgeted_amount' => 10000,
             'status' => 'open',
         ]);
-        $entry = $this->makeEntry(['purchase_order_id' => $po->id]);
+        // Entries reach the PO through their project.
+        $this->project->update(['purchase_order_id' => $po->id]);
+        $entry = $this->makeEntry();
 
         $response = $this->actingAs($this->user)
             ->post(route('purchase-orders.create-invoice.store', $po), [
@@ -308,7 +312,9 @@ class CreateInvoiceFromTimeEntriesTest extends TestCase
             'budgeted_amount' => 10000,
             'status' => 'draft',
         ]);
-        $entry = $this->makeEntry(['purchase_order_id' => $po->id]);
+        // Entries reach the PO through their project.
+        $this->project->update(['purchase_order_id' => $po->id]);
+        $entry = $this->makeEntry();
 
         // The action never renders for non-invoiceable statuses, and the
         // controller rejects direct hits on both endpoints.
@@ -355,7 +361,9 @@ class CreateInvoiceFromTimeEntriesTest extends TestCase
             'budgeted_amount' => 10000,
             'status' => 'open',
         ]);
-        $entry = $this->makeEntry(['purchase_order_id' => $poA->id]);
+        // The entry rides poA through its project.
+        $this->project->update(['purchase_order_id' => $poA->id]);
+        $entry = $this->makeEntry();
 
         $response = $this->actingAs($this->user)
             ->post(route('purchase-orders.create-invoice.store', $poB), [

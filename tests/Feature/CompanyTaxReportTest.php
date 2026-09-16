@@ -276,8 +276,10 @@ class CompanyTaxReportTest extends TestCase
         $response = $this->actingAs($this->user)
             ->get(route('reports.company-tax'));
 
-        $response->assertSee('51824753556');
-        $response->assertSee('123456789');
+        // The screen shows display-formatted numbers (bare digits stay
+        // in the CSV exports).
+        $response->assertSee('51 824 753 556');
+        $response->assertSee('123 456 789');
     }
 
     public function test_company_tax_falls_back_and_warns_for_unmapped_accounts(): void

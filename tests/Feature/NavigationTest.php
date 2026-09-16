@@ -79,6 +79,39 @@ class NavigationTest extends TestCase
         $response->assertDontSee('Franking Account');
     }
 
+    public function test_admin_sees_the_topbar_dropdowns(): void
+    {
+        $response = $this->actingAs($this->admin)->get('/dashboard');
+
+        $response->assertStatus(200);
+        // The three topbar dropdowns carry the moved sidebar sections.
+        $response->assertSee('Reports');
+        $response->assertSee('Accounting');
+        $response->assertSee('Shares');
+        // Reports dropdown items
+        $response->assertSee('Time by Client');
+        $response->assertSee('Balance Sheet');
+        $response->assertSee('Company Tax Return');
+        $response->assertSee('BAS Settlements');
+        // Accounting dropdown items
+        $response->assertSee('Prepayments');
+        $response->assertSee('Domain Names');
+        // Shares dropdown items
+        $response->assertSee('Shareholders');
+        $response->assertSee('Franking Account');
+    }
+
+    public function test_staff_sees_reports_but_not_accounting_or_shares_dropdowns(): void
+    {
+        $response = $this->actingAs($this->staff)->get('/dashboard');
+
+        $response->assertStatus(200);
+        $response->assertSee('Reports'); // reports are available to staff
+        $response->assertDontSee('Domain Names');
+        $response->assertDontSee('Dividends');
+        $response->assertDontSee('BAS Settlements'); // admin/accountant only
+    }
+
     public function test_staff_sees_limited_navigation_menu_items(): void
     {
         $response = $this->actingAs($this->staff)->get('/dashboard');

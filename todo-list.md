@@ -1,5 +1,23 @@
 # Todo list
 
+- [ ] Bank Reconciliation: Need a way to manually match (and have automatch learn it?)
+
+- [ ] When an invoice is cancelled, then if it has time entries associated with it - these should be freed up for re-assingment.
+
+- [ ] Sales funnel/crm - targets, leads, plans
+
+- [ ] move setup section under profile to own dropdown alongside Reports, Accounting, Shares
+
+- [ ] Fix: "BAS Settlement" should be under Accounting - also where to handle "PAYG" tax calcs and settlements - especially since tax settlements drive Franking Credits
+
+- [ ] Company details: Bank info - bsb/account/name - also use on invoice 
+
+- [ ] Look at and [GitHub - tiagofcp/laraestimate: LaraEstimate is a complete Estimates/Quotes System made with Laravel 7 and VueJS. · GitHub](https://github.com/tiagofcp/laraestimate) update estimates to use concepts - link it with services
+
+- [ ] Make things modular using nwidart - for plugins from somewhere - maybe just github first off?
+
+- [x] Better handling of Project, PO, Client on forms. - (Sep 2026, branch feat/time-entry-project-linkage) Done, scoped to time entries. Entries go against a project only: the Client and PO selects left the entry form (they render as read-only displays filled from the chosen project), ad-hoc client time and internal/no-project time are refused, and TimeEntry's saving hook derives client_id and purchase_order_id from the project (submitted values ignored; legacy projects without a PO leave the entry PO-less). The one-entry-per-staff-per-client-per-day rule now keys on the project's client and reports the duplicate error under project_id. Projects must link one of their client's POs — enforced server-side (client match + not already linked to another project) behind the AJAX filter — and saving a project mirrors the link onto purchase_orders.project_id so available-PO lists and PO screens see it from both sides. The project form's PO select is required with a "no open POs — create one" hint (create-PO link carries the client preselect), and editing keeps the project's own PO selectable whatever its status. Manual "allocate time to PO" removed (controller action, route and test) — an entry's PO comes solely from its project. Historical project-less entries stay as history; their drafts must pick a project to be edited. Covered by TimeEntryLifecycleTest + new ProjectPurchaseOrderLinkTest.
+
 - [x] In `@app/Http/Controllers/BackupController.php`:
   Line 46: Update BackupService::runAndPrune() to acquire one shared
   cross-process atomic lock before running the complete backup-and-prune
@@ -7,6 +25,7 @@
   afterward. Return an explicit “backup already running” result when the lock is
   unavailable, then update BackupController::run() and CreateBackup::handle() to
   handle that result without proceeding as if the backup succeeded.
+  
   - (Sep 2026) Done. runAndPrune() now takes a `backups:run-and-prune` atomic
     cache lock (TTL 3600s, matching the process timeouts; released in `finally`)
     around the whole run — archives, temp files, success stamp and prune. When
@@ -20,6 +39,7 @@
   as-at date once, using the requested as_at when present or the latest completed
   quarter end otherwise, and reuse that value for service->positions(),
   positionAsAt, and defaultAsAt.
+  
   - (Sep 2026) Done. index() derives one `$effectiveAsAt` (requested as_at, else
     the latest completed quarter end from quarterEnds(), else today) and feeds it
     to positions(), positionAsAt and defaultAsAt, so the shown balances, the
@@ -32,6 +52,7 @@
   through the current entity relationship or enforcing the entity-scoped
   authorization policy. Preserve authorized same-entity behavior and add a feature
   test confirming a user cannot unfreeze another entity’s statement.
+  
   - (Sep 2026) Done. unfreezeBasQuarter now aborts 404 unless the bound
     BasStatement's entity matches ifrsEntity() (the caller's entity) — the route
     binding resolves by id alone, so the check stops one entity's admin deleting
@@ -45,6 +66,7 @@
   or create the same persisted settings row before BackupService::runAndPrune()
   invokes recordSuccess(). Add a database uniqueness constraint for that key so
   only one BackupSetting row can exist.
+  
   - (Sep 2026) Done. current() now firstOrCreate()s on a fixed
     `singleton_key = 'default'`; concurrent first callers race on a unique index
     (migration 2026_09_09_000001, which also collapses any rows the old
@@ -60,6 +82,7 @@
   Line 60: Update the archive stamp generation in BackupService::runAndPrune()
   to include sufficient uniqueness beyond seconds, such as microseconds and a
   random suffix, so sequential runs cannot reuse database or file archive paths.
+  
   - (Sep 2026) Done. When VACUUM INTO cannot run (e.g. inside a transaction) the
     fallback is now always dumpSqliteStatements() — it reads through the live
     connection so committed rows still in the WAL are captured; the raw
@@ -80,6 +103,7 @@
   assertDatePostable() guard before calling IfrsPosting::reverseTransaction().
   Preserve the current reversal checks and posting flow, ensuring locked
   FiscalPeriod entries cannot be bypassed.
+  
   - (Sep 2026) Done. reverse() now runs assertDatePostable(settled_at,
     settlement->entity) before posting — a period locked since the settlement
     was recorded refuses with the usual error and nothing posts — and the
@@ -93,6 +117,7 @@
   actionable commands for both SQLite archive formats: .sqlite.gz snapshots and
   .sql.gz textual dumps, while retaining the existing MySQL restore command for
   SQL archives.
+  
   - (Sep 2026) Done. The overview table lists MySQL/SQLite only; the built-in
     command's restore snippet and the Restore Procedures section now give copy-
     paste commands for .sqlite.gz (decompress over DB_DATABASE) and .sql.gz
@@ -106,6 +131,7 @@
 - [x] Bank reconciliation doesn't upload - also remove API integration, its too much of a hassle. - (Sep 2026) Done. The upload works: ReconciliationController::processImport now really imports via ReconciliationService::importFromCsv, and the importer handles the bank's current transaction-history.csv download (ID/Status/Direction/Source-Target format — IN credits as target amount, OUT debits as the AUD source amount even for multi-currency card spend, REFUNDED/zero rows skipped, NOTPROVIDED references cleared) as well as the older statement export; already-imported rows are skipped so re-uploading is safe. The reconciliation screen is real now (pending/matched/ignored counts, pending + recently-matched tables, Auto-match and Ignore actions) instead of the "Phase 6" placeholder. Wise API integration removed entirely: WiseService (API client), reconcile:wise command + daily schedule, services.wise config, WISE_* env keys and WiseApiSyncTest are gone; CSV import is the only feed. Fixture: tests/transaction_history_sample.csv (a real export).
 
 - [x] Update dashboard widget and report to pick up unlodged GST balances both receivable and payable
+  
   - (Sep 2026) Done. The dashboard widget (now "Unlodged GST") reads the ledger via
     BasSettlementService::position() — the same balances the BAS settlement screen
     nets — instead of estimating payable from outstanding invoices; it shows the
@@ -115,6 +141,7 @@
     tests/Feature/Bas/GstPositionDisplayTest.php.
 
 - [x] shareholders - share held at what value? $10 for 1000
+  
   - (Sep 2026) Done. holdingsByClass() now aggregates each holding's book value —
     SUM(amount_paid, falling back to quantity × unit_price) — with the average
     unit price (1000 @ $10 shows as $10,000.00 @ $10.0000/share), and the
@@ -123,6 +150,7 @@
     SharesAndDividendsTest::test_holdings_carry_the_value_they_are_held_at.
 
 - [x] Add handling for payroll - australian rules - handle closely linked people as well, personal services income
+  
   - (Sep 2026) Done per the .zcode/wages_and_psi-spec.md modules A–E. **Payroll** (A/B): employees/directors/contractors
     master data; pay runs with payslips — PAYG withheld from the ATO NAT 1004 Schedule 1 weekly coefficient tables
     (config/payroll.php, 2026-27: scale 2 w/ threshold, scale 1 w/o, 47% no-TFN, weekly-equivalent conversion for
@@ -141,14 +169,14 @@
 - [x] add crud/ui etc for services controller and model - fix any bugs. - (Sep 2026, branch add-services) Done. Services catalogue (name, description, standard hourly rate — nullable for fixed-fee, 4dp) with full CRUD at /services, admin/accountant only, nav link under Time & Projects; covered by tests/Feature/ServiceTest.php. Skeleton bugs fixed: removed references to the non-existent Skill model and to PhpWord/Markdown (packages not installed — every route fataled); dropped the required_skills JSON (two incompatible shapes between store/index/update); plain `find()` crashes on unknown ids → route-model binding 404s; duplicated conflicting validation → single ServiceRequest.
 
 - [x] Need to handle clients who want timesheet reports for project by calendar month and week sum
+  
   - (Sep 2026) Done. New "Project Timesheet" report (/reports/project-timesheet, nav under Reports): per project,
     filterable by client/project/date range, with a By-week table (weeks starting Monday, "Week of d M Y" rows)
     and a By-month table side by side, each summing hours and amounts with totals; overall totals across
     projects; approved entries only. Covered by ReportTest::test_project_timesheet_sums_hours_by_week_and_month.
 
-- [ ] SKIP - need to handle client who "reverse invoice" - as in I fill their timesheet system and they send me a payment that is itemised like my time-based invoice timesheet
-
 - [x] allow abn/acn/tfn to be display formatted in the way they normally are - also allow entry with the usual spaces
+  
   - (Sep 2026) Done. New `App\Support\AuNumbers` (ABN 2-3-3-3, ACN 3-3-3, TFN 3-3-3 / 3-5 for 8 digits;
     unexpected shapes pass through untouched) + `App\Rules\AuNumber` validation that accepts spaced entry.
     Client, Supplier, CompanyProfile, CompanyShareholder and payroll Employee models normalise ABN/ACN/TFN
@@ -157,9 +185,8 @@
     tax report screen/PDF (CSV exports keep bare digits). Covered by tests/Unit/AuNumbersTest.php and
     tests/Feature/AuNumberFormattingTest.php.
 
-- [ ] DO NOT EXECUTE THIS ITEM - no need to enter both project and po project should have po
-
 - [x] When Credit note is issued against an invoice - the invoice should no longer be marked overdue - also if invoice is cancelled then amount due should be zero dollars
+  
   - (Sep 2026) Done. Issuing a credit note against an invoice now un-marks it: the CreditNote
     created-hook calls invoice->unmarkOverdue() (overdue → sent/partially_paid), is_overdue returns
     false, the overdue scope excludes it and invoices:mark-overdue skips it while any non-void
@@ -171,6 +198,7 @@
 - [x] Add "select all" for create invoice from time entries against time entries
 
 - [x] refactor to ensure all users are created linked with an entity
+  
   - (Sep 2026) Done. The admin user form requires an Entity (select prefilled with the creator's
     entity, enforced by exists:ifrs_entities,id on store+update) and the users index shows the
     entity column; self-registration links the new user to the instance's entity (fresh installs
@@ -178,6 +206,7 @@
     the linkage; a new test refuses creation without an entity).
 
 - [x] setting to prune transactions in closed years after x years (default 7 years)
+  
   - (Sep 2026) Done. `ledger:prune` (scheduled yearly 1 Jan, or by hand; --dry-run, --years overrides)
     removes the double-entry trail (ifrs transactions/line items/ledgers/assignments) of CLOSED
     financial years that ended before today−N years — after writing an opening-balance snapshot at
@@ -188,6 +217,7 @@
     (blank = default 7). Covered by tests/Feature/LedgerPruneTest.php.
 
 - [x] allow bill and invoice adjustment items that might be negative. allow adjustments to subtotal and gst separately.
+  
   - (Sep 2026) Done. Item unit prices may be negative on bills and invoices (validation and the four
     form views dropped the min=0 floor) — a negative-price, 0%-rate line adjusts the ex-GST subtotal.
     New `gst_override` column on invoice_items/bill_items (optional input under the unit price) sets
@@ -196,15 +226,15 @@
     tests/Feature/NegativeAdjustmentTest.php (model + bill/invoice form flows).
 
 - [x] Balance Sheet report
+  
   - (Sep 2026) Done — the report itself was already implemented (assets / liabilities / equity with a
     Net Assets = Liabilities + Equity check, opening-snapshot-aware as-at balances and close-aware
     profit, covered by IfrsReportsFinancialTest) but unreachable: no nav link existed. The IFRS
     Reports nav section now links Balance Sheet along with the equally-orphaned Trial Balance,
     Income Statement and Cash Flow reports.
 
-- [ ] DO NOT EXECUTE THIS ITEM - Make things modular using nwidart
-
 - [x] Add "Admin" section to profile dropdown and move rarely executed amd setup items from the sidebar to here
+  
   - (Sep 2026) Done. The profile dropdown's Administration section became a proper Admin area: admin sees
     Administration, Backups and Users; admin/accountant see a "Setup & maintenance" group with Company
     Details, Chart of Accounts, Opening Balances, Financial Years, Services, Share Classes and PSI
@@ -288,3 +318,7 @@
 - [x] display the uploaded logo in the top left if it exists when viewing the bill record
 
 - [x] use company logo that is uploaded on pdf invoice
+
+- [ ] 
+
+- [ ] 

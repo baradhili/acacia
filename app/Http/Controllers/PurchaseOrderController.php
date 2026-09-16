@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Client;
 use App\Models\PurchaseOrder;
-use App\Models\TimeEntry;
 use Illuminate\Http\Request;
 
 class PurchaseOrderController extends Controller
@@ -19,10 +18,12 @@ class PurchaseOrderController extends Controller
         return view('purchase-orders.index', compact('purchaseOrders'));
     }
 
-    public function create()
+    public function create(Request $request)
     {
         $clients = Client::orderBy('name')->pluck('name', 'id');
-        return view('purchase-orders.create', compact('clients'));
+        $selectedClient = $request->client_id ? Client::find($request->client_id) : null;
+
+        return view('purchase-orders.create', compact('clients', 'selectedClient'));
     }
 
     public function store(Request $request)
@@ -60,6 +61,7 @@ class PurchaseOrderController extends Controller
         }
 
         $clients = Client::orderBy('name')->pluck('name', 'id');
+
         return view('purchase-orders.edit', compact('purchaseOrder', 'clients'));
     }
 
@@ -102,7 +104,7 @@ class PurchaseOrderController extends Controller
 
     public function activate(PurchaseOrder $purchaseOrder)
     {
-        if (!$purchaseOrder->canBeActivated()) {
+        if (! $purchaseOrder->canBeActivated()) {
             return back()->with('error', 'Only draft purchase orders can be activated.');
         }
 
@@ -113,7 +115,7 @@ class PurchaseOrderController extends Controller
 
     public function cancel(PurchaseOrder $purchaseOrder)
     {
-        if (!$purchaseOrder->canBeCancelled()) {
+        if (! $purchaseOrder->canBeCancelled()) {
             return back()->with('error', 'This purchase order cannot be cancelled.');
         }
 
@@ -124,7 +126,7 @@ class PurchaseOrderController extends Controller
 
     public function complete(PurchaseOrder $purchaseOrder)
     {
-        if (!$purchaseOrder->canTransitionTo(PurchaseOrder::STATUS_COMPLETED)) {
+        if (! $purchaseOrder->canTransitionTo(PurchaseOrder::STATUS_COMPLETED)) {
             return back()->with('error', 'This purchase order cannot be marked as completed.');
         }
 
@@ -135,44 +137,10 @@ class PurchaseOrderController extends Controller
 
     public function reopen(PurchaseOrder $purchaseOrder)
     {
-        if (!$purchaseOrder->reopen()) {
+        if (! $purchaseOrder->reopen()) {
             return back()->with('error', 'This purchase order cannot be reopened.');
         }
 
         return back()->with('success', 'Purchase order reopened.');
-    }
-
-    public function allocateTime(Request $request, PurchaseOrder $purchaseOrder)
-    {
-        $validated = $request->validate([
-            'time_entry_ids' => 'required|array',
-            'time_entry_ids.*' => 'exists:time_entries,id',
-        ]);
-
-        // Only open POs can receive allocations
-        if (!in_array($purchaseOrder->status, [PurchaseOrder::STATUS_OPEN, PurchaseOrder::STATUS_PARTIALLY_USED])) {
-            return back()->with('error', 'Purchase order must be open to allocate time.');
-        }
-
-        // Refresh to get latest budget info
-        $purchaseOrder->refresh();
-        $remainingBudget = $purchaseOrder->remaining;
-
-        $timeEntries = TimeEntry::whereIn('id', $validated['time_entry_ids'])->get();
-
-        foreach ($timeEntries as $entry) {
-            // Only link approved entries and only if there's remaining budget
-            if ($entry->status === TimeEntry::STATUS_APPROVED) {
-                // Check if this entry would exceed the remaining budget
-                if ($entry->total <= $remainingBudget) {
-                    $entry->update(['purchase_order_id' => $purchaseOrder->id]);
-                    $remainingBudget -= $entry->total;
-                }
-            }
-        }
-
-        $purchaseOrder->recalculateUsedAmount();
-
-        return back()->with('success', 'Time entries allocated to purchase order.');
     }
 }

@@ -34,9 +34,45 @@ class Project extends Model
 
     // Status constants
     const STATUS_ACTIVE = 'active';
+
     const STATUS_ON_HOLD = 'on_hold';
+
     const STATUS_COMPLETED = 'completed';
+
     const STATUS_CANCELLED = 'cancelled';
+
+    protected static function booted()
+    {
+        parent::booted();
+
+        // Mirror the project→PO link onto the PO row so "available PO"
+        // filtering and PO screens see the linkage from both sides:
+        // clear any PO still pointing at this project, then point the
+        // linked PO back. Mass updates keep this loop-free. When the
+        // client or PO linkage moves, the project's entries follow so
+        // their denormalised client/PO columns never go stale.
+        static::saved(function (Project $project) {
+            if (! $project->wasRecentlyCreated
+                && ! $project->wasChanged('purchase_order_id')
+                && ! $project->wasChanged('client_id')) {
+                return;
+            }
+
+            PurchaseOrder::where('project_id', $project->id)
+                ->whereKeyNot($project->purchase_order_id ?? 0)
+                ->update(['project_id' => null]);
+
+            if ($project->purchase_order_id) {
+                PurchaseOrder::whereKey($project->purchase_order_id)
+                    ->update(['project_id' => $project->id]);
+            }
+
+            TimeEntry::where('project_id', $project->id)->update([
+                'client_id' => $project->client_id,
+                'purchase_order_id' => $project->purchase_order_id,
+            ]);
+        });
+    }
 
     public function client(): BelongsTo
     {
@@ -84,9 +120,10 @@ class Project extends Model
      */
     public function getBudgetUtilizationAttribute(): float
     {
-        if (!$this->budget_hours || $this->budget_hours == 0) {
+        if (! $this->budget_hours || $this->budget_hours == 0) {
             return 0;
         }
+
         return ($this->total_hours / $this->budget_hours) * 100;
     }
 
