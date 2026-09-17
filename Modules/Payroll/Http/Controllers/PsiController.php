@@ -1,12 +1,13 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace Modules\Payroll\Http\Controllers;
 
+use App\Http\Controllers\Controller;
 use App\Models\EntitySetting;
 use App\Services\IfrsPosting;
-use App\Services\PsiService;
 use IFRS\Models\ReportingPeriod;
 use Illuminate\Http\Request;
+use Modules\Payroll\Services\PsiService;
 
 /**
  * The PSI screen: the 80% rule tracker over this financial year's

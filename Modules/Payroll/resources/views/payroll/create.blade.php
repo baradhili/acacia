@@ -21,7 +21,7 @@
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Frequency</label>
                 <select name="frequency" class="w-full border-gray-300 rounded-lg text-sm">
-                    @foreach (\App\Models\PayRun::FREQUENCIES as $frequency)
+                    @foreach (\Modules\Payroll\Models\PayRun::FREQUENCIES as $frequency)
                         <option value="{{ $frequency }}" {{ old('frequency', 'fortnightly') === $frequency ? 'selected' : '' }}>
                             {{ ucfirst($frequency) }}
                         </option>

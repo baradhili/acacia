@@ -1,13 +1,14 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace Modules\Payroll\Http\Controllers;
 
-use App\Models\Employee;
-use App\Models\PayRun;
-use App\Models\Payslip;
-use App\Services\PayrollService;
+use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Modules\Payroll\Models\Employee;
+use Modules\Payroll\Models\PayRun;
+use Modules\Payroll\Models\Payslip;
+use Modules\Payroll\Services\PayrollService;
 
 /**
  * Pay runs: create a run over a pay period, build its payslips (gross

@@ -41,7 +41,7 @@
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Employment type</label>
                 <select name="employment_type" class="w-full border-gray-300 rounded-lg text-sm">
-                    @foreach (\App\Models\Employee::types() as $value => $label)
+                    @foreach (\Modules\Payroll\Models\Employee::types() as $value => $label)
                         <option value="{{ $value }}" {{ old('employment_type', $employee->employment_type) === $value ? 'selected' : '' }}>{{ $label }}</option>
                     @endforeach
                 </select>
@@ -50,7 +50,7 @@
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Payment basis</label>
                 <select name="payment_basis" class="w-full border-gray-300 rounded-lg text-sm">
-                    @foreach (\App\Models\Employee::bases() as $value => $label)
+                    @foreach (\Modules\Payroll\Models\Employee::bases() as $value => $label)
                         <option value="{{ $value }}" {{ old('payment_basis', $employee->payment_basis) === $value ? 'selected' : '' }}>{{ $label }}</option>
                     @endforeach
                 </select>

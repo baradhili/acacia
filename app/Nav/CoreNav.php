@@ -69,9 +69,6 @@ class CoreNav
             ['type' => 'link', 'label' => 'Purchase Orders', 'route' => 'purchase-orders.index', 'active' => ['purchase-orders.*'],
                 'icon' => $icon('M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'),
                 'add' => 'purchase-orders.create', 'addTitle' => 'Add Purchase Order', 'position' => 24],
-            ['type' => 'link', 'label' => 'Payroll', 'route' => 'payroll.index', 'active' => ['payroll.*'],
-                'icon' => $icon('M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z'),
-                'add' => 'payroll.runs.create', 'addTitle' => 'New Pay Run', 'roles' => ['admin', 'accountant'], 'position' => 25],
 
             ['type' => 'divider', 'position' => 30],
             ['type' => 'heading', 'label' => 'Invoicing', 'position' => 35],
@@ -139,14 +136,13 @@ class CoreNav
                 ]],
 
             ['type' => 'dropdown', 'label' => 'Setup', 'position' => 40, 'roles' => $gated,
-                'active' => ['company-profile.*', 'chart-of-accounts.*', 'opening-balances.*', 'financial-years.*', 'services.*', 'share-classes.*', 'psi.*'], 'children' => [
+                'active' => ['company-profile.*', 'chart-of-accounts.*', 'opening-balances.*', 'financial-years.*', 'services.*', 'share-classes.*'], 'children' => [
                     $link('Company Details', 'company-profile.index', ['company-profile.*']),
                     $link('Chart of Accounts', 'chart-of-accounts.index', ['chart-of-accounts.*']),
                     $link('Opening Balances', 'opening-balances.index', ['opening-balances.*']),
                     $link('Financial Years', 'financial-years.index', ['financial-years.*']),
                     $link('Services', 'services.index', ['services.*']),
                     $link('Share Classes', 'share-classes.index', ['share-classes.*']),
-                    $link('PSI Assessment', 'psi.index', ['psi.*']),
                 ]],
         ];
     }

@@ -1,21 +1,21 @@
 <?php
 
-namespace Tests\Feature\Payroll;
+namespace Modules\Payroll\Tests;
 
 use App\Models\Client;
-use App\Models\Employee;
 use App\Models\EntitySetting;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\TimeEntry;
 use App\Models\User;
 use App\Services\IfrsPosting;
-use App\Services\PayrollService;
-use App\Services\PsiService;
 use Carbon\Carbon;
 use Database\Seeders\IFRSSeeder;
 use IFRS\Models\Entity;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Modules\Payroll\Models\Employee;
+use Modules\Payroll\Services\PayrollService;
+use Modules\Payroll\Services\PsiService;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 

@@ -35,6 +35,28 @@ class Nav
         $this->topbar = array_merge($this->topbar, $items);
     }
 
+    /**
+     * Slot a child into an existing topbar dropdown by label — how a
+     * module adds one item to a core dropdown (PSI Assessment under
+     * Setup) without owning the dropdown. The child's active-route
+     * patterns join the dropdown's, keeping the button highlight.
+     */
+    public function addTopbarChild(string $dropdownLabel, array $child): void
+    {
+        foreach ($this->topbar as &$item) {
+            if (($item['type'] ?? null) === 'dropdown' && ($item['label'] ?? null) === $dropdownLabel) {
+                $item['children'][] = $child;
+                $item['active'] = array_values(array_unique(array_merge(
+                    (array) ($item['active'] ?? []),
+                    (array) ($child['active'] ?? []),
+                )));
+
+                return;
+            }
+        }
+        unset($item);
+    }
+
     /** Role-filtered, position-ordered sidebar items. */
     public function sidebar(): array
     {

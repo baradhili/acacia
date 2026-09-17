@@ -1,11 +1,12 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace Modules\Payroll\Http\Controllers;
 
-use App\Models\Employee;
+use App\Http\Controllers\Controller;
 use App\Rules\AuNumber;
 use App\Services\IfrsPosting;
 use Illuminate\Http\Request;
+use Modules\Payroll\Models\Employee;
 
 /**
  * Payroll employee master data: pay basis and rates, tax treatment

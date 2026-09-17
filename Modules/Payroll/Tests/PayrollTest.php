@@ -1,19 +1,19 @@
 <?php
 
-namespace Tests\Feature\Payroll;
+namespace Modules\Payroll\Tests;
 
-use App\Models\Employee;
 use App\Models\FiscalPeriod;
-use App\Models\PayRun;
 use App\Models\User;
 use App\Services\IfrsPosting;
 use App\Services\OpeningBalances;
-use App\Services\PayrollService;
 use Carbon\Carbon;
 use Database\Seeders\IFRSSeeder;
 use IFRS\Models\Account;
 use IFRS\Models\Entity;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Modules\Payroll\Models\Employee;
+use Modules\Payroll\Models\PayRun;
+use Modules\Payroll\Services\PayrollService;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 

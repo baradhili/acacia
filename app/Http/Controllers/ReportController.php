@@ -15,7 +15,6 @@ use App\Models\DividendDeclaration;
 use App\Models\FiscalYearClose;
 use App\Models\Invoice;
 use App\Models\Payment;
-use App\Models\PayRun;
 use App\Models\Prepayment;
 use App\Models\Project;
 use App\Models\TimeEntry;
@@ -39,6 +38,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
+use Modules\Payroll\Models\PayRun;
 
 class ReportController extends Controller
 {
@@ -1268,11 +1268,19 @@ class ReportController extends Controller
         // attributed by pay day like every other label here. The withheld
         // leg of each run is the same Cr 2210 the BAS settlement screen
         // nets, so W2 matches what settling PAYG withholding clears.
-        $payRuns = PayRun::where('entity_id', $entity->id)
-            ->whereBetween('payment_date', [$fyStart, $fyEndDate])
-            ->where('status', PayRun::STATUS_PROCESSED)
-            ->with('payslips')
-            ->get();
+        // Soft dependency: the labels only exist when the Payroll module
+        // is enabled (its provider registers routes, tables and the
+        // PSI/BAS label coverage).
+        $payRunClass = PayRun::class;
+        if (class_exists($payRunClass)) {
+            $payRuns = $payRunClass::where('entity_id', $entity->id)
+                ->whereBetween('payment_date', [$fyStart, $fyEndDate])
+                ->where('status', $payRunClass::STATUS_PROCESSED)
+                ->with('payslips')
+                ->get();
+        } else {
+            $payRuns = collect();
+        }
         foreach ($payRuns as $run) {
             $i = $quarterOf($run->payment_date);
             $quarters[$i]['w1'] += (float) $run->payslips->sum('gross');

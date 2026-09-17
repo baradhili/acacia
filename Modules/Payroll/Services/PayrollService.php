@@ -1,10 +1,9 @@
 <?php
 
-namespace App\Services;
+namespace Modules\Payroll\Services;
 
-use App\Models\Employee;
-use App\Models\PayRun;
-use App\Models\Payslip;
+use App\Services\IfrsPosting;
+use App\Services\PeriodLockService;
 use Carbon\Carbon;
 use IFRS\Models\Account;
 use IFRS\Models\Entity;
@@ -12,6 +11,9 @@ use IFRS\Models\LineItem;
 use IFRS\Transactions\JournalEntry;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Modules\Payroll\Models\Employee;
+use Modules\Payroll\Models\PayRun;
+use Modules\Payroll\Models\Payslip;
 
 /**
  * Australian payroll: PAYG withholding from the ATO's NAT 1004
