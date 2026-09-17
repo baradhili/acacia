@@ -1,0 +1,10 @@
+{
+    "name": "acacia/payroll",
+    "description": "Acacia ERP payroll and PSI module",
+    "type": "acacia-module",
+    "autoload": {
+        "psr-4": {
+            "Modules\\Payroll\\": ""
+        }
+    }
+}

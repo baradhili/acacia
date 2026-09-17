@@ -1,0 +1,12 @@
+{
+    "name": "Payroll",
+    "alias": "payroll",
+    "description": "Australian payroll (NAT 1004 PAYG withholding, super guarantee, pay runs with ledger posting) and the personal services income assessment.",
+    "keywords": ["payroll", "payg", "super", "psi"],
+    "priority": 0,
+    "version": "1.0.0",
+    "providers": [
+        "Modules\\Payroll\\Providers\\PayrollServiceProvider"
+    ],
+    "files": []
+}
