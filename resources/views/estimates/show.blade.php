@@ -34,8 +34,16 @@
                 </form>
             @endif
             @if($estimate->status === 'accepted')
-                <form action="{{ route('estimates.convertToInvoice', $estimate) }}" method="POST" class="inline">
+                <form action="{{ route('estimates.convertToInvoice', $estimate) }}" method="POST" class="inline-flex items-center gap-3">
                     @csrf
+                    @if($estimate->hasOptionalItems())
+                        <label class="flex items-center gap-2 text-sm text-gray-700"
+                            title="Optional lines are excluded unless ticked here">
+                            <input type="checkbox" name="include_optional" value="1"
+                                class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                            Include optional items
+                        </label>
+                    @endif
                     <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg">
                         Convert to Invoice
                     </button>
@@ -48,26 +56,55 @@
         <div class="lg:col-span-2 space-y-6">
             <div class="bg-white rounded-lg shadow p-6">
                 <h2 class="text-lg font-semibold text-gray-800 mb-4">Items</h2>
-                <table class="min-w-full">
-                    <thead>
-                        <tr class="border-b">
-                            <th class="text-left py-2 text-xs font-medium text-gray-500 uppercase">Description</th>
-                            <th class="text-right py-2 text-xs font-medium text-gray-500 uppercase">Qty</th>
-                            <th class="text-right py-2 text-xs font-medium text-gray-500 uppercase">Unit Price</th>
-                            <th class="text-right py-2 text-xs font-medium text-gray-500 uppercase">Total</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y">
-                        @foreach($estimate->items as $item)
-                            <tr>
-                                <td class="py-3">{{ $item->description }}</td>
-                                <td class="py-3 text-right">{{ number_format($item->quantity, 2) }}</td>
-                                <td class="py-3 text-right">${{ number_format($item->unit_price, 2) }}</td>
-                                <td class="py-3 text-right font-medium">${{ number_format($item->total, 2) }}</td>
+                @php
+                    // Consecutive lines sharing a section label group under
+                    // one heading; unlabeled lines stand alone.
+                    $sections = [];
+                    $current = null;
+                    foreach ($estimate->items as $item) {
+                        $label = $item->section ?: null;
+                        if ($label === null || $label !== $current) {
+                            $sections[] = ['label' => $label, 'items' => []];
+                            $current = $label;
+                        }
+                        $sections[count($sections) - 1]['items'][] = $item;
+                    }
+                @endphp
+                @foreach($sections as $section)
+                    @if($section['label'])
+                        <p class="px-2 py-1 mt-4 first:mt-0 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 rounded">
+                            {{ $section['label'] }}
+                        </p>
+                    @endif
+                    <table class="min-w-full">
+                        <thead>
+                            <tr class="border-b">
+                                <th class="text-left py-2 text-xs font-medium text-gray-500 uppercase">Description</th>
+                                <th class="text-right py-2 text-xs font-medium text-gray-500 uppercase">Qty</th>
+                                <th class="text-right py-2 text-xs font-medium text-gray-500 uppercase">Unit Price</th>
+                                <th class="text-right py-2 text-xs font-medium text-gray-500 uppercase">Total</th>
                             </tr>
-                        @endforeach
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody class="divide-y">
+                            @foreach($section['items'] as $item)
+                                <tr class="{{ $item->is_optional ? 'text-gray-500' : '' }}">
+                                    <td class="py-3">
+                                        {{ $item->description }}
+                                        @if($item->service)
+                                            <span class="block text-xs text-gray-400">{{ $item->service->name }}</span>
+                                        @endif
+                                        @if($item->is_optional)
+                                            <span class="ml-2 px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-800">optional</span>
+                                        @endif
+                                    </td>
+                                    <td class="py-3 text-right">{{ number_format($item->quantity, 2) }}</td>
+                                    <td class="py-3 text-right">${{ number_format($item->unit_price, 2) }}</td>
+                                    <td class="py-3 text-right font-medium">${{ number_format($item->total, 2) }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                @endforeach
                 <div class="mt-4 flex justify-end">
                     <div class="text-right">
                         <p class="text-sm text-gray-600">Subtotal</p>
@@ -80,6 +117,10 @@
                         @endif
                         <p class="text-lg font-bold mt-2">Total</p>
                         <p class="text-lg font-bold">${{ number_format($estimate->total, 2) }}</p>
+                        @if($estimate->optional_total > 0)
+                            <p class="text-sm text-amber-700 mt-2">Optional extras</p>
+                            <p class="text-amber-700">${{ number_format($estimate->optional_total, 2) }}</p>
+                        @endif
                     </div>
                 </div>
             </div>
