@@ -23,7 +23,8 @@ class TargetController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'month' => ['required', 'date', function ($attribute, $value, $fail) {
+            // bail: the day-of-month closure only runs on parseable dates.
+            'month' => ['required', 'bail', 'date', function ($attribute, $value, $fail) {
                 if (Carbon::parse($value)->day !== 1) {
                     $fail('The target month must be the first of a month.');
                 }

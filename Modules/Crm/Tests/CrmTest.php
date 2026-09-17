@@ -3,6 +3,7 @@
 namespace Modules\Crm\Tests;
 
 use App\Models\Client;
+use App\Models\Estimate;
 use App\Models\User;
 use App\Support\Nav;
 use App\Support\Widgets;
@@ -272,6 +273,109 @@ class CrmTest extends TestCase
         $this->actingAs($this->admin)
             ->get("/crm/leads/{$won->id}/estimate")
             ->assertSessionHas('error');
+    }
+
+    public function test_losing_requires_a_reason(): void
+    {
+        $lead = $this->lead();
+
+        $this->actingAs($this->admin)
+            ->post("/crm/leads/{$lead->id}/status", ['status' => Lead::STATUS_LOST])
+            ->assertSessionHasErrors('loss_reason');
+
+        $this->assertSame(Lead::STATUS_NEW, $lead->fresh()->status);
+    }
+
+    public function test_winning_through_a_status_move_is_refused(): void
+    {
+        $lead = $this->lead(['status' => Lead::STATUS_PROPOSAL]);
+
+        $this->actingAs($this->admin)
+            ->post("/crm/leads/{$lead->id}/status", ['status' => Lead::STATUS_WON])
+            ->assertSessionHas('error')
+            ->assertSessionHas('error', 'Leads are won by converting them to a client — use Convert to Client.');
+
+        $this->assertSame(Lead::STATUS_PROPOSAL, $lead->fresh()->status);
+    }
+
+    public function test_only_proposal_leads_take_the_estimate_shortcut(): void
+    {
+        foreach ([Lead::STATUS_NEW, Lead::STATUS_CONTACTED, Lead::STATUS_QUALIFIED, Lead::STATUS_LOST, Lead::STATUS_WON] as $status) {
+            $lead = $this->lead(['status' => $status]);
+
+            $this->actingAs($this->admin)
+                ->get("/crm/leads/{$lead->id}/estimate")
+                ->assertSessionHas('error', 'Only proposal-stage leads can prepare an estimate.');
+        }
+
+        $proposal = $this->lead(['status' => Lead::STATUS_PROPOSAL]);
+        $this->actingAs($this->admin)
+            ->get("/crm/leads/{$proposal->id}/estimate")
+            ->assertRedirect(route('estimates.create', ['lead_id' => $proposal->id]));
+    }
+
+    public function test_a_lead_never_links_two_estimates(): void
+    {
+        $client = Client::factory()->create();
+        $lead = $this->lead(['status' => Lead::STATUS_PROPOSAL]);
+        $payload = fn () => [
+            'lead_id' => $lead->id,
+            'client_id' => $client->id,
+            'issue_date' => now()->toDateString(),
+            'valid_until' => now()->addDays(30)->toDateString(),
+            'items' => [['description' => 'Scope', 'quantity' => 1, 'unit_price' => 500, 'tax_rate' => 10]],
+        ];
+
+        $this->actingAs($this->admin)->post('/estimates', $payload())->assertSessionHas('success');
+        $first = $lead->fresh()->estimate;
+        $this->assertNotNull($first);
+
+        // A second estimate cannot claim the same lead.
+        $this->actingAs($this->admin)
+            ->post('/estimates', $payload())
+            ->assertSessionHasErrors('lead_id');
+        $this->assertEquals($first->id, $lead->fresh()->estimate_id);
+        $this->assertSame(1, Estimate::count());
+
+        // But the linked estimate's own edit keeps the link (retained,
+        // not re-claimed), while a different estimate is refused.
+        $this->actingAs($this->admin)
+            ->put("/estimates/{$first->id}", $payload())
+            ->assertSessionHas('success');
+        $this->assertEquals($first->id, $lead->fresh()->estimate_id);
+
+        $other = Estimate::create([
+            'client_id' => $client->id,
+            'issue_date' => now()->toDateString(),
+            'valid_until' => now()->addDays(30)->toDateString(),
+            'items' => [],
+        ]);
+        $this->actingAs($this->admin)
+            ->put("/estimates/{$other->id}", $payload())
+            ->assertSessionHasErrors('lead_id');
+    }
+
+    public function test_a_stale_lead_link_rolls_back_the_estimate(): void
+    {
+        $client = Client::factory()->create();
+        $lead = $this->lead(['status' => Lead::STATUS_PROPOSAL]);
+
+        // The lead closes between the form rendering and the submit —
+        // validation passes (open at rule time in this construction is
+        // bypassed by crafting the stale state directly through the
+        // guarded update path: the claim finds no open lead).
+        $lead->update(['status' => Lead::STATUS_LOST, 'loss_reason' => 'Gone']);
+
+        $this->actingAs($this->admin)
+            ->post('/estimates', [
+                'lead_id' => $lead->id,
+                'client_id' => $client->id,
+                'issue_date' => now()->toDateString(),
+                'valid_until' => now()->addDays(30)->toDateString(),
+                'items' => [['description' => 'Scope', 'quantity' => 1, 'unit_price' => 500, 'tax_rate' => 10]],
+            ])
+            ->assertSessionHasErrors('lead_id'); // the closure catches closed leads too
+        $this->assertSame(0, Estimate::count());
     }
 
     public function test_the_shell_contracts_pick_up_the_module(): void

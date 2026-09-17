@@ -39,8 +39,34 @@ class EstimateController extends Controller
             'items.*.tax_rate' => 'nullable|numeric|min:0|max:100',
             'items.*.discount_percent' => 'nullable|numeric|min:0|max:100',
             'items.*.is_optional' => 'nullable|boolean',
-            'lead_id' => ['nullable', 'integer'],
         ];
+    }
+
+    /**
+     * The lead association, when supplied: an open lead that either
+     * has no estimate yet (store) or is already linked to the
+     * estimate being updated — never another estimate's lead.
+     */
+    protected function leadRules(?Estimate $estimate = null): array
+    {
+        return ['lead_id' => ['nullable', 'integer', function ($attribute, $value, $fail) use ($estimate) {
+            if (! class_exists(Lead::class)) {
+                $fail('The lead could not be found.');
+
+                return;
+            }
+
+            $lead = Lead::query()->open()->find($value);
+            if (! $lead) {
+                $fail('The selected lead is no longer open.');
+
+                return;
+            }
+
+            if ($lead->estimate_id && (! $estimate || (int) $lead->estimate_id !== (int) $estimate->id)) {
+                $fail('This lead already has an estimate.');
+            }
+        }]];
     }
 
     /**
@@ -116,7 +142,9 @@ class EstimateController extends Controller
 
     public function store(Request $request)
     {
-        $validated = $request->validate($this->estimateRules());
+        $validated = $request->validate(
+            array_merge($this->estimateRules(), $this->leadRules())
+        );
 
         DB::beginTransaction();
         try {
@@ -133,9 +161,18 @@ class EstimateController extends Controller
             $this->createItems($estimate, $validated['items']);
 
             // Link the estimate back to the lead it was prepared from.
+            // The guarded update claims only an open, unlinked lead —
+            // zero affected rows means the validation snapshot went
+            // stale (lead closed or linked meanwhile), and the whole
+            // estimate rolls back rather than persisting unlinked.
             if (! empty($validated['lead_id']) && class_exists(Lead::class)) {
-                Lead::query()->open()->whereKey($validated['lead_id'])
+                $claimed = Lead::query()->open()->whereKey($validated['lead_id'])
+                    ->whereNull('estimate_id')
                     ->update(['estimate_id' => $estimate->id]);
+
+                if ($claimed === 0) {
+                    throw new \InvalidArgumentException('The selected lead is no longer available for linking.');
+                }
             }
 
             $estimate->recalculateTotals();
@@ -179,7 +216,9 @@ class EstimateController extends Controller
                 ->with('error', 'Only draft estimates can be edited.');
         }
 
-        $validated = $request->validate($this->estimateRules());
+        $validated = $request->validate(
+            array_merge($this->estimateRules(), $this->leadRules($estimate))
+        );
 
         DB::beginTransaction();
         try {
@@ -197,7 +236,9 @@ class EstimateController extends Controller
 
             $this->createItems($estimate, $validated['items']);
 
-            // Link the estimate back to the lead it was prepared from.
+            // Link the estimate back to the lead it was prepared from —
+            // the lead rules already allow only this estimate's own
+            // lead or an unlinked one.
             if (! empty($validated['lead_id']) && class_exists(Lead::class)) {
                 Lead::query()->open()->whereKey($validated['lead_id'])
                     ->update(['estimate_id' => $estimate->id]);

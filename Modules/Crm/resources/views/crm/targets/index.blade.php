@@ -48,12 +48,19 @@
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
                 @forelse ($targets as $target)
+                    @php
+                        // One aggregate query per row: achieved feeds both
+                        // the amount shown and the progress bar.
+                        $achieved = $target->achieved();
+                        $pct = (float) $target->amount > 0
+                            ? round(min($achieved / (float) $target->amount * 100, 999.9), 1)
+                            : 0.0;
+                    @endphp
                     <tr>
                         <td class="px-4 py-3 text-sm font-medium text-gray-900">{{ $target->month->format('M Y') }}</td>
                         <td class="px-4 py-3 text-sm text-right text-gray-900">${{ number_format($target->amount, 2) }}</td>
-                        <td class="px-4 py-3 text-sm text-right text-gray-600">${{ number_format($target->achieved(), 2) }}</td>
+                        <td class="px-4 py-3 text-sm text-right text-gray-600">${{ number_format($achieved, 2) }}</td>
                         <td class="px-4 py-3">
-                            @php $pct = $target->progressPercent(); @endphp
                             <div class="w-full bg-gray-100 rounded-full h-3">
                                 <div class="h-3 rounded-full {{ $pct >= 100 ? 'bg-green-500' : ($pct >= 50 ? 'bg-indigo-500' : 'bg-amber-500') }}"
                                     style="width: {{ min($pct, 100) }}%"></div>

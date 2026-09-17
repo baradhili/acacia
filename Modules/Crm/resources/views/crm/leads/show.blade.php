@@ -56,7 +56,7 @@
             @if ($lead->canTransitionTo(\Modules\Crm\Models\Lead::STATUS_WON))
                 <div id="convert-form" class="hidden bg-white rounded-lg shadow p-6">
                     <h2 class="text-lg font-semibold text-gray-800 mb-2">Convert to Client</h2>
-                    <p class="text-sm text-gray-500 mb-4">Wins the lead and creates the client — the plan, value and contact details carry into the client record.</p>
+                    <p class="text-sm text-gray-500 mb-4">Wins the lead and creates the client — the contact details carry into the client record.</p>
                     <form action="{{ route('crm.leads.convert', $lead) }}" method="POST" class="flex items-end gap-3">
                         @csrf
                         <div class="flex-1">

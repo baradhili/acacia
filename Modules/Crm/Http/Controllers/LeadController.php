@@ -7,6 +7,7 @@ use App\Models\Client;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Modules\Crm\Models\Lead;
 use Modules\Crm\Models\LeadActivity;
 
@@ -109,8 +110,14 @@ class LeadController extends Controller
     {
         $validated = $request->validate([
             'status' => ['required', 'in:'.implode(',', Lead::STATUSES)],
-            'loss_reason' => ['nullable', 'string', 'max:255'],
+            'loss_reason' => ['required_if:status,lost', 'nullable', 'string', 'max:255'],
         ]);
+
+        // Winning happens through conversion (which creates the
+        // client) — never a bare status move.
+        if ($validated['status'] === Lead::STATUS_WON) {
+            return back()->with('error', 'Leads are won by converting them to a client — use Convert to Client.');
+        }
 
         if (! $lead->canTransitionTo($validated['status'])) {
             return back()->with('error', "A {$lead->label()} lead cannot move to {$validated['status']}.");
@@ -118,7 +125,7 @@ class LeadController extends Controller
 
         $lead->update([
             'status' => $validated['status'],
-            'loss_reason' => $validated['status'] === Lead::STATUS_LOST ? ($validated['loss_reason'] ?? 'Not specified') : null,
+            'loss_reason' => $validated['status'] === Lead::STATUS_LOST ? $validated['loss_reason'] : null,
             'next_follow_up' => $validated['status'] === Lead::STATUS_LOST ? null : $lead->next_follow_up,
         ]);
 
@@ -127,7 +134,10 @@ class LeadController extends Controller
 
     /**
      * Winning: convert the lead to a Client. The lead keeps pointing
-     * at the client it became; the name/email/phone carry over.
+     * at the client it became; the name/email/phone carry over. One
+     * transaction: the client creation, the lead update and the audit
+     * activity commit together, with the funnel recheck done on a
+     * locked reload so a concurrent conversion can't double-create.
      */
     public function convert(Request $request, Lead $lead)
     {
@@ -139,25 +149,39 @@ class LeadController extends Controller
             'client_name' => ['required', 'string', 'max:255'],
         ]);
 
-        $client = Client::create([
-            'name' => $validated['client_name'],
-            'email' => $lead->email,
-            'phone' => $lead->phone,
-        ]);
+        try {
+            [$client, $lead] = DB::transaction(function () use ($validated, $lead) {
+                $locked = Lead::lockForUpdate()->findOrFail($lead->id);
 
-        $lead->update([
-            'status' => Lead::STATUS_WON,
-            'client_id' => $client->id,
-            'converted_at' => now(),
-            'loss_reason' => null,
-        ]);
+                if (! $locked->canTransitionTo(Lead::STATUS_WON)) {
+                    throw new \InvalidArgumentException('Only proposal-stage leads can be converted to a client.');
+                }
 
-        $lead->activities()->create([
-            'user_id' => Auth::id(),
-            'type' => 'note',
-            'summary' => "Converted to client {$client->name}.",
-            'happened_at' => now(),
-        ]);
+                $client = Client::create([
+                    'name' => $validated['client_name'],
+                    'email' => $locked->email,
+                    'phone' => $locked->phone,
+                ]);
+
+                $locked->update([
+                    'status' => Lead::STATUS_WON,
+                    'client_id' => $client->id,
+                    'converted_at' => now(),
+                    'loss_reason' => null,
+                ]);
+
+                $locked->activities()->create([
+                    'user_id' => Auth::id(),
+                    'type' => 'note',
+                    'summary' => "Converted to client {$client->name}.",
+                    'happened_at' => now(),
+                ]);
+
+                return [$client, $locked];
+            });
+        } catch (\InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         return redirect()->route('clients.show', $client)
             ->with('success', "Lead converted — {$client->name} is now a client.");
@@ -170,8 +194,8 @@ class LeadController extends Controller
      */
     public function estimate(Lead $lead)
     {
-        if (! $lead->isOpen()) {
-            return back()->with('error', 'Only open leads can prepare an estimate.');
+        if ($lead->status !== Lead::STATUS_PROPOSAL) {
+            return back()->with('error', 'Only proposal-stage leads can prepare an estimate.');
         }
 
         return redirect()->route('estimates.create', ['lead_id' => $lead->id]);

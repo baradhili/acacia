@@ -5,11 +5,11 @@
     </div>
     <div class="grid grid-cols-3 gap-2 mb-3 text-center">
         <div>
-            <p class="text-lg font-bold text-indigo-700">${{ number_format(round($pipelineValue / 1000), 0) }}k</p>
+            <p class="text-lg font-bold text-indigo-700">${{ number_format($pipelineValue, 2) }}</p>
             <p class="text-xs text-gray-500">open</p>
         </div>
         <div>
-            <p class="text-lg font-bold text-green-700">${{ number_format(round($forecast / 1000), 0) }}k</p>
+            <p class="text-lg font-bold text-green-700">${{ number_format($forecast, 2) }}</p>
             <p class="text-xs text-gray-500">forecast</p>
         </div>
         <div>
