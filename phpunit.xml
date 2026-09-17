@@ -18,6 +18,11 @@
             <exclude>tests/Feature/Reconciliation/ReconciliationServiceTest.php</exclude>
             <exclude>tests/Feature/Reconciliation/AutoCreateCashReceiptTest.php</exclude>
         </testsuite>
+        <!-- Shipped modules carry their tests with them; the suite runs
+             with all shipped modules enabled. -->
+        <testsuite name="Modules">
+            <directory>Modules</directory>
+        </testsuite>
     </testsuites>
     <source>
         <include>
