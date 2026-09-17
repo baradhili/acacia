@@ -163,6 +163,20 @@ class LeadController extends Controller
             ->with('success', "Lead converted — {$client->name} is now a client.");
     }
 
+    /**
+     * The proposal-stage shortcut: jump to the estimate form carrying
+     * the lead, which pre-fills the plan, value and a first line (the
+     * core controller accepts the lead via its soft Crm dependency).
+     */
+    public function estimate(Lead $lead)
+    {
+        if (! $lead->isOpen()) {
+            return back()->with('error', 'Only open leads can prepare an estimate.');
+        }
+
+        return redirect()->route('estimates.create', ['lead_id' => $lead->id]);
+    }
+
     public function storeActivity(Request $request, Lead $lead)
     {
         $validated = $request->validate([

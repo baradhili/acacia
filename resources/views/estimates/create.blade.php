@@ -6,8 +6,25 @@
         <h1 class="text-2xl font-bold text-gray-800">Create Estimate</h1>
     </div>
 
+    @if ($lead ?? null)
+        <div class="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 mb-6 flex justify-between items-center">
+            <p class="text-sm text-indigo-800">
+                Preparing the estimate for lead <strong>{{ $lead->name }}</strong>
+                @if ($lead->company)({{ $lead->company }})@endif
+                — pipeline value ${{ number_format($lead->estimated_value, 2) }}
+                @if ($lead->estimate)
+                    · <a href="{{ route('estimates.show', $lead->estimate) }}" class="underline">estimate {{ $lead->estimate->estimate_number }} already exists</a>
+                @endif
+            </p>
+            <a href="{{ route('crm.leads.show', $lead) }}" class="text-xs text-indigo-700 underline shrink-0 ml-3">Back to lead</a>
+        </div>
+    @endif
+
     <form action="{{ route('estimates.store') }}" method="POST" class="space-y-6">
         @csrf
+        @if ($lead ?? null)
+            <input type="hidden" name="lead_id" value="{{ $lead->id }}">
+        @endif
 
         <div class="bg-white rounded-lg shadow p-6">
             <h2 class="text-lg font-semibold text-gray-800 mb-4">Client & Project</h2>
@@ -76,7 +93,7 @@
             <div class="mt-4">
                 <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
                 <textarea name="notes" rows="2"
-                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">{{ old('notes') }}</textarea>
+                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">{{ old('notes', ($lead ?? null)?->notes) }}</textarea>
             </div>
 
             <div class="mt-4">
@@ -90,7 +107,15 @@
             <h2 class="text-lg font-semibold text-gray-800 mb-4">Line Items</h2>
 
             <div id="itemsContainer">
-                @php $items = old('items', [[]]); @endphp
+                @php
+                    // From a lead: pre-fill the plan into the first line.
+                    $items = old('items', ($lead ?? null) ? [[
+                        'description' => 'Services for '.($lead->company ?: $lead->name),
+                        'quantity' => 1,
+                        'unit_price' => (float) $lead->estimated_value,
+                        'tax_rate' => 10,
+                    ]] : [[]]);
+                @endphp
                 @php
                     // Next row index past the highest submitted key —
                     // removed rows leave gaps in old('items'), so count()

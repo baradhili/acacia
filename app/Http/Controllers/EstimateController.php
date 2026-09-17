@@ -10,6 +10,7 @@ use App\Models\Service;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Modules\Crm\Models\Lead;
 
 class EstimateController extends Controller
 {
@@ -38,6 +39,7 @@ class EstimateController extends Controller
             'items.*.tax_rate' => 'nullable|numeric|min:0|max:100',
             'items.*.discount_percent' => 'nullable|numeric|min:0|max:100',
             'items.*.is_optional' => 'nullable|boolean',
+            'lead_id' => ['nullable', 'integer'],
         ];
     }
 
@@ -94,12 +96,21 @@ class EstimateController extends Controller
         $selectedClient = $request->client_id ? Client::find($request->client_id) : null;
         $selectedProject = $request->project_id ? Project::find($request->project_id) : null;
 
+        // Soft dependency: the CRM module's proposal-stage shortcut
+        // sends a lead whose plan, value and first line pre-fill the
+        // form (and the created estimate links back to the lead).
+        $lead = null;
+        if ($request->lead_id && class_exists(Lead::class)) {
+            $lead = Lead::query()->open()->find($request->lead_id);
+        }
+
         return view('estimates.create', compact(
             'clients',
             'projects',
             'services',
             'selectedClient',
-            'selectedProject'
+            'selectedProject',
+            'lead'
         ));
     }
 
@@ -120,6 +131,12 @@ class EstimateController extends Controller
             ]);
 
             $this->createItems($estimate, $validated['items']);
+
+            // Link the estimate back to the lead it was prepared from.
+            if (! empty($validated['lead_id']) && class_exists(Lead::class)) {
+                Lead::query()->open()->whereKey($validated['lead_id'])
+                    ->update(['estimate_id' => $estimate->id]);
+            }
 
             $estimate->recalculateTotals();
 
@@ -179,6 +196,12 @@ class EstimateController extends Controller
             $estimate->items()->delete();
 
             $this->createItems($estimate, $validated['items']);
+
+            // Link the estimate back to the lead it was prepared from.
+            if (! empty($validated['lead_id']) && class_exists(Lead::class)) {
+                Lead::query()->open()->whereKey($validated['lead_id'])
+                    ->update(['estimate_id' => $estimate->id]);
+            }
 
             $estimate->recalculateTotals();
 

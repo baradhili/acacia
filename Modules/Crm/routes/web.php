@@ -18,6 +18,7 @@ Route::middleware(['web', 'auth'])->group(function () {
     Route::post('/crm/leads/{lead}/status', [LeadController::class, 'updateStatus'])->name('crm.leads.status');
     Route::post('/crm/leads/{lead}/convert', [LeadController::class, 'convert'])->name('crm.leads.convert');
     Route::post('/crm/leads/{lead}/activities', [LeadController::class, 'storeActivity'])->name('crm.leads.activities.store');
+    Route::get('/crm/leads/{lead}/estimate', [LeadController::class, 'estimate'])->name('crm.leads.estimate');
 });
 
 Route::middleware(['web', 'auth', 'role:admin|accountant'])->group(function () {

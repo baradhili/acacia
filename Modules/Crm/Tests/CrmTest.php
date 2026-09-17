@@ -215,6 +215,65 @@ class CrmTest extends TestCase
         $this->assertSame(0, SalesTarget::count());
     }
 
+    public function test_the_proposal_shortcut_pre_fills_and_links_the_estimate(): void
+    {
+        $client = Client::factory()->create(['name' => 'BuyerCo Pty Ltd']);
+        $lead = $this->lead([
+            'status' => Lead::STATUS_PROPOSAL,
+            'estimated_value' => 12500,
+            'notes' => 'Migration project — two phases.',
+        ]);
+
+        // The shortcut lands on the estimate form pre-filled from the lead.
+        $this->actingAs($this->admin)
+            ->get("/crm/leads/{$lead->id}/estimate")
+            ->assertRedirect(route('estimates.create', ['lead_id' => $lead->id]));
+
+        $this->actingAs($this->admin)
+            ->get(route('estimates.create', ['lead_id' => $lead->id]))
+            ->assertOk()
+            ->assertSee('Preparing the estimate for lead')
+            ->assertSee('Jane Buyer')
+            ->assertSee('Services for BuyerCo')
+            ->assertSee('Migration project');
+
+        // Creating the estimate links it back on the lead.
+        $this->actingAs($this->admin)->post('/estimates', [
+            'lead_id' => $lead->id,
+            'client_id' => $client->id,
+            'issue_date' => now()->toDateString(),
+            'valid_until' => now()->addDays(30)->toDateString(),
+            'items' => [
+                ['description' => 'Migration project', 'quantity' => 1, 'unit_price' => 12500, 'tax_rate' => 10],
+            ],
+        ])->assertSessionHas('success');
+
+        $estimate = $lead->fresh()->estimate;
+        $this->assertNotNull($estimate);
+        $this->assertEqualsWithDelta(13750.0, (float) $estimate->total, 0.001);
+
+        // The lead screen shows the linked estimate instead of the shortcut.
+        $this->actingAs($this->admin)
+            ->get("/crm/leads/{$lead->id}")
+            ->assertOk()
+            ->assertSee($estimate->estimate_number)
+            ->assertDontSee('Prepare Estimate');
+    }
+
+    public function test_the_shortcut_refuses_closed_leads(): void
+    {
+        $lost = $this->lead(['status' => Lead::STATUS_LOST, 'loss_reason' => 'Gone']);
+
+        $this->actingAs($this->admin)
+            ->get("/crm/leads/{$lost->id}/estimate")
+            ->assertSessionHas('error');
+
+        $won = $this->lead(['status' => Lead::STATUS_WON]);
+        $this->actingAs($this->admin)
+            ->get("/crm/leads/{$won->id}/estimate")
+            ->assertSessionHas('error');
+    }
+
     public function test_the_shell_contracts_pick_up_the_module(): void
     {
         $nav = app(Nav::class);

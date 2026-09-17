@@ -26,6 +26,15 @@
                 <button type="button" onclick="document.getElementById('convert-form').classList.toggle('hidden')"
                     class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm">Convert to Client</button>
             @endif
+            @if ($lead->estimate)
+                <a href="{{ route('estimates.show', $lead->estimate) }}"
+                    class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-4 py-2 rounded-lg text-sm">
+                    Estimate {{ $lead->estimate->estimate_number }}
+                </a>
+            @elseif ($lead->canTransitionTo(\Modules\Crm\Models\Lead::STATUS_WON))
+                <a href="{{ route('crm.leads.estimate', $lead) }}"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm">Prepare Estimate</a>
+            @endif
             <form action="{{ route('crm.leads.destroy', $lead) }}" method="POST"
                 onsubmit="return confirm('Delete this lead and its activities?');">
                 @csrf
@@ -132,6 +141,10 @@
                     @if ($lead->client)
                         <div><dt class="text-gray-500">Converted to client</dt>
                             <dd><a href="{{ route('clients.show', $lead->client) }}" class="text-indigo-600 hover:text-indigo-800">{{ $lead->client->name }}</a></dd></div>
+                    @endif
+                    @if ($lead->estimate)
+                        <div><dt class="text-gray-500">Estimate</dt>
+                            <dd><a href="{{ route('estimates.show', $lead->estimate) }}" class="text-indigo-600 hover:text-indigo-800">{{ $lead->estimate->estimate_number }} — ${{ number_format($lead->estimate->total, 2) }}</a></dd></div>
                     @endif
                 </dl>
             </div>

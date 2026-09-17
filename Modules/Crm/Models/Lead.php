@@ -3,6 +3,7 @@
 namespace Modules\Crm\Models;
 
 use App\Models\Client;
+use App\Models\Estimate;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -33,6 +34,7 @@ class Lead extends Model
         'next_follow_up',
         'loss_reason',
         'client_id',
+        'estimate_id',
         'converted_at',
     ];
 
@@ -122,6 +124,12 @@ class Lead extends Model
         return round((float) $this->estimated_value * ((float) $this->probability / 100), 2);
     }
 
+    /** Open pipeline leads (before won/lost). */
+    public function scopeOpen($query)
+    {
+        return $query->whereIn('status', self::OPEN_STATUSES);
+    }
+
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_id');
@@ -130,6 +138,14 @@ class Lead extends Model
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
+    }
+
+    /**
+     * The estimate prepared through the proposal-stage shortcut.
+     */
+    public function estimate(): BelongsTo
+    {
+        return $this->belongsTo(Estimate::class);
     }
 
     public function activities(): HasMany
