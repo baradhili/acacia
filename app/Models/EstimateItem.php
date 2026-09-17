@@ -12,6 +12,8 @@ class EstimateItem extends Model
 
     protected $fillable = [
         'estimate_id',
+        'service_id',
+        'section',
         'description',
         'quantity',
         'unit_price',
@@ -21,6 +23,7 @@ class EstimateItem extends Model
         'discount_amount',
         'total',
         'sort_order',
+        'is_optional',
     ];
 
     protected $casts = [
@@ -31,6 +34,7 @@ class EstimateItem extends Model
         'discount_percent' => 'decimal:2',
         'discount_amount' => 'decimal:2',
         'total' => 'decimal:2',
+        'is_optional' => 'boolean',
     ];
 
     protected static function boot()
@@ -48,22 +52,32 @@ class EstimateItem extends Model
     }
 
     /**
+     * The catalogue service this line was quoted from, if any — the
+     * link keeps the estimate tied to the standard rate card even
+     * after the description or price is tailored.
+     */
+    public function service(): BelongsTo
+    {
+        return $this->belongsTo(Service::class);
+    }
+
+    /**
      * Calculate item totals
      */
     public function calculateTotals(): void
     {
         $subtotal = $this->quantity * $this->unit_price;
-        
+
         // Calculate discount
         if ($this->discount_percent > 0) {
             $this->discount_amount = $subtotal * ($this->discount_percent / 100);
         }
-        
+
         $afterDiscount = $subtotal - $this->discount_amount;
-        
+
         // Calculate tax
         $this->tax_amount = $afterDiscount * ($this->tax_rate / 100);
-        
+
         // Calculate total including tax
         $this->total = $afterDiscount + $this->tax_amount;
     }
@@ -97,7 +111,7 @@ class EstimateItem extends Model
      */
     public function getFormattedUnitPriceAttribute(): string
     {
-        return config('australian.currency.symbol', 'A$') . number_format($this->unit_price, 2);
+        return config('australian.currency.symbol', 'A$').number_format($this->unit_price, 2);
     }
 
     /**
@@ -105,6 +119,6 @@ class EstimateItem extends Model
      */
     public function getFormattedTotalAttribute(): string
     {
-        return config('australian.currency.symbol', 'A$') . number_format($this->total, 2);
+        return config('australian.currency.symbol', 'A$').number_format($this->total, 2);
     }
 }

@@ -6,6 +6,7 @@ use App\Models\Client;
 use App\Models\Estimate;
 use App\Models\EstimateItem;
 use App\Models\Invoice;
+use App\Models\Service;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -15,6 +16,7 @@ class EstimateTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected Client $client;
 
     protected function setUp(): void
@@ -32,6 +34,188 @@ class EstimateTest extends TestCase
     {
         $response = $this->get('/estimates');
         $response->assertRedirect('/login');
+    }
+
+    public function test_estimate_lines_can_reference_a_catalogue_service(): void
+    {
+        $service = Service::create([
+            'name' => 'Cloud architecture review',
+            'description' => 'Review of cloud setup',
+            'hourly_rate' => 220.0000,
+        ]);
+
+        $this->actingAs($this->user)->post('/estimates', [
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'valid_until' => now()->addDays(30)->toDateString(),
+            'items' => [
+                [
+                    'service_id' => $service->id,
+                    'section' => 'Discovery',
+                    'description' => 'Cloud architecture review — tailored scope',
+                    'quantity' => 5,
+                    'unit_price' => 200, // tailored off the standard 220 rate
+                    'tax_rate' => 10,
+                ],
+            ],
+        ])->assertSessionHas('success');
+
+        $item = EstimateItem::query()->firstOrFail();
+        $this->assertEquals($service->id, $item->service_id);
+        $this->assertSame('Discovery', $item->section);
+        $this->assertSame('Cloud architecture review', $item->service->name);
+
+        // The link survives tailoring, and a deleted catalogue entry
+        // unties the line without deleting it.
+        $service->delete();
+        $this->assertNull($item->fresh()->service_id);
+    }
+
+    public function test_optional_lines_are_excluded_from_the_committed_total(): void
+    {
+        $this->actingAs($this->user)->post('/estimates', [
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'valid_until' => now()->addDays(30)->toDateString(),
+            'items' => [
+                [
+                    'description' => 'Build phase',
+                    'quantity' => 1,
+                    'unit_price' => 100,
+                    'tax_rate' => 10,
+                ],
+                [
+                    'description' => 'Extended warranty',
+                    'quantity' => 1,
+                    'unit_price' => 50,
+                    'tax_rate' => 10,
+                    'is_optional' => '1',
+                ],
+            ],
+        ])->assertSessionHas('success');
+
+        $estimate = Estimate::query()->firstOrFail();
+
+        // Required line only: 100 + GST = 110.00; the optional extra
+        // (55.00) is quoted alongside, not inside.
+        $this->assertEqualsWithDelta(110.0, (float) $estimate->total, 0.001);
+        $this->assertEqualsWithDelta(55.0, $estimate->optional_total, 0.001);
+        $this->assertTrue($estimate->hasOptionalItems());
+
+        $this->actingAs($this->user)
+            ->get('/estimates/'.$estimate->id)
+            ->assertOk()
+            ->assertSee('optional')
+            ->assertSee('Optional extras');
+    }
+
+    public function test_conversion_leaves_optional_lines_behind_unless_requested(): void
+    {
+        $estimateFor = function () {
+            $this->actingAs($this->user)->post('/estimates', [
+                'client_id' => $this->client->id,
+                'issue_date' => now()->toDateString(),
+                'valid_until' => now()->addDays(30)->toDateString(),
+                'items' => [
+                    ['description' => 'Base scope', 'quantity' => 1, 'unit_price' => 100, 'tax_rate' => 10],
+                    ['description' => 'Extra training day', 'quantity' => 1, 'unit_price' => 50, 'tax_rate' => 10, 'is_optional' => '1'],
+                ],
+            ])->assertSessionHas('success');
+
+            $estimate = Estimate::query()->latest('id')->first();
+            $estimate->markAsSent();
+            $estimate->accept();
+
+            return $estimate;
+        };
+
+        // Default: the optional extra stays a quote.
+        $plain = $estimateFor();
+        $this->actingAs($this->user)
+            ->post("/estimates/{$plain->id}/convert-to-invoice")
+            ->assertRedirect();
+        $this->assertSame(1, $plain->refresh()->convertedToInvoice->items()->count());
+
+        // Ticked: the accepted extra rides along.
+        $withExtra = $estimateFor();
+        $this->actingAs($this->user)
+            ->post("/estimates/{$withExtra->id}/convert-to-invoice", ['include_optional' => '1'])
+            ->assertRedirect();
+        $this->assertSame(2, $withExtra->refresh()->convertedToInvoice->items()->count());
+    }
+
+    public function test_sections_group_lines_on_the_show_screen(): void
+    {
+        $this->actingAs($this->user)->post('/estimates', [
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'valid_until' => now()->addDays(30)->toDateString(),
+            'items' => [
+                ['section' => 'Discovery', 'description' => 'Workshops', 'quantity' => 2, 'unit_price' => 100, 'tax_rate' => 10],
+                ['section' => 'Discovery', 'description' => 'Report', 'quantity' => 1, 'unit_price' => 80, 'tax_rate' => 10],
+                ['section' => 'Build', 'description' => 'Implementation', 'quantity' => 10, 'unit_price' => 120, 'tax_rate' => 10],
+            ],
+        ])->assertSessionHas('success');
+
+        $estimate = Estimate::query()->firstOrFail();
+
+        $this->actingAs($this->user)
+            ->get('/estimates/'.$estimate->id)
+            ->assertOk()
+            ->assertSee('Discovery')
+            ->assertSee('Build')
+            ->assertSee('Workshops')
+            ->assertSee('Implementation');
+    }
+
+    public function test_draft_estimates_can_be_edited_from_the_form(): void
+    {
+        $service = Service::create(['name' => 'Advisory', 'hourly_rate' => 300]);
+
+        $this->actingAs($this->user)->post('/estimates', [
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'valid_until' => now()->addDays(30)->toDateString(),
+            'items' => [
+                ['description' => 'Initial scope', 'quantity' => 1, 'unit_price' => 100, 'tax_rate' => 10],
+            ],
+        ])->assertSessionHas('success');
+
+        $estimate = Estimate::query()->firstOrFail();
+
+        // The edit screen renders the existing lines (it was missing
+        // entirely before — edit/duplicate crashed on the absent view).
+        $this->actingAs($this->user)
+            ->get('/estimates/'.$estimate->id.'/edit')
+            ->assertOk()
+            ->assertSee('Initial scope')
+            ->assertSee('Update Estimate');
+
+        $this->actingAs($this->user)->put('/estimates/'.$estimate->id, [
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'valid_until' => now()->addDays(30)->toDateString(),
+            'items' => [
+                [
+                    'service_id' => $service->id,
+                    'section' => 'Revised',
+                    'description' => 'Revised scope',
+                    'quantity' => 3,
+                    'unit_price' => 150,
+                    'tax_rate' => 10,
+                    'is_optional' => '1',
+                ],
+            ],
+        ])->assertSessionHas('success');
+
+        $estimate->refresh();
+        $this->assertSame(1, $estimate->items()->count());
+        $item = $estimate->items()->first();
+        $this->assertEquals($service->id, $item->service_id);
+        $this->assertSame('Revised', $item->section);
+        $this->assertTrue((bool) $item->is_optional);
+        // Optional-only: the committed total drops to zero.
+        $this->assertEqualsWithDelta(0.0, (float) $estimate->total, 0.001);
     }
 
     public function test_can_create_estimate(): void
@@ -65,7 +249,7 @@ class EstimateTest extends TestCase
             'valid_until' => now()->addDays(30)->toDateString(),
         ]);
 
-        $this->assertMatchesRegularExpression('/^EST-' . date('Y') . '-\d{4}$/', $estimate->estimate_number);
+        $this->assertMatchesRegularExpression('/^EST-'.date('Y').'-\d{4}$/', $estimate->estimate_number);
     }
 
     public function test_estimate_status_constants_are_defined(): void
