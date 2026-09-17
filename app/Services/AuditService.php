@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\BankTransaction;
 use App\Models\Bill;
 use App\Models\BillPayment;
 use App\Models\Client;
@@ -17,6 +16,7 @@ use App\Models\Shareholding;
 use App\Models\TimeEntry;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
+use Modules\Reconciliation\Models\BankTransaction;
 
 class AuditService
 {

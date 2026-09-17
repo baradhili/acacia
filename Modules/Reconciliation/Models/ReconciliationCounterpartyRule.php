@@ -1,7 +1,9 @@
 <?php
 
-namespace App\Models;
+namespace Modules\Reconciliation\Models;
 
+use App\Models\Client;
+use App\Models\Supplier;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 

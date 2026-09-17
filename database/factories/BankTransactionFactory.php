@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
-use App\Models\BankTransaction;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Modules\Reconciliation\Models\BankTransaction;
 
 class BankTransactionFactory extends Factory
 {
@@ -13,10 +13,10 @@ class BankTransactionFactory extends Factory
     {
         $type = $this->faker->randomElement([BankTransaction::TYPE_CREDIT, BankTransaction::TYPE_DEBIT]);
         $amount = $this->faker->randomFloat(2, 10, 5000);
-        
+
         return [
             'source' => BankTransaction::SOURCE_WISE,
-            'source_id' => 'TRANSFER-' . $this->faker->unique()->randomNumber(8),
+            'source_id' => 'TRANSFER-'.$this->faker->unique()->randomNumber(8),
             'reference' => $this->faker->optional()->numerify('REF-####'),
             'description' => $this->faker->sentence(),
             'amount' => $type === BankTransaction::TYPE_CREDIT ? $amount : -$amount,
@@ -59,6 +59,7 @@ class BankTransactionFactory extends Factory
     public function credit(): Factory
     {
         $amount = $this->faker->randomFloat(2, 10, 5000);
+
         return $this->state(fn (array $attributes) => [
             'amount' => $amount,
             'type' => BankTransaction::TYPE_CREDIT,
@@ -69,6 +70,7 @@ class BankTransactionFactory extends Factory
     public function debit(): Factory
     {
         $amount = $this->faker->randomFloat(2, 10, 5000);
+
         return $this->state(fn (array $attributes) => [
             'amount' => -$amount,
             'type' => BankTransaction::TYPE_DEBIT,

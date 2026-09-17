@@ -2,14 +2,14 @@
 
 namespace Tests\Feature\Reconciliation;
 
-use App\Models\BankTransaction;
-use App\Services\ReconciliationService;
 use Carbon\Carbon;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use IFRS\Models\Account;
 use IFRS\Models\Entity;
 use IFRS\Models\Ledger;
 use IFRS\Models\Transaction;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Modules\Reconciliation\Models\BankTransaction;
+use Modules\Reconciliation\Services\ReconciliationService;
 use Tests\TestCase;
 
 /**
@@ -24,7 +24,7 @@ class ReconciliationMatchingTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new ReconciliationService();
+        $this->service = new ReconciliationService;
     }
 
     protected function createEntity(): Entity

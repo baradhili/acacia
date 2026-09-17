@@ -26,7 +26,6 @@ use App\Http\Controllers\PrepaymentController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\PurchaseOrderController;
-use App\Http\Controllers\ReconciliationController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\ShareClassController;
@@ -292,15 +291,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/prepayment-schedule', [ReportController::class, 'prepaymentSchedule'])->name('reports.prepayment-schedule');
     Route::get('/reports/export/prepayment-schedule/pdf', [ReportController::class, 'exportPrepaymentSchedulePdf'])->name('reports.export.prepayment-schedule.pdf');
 
-    // Wise Reconciliation
-    Route::get('/reconciliation', [ReconciliationController::class, 'index'])->name('reconciliation.index');
-    Route::get('/reconciliation/import', [ReconciliationController::class, 'import'])->name('reconciliation.import');
-    Route::post('/reconciliation/import', [ReconciliationController::class, 'processImport'])->name('reconciliation.process-import');
-    Route::post('/reconciliation/auto-match', [ReconciliationController::class, 'autoMatch'])->name('reconciliation.auto-match');
-    Route::get('/reconciliation/transactions/{transaction}/match', [ReconciliationController::class, 'matchScreen'])->name('reconciliation.match');
-    Route::post('/reconciliation/transactions/{transaction}/match', [ReconciliationController::class, 'storeMatch'])->name('reconciliation.match.store');
-    Route::post('/reconciliation/transactions/{transaction}/unmatch', [ReconciliationController::class, 'unmatch'])->name('reconciliation.unmatch');
-    Route::post('/reconciliation/transactions/{transaction}/ignore', [ReconciliationController::class, 'ignore'])->name('reconciliation.ignore');
+    // Reconciliation moved to Modules/Reconciliation (its routes/web.php).
 
     // Chart of Accounts
     Route::get('/chart-of-accounts', [ChartOfAccountsController::class, 'index'])->name('chart-of-accounts.index');

@@ -1,15 +1,12 @@
 <?php
 
-namespace App\Services;
+namespace Modules\Reconciliation\Services;
 
-use App\Models\BankTransaction;
 use App\Models\Bill;
 use App\Models\BillPayment;
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\Payment;
-use App\Models\ReconciliationCounterpartyRule;
-use App\Models\ReconciliationHistory;
 use App\Models\Supplier;
 use App\Models\User;
 use Carbon\Carbon;
@@ -18,6 +15,9 @@ use IFRS\Models\Ledger;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Modules\Reconciliation\Models\BankTransaction;
+use Modules\Reconciliation\Models\ReconciliationCounterpartyRule;
+use Modules\Reconciliation\Models\ReconciliationHistory;
 
 class ReconciliationService
 {

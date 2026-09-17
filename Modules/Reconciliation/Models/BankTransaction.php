@@ -1,7 +1,9 @@
 <?php
 
-namespace App\Models;
+namespace Modules\Reconciliation\Models;
 
+use App\Models\Client;
+use Database\Factories\BankTransactionFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -40,16 +42,30 @@ class BankTransaction extends Model
 
     // Source constants
     const SOURCE_WISE = 'wise';
+
     const SOURCE_MANUAL = 'manual';
 
     // Status constants
     const STATUS_PENDING = 'PENDING';
+
     const STATUS_MATCHED = 'MATCHED';
+
     const STATUS_IGNORED = 'IGNORED';
 
     // Type constants
     const TYPE_DEBIT = 'DEBIT';
+
     const TYPE_CREDIT = 'CREDIT';
+
+    /**
+     * The factory stays in database/factories (core test tooling);
+     * the default convention would look for it under the module
+     * namespace.
+     */
+    protected static function newFactory()
+    {
+        return BankTransactionFactory::new();
+    }
 
     /**
      * Get the client associated with this bank transaction
@@ -107,7 +123,7 @@ class BankTransaction extends Model
     /**
      * Mark transaction as ignored
      */
-    public function markAsIgnored(string $notes = null): void
+    public function markAsIgnored(?string $notes = null): void
     {
         $this->update([
             'status' => self::STATUS_IGNORED,

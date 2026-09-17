@@ -2,8 +2,8 @@
 
 namespace App\Widgets;
 
-use App\Models\BankTransaction;
 use Arrilot\Widgets\AbstractWidget;
+use Modules\Reconciliation\Models\BankTransaction;
 
 class BankBalanceWidget extends AbstractWidget
 {
@@ -12,7 +12,7 @@ class BankBalanceWidget extends AbstractWidget
     public function run()
     {
         $bankTransactions = BankTransaction::all();
-        
+
         $totalCredits = $bankTransactions->where('type', BankTransaction::TYPE_CREDIT)->sum('amount');
         $totalDebits = $bankTransactions->where('type', BankTransaction::TYPE_DEBIT)->sum('amount');
         $balance = $totalCredits - $totalDebits;
@@ -23,7 +23,7 @@ class BankBalanceWidget extends AbstractWidget
 
         $bySource = $bankTransactions
             ->groupBy('source')
-            ->map(fn($group) => [
+            ->map(fn ($group) => [
                 'count' => $group->count(),
                 'total' => $group->sum('amount'),
             ]);

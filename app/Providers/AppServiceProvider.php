@@ -2,7 +2,6 @@
 
 namespace App\Providers;
 
-use App\Models\BankTransaction;
 use App\Models\Bill;
 use App\Models\BillPayment;
 use App\Models\Client;
@@ -63,7 +62,6 @@ class AppServiceProvider extends ServiceProvider
         Project::observe(AuditObserver::class);
         PurchaseOrder::observe(AuditObserver::class);
         TimeEntry::observe(AuditObserver::class);
-        BankTransaction::observe(AuditObserver::class);
         Shareholding::observe(AuditObserver::class);
         FrankingAccountEntry::observe(AuditObserver::class);
         DividendDeclaration::observe(AuditObserver::class);

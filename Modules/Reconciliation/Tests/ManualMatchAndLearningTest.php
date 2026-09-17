@@ -1,18 +1,18 @@
 <?php
 
-namespace Tests\Feature\Reconciliation;
+namespace Modules\Reconciliation\Tests;
 
-use App\Models\BankTransaction;
 use App\Models\Bill;
 use App\Models\Client;
 use App\Models\Payment;
-use App\Models\ReconciliationCounterpartyRule;
-use App\Models\ReconciliationHistory;
 use App\Models\Supplier;
 use App\Models\User;
-use App\Services\ReconciliationService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Modules\Reconciliation\Models\BankTransaction;
+use Modules\Reconciliation\Models\ReconciliationCounterpartyRule;
+use Modules\Reconciliation\Models\ReconciliationHistory;
+use Modules\Reconciliation\Services\ReconciliationService;
 use Tests\TestCase;
 
 /**

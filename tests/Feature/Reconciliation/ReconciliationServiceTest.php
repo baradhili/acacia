@@ -2,17 +2,17 @@
 
 namespace Tests\Feature\Reconciliation;
 
-use App\Models\BankTransaction;
 use App\Models\Bill;
 use App\Models\BillPayment;
 use App\Models\Client;
-use App\Models\Invoice;
 use App\Models\Payment;
-use App\Models\ReconciliationHistory;
 use App\Models\Supplier;
-use App\Services\ReconciliationService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Collection;
+use Modules\Reconciliation\Models\BankTransaction;
+use Modules\Reconciliation\Models\ReconciliationHistory;
+use Modules\Reconciliation\Services\ReconciliationService;
 use Tests\TestCase;
 
 class ReconciliationServiceTest extends TestCase
@@ -24,7 +24,7 @@ class ReconciliationServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new ReconciliationService();
+        $this->service = new ReconciliationService;
     }
 
     protected function createClient(array $attributes = []): Client
@@ -39,8 +39,8 @@ class ReconciliationServiceTest extends TestCase
     {
         return BankTransaction::create(array_merge([
             'source' => BankTransaction::SOURCE_WISE,
-            'source_id' => 'WISE-' . uniqid(),
-            'reference' => 'REF-' . uniqid(),
+            'source_id' => 'WISE-'.uniqid(),
+            'reference' => 'REF-'.uniqid(),
             'description' => 'Test transaction',
             'amount' => 1000.00,
             'currency' => 'AUD',
@@ -523,7 +523,7 @@ class ReconciliationServiceTest extends TestCase
 
         $transactions = $this->service->getAvailableTransactionsForLinking($bankTxn);
 
-        $this->assertInstanceOf(\Illuminate\Support\Collection::class, $transactions);
+        $this->assertInstanceOf(Collection::class, $transactions);
     }
 
     // =====================================================

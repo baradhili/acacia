@@ -1,10 +1,11 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace Modules\Reconciliation\Http\Controllers;
 
-use App\Models\BankTransaction;
-use App\Services\ReconciliationService;
+use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Modules\Reconciliation\Models\BankTransaction;
+use Modules\Reconciliation\Services\ReconciliationService;
 
 /**
  * Bank reconciliation: bank statement rows (imported from a Wise CSV
