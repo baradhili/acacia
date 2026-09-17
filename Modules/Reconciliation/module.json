@@ -1,0 +1,13 @@
+{
+    "name": "Reconciliation",
+    "alias": "reconciliation",
+    "description": "Bank statement import (CSV), matching against payments, invoices, bills and ledger entries, and the learning counterparty rules behind auto-match.",
+    "keywords": ["reconciliation", "bank", "wise"],
+    "priority": 0,
+    "version": "1.0.0",
+    "core": true,
+    "providers": [
+        "Modules\\Reconciliation\\Providers\\ReconciliationServiceProvider"
+    ],
+    "files": []
+}

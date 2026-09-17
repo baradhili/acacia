@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Modules\Shares\Models\DividendDeclaration;
+use Modules\Shares\Models\Shareholding;
 
 /**
  * A class of shares issued by the company (e.g. ORD ordinary, PREF

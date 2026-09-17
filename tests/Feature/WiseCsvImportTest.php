@@ -2,11 +2,11 @@
 
 namespace Tests\Feature;
 
-use App\Models\BankTransaction;
 use App\Models\User;
-use App\Services\ReconciliationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Modules\Reconciliation\Models\BankTransaction;
+use Modules\Reconciliation\Services\ReconciliationService;
 use Tests\TestCase;
 
 class WiseCsvImportTest extends TestCase

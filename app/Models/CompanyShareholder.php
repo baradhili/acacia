@@ -6,6 +6,8 @@ use App\Support\AuNumbers;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Modules\Shares\Models\DividendDistribution;
+use Modules\Shares\Models\Shareholding;
 
 /**
  * Shareholder registry entry (Phase 1 of the franking/dividend spec in

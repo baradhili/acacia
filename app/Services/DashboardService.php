@@ -2,13 +2,13 @@
 
 namespace App\Services;
 
-use App\Models\BankTransaction;
 use App\Models\BillPayment;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PurchaseOrder;
 use App\Models\TimeEntry;
 use Carbon\Carbon;
+use Modules\Reconciliation\Models\BankTransaction;
 
 class DashboardService
 {

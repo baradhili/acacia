@@ -2,21 +2,21 @@
 
 namespace App\Services;
 
-use App\Models\BankTransaction;
 use App\Models\Bill;
 use App\Models\BillPayment;
 use App\Models\Client;
-use App\Models\DividendDeclaration;
-use App\Models\DividendDistribution;
-use App\Models\FrankingAccountEntry;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Project;
 use App\Models\PurchaseOrder;
-use App\Models\Shareholding;
 use App\Models\TimeEntry;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
+use Modules\Reconciliation\Models\BankTransaction;
+use Modules\Shares\Models\DividendDeclaration;
+use Modules\Shares\Models\DividendDistribution;
+use Modules\Shares\Models\FrankingAccountEntry;
+use Modules\Shares\Models\Shareholding;
 
 class AuditService
 {

@@ -2,15 +2,15 @@
 
 namespace Tests\Feature;
 
-use App\Models\BankTransaction;
 use App\Models\Client;
 use App\Models\Project;
 use App\Models\ProjectStaff;
 use App\Models\User;
-use App\Services\ReconciliationService;
 use Carbon\Carbon;
-use Spatie\Permission\Models\Role;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Modules\Reconciliation\Models\BankTransaction;
+use Modules\Reconciliation\Services\ReconciliationService;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class Phase45RemainingTest extends TestCase
@@ -18,8 +18,11 @@ class Phase45RemainingTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected User $staff;
+
     protected Client $client;
+
     protected Project $project;
 
     protected function setUp(): void
@@ -97,7 +100,7 @@ class Phase45RemainingTest extends TestCase
 
     public function test_manual_match_updates_bank_transaction_status(): void
     {
-        $service = new ReconciliationService();
+        $service = new ReconciliationService;
 
         $transactionDate = Carbon::parse('2025-07-15');
 
@@ -123,7 +126,7 @@ class Phase45RemainingTest extends TestCase
 
     public function test_match_transaction_returns_null_when_no_match_found(): void
     {
-        $service = new ReconciliationService();
+        $service = new ReconciliationService;
 
         $transactionDate = Carbon::parse('2025-07-15');
 
@@ -146,7 +149,7 @@ class Phase45RemainingTest extends TestCase
 
     public function test_reconciliation_service_has_required_methods(): void
     {
-        $service = new ReconciliationService();
+        $service = new ReconciliationService;
 
         $this->assertTrue(method_exists($service, 'calculateMatchScore'));
         $this->assertTrue(method_exists($service, 'getMatchingCandidates'));
@@ -157,10 +160,10 @@ class Phase45RemainingTest extends TestCase
 
     public function test_reconciliation_service_tolerances_are_accessible(): void
     {
-        $service = new ReconciliationService();
+        $service = new ReconciliationService;
 
         $tolerances = $service->getTolerances();
-        
+
         $this->assertArrayHasKey('amount_tolerance', $tolerances);
         $this->assertArrayHasKey('date_tolerance_days', $tolerances);
         $this->assertEquals(0.01, $tolerances['amount_tolerance']);
@@ -169,7 +172,7 @@ class Phase45RemainingTest extends TestCase
 
     public function test_reconciliation_report_shows_correct_matched_unmatched_totals(): void
     {
-        $service = new ReconciliationService();
+        $service = new ReconciliationService;
 
         // Create matched transactions
         BankTransaction::create([
@@ -223,7 +226,7 @@ class Phase45RemainingTest extends TestCase
 
     public function test_auto_match_all_returns_summary(): void
     {
-        $service = new ReconciliationService();
+        $service = new ReconciliationService;
 
         BankTransaction::create([
             'source' => 'wise',

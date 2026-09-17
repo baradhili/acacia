@@ -2,14 +2,11 @@
 
 namespace Tests\Feature\Reconciliation;
 
-use App\Models\BankTransaction;
 use App\Models\Bill;
 use App\Models\BillPayment;
 use App\Models\Client;
 use App\Models\Payment;
-use App\Models\ReconciliationHistory;
 use App\Models\Supplier;
-use App\Services\ReconciliationService;
 use Carbon\Carbon;
 use IFRS\Models\Account;
 use IFRS\Models\Currency;
@@ -17,7 +14,11 @@ use IFRS\Models\Entity;
 use IFRS\Models\ReportingPeriod;
 use IFRS\Models\Vat;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Modules\Reconciliation\Models\BankTransaction;
+use Modules\Reconciliation\Models\ReconciliationHistory;
+use Modules\Reconciliation\Services\ReconciliationService;
 use Tests\TestCase;
 
 class AutoCreateCashReceiptTest extends TestCase
@@ -29,7 +30,7 @@ class AutoCreateCashReceiptTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new ReconciliationService();
+        $this->service = new ReconciliationService;
     }
 
     /**
@@ -130,7 +131,7 @@ class AutoCreateCashReceiptTest extends TestCase
     {
         return BankTransaction::create(array_merge([
             'source' => BankTransaction::SOURCE_WISE,
-            'source_id' => 'WISE-' . uniqid(),
+            'source_id' => 'WISE-'.uniqid(),
             'reference' => 'INV-2025-0001',
             'description' => 'Test payment from client',
             'amount' => 1500.00,
@@ -684,7 +685,7 @@ class AutoCreateCashReceiptTest extends TestCase
         // This will return empty since there are no matching transactions in test DB
         $transactions = $this->service->getAvailableTransactionsForLinking($bankTxn);
 
-        $this->assertInstanceOf(\Illuminate\Support\Collection::class, $transactions);
+        $this->assertInstanceOf(Collection::class, $transactions);
     }
 
     // ========================

@@ -1,0 +1,10 @@
+{
+    "name": "acacia/reconciliation",
+    "description": "Acacia ERP bank reconciliation module",
+    "type": "acacia-module",
+    "autoload": {
+        "psr-4": {
+            "Modules\\Reconciliation\\": ""
+        }
+    }
+}

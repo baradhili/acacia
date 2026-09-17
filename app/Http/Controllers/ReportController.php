@@ -11,18 +11,15 @@ use App\Models\BillItem;
 use App\Models\BillPayment;
 use App\Models\Client;
 use App\Models\CompanyProfile;
-use App\Models\DividendDeclaration;
 use App\Models\FiscalYearClose;
 use App\Models\Invoice;
 use App\Models\Payment;
-use App\Models\PayRun;
 use App\Models\Prepayment;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\User;
 use App\Services\BasSettlementService;
 use App\Services\FiscalYearService;
-use App\Services\FrankingService;
 use App\Services\OpeningBalances;
 use App\Services\PrepaymentService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -39,6 +36,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
+use Modules\Payroll\Models\PayRun;
+use Modules\Shares\Models\DividendDeclaration;
+use Modules\Shares\Services\FrankingService;
 
 class ReportController extends Controller
 {
@@ -1268,11 +1268,19 @@ class ReportController extends Controller
         // attributed by pay day like every other label here. The withheld
         // leg of each run is the same Cr 2210 the BAS settlement screen
         // nets, so W2 matches what settling PAYG withholding clears.
-        $payRuns = PayRun::where('entity_id', $entity->id)
-            ->whereBetween('payment_date', [$fyStart, $fyEndDate])
-            ->where('status', PayRun::STATUS_PROCESSED)
-            ->with('payslips')
-            ->get();
+        // Soft dependency: the labels only exist when the Payroll module
+        // is enabled (its provider registers routes, tables and the
+        // PSI/BAS label coverage).
+        $payRunClass = PayRun::class;
+        if (class_exists($payRunClass)) {
+            $payRuns = $payRunClass::where('entity_id', $entity->id)
+                ->whereBetween('payment_date', [$fyStart, $fyEndDate])
+                ->where('status', $payRunClass::STATUS_PROCESSED)
+                ->with('payslips')
+                ->get();
+        } else {
+            $payRuns = collect();
+        }
         foreach ($payRuns as $run) {
             $i = $quarterOf($run->payment_date);
             $quarters[$i]['w1'] += (float) $run->payslips->sum('gross');
@@ -1937,11 +1945,14 @@ class ReportController extends Controller
         // Item 8 J/K: the franked/unfranked split of dividends paid, from
         // the runs settled in the year (the ledger's account 3400 movement
         // is the total; the declarations' franking percentages split it).
-        $dividendRuns = DividendDeclaration::query()
-            ->where('entity_id', $entity->id)
-            ->where('status', DividendDeclaration::STATUS_COMPLETED)
-            ->whereBetween('payment_date', [$fyStart->toDateString(), $fyEndDate->toDateString()])
-            ->get();
+        // Soft dependency: the split exists only with the Shares module.
+        $dividendRuns = class_exists(DividendDeclaration::class)
+            ? DividendDeclaration::query()
+                ->where('entity_id', $entity->id)
+                ->where('status', DividendDeclaration::STATUS_COMPLETED)
+                ->whereBetween('payment_date', [$fyStart->toDateString(), $fyEndDate->toDateString()])
+                ->get()
+            : collect();
         $frankedDividends = round($dividendRuns->sum(fn ($d) => $d->frankedCashPortion()));
         $unfrankedDividends = round($dividendRuns->sum(fn ($d) => $d->unfrankedCashPortion()));
         if (($frankedDividends + $unfrankedDividends) > 0 && abs($frankedDividends + $unfrankedDividends - $dividendsPaid) > 1) {
@@ -1952,8 +1963,14 @@ class ReportController extends Controller
                 $dividendsPaid,
             );
         }
-        $frankingOpening = round(FrankingService::openingBalance($fyEnd - 1, $entity->id));
-        $frankingClosing = round(FrankingService::closingBalance($fyEnd - 1, $entity->id));
+        // Soft dependency: the franking balances exist only with the
+        // Shares module enabled; without it the tax report shows zero.
+        $frankingOpening = class_exists(FrankingService::class)
+            ? round(FrankingService::openingBalance($fyEnd - 1, $entity->id))
+            : 0.0;
+        $frankingClosing = class_exists(FrankingService::class)
+            ? round(FrankingService::closingBalance($fyEnd - 1, $entity->id))
+            : 0.0;
 
         // Supplementary equity reconciliation (beyond the ATO labels):
         // the ledger's equity story for the year. EQUITY accounts are

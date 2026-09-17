@@ -5,11 +5,10 @@ namespace Tests\Unit;
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\Payment;
-use App\Models\PurchaseOrder;
-use App\Models\TimeEntry;
 use App\Services\DashboardService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Modules\Reconciliation\Models\BankTransaction;
 use Tests\TestCase;
 
 class DashboardServiceTest extends TestCase
@@ -21,7 +20,7 @@ class DashboardServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new DashboardService();
+        $this->service = new DashboardService;
     }
 
     protected function createClient(array $attributes = []): Client
@@ -79,7 +78,7 @@ class DashboardServiceTest extends TestCase
     public function test_cash_flow_calculates_inflows(): void
     {
         $client = $this->createClient();
-        
+
         Payment::create([
             'client_id' => $client->id,
             'amount' => 1000.00,
@@ -96,7 +95,7 @@ class DashboardServiceTest extends TestCase
     public function test_cash_flow_excludes_pending_payments(): void
     {
         $client = $this->createClient();
-        
+
         Payment::create([
             'client_id' => $client->id,
             'amount' => 1000.00,
@@ -115,7 +114,7 @@ class DashboardServiceTest extends TestCase
         $widget = $this->service->getCashFlowWidget();
 
         $this->assertIsArray($widget['daily_data']);
-        if (!empty($widget['daily_data'])) {
+        if (! empty($widget['daily_data'])) {
             $first = $widget['daily_data'][0];
             $this->assertArrayHasKey('date', $first);
             $this->assertArrayHasKey('inflow', $first);
@@ -145,7 +144,7 @@ class DashboardServiceTest extends TestCase
     {
         $widget = $this->service->getARAgingWidget();
 
-        $sum = $widget['current'] + $widget['days_30'] + $widget['days_60'] + 
+        $sum = $widget['current'] + $widget['days_30'] + $widget['days_60'] +
                $widget['days_90'] + $widget['over_90'];
         $this->assertEquals($widget['total'], $sum);
     }
@@ -240,28 +239,28 @@ class DashboardServiceTest extends TestCase
 
     public function test_bank_balance_calculates_correctly(): void
     {
-        \App\Models\BankTransaction::create([
+        BankTransaction::create([
             'source' => 'WISE',
             'source_id' => 'TST-001',
             'reference' => 'REF-001',
             'description' => 'Test credit',
             'amount' => 1000.00,
             'currency' => 'AUD',
-            'type' => \App\Models\BankTransaction::TYPE_CREDIT,
+            'type' => BankTransaction::TYPE_CREDIT,
             'transaction_date' => Carbon::now(),
-            'status' => \App\Models\BankTransaction::STATUS_PENDING,
+            'status' => BankTransaction::STATUS_PENDING,
         ]);
 
-        \App\Models\BankTransaction::create([
+        BankTransaction::create([
             'source' => 'WISE',
             'source_id' => 'TST-002',
             'reference' => 'REF-002',
             'description' => 'Test debit',
             'amount' => 300.00,
             'currency' => 'AUD',
-            'type' => \App\Models\BankTransaction::TYPE_DEBIT,
+            'type' => BankTransaction::TYPE_DEBIT,
             'transaction_date' => Carbon::now(),
-            'status' => \App\Models\BankTransaction::STATUS_PENDING,
+            'status' => BankTransaction::STATUS_PENDING,
         ]);
 
         $widget = $this->service->getBankBalanceWidget();

@@ -11,28 +11,22 @@ use App\Http\Controllers\ClientController;
 use App\Http\Controllers\CompanyProfileController;
 use App\Http\Controllers\CreditNoteController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\DividendDeclarationController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DomainController;
 use App\Http\Controllers\EstimateController;
 use App\Http\Controllers\FinancialYearController;
-use App\Http\Controllers\FrankingAccountController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\LogoController;
+use App\Http\Controllers\ModulesController;
 use App\Http\Controllers\OpeningBalanceController;
 use App\Http\Controllers\PaymentController;
-use App\Http\Controllers\PayrollController;
-use App\Http\Controllers\PayrollEmployeeController;
 use App\Http\Controllers\PrepaymentController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
-use App\Http\Controllers\PsiController;
 use App\Http\Controllers\PurchaseOrderController;
-use App\Http\Controllers\ReconciliationController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\ShareClassController;
-use App\Http\Controllers\ShareholderController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TimeEntryController;
 use App\Http\Controllers\UserController;
@@ -78,6 +72,16 @@ Route::middleware('auth')->group(function () {
         Route::put('/backups/settings', [BackupController::class, 'update'])->name('backups.settings.update');
     });
 
+    // Modules (admin only) — the module management screen
+    Route::middleware('role:admin')->group(function () {
+        Route::get('/modules', [ModulesController::class, 'index'])->name('modules.index');
+        Route::post('/modules/install', [ModulesController::class, 'installFromGit'])->name('modules.install');
+        Route::post('/modules/{module}/enable', [ModulesController::class, 'enable'])->name('modules.enable');
+        Route::post('/modules/{module}/disable', [ModulesController::class, 'disable'])->name('modules.disable');
+        Route::post('/modules/{module}/update', [ModulesController::class, 'update'])->name('modules.update');
+        Route::post('/modules/{module}/uninstall', [ModulesController::class, 'uninstall'])->name('modules.uninstall');
+    });
+
     // Opening balances (admin or accountant)
     Route::middleware('role:admin|accountant')->group(function () {
         Route::get('/opening-balances', [OpeningBalanceController::class, 'index'])->name('opening-balances.index');
@@ -100,21 +104,7 @@ Route::middleware('auth')->group(function () {
         Route::resource('domains', DomainController::class);
         Route::post('/domains/{domain}/amortisation', [DomainController::class, 'createAmortisation'])->name('domains.amortisation');
 
-        // Payroll: pay runs (posting actions) and employee master data
-        Route::get('/payroll', [PayrollController::class, 'index'])->name('payroll.index');
-        Route::get('/payroll/runs/create', [PayrollController::class, 'create'])->name('payroll.runs.create');
-        Route::post('/payroll/runs', [PayrollController::class, 'store'])->name('payroll.runs.store');
-        Route::get('/payroll/runs/{run}', [PayrollController::class, 'show'])->name('payroll.runs.show');
-        Route::post('/payroll/runs/{run}/payslips', [PayrollController::class, 'addPayslip'])->name('payroll.runs.payslips.store');
-        Route::delete('/payroll/runs/{run}/payslips/{payslip}', [PayrollController::class, 'removePayslip'])->name('payroll.runs.payslips.destroy');
-        Route::post('/payroll/runs/{run}/process', [PayrollController::class, 'process'])->name('payroll.runs.process');
-        Route::post('/payroll/runs/{run}/reverse', [PayrollController::class, 'reverse'])->name('payroll.runs.reverse');
-        Route::delete('/payroll/runs/{run}', [PayrollController::class, 'destroy'])->name('payroll.runs.destroy');
-        Route::resource('payroll-employees', PayrollEmployeeController::class)->except(['show'])->names('payroll.employees');
-
-        // PSI assessment: 80% rule, PSB results test, attribution
-        Route::get('/psi', [PsiController::class, 'index'])->name('psi.index');
-        Route::post('/psi/assess', [PsiController::class, 'assess'])->name('psi.assess');
+        // Payroll + PSI moved to Modules/Payroll (its routes/web.php).
 
         // Year-end close workflow (four-eyes hand-off enforced in the service)
         Route::get('/financial-years', [FinancialYearController::class, 'index'])->name('financial-years.index');
@@ -124,12 +114,9 @@ Route::middleware('auth')->group(function () {
         Route::post('/financial-years/{year}/close', [FinancialYearController::class, 'close'])->name('financial-years.close');
         Route::post('/financial-years/{year}/reopen', [FinancialYearController::class, 'reopen'])->name('financial-years.reopen');
 
-        // Shares, franking account & dividends (franking/dividend spec)
-        Route::get('/shareholders', [ShareholderController::class, 'index'])->name('shareholders.index');
-        Route::get('/shareholders/{shareholder}', [ShareholderController::class, 'show'])->name('shareholders.show');
-        Route::post('/shareholders/{shareholder}/shareholdings', [ShareholderController::class, 'storeShareholding'])->name('shareholders.shareholdings.store');
-        Route::post('/shareholders/{shareholder}/shareholdings/{shareholding}/cancel', [ShareholderController::class, 'cancelShareholding'])->name('shareholders.shareholdings.cancel');
-
+        // Shareholding ledger, franking account and dividends moved to
+        // Modules/Shares (its routes/web.php). Share classes are company
+        // identity and stay here.
         Route::resource('share-classes', ShareClassController::class)->except('show');
 
         // Services catalogue — rate-card master data behind time billing
@@ -145,25 +132,6 @@ Route::middleware('auth')->group(function () {
         Route::post('/bas-statements/freeze', [ReportController::class, 'freezeBasQuarter'])->name('bas-statements.freeze');
         Route::delete('/bas-statements/{statement}/unfreeze', [ReportController::class, 'unfreezeBasQuarter'])->name('bas-statements.unfreeze');
 
-        Route::get('/franking-account', [FrankingAccountController::class, 'index'])->name('franking-account.index');
-        Route::post('/franking-account', [FrankingAccountController::class, 'store'])->name('franking-account.store');
-        Route::delete('/franking-account/{entry}', [FrankingAccountController::class, 'destroy'])->name('franking-account.destroy');
-        Route::get('/franking-account/disclosure', [FrankingAccountController::class, 'disclosure'])->name('franking-account.disclosure');
-        Route::get('/franking-account/disclosure/pdf', [FrankingAccountController::class, 'disclosurePdf'])->name('franking-account.disclosure.pdf');
-
-        Route::get('/dividends', [DividendDeclarationController::class, 'index'])->name('dividends.index');
-        Route::get('/dividends/create', [DividendDeclarationController::class, 'create'])->name('dividends.create');
-        Route::post('/dividends', [DividendDeclarationController::class, 'store'])->name('dividends.store');
-        Route::get('/dividends/{declaration}', [DividendDeclarationController::class, 'show'])->name('dividends.show');
-        Route::get('/dividends/{declaration}/edit', [DividendDeclarationController::class, 'edit'])->name('dividends.edit');
-        Route::put('/dividends/{declaration}', [DividendDeclarationController::class, 'update'])->name('dividends.update');
-        Route::post('/dividends/{declaration}/calculate', [DividendDeclarationController::class, 'calculate'])->name('dividends.calculate');
-        Route::post('/dividends/{declaration}/approve', [DividendDeclarationController::class, 'approve'])->name('dividends.approve');
-        Route::post('/dividends/{declaration}/record-payment', [DividendDeclarationController::class, 'recordPayment'])->name('dividends.record-payment');
-        Route::post('/dividends/{declaration}/send-statements', [DividendDeclarationController::class, 'sendStatements'])->name('dividends.send-statements');
-        Route::post('/dividends/{declaration}/cancel', [DividendDeclarationController::class, 'cancel'])->name('dividends.cancel');
-        Route::get('/dividends/{declaration}/payment-schedule.csv', [DividendDeclarationController::class, 'paymentScheduleCsv'])->name('dividends.payment-schedule.csv');
-        Route::get('/dividends/statements/{distribution}/pdf', [DividendDeclarationController::class, 'statementPdf'])->name('dividends.statements.pdf');
     });
 
     // Clients
@@ -298,15 +266,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/prepayment-schedule', [ReportController::class, 'prepaymentSchedule'])->name('reports.prepayment-schedule');
     Route::get('/reports/export/prepayment-schedule/pdf', [ReportController::class, 'exportPrepaymentSchedulePdf'])->name('reports.export.prepayment-schedule.pdf');
 
-    // Wise Reconciliation
-    Route::get('/reconciliation', [ReconciliationController::class, 'index'])->name('reconciliation.index');
-    Route::get('/reconciliation/import', [ReconciliationController::class, 'import'])->name('reconciliation.import');
-    Route::post('/reconciliation/import', [ReconciliationController::class, 'processImport'])->name('reconciliation.process-import');
-    Route::post('/reconciliation/auto-match', [ReconciliationController::class, 'autoMatch'])->name('reconciliation.auto-match');
-    Route::get('/reconciliation/transactions/{transaction}/match', [ReconciliationController::class, 'matchScreen'])->name('reconciliation.match');
-    Route::post('/reconciliation/transactions/{transaction}/match', [ReconciliationController::class, 'storeMatch'])->name('reconciliation.match.store');
-    Route::post('/reconciliation/transactions/{transaction}/unmatch', [ReconciliationController::class, 'unmatch'])->name('reconciliation.unmatch');
-    Route::post('/reconciliation/transactions/{transaction}/ignore', [ReconciliationController::class, 'ignore'])->name('reconciliation.ignore');
+    // Reconciliation moved to Modules/Reconciliation (its routes/web.php).
 
     // Chart of Accounts
     Route::get('/chart-of-accounts', [ChartOfAccountsController::class, 'index'])->name('chart-of-accounts.index');

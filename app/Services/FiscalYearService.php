@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\BankTransaction;
 use App\Models\BillPayment;
 use App\Models\EntitySetting;
 use App\Models\FiscalPeriod;
@@ -22,6 +21,7 @@ use IFRS\Scopes\EntityScope;
 use IFRS\Transactions\JournalEntry;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Modules\Reconciliation\Models\BankTransaction;
 
 /**
  * Financial year end/start handling.
