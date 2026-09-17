@@ -60,7 +60,7 @@
             <ul class="mt-1 text-sm">
                 @forelse($movements as $type => $net)
                     <li class="flex justify-between">
-                        <span class="text-gray-500">{{ \App\Models\FrankingAccountEntry::types()[$type] ?? $type }}</span>
+                        <span class="text-gray-500">{{ \Modules\Shares\Models\FrankingAccountEntry::types()[$type] ?? $type }}</span>
                         <span class="font-medium {{ $net < 0 ? 'text-red-600' : 'text-gray-800' }}">{{ number_format($net, 2) }}</span>
                     </li>
                 @empty
@@ -112,7 +112,7 @@
                                 {{ $entry->running_balance !== null ? number_format($entry->running_balance, 2) : '—' }}
                             </td>
                             <td class="px-4 py-2 text-right">
-                                @if(in_array($entry->entry_type, \App\Models\FrankingAccountEntry::MANUAL_TYPES))
+                                @if(in_array($entry->entry_type, \Modules\Shares\Models\FrankingAccountEntry::MANUAL_TYPES))
                                     <form method="POST" action="{{ route('franking-account.destroy', $entry) }}"
                                         onsubmit="return confirm('Delete this franking entry?');">
                                         @csrf @method('DELETE')
@@ -141,7 +141,7 @@
             <div class="col-span-1">
                 <label class="block text-xs font-medium text-gray-500 mb-1">Type</label>
                 <select name="entry_type" class="w-full border-gray-300 rounded-lg text-sm">
-                    @foreach(\App\Models\FrankingAccountEntry::manualTypes() as $value => $label)
+                    @foreach(\Modules\Shares\Models\FrankingAccountEntry::manualTypes() as $value => $label)
                         <option value="{{ $value }}" {{ old('entry_type') === $value ? 'selected' : '' }}>{{ $label }}</option>
                     @endforeach
                 </select>

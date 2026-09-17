@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Console\Commands;
+namespace Modules\Shares\Console;
 
-use App\Models\DividendDeclaration;
-use App\Services\DividendService;
 use Illuminate\Console\Command;
+use Modules\Shares\Models\DividendDeclaration;
+use Modules\Shares\Services\DividendService;
 
 /**
  * Retry/fallback sender for dividend statement emails. Statements normally

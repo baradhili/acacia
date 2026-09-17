@@ -1,18 +1,11 @@
 <?php
 
-namespace Tests\Feature;
+namespace Modules\Shares\Tests;
 
-use App\Mail\DividendStatementMail;
 use App\Models\CompanyProfile;
 use App\Models\CompanyShareholder;
-use App\Models\DividendDeclaration;
-use App\Models\DividendDistribution;
-use App\Models\FrankingAccountEntry;
 use App\Models\ShareClass;
-use App\Models\Shareholding;
 use App\Models\User;
-use App\Services\FrankingService;
-use App\Services\ShareholdingService;
 use Carbon\Carbon;
 use Hash;
 use IFRS\Models\Account;
@@ -22,6 +15,13 @@ use IFRS\Models\ExchangeRate;
 use IFRS\Models\Ledger;
 use IFRS\Models\ReportingPeriod;
 use Illuminate\Support\Facades\Mail;
+use Modules\Shares\Mail\DividendStatementMail;
+use Modules\Shares\Models\DividendDeclaration;
+use Modules\Shares\Models\DividendDistribution;
+use Modules\Shares\Models\FrankingAccountEntry;
+use Modules\Shares\Models\Shareholding;
+use Modules\Shares\Services\FrankingService;
+use Modules\Shares\Services\ShareholdingService;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 

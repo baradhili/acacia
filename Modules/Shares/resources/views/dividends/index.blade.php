@@ -53,7 +53,7 @@
                             </td>
                             <td class="px-4 py-3 text-sm">{{ $declaration->declaration_date->format('d M Y') }}</td>
                             <td class="px-4 py-3 text-sm">{{ $declaration->shareClass?->code }}</td>
-                            <td class="px-4 py-3 text-sm">{{ \App\Models\DividendDeclaration::dividendTypes()[$declaration->dividend_type] ?? '' }}</td>
+                            <td class="px-4 py-3 text-sm">{{ \Modules\Shares\Models\DividendDeclaration::dividendTypes()[$declaration->dividend_type] ?? '' }}</td>
                             <td class="px-4 py-3 text-sm text-right">${{ number_format((float) $declaration->amount_per_share, 4) }}</td>
                             <td class="px-4 py-3 text-sm text-right">{{ number_format((float) $declaration->franking_percentage, 0) }}%</td>
                             <td class="px-4 py-3 text-sm text-right">${{ number_format((float) $declaration->total_cash_dividend, 2) }}</td>

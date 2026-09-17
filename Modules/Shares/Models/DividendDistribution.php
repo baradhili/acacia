@@ -1,7 +1,10 @@
 <?php
 
-namespace App\Models;
+namespace Modules\Shares\Models;
 
+use App\Models\CompanyShareholder;
+use App\Models\ShareClass;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 

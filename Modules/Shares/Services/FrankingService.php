@@ -1,13 +1,14 @@
 <?php
 
-namespace App\Services;
+namespace Modules\Shares\Services;
 
-use App\Models\DividendDeclaration;
-use App\Models\FrankingAccountEntry;
+use App\Services\IfrsPosting;
 use Carbon\Carbon;
 use IFRS\Models\Entity;
 use IFRS\Models\ReportingPeriod;
 use Illuminate\Support\Facades\DB;
+use Modules\Shares\Models\DividendDeclaration;
+use Modules\Shares\Models\FrankingAccountEntry;
 
 /**
  * The notional franking account: a lifetime running balance of franking

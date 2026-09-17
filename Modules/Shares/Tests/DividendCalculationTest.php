@@ -1,8 +1,8 @@
 <?php
 
-namespace Tests\Unit;
+namespace Modules\Shares\Tests;
 
-use App\Services\DividendService;
+use Modules\Shares\Services\DividendService;
 use PHPUnit\Framework\TestCase;
 
 /**

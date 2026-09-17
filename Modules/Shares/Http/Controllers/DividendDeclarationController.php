@@ -1,17 +1,18 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace Modules\Shares\Http\Controllers;
 
+use App\Http\Controllers\Controller;
 use App\Models\CompanyProfile;
-use App\Models\DividendDeclaration;
-use App\Models\DividendDistribution;
-use App\Services\DividendService;
-use App\Services\FrankingService;
 use App\Services\IfrsPosting;
 use Barryvdh\DomPDF\Facade\Pdf;
 use IFRS\Models\Entity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response;
+use Modules\Shares\Models\DividendDeclaration;
+use Modules\Shares\Models\DividendDistribution;
+use Modules\Shares\Services\DividendService;
+use Modules\Shares\Services\FrankingService;
 
 /**
  * Dividend declaration lifecycle: draft entry, distribution calculation,

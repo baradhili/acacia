@@ -4,10 +4,8 @@ namespace Tests\Feature\Bas;
 
 use App\Models\BasSettlement;
 use App\Models\FiscalPeriod;
-use App\Models\FrankingAccountEntry;
 use App\Models\User;
 use App\Services\BasSettlementService;
-use App\Services\FrankingService;
 use App\Services\IfrsPosting;
 use App\Services\OpeningBalances;
 use Carbon\Carbon;
@@ -401,92 +399,6 @@ class BasSettlementTest extends TestCase
             ->get('/bas-settlements')
             ->assertOk()
             ->assertSee('ATO receipt 123');
-    }
-
-    public function test_income_tax_settlements_credit_the_franking_account(): void
-    {
-        $this->postJournal(320, 2240, 1000, now(), 'ASSESSED');
-
-        $settlement = $this->settle(['type' => BasSettlement::TYPE_INCOME_TAX]);
-
-        $entry = FrankingAccountEntry::query()->sole();
-        $this->assertSame(FrankingAccountEntry::TYPE_TAX_PAYMENT, $entry->entry_type);
-        $this->assertEqualsWithDelta(1000.0, (float) $entry->credit_amount, 0.001);
-        $this->assertEqualsWithDelta(0.0, (float) $entry->debit_amount, 0.001);
-        // Franking credits arise on payment — the bank date, not as_at.
-        $this->assertSame($settlement->settled_at->toDateString(), $entry->entry_date->toDateString());
-        $this->assertFalse($entry->is_estimated);
-        $this->assertSame($settlement->ifrs_transaction_id, $entry->ifrs_transaction_id);
-        $this->assertEqualsWithDelta(1000.0, FrankingService::balance(), 0.001);
-    }
-
-    public function test_payg_instalment_settlements_credit_the_franking_account(): void
-    {
-        $this->postJournal(320, 2240, 1500, now(), 'INSTALMENT');
-
-        $this->settle(['type' => BasSettlement::TYPE_PAYG_INSTALMENT]);
-
-        $entry = FrankingAccountEntry::query()->sole();
-        $this->assertSame(FrankingAccountEntry::TYPE_TAX_PAYMENT, $entry->entry_type);
-        $this->assertEqualsWithDelta(1500.0, FrankingService::balance(), 0.001);
-    }
-
-    public function test_gst_and_payg_withholding_settlements_never_touch_franking(): void
-    {
-        $this->collect(1000);
-        $this->postJournal(320, 2210, 800, now(), 'WITHHELD');
-
-        $this->settle();
-        $this->settle(['type' => BasSettlement::TYPE_PAYG]);
-
-        $this->assertDatabaseCount('franking_account_entries', 0);
-        $this->assertEqualsWithDelta(0.0, FrankingService::balance(), 0.001);
-    }
-
-    public function test_an_income_tax_refund_debits_the_franking_account(): void
-    {
-        $this->postJournal(2240, 320, 300, now(), 'OVERPAID');
-
-        $this->settle(['type' => BasSettlement::TYPE_INCOME_TAX]);
-
-        $entry = FrankingAccountEntry::query()->sole();
-        $this->assertSame(FrankingAccountEntry::TYPE_REFUND_RECEIVED, $entry->entry_type);
-        $this->assertEqualsWithDelta(300.0, (float) $entry->debit_amount, 0.001);
-        $this->assertEqualsWithDelta(-300.0, FrankingService::balance(), 0.001);
-    }
-
-    public function test_reversing_a_settlement_mirrors_out_its_franking_entry(): void
-    {
-        $this->postJournal(320, 2240, 1000, now(), 'ASSESSED');
-        $settlement = $this->settle(['type' => BasSettlement::TYPE_INCOME_TAX]);
-
-        $this->assertEqualsWithDelta(1000.0, FrankingService::balance(), 0.001);
-
-        $this->service->reverse($settlement);
-
-        $entries = FrankingAccountEntry::query()->orderBy('id')->get();
-        $this->assertCount(2, $entries);
-        [$credit, $mirror] = $entries->all();
-        $this->assertSame(FrankingAccountEntry::TYPE_TAX_PAYMENT, $mirror->entry_type);
-        $this->assertEqualsWithDelta(1000.0, (float) $mirror->debit_amount, 0.001);
-        $this->assertSame($credit->entry_date->toDateString(), $mirror->entry_date->toDateString());
-        $this->assertEqualsWithDelta(0.0, FrankingService::balance(), 0.001);
-    }
-
-    public function test_an_exactly_offset_income_tax_position_has_nothing_to_settle(): void
-    {
-        // The single liability account plays both netting roles, so an
-        // accrued payable exactly matched by an overpayment reads as a
-        // zero balance — settle() refuses, which is why a zero-bank
-        // income tax settlement (and a franking entry for one) cannot
-        // exist.
-        $this->postJournal(320, 2240, 500, now(), 'ASSESSED');
-        $this->postJournal(2240, 320, 500, now(), 'OVERPAID');
-
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('no unsettled income tax');
-
-        $this->settle(['type' => BasSettlement::TYPE_INCOME_TAX]);
     }
 
     public function test_reversing_a_settlement_restores_the_balances(): void

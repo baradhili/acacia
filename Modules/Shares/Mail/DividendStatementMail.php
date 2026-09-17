@@ -1,9 +1,8 @@
 <?php
 
-namespace App\Mail;
+namespace Modules\Shares\Mail;
 
 use App\Models\CompanyProfile;
-use App\Models\DividendDistribution;
 use Barryvdh\DomPDF\Facade\Pdf;
 use IFRS\Models\Entity;
 use Illuminate\Bus\Queueable;
@@ -14,6 +13,7 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Storage;
+use Modules\Shares\Models\DividendDistribution;
 
 /**
  * Per-shareholder dividend statement with the franking credit details the

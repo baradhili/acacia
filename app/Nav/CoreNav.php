@@ -124,13 +124,6 @@ class CoreNav
                     $link('BAS Settlements', 'bas-settlements.index', ['bas-settlements.*']),
                 ]],
 
-            ['type' => 'dropdown', 'label' => 'Shares', 'position' => 30, 'roles' => $gated,
-                'active' => ['shareholders.*', 'franking-account.*', 'dividends.*', 'share-classes.*'], 'children' => [
-                    $link('Shareholders', 'shareholders.index', ['shareholders.*']),
-                    $link('Franking Account', 'franking-account.index', ['franking-account.*']),
-                    $link('Dividends', 'dividends.index', ['dividends.*']),
-                ]],
-
             ['type' => 'dropdown', 'label' => 'Setup', 'position' => 40, 'roles' => $gated,
                 'active' => ['company-profile.*', 'chart-of-accounts.*', 'opening-balances.*', 'financial-years.*', 'services.*', 'share-classes.*'], 'children' => [
                     $link('Company Details', 'company-profile.index', ['company-profile.*']),

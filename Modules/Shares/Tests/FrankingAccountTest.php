@@ -1,18 +1,18 @@
 <?php
 
-namespace Tests\Feature;
+namespace Modules\Shares\Tests;
 
 use App\Models\CompanyProfile;
-use App\Models\DividendDeclaration;
-use App\Models\FrankingAccountEntry;
 use App\Models\User;
-use App\Services\FrankingService;
 use Carbon\Carbon;
 use Hash;
 use IFRS\Models\Currency;
 use IFRS\Models\Entity;
 use IFRS\Models\ExchangeRate;
 use IFRS\Models\ReportingPeriod;
+use Modules\Shares\Models\DividendDeclaration;
+use Modules\Shares\Models\FrankingAccountEntry;
+use Modules\Shares\Services\FrankingService;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 

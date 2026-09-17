@@ -7,10 +7,10 @@ use App\Models\CompanyShareholder;
 use App\Models\ShareClass;
 use App\Rules\AuNumber;
 use App\Services\IfrsPosting;
-use App\Services\ShareholdingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Modules\Shares\Services\ShareholdingService;
 
 /**
  * Maintain the reporting entity's company identity — legal name (on the
@@ -209,7 +209,9 @@ class CompanyProfileController extends Controller
                         ['description' => 'Shares', 'status' => ShareClass::STATUS_ACTIVE],
                     );
                     $created->update(['shares_held' => (int) $row['shares_held']]);
-                    ShareholdingService::backfillOpenings($created, $class);
+                    if (class_exists(ShareholdingService::class)) {
+                        ShareholdingService::backfillOpenings($created, $class);
+                    }
                 }
             }
 

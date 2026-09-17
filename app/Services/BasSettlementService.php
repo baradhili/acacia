@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\BasSettlement;
 use App\Models\BillPayment;
-use App\Models\FrankingAccountEntry;
 use Carbon\Carbon;
 use IFRS\Models\Account;
 use IFRS\Models\Entity;
@@ -13,6 +12,8 @@ use IFRS\Models\ReportingPeriod;
 use IFRS\Transactions\JournalEntry;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Modules\Shares\Models\FrankingAccountEntry;
+use Modules\Shares\Services\FrankingService;
 
 /**
  * Records BAS settlements: the ATO payment (or refund) that nets a tax
@@ -236,7 +237,8 @@ class BasSettlementService
                 'notes' => $data['notes'] ?? null,
             ]);
 
-            if (in_array($type, BasSettlement::INCOME_TAX_TYPES, true) && abs($net) >= 0.005) {
+            if (in_array($type, BasSettlement::INCOME_TAX_TYPES, true) && abs($net) >= 0.005
+                && class_exists(FrankingAccountEntry::class)) {
                 $this->recordFrankingEntry($settlement, $journal, $entity);
             }
 
@@ -283,7 +285,9 @@ class BasSettlementService
                 throw: true,
             );
 
-            $this->reverseFrankingEntry($settlement, $reversalId);
+            if (class_exists(FrankingAccountEntry::class)) {
+                $this->reverseFrankingEntry($settlement, $reversalId);
+            }
 
             $settlement->forceFill([
                 'reversal_transaction_id' => $reversalId,
@@ -306,7 +310,7 @@ class BasSettlementService
      * The amount is the settlement's bank leg: an exact offset pays and
      * refunds nothing, so it posts no entry.
      */
-    protected function recordFrankingEntry(BasSettlement $settlement, JournalEntry $journal, Entity $entity): FrankingAccountEntry
+    protected function recordFrankingEntry(BasSettlement $settlement, JournalEntry $journal, Entity $entity)
     {
         $pay = $settlement->direction === BasSettlement::DIRECTION_PAY;
 

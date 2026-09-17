@@ -1,0 +1,10 @@
+{
+    "name": "acacia/shares",
+    "description": "Acacia ERP shares, franking and dividends module",
+    "type": "acacia-module",
+    "autoload": {
+        "psr-4": {
+            "Modules\\Shares\\": ""
+        }
+    }
+}

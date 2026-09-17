@@ -3,9 +3,9 @@
 @section('content')
 
     @php
-        $isDraft = $declaration->status === \App\Models\DividendDeclaration::STATUS_DRAFT;
-        $isApproved = $declaration->status === \App\Models\DividendDeclaration::STATUS_APPROVED;
-        $isCompleted = $declaration->status === \App\Models\DividendDeclaration::STATUS_COMPLETED;
+        $isDraft = $declaration->status === \Modules\Shares\Models\DividendDeclaration::STATUS_DRAFT;
+        $isApproved = $declaration->status === \Modules\Shares\Models\DividendDeclaration::STATUS_APPROVED;
+        $isCompleted = $declaration->status === \Modules\Shares\Models\DividendDeclaration::STATUS_COMPLETED;
         $canCancel = $isDraft || $isApproved;
     @endphp
 
@@ -24,7 +24,7 @@
                 <span class="px-2.5 py-1 text-xs font-medium rounded-full {{ $badge }}">{{ $declaration->statusLabel() }}</span>
             </div>
             <p class="text-sm text-gray-500 mt-1">
-                {{ \App\Models\DividendDeclaration::dividendTypes()[$declaration->dividend_type] }} ·
+                {{ \Modules\Shares\Models\DividendDeclaration::dividendTypes()[$declaration->dividend_type] }} ·
                 {{ $declaration->shareClass?->code }} · FY{{ $declaration->financial_year }} ·
                 Declared {{ $declaration->declaration_date->format('d M Y') }} ·
                 Books close {{ $declaration->books_close_date->format('d M Y') }} ·
@@ -193,7 +193,7 @@
                                 </span>
                             </td>
                             <td class="px-4 py-2 text-right">
-                                @if($distribution->status === \App\Models\DividendDistribution::STATUS_PAID)
+                                @if($distribution->status === \Modules\Shares\Models\DividendDistribution::STATUS_PAID)
                                     <a href="{{ route('dividends.statements.pdf', $distribution) }}"
                                         class="text-indigo-600 hover:underline text-xs font-medium">Statement PDF</a>
                                 @endif

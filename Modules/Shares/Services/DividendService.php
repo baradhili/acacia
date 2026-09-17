@@ -1,14 +1,11 @@
 <?php
 
-namespace App\Services;
+namespace Modules\Shares\Services;
 
-use App\Mail\DividendStatementMail;
 use App\Models\CompanyProfile;
 use App\Models\CompanyShareholder;
-use App\Models\DividendDeclaration;
-use App\Models\DividendDistribution;
-use App\Models\FrankingAccountEntry;
-use App\Models\Shareholding;
+use App\Services\IfrsPosting;
+use App\Services\PeriodLockService;
 use Carbon\Carbon;
 use IFRS\Models\Account;
 use IFRS\Models\Entity;
@@ -17,6 +14,11 @@ use IFRS\Transactions\JournalEntry;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Modules\Shares\Mail\DividendStatementMail;
+use Modules\Shares\Models\DividendDeclaration;
+use Modules\Shares\Models\DividendDistribution;
+use Modules\Shares\Models\FrankingAccountEntry;
+use Modules\Shares\Models\Shareholding;
 
 /**
  * Dividend declaration lifecycle: eligibility calculation, franking credit

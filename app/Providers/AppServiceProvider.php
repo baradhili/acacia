@@ -5,14 +5,10 @@ namespace App\Providers;
 use App\Models\Bill;
 use App\Models\BillPayment;
 use App\Models\Client;
-use App\Models\DividendDeclaration;
-use App\Models\DividendDistribution;
-use App\Models\FrankingAccountEntry;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Project;
 use App\Models\PurchaseOrder;
-use App\Models\Shareholding;
 use App\Models\TimeEntry;
 use App\Nav\CoreNav;
 use App\Observers\AuditObserver;
@@ -62,9 +58,5 @@ class AppServiceProvider extends ServiceProvider
         Project::observe(AuditObserver::class);
         PurchaseOrder::observe(AuditObserver::class);
         TimeEntry::observe(AuditObserver::class);
-        Shareholding::observe(AuditObserver::class);
-        FrankingAccountEntry::observe(AuditObserver::class);
-        DividendDeclaration::observe(AuditObserver::class);
-        DividendDistribution::observe(AuditObserver::class);
     }
 }

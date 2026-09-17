@@ -26,7 +26,7 @@
 
         <form method="POST" action="{{ route('dividends.store') }}">
             @csrf
-            @include('dividends.form', ['declaration' => new \App\Models\DividendDeclaration()])
+            @include('dividends.form', ['declaration' => new \Modules\Shares\Models\DividendDeclaration()])
             <div class="mt-6 flex gap-3">
                 <button class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
                     Create draft declaration

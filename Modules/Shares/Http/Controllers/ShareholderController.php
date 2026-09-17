@@ -1,13 +1,14 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace Modules\Shares\Http\Controllers;
 
+use App\Http\Controllers\Controller;
 use App\Models\CompanyProfile;
 use App\Models\CompanyShareholder;
-use App\Models\Shareholding;
 use App\Services\IfrsPosting;
-use App\Services\ShareholdingService;
 use Illuminate\Http\Request;
+use Modules\Shares\Models\Shareholding;
+use Modules\Shares\Services\ShareholdingService;
 
 /**
  * Shareholder registry browser: holdings by class, the dated shareholding

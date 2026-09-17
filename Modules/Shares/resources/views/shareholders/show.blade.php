@@ -86,7 +86,7 @@
                             @forelse($shareholder->shareholdings as $holding)
                                 <tr>
                                     <td class="px-3 py-2">{{ $holding->transaction_date->format('d M Y') }}</td>
-                                    <td class="px-3 py-2">{{ \App\Models\Shareholding::types()[$holding->transaction_type] ?? $holding->transaction_type }}</td>
+                                    <td class="px-3 py-2">{{ \Modules\Shares\Models\Shareholding::types()[$holding->transaction_type] ?? $holding->transaction_type }}</td>
                                     <td class="px-3 py-2">{{ $holding->shareClass?->code }}</td>
                                     <td class="px-3 py-2 text-right font-medium {{ $holding->quantity < 0 ? 'text-red-600' : 'text-gray-900' }}">
                                         {{ number_format($holding->quantity) }}
@@ -102,12 +102,12 @@
                                     </td>
                                     <td class="px-3 py-2">{{ $holding->reference ?: '—' }}</td>
                                     <td class="px-3 py-2">
-                                        <span class="px-2 py-0.5 text-xs rounded-full {{ $holding->status === \App\Models\Shareholding::STATUS_ACTIVE ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500' }}">
-                                            {{ $holding->status === \App\Models\Shareholding::STATUS_ACTIVE ? 'Active' : 'Cancelled' }}
+                                        <span class="px-2 py-0.5 text-xs rounded-full {{ $holding->status === \Modules\Shares\Models\Shareholding::STATUS_ACTIVE ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500' }}">
+                                            {{ $holding->status === \Modules\Shares\Models\Shareholding::STATUS_ACTIVE ? 'Active' : 'Cancelled' }}
                                         </span>
                                     </td>
                                     <td class="px-3 py-2 text-right">
-                                        @if($holding->status === \App\Models\Shareholding::STATUS_ACTIVE)
+                                        @if($holding->status === \Modules\Shares\Models\Shareholding::STATUS_ACTIVE)
                                             <form method="POST" action="{{ route('shareholders.shareholdings.cancel', [$shareholder, $holding]) }}"
                                                 onsubmit="return confirm('Cancel this shareholding transaction?');">
                                                 @csrf
@@ -134,7 +134,7 @@
                     <div class="col-span-1">
                         <label class="block text-xs font-medium text-gray-500 mb-1">Type</label>
                         <select name="transaction_type" class="w-full border-gray-300 rounded-lg text-sm">
-                            @foreach(\App\Models\Shareholding::types() as $value => $label)
+                            @foreach(\Modules\Shares\Models\Shareholding::types() as $value => $label)
                                 <option value="{{ $value }}" {{ old('transaction_type') === $value ? 'selected' : '' }}>{{ $label }}</option>
                             @endforeach
                         </select>
@@ -201,7 +201,7 @@
                                     <td class="px-3 py-2 text-right">${{ number_format((float) $distribution->franking_credit, 2) }}</td>
                                     <td class="px-3 py-2 text-right">${{ number_format((float) $distribution->grossed_up_dividend, 2) }}</td>
                                     <td class="px-3 py-2">
-                                        @if($distribution->status === \App\Models\DividendDistribution::STATUS_PAID)
+                                        @if($distribution->status === \Modules\Shares\Models\DividendDistribution::STATUS_PAID)
                                             <a href="{{ route('dividends.statements.pdf', $distribution) }}"
                                                 class="text-indigo-600 hover:underline">PDF</a>
                                             @if($distribution->statement_sent)

@@ -1,11 +1,12 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace Modules\Shares\Http\Controllers;
 
-use App\Models\FrankingAccountEntry;
-use App\Services\FrankingService;
+use App\Http\Controllers\Controller;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Modules\Shares\Models\FrankingAccountEntry;
+use Modules\Shares\Services\FrankingService;
 
 /**
  * The notional franking account: manual entries (income tax paid, refunds,

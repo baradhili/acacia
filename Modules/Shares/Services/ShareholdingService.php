@@ -1,13 +1,13 @@
 <?php
 
-namespace App\Services;
+namespace Modules\Shares\Services;
 
 use App\Models\CompanyShareholder;
-use App\Models\DividendDeclaration;
 use App\Models\ShareClass;
-use App\Models\Shareholding;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Modules\Shares\Models\DividendDeclaration;
+use Modules\Shares\Models\Shareholding;
 
 /**
  * Shareholding transaction ledger management. Holdings as at any date are

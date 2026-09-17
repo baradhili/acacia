@@ -1,0 +1,17 @@
+{
+    "name": "Shares",
+    "alias": "shares",
+    "description": "The shareholding ledger, franking account and dividend runs.",
+    "keywords": [
+        "shares",
+        "dividends",
+        "franking"
+    ],
+    "priority": 0,
+    "version": "1.0.0",
+    "core": true,
+    "providers": [
+        "Modules\\Shares\\Providers\\SharesServiceProvider"
+    ],
+    "files": []
+}

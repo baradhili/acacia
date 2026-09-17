@@ -20,7 +20,7 @@
     <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">Dividend type</label>
         <select name="dividend_type" class="w-full border-gray-300 rounded-lg">
-            @foreach(\App\Models\DividendDeclaration::dividendTypes() as $value => $label)
+            @foreach(\Modules\Shares\Models\DividendDeclaration::dividendTypes() as $value => $label)
                 <option value="{{ $value }}" {{ old('dividend_type', $declaration->dividend_type ?? 'I') === $value ? 'selected' : '' }}>{{ $label }}</option>
             @endforeach
         </select>
