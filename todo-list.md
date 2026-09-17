@@ -6,7 +6,7 @@
 
 - [ ] Review - https://github.com/baradhili/resource_mgr and look to bring services, skills allocations concepts into acacia
 
-- [ ] Sales funnel/crm - targets, leads, plans
+- [x] Sales funnel/crm - targets, leads, plans - (Sep 2026, branch feat/crm-module) Done as Modules/Crm — the first module authored in place (migrations ship inside the module). Leads: guarded funnel (new → contacted → qualified → proposal → won/lost; loss reasons, re-open), estimated value + win probability, source, owner and the plan; index shows stage counts, open pipeline value, probability-weighted forecast and overdue follow-ups. Activities (call/email/meeting/note/task) log per lead. Winning = converting a proposal lead to a Client (details carried, lead stays linked) — the ERP seam. Targets: monthly sales goals (admin/accountant only) measured against won-lead value with progress bars. Sidebar Sales section + Sales pipeline dashboard widget via the module registries. Covered by Modules/Crm/Tests/CrmTest; suite 865. Not yet: email/calendar integrations, lead-to-estimate shortcut, per-owner targets.
 
 - [ ] https://docs.markwhen.com/ might be good to integrate into projects section 
 
