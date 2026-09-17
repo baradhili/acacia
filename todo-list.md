@@ -4,6 +4,8 @@
 
 - [x] When an invoice is cancelled, then if it has time entries associated with it - these should be freed up for re-assingment. - (Sep 2026) Verified fixed. Invoiced state is derived, never stored: TimeEntry::invoiceItem() only sees items on non-cancelled invoices, so cancelling an invoice automatically releases its entries — no cleanup step to forget. Every consumer reads that relation (the unbilled-time widget, dashboard, the create-from-time-entries picker and store screening, and the unapprove guard — an entry on a cancelled invoice can be unapproved back to draft and re-invoiced). Covered by InvoiceTest::test_cancelling_invoice_releases_its_time_entries and TimeEntryLifecycleTest's unapprove-after-cancel case, both passing.
 
+- [ ] Review - https://github.com/baradhili/resource_mgr and look to bring services, skills allocations concepts into acacia
+
 - [ ] Sales funnel/crm - targets, leads, plans
 
 - [x] move setup section under profile to own dropdown alongside Reports, Accounting, Shares
@@ -14,7 +16,7 @@
 
 - [x] Company details: Bank info - bsb/account/name - also use on invoice - (Sep 2026) Done. Company Details gained bank account name, BSB and account number fields under the address card (same column shapes the shareholder registry uses). Invoices print them as a Payment Details block below the notes — the PDF in the notes styling, the screen as the matching card — with a bare 6-digit BSB displaying as 123-456; blank details omit the block everywhere. Covered by CompanyProfileTest::test_company_profile_update_saves_bank_details and InvoiceTest::test_invoice_screen_shows_company_bank_payment_details.
 
-- [ ] Look at and [GitHub - tiagofcp/laraestimate: LaraEstimate is a complete Estimates/Quotes System made with Laravel 7 and VueJS. · GitHub](https://github.com/tiagofcp/laraestimate) update estimates to use concepts - link it with services
+- [x] Look at and [GitHub - tiagofcp/laraestimate: LaraEstimate is a complete Estimates/Quotes System made with Laravel 7 and VueJS. · GitHub](https://github.com/tiagofcp/laraestimate) update estimates to use concepts - link it with services - (Sep 2026, branch feat/estimates-services) Done. From LaraEstimate's concepts: estimate lines carry a Section label (consecutive same-label lines group under a heading on the estimate screen) and can be flagged Optional extras — excluded from the committed subtotal/tax/total, quoted alongside as an "Optional extras" figure, and only invoiced when Convert to Invoice ticks "include optional items" (their customer-togglable dynamic pricing adapted to our accept/convert lifecycle; shareable client links not adopted — estimates are sent manually). Services linkage: lines reference the catalogue Service (service_id fk kept through description/price tailoring, untied if the catalogue entry is deleted), and the create/edit forms offer a per-line Service select that pre-fills a blank description and zero price with the service's standard rate. Drive-by fix: the estimates.edit view never existed — edit and duplicate 500'd; it now mirrors create pre-filled, and update keeps the new line fields via shared validation/persistence helpers. Covered by five new EstimateTest cases (848 total passing).
 
 - [ ] Make things modular using nwidart - for plugins from somewhere - maybe just github first off?
 
