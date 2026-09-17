@@ -8,7 +8,7 @@
 
 - [ ] Sales funnel/crm - targets, leads, plans
 
-- [ ] https://docs.markwhen.com/ might be good to integrate into projects section - probably should modularise things soon
+- [ ] https://docs.markwhen.com/ might be good to integrate into projects section 
 
 - [x] move setup section under profile to own dropdown alongside Reports, Accounting, Shares
 
