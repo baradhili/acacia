@@ -1,0 +1,10 @@
+{
+    "name": "acacia/crm",
+    "description": "Acacia ERP sales funnel and CRM module",
+    "type": "acacia-module",
+    "autoload": {
+        "psr-4": {
+            "Modules\\Crm\\": ""
+        }
+    }
+}

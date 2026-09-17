@@ -1,6 +1,7 @@
 {
+    "Crm": true,
     "Payroll": true,
+    "Probe": false,
     "Reconciliation": true,
-    "Shares": true,
-    "Probe": false
+    "Shares": true
 }
