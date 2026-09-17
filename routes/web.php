@@ -19,6 +19,7 @@ use App\Http\Controllers\FinancialYearController;
 use App\Http\Controllers\FrankingAccountController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\LogoController;
+use App\Http\Controllers\ModulesController;
 use App\Http\Controllers\OpeningBalanceController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PrepaymentController;
@@ -73,6 +74,16 @@ Route::middleware('auth')->group(function () {
         Route::get('/backups', [BackupController::class, 'index'])->name('backups.index');
         Route::post('/backups/run', [BackupController::class, 'run'])->name('backups.run');
         Route::put('/backups/settings', [BackupController::class, 'update'])->name('backups.settings.update');
+    });
+
+    // Modules (admin only) — the module management screen
+    Route::middleware('role:admin')->group(function () {
+        Route::get('/modules', [ModulesController::class, 'index'])->name('modules.index');
+        Route::post('/modules/install', [ModulesController::class, 'installFromGit'])->name('modules.install');
+        Route::post('/modules/{module}/enable', [ModulesController::class, 'enable'])->name('modules.enable');
+        Route::post('/modules/{module}/disable', [ModulesController::class, 'disable'])->name('modules.disable');
+        Route::post('/modules/{module}/update', [ModulesController::class, 'update'])->name('modules.update');
+        Route::post('/modules/{module}/uninstall', [ModulesController::class, 'uninstall'])->name('modules.uninstall');
     });
 
     // Opening balances (admin or accountant)

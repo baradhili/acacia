@@ -79,6 +79,10 @@
                         class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                         Users
                     </a>
+                    <a href="{{ route('modules.index') }}"
+                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                        Modules
+                    </a>
                 @endrole
                 <div class="border-t border-gray-100 my-1"></div>
                 <a href="{{ route('profile.edit') }}"
