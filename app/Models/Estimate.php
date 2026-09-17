@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -43,10 +42,15 @@ class Estimate extends Model
 
     // Status constants
     const STATUS_DRAFT = 'draft';
+
     const STATUS_SENT = 'sent';
+
     const STATUS_ACCEPTED = 'accepted';
+
     const STATUS_REJECTED = 'rejected';
+
     const STATUS_EXPIRED = 'expired';
+
     const STATUS_CONVERTED = 'converted';
 
     // Valid state transitions
@@ -91,7 +95,7 @@ class Estimate extends Model
             ->first();
 
         if ($lastEstimate) {
-            preg_match('/EST-' . $year . '-(\d+)/', $lastEstimate->estimate_number, $matches);
+            preg_match('/EST-'.$year.'-(\d+)/', $lastEstimate->estimate_number, $matches);
             $nextNumber = isset($matches[1]) ? ((int) $matches[1]) + 1 : 1;
         } else {
             $nextNumber = 1;
@@ -134,13 +138,16 @@ class Estimate extends Model
     }
 
     /**
-     * Recalculate estimate totals from items
+     * Recalculate estimate totals from items. Optional lines are
+     * quoted as take-it-or-leave-it extras — they are excluded from
+     * the committed figures (see optionalTotal) and only join the
+     * totals when the conversion asks for them.
      */
     public function recalculateTotals(): void
     {
         // Unset cached items to ensure we get fresh data from DB
         $this->unsetRelation('items');
-        $items = $this->items;
+        $items = $this->items->where('is_optional', false);
 
         $subtotal = $items->sum('total');
         $taxAmount = $items->sum('tax_amount');
@@ -159,6 +166,27 @@ class Estimate extends Model
     }
 
     /**
+     * The optional lines' total (tax-inclusive, discounts applied) —
+     * shown alongside the committed total as the extras on offer.
+     */
+    public function getOptionalTotalAttribute(): float
+    {
+        $this->unsetRelation('items');
+
+        return round((float) $this->items->where('is_optional', true)->sum('total'), 2);
+    }
+
+    /**
+     * Whether the estimate carries optional lines at all.
+     */
+    public function hasOptionalItems(): bool
+    {
+        $this->unsetRelation('items');
+
+        return $this->items->contains(fn ($item) => $item->is_optional);
+    }
+
+    /**
      * Check if estimate is expired
      */
     public function getIsExpiredAttribute(): bool
@@ -172,6 +200,7 @@ class Estimate extends Model
     public function canTransitionTo(string $status): bool
     {
         $allowedTransitions = self::$transitions[$this->status] ?? [];
+
         return in_array($status, $allowedTransitions);
     }
 
@@ -188,11 +217,12 @@ class Estimate extends Model
      */
     public function transitionTo(string $status): bool
     {
-        if (!$this->canTransitionTo($status)) {
+        if (! $this->canTransitionTo($status)) {
             return false;
         }
 
         $this->update(['status' => $status]);
+
         return true;
     }
 
@@ -221,16 +251,18 @@ class Estimate extends Model
     }
 
     /**
-     * Convert estimate to invoice
+     * Convert estimate to invoice. Optional lines are left behind
+     * unless $includeOptional — the accepted extras ride along.
      */
-    public function convertToInvoice(): ?Invoice
+    public function convertToInvoice(bool $includeOptional = false): ?Invoice
     {
-        if (!$this->canTransitionTo(self::STATUS_CONVERTED)) {
+        if (! $this->canTransitionTo(self::STATUS_CONVERTED)) {
             return null;
         }
 
         // Ensure fresh items data
         $this->unsetRelation('items');
+        $items = $this->items->filter(fn ($item) => $includeOptional || ! $item->is_optional)->values();
 
         $invoice = Invoice::createWithUniqueNumber([
             'client_id' => $this->client_id,
@@ -243,7 +275,7 @@ class Estimate extends Model
         ]);
 
         // Copy items
-        foreach ($this->items as $estimateItem) {
+        foreach ($items as $estimateItem) {
             $invoice->items()->create([
                 'description' => $estimateItem->description,
                 'quantity' => $estimateItem->quantity,
@@ -271,7 +303,7 @@ class Estimate extends Model
      */
     public function getFormattedTotalAttribute(): string
     {
-        return config('australian.currency.symbol', 'A$') . number_format($this->total, 2);
+        return config('australian.currency.symbol', 'A$').number_format($this->total, 2);
     }
 
     /**

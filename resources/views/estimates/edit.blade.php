@@ -1,13 +1,15 @@
 @extends('layouts.app')
-@section('title', 'Create Estimate')
+@section('title', 'Edit Estimate')
 @section('content')
 
     <div class="mb-6">
-        <h1 class="text-2xl font-bold text-gray-800">Create Estimate</h1>
+        <h1 class="text-2xl font-bold text-gray-800">Edit Estimate</h1>
+        <p class="text-sm text-gray-500 mt-1">{{ $estimate->estimate_number }} — only draft estimates can be edited.</p>
     </div>
 
-    <form action="{{ route('estimates.store') }}" method="POST" class="space-y-6">
+    <form action="{{ route('estimates.update', $estimate) }}" method="POST" class="space-y-6">
         @csrf
+        @method('PUT')
 
         <div class="bg-white rounded-lg shadow p-6">
             <h2 class="text-lg font-semibold text-gray-800 mb-4">Client & Project</h2>
@@ -19,7 +21,7 @@
                         class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
                         <option value="">Select Client</option>
                         @foreach($clients as $id => $name)
-                            <option value="{{ $id }}" {{ old('client_id', $selectedClient?->id) == $id ? 'selected' : '' }}>{{ $name }}</option>
+                            <option value="{{ $id }}" {{ old('client_id', $estimate->client_id) == $id ? 'selected' : '' }}>{{ $name }}</option>
                         @endforeach
                     </select>
                     @error('client_id')
@@ -32,15 +34,14 @@
                     <select name="project_id" id="projectSelect"
                         class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
                         <option value="">Select Project (optional)</option>
-                        @php
-                            $allProjects = App\Models\Project::with('client')->orderBy('name')->get();
-                        @endphp
-                        @foreach($allProjects as $project)
-                            <option value="{{ $project->id }}"
-                                data-client-id="{{ $project->client_id }}"
-                                {{ old('project_id', $selectedProject?->id) == $project->id ? 'selected' : '' }}>
-                                {{ $project->name }} ({{ $project->client->name ?? 'No client' }})
-                            </option>
+                        @foreach($projects as $group)
+                            @foreach($group as $project)
+                                <option value="{{ $project->id }}"
+                                    data-client-id="{{ $project->client_id }}"
+                                    {{ old('project_id', $estimate->project_id) == $project->id ? 'selected' : '' }}>
+                                    {{ $project->name }} ({{ $project->client->name ?? 'No client' }})
+                                </option>
+                            @endforeach
                         @endforeach
                     </select>
                     @error('project_id')
@@ -56,7 +57,7 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Issue Date *</label>
-                    <input type="date" name="issue_date" value="{{ old('issue_date', now()->toDateString()) }}" required
+                    <input type="date" name="issue_date" value="{{ old('issue_date', $estimate->issue_date?->toDateString()) }}" required
                         class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
                     @error('issue_date')
                         <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
@@ -65,7 +66,7 @@
 
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Valid Until *</label>
-                    <input type="date" name="valid_until" value="{{ old('valid_until', now()->addDays(30)->toDateString()) }}" required
+                    <input type="date" name="valid_until" value="{{ old('valid_until', $estimate->valid_until?->toDateString()) }}" required
                         class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
                     @error('valid_until')
                         <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
@@ -76,13 +77,13 @@
             <div class="mt-4">
                 <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
                 <textarea name="notes" rows="2"
-                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">{{ old('notes') }}</textarea>
+                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">{{ old('notes', $estimate->notes) }}</textarea>
             </div>
 
             <div class="mt-4">
                 <label class="block text-sm font-medium text-gray-700 mb-1">Terms & Conditions</label>
                 <textarea name="terms" rows="2"
-                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">{{ old('terms', config('australian.estimate_terms', 'This estimate is valid for 30 days from the issue date.')) }}</textarea>
+                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">{{ old('terms', $estimate->terms) }}</textarea>
             </div>
         </div>
 
@@ -90,7 +91,7 @@
             <h2 class="text-lg font-semibold text-gray-800 mb-4">Line Items</h2>
 
             <div id="itemsContainer">
-                @php $items = old('items', [[]]); @endphp
+                @php $items = old('items', $estimate->items->all()); @endphp
                 @foreach($items as $index => $item)
                     <div class="item-row mb-4 p-4 bg-gray-50 rounded-lg">
                         <div class="grid grid-cols-12 gap-2 mb-2">
@@ -107,7 +108,7 @@
                                     <option value="">— free text —</option>
                                     @foreach($services as $service)
                                         <option value="{{ $service->id }}" data-rate="{{ $service->hourly_rate }}"
-                                            {{ (string) ($item['service_id'] ?? '') === (string) $service->id ? 'selected' : '' }}>
+                                            {{ (string) old('items.'.$index.'.service_id', $item['service_id'] ?? '') === (string) $service->id ? 'selected' : '' }}>
                                             {{ $service->name }}@if($service->hourly_rate !== null) — {{ $service->formattedRate() }}/hr @endif
                                         </option>
                                     @endforeach
@@ -171,11 +172,11 @@
         </div>
 
         <div class="flex justify-end gap-4">
-            <a href="{{ route('estimates.index') }}" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-2 rounded-lg">
+            <a href="{{ route('estimates.show', $estimate) }}" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-2 rounded-lg">
                 Cancel
             </a>
             <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg">
-                Create Estimate
+                Update Estimate
             </button>
         </div>
     </form>
@@ -246,7 +247,7 @@
     </template>
 
     <script>
-        let itemIndex = {{ count(old('items', [[]])) }};
+        let itemIndex = {{ count($items) }};
 
         document.getElementById('addItemBtn').addEventListener('click', function() {
             const container = document.getElementById('itemsContainer');
