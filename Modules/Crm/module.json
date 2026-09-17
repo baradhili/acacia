@@ -1,0 +1,19 @@
+{
+    "name": "Crm",
+    "alias": "crm",
+    "description": "Sales funnel and CRM: leads through the pipeline, activity history, conversion to clients, and monthly sales targets.",
+    "keywords": [
+        "crm",
+        "leads",
+        "sales",
+        "funnel",
+        "targets"
+    ],
+    "priority": 0,
+    "version": "1.0.0",
+    "core": true,
+    "providers": [
+        "Modules\\Crm\\Providers\\CrmServiceProvider"
+    ],
+    "files": []
+}

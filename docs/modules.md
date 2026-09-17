@@ -14,6 +14,7 @@ hook into.
 | `Payroll` | Pay runs, employees, PAYG withholding + super (NAT 1004), PSI assessment | config exposed as `config('payroll.*')` |
 | `Reconciliation` | Bank statement import, matching + learning, counterparty rules | bank tables live in the core squashed schema |
 | `Shares` | Shareholding ledger, franking account, dividend runs | company identity (CompanyShareholder/ShareClass) stays core |
+| `Crm` | Leads through the sales funnel, activity history, client conversion, monthly sales targets | first module authored in place (its migrations ship in the module) |
 
 All three carry `"core": true` in their manifest — they ship with the app and
 cannot be uninstalled from the GUI (only disabled). `modules_statuses.json`
