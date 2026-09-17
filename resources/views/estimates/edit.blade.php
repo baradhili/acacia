@@ -92,6 +92,12 @@
 
             <div id="itemsContainer">
                 @php $items = old('items', $estimate->items->all()); @endphp
+                @php
+                    // Next row index past the highest existing key —
+                    // removed rows leave gaps in old('items'), so count()
+                    // could collide with a surviving key.
+                    $nextIndex = $items !== [] ? max(array_keys($items)) + 1 : 0;
+                @endphp
                 @foreach($items as $index => $item)
                     <div class="item-row mb-4 p-4 bg-gray-50 rounded-lg">
                         <div class="grid grid-cols-12 gap-2 mb-2">
@@ -107,7 +113,7 @@
                                 <select name="items[{{ $index }}][service_id]" class="service-select rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
                                     <option value="">— free text —</option>
                                     @foreach($services as $service)
-                                        <option value="{{ $service->id }}" data-rate="{{ $service->hourly_rate }}"
+                                        <option value="{{ $service->id }}" data-name="{{ $service->name }}" data-rate="{{ $service->hourly_rate }}"
                                             {{ (string) old('items.'.$index.'.service_id', $item['service_id'] ?? '') === (string) $service->id ? 'selected' : '' }}>
                                             {{ $service->name }}@if($service->hourly_rate !== null) — {{ $service->formattedRate() }}/hr @endif
                                         </option>
@@ -195,7 +201,7 @@
                     <select name="items[__INDEX__][service_id]" class="service-select rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
                         <option value="">— free text —</option>
                         @foreach($services as $service)
-                            <option value="{{ $service->id }}" data-rate="{{ $service->hourly_rate }}">
+                            <option value="{{ $service->id }}" data-name="{{ $service->name }}" data-rate="{{ $service->hourly_rate }}">
                                 {{ $service->name }}@if($service->hourly_rate !== null) — {{ $service->formattedRate() }}/hr @endif
                             </option>
                         @endforeach
@@ -247,11 +253,18 @@
     </template>
 
     <script>
-        let itemIndex = {{ count($items) }};
+        let itemIndex = {{ $nextIndex }};
 
         document.getElementById('addItemBtn').addEventListener('click', function() {
             const container = document.getElementById('itemsContainer');
             const template = document.getElementById('itemTemplate').innerHTML;
+
+            // Skip any index a surviving row still uses (sparse old()
+            // keys or rows re-added after removal).
+            while (container.querySelector('[name="items[' + itemIndex + '][description]"]') !== null) {
+                itemIndex++;
+            }
+
             const html = template.replace(/__INDEX__/g, itemIndex);
             container.insertAdjacentHTML('beforeend', html);
             itemIndex++;
@@ -302,8 +315,10 @@
         attachEventListeners();
 
         // Selecting a catalogue service pre-fills the blank fields: the
-        // description with the service name, the unit price with its
-        // standard rate (fixed-fee services carry no rate).
+        // description with the service name (dataset.name — the visible
+        // label interleaves the rate, so it must not be parsed), the
+        // unit price with its standard rate (fixed-fee services carry
+        // no rate).
         document.getElementById('itemsContainer').addEventListener('change', function (event) {
             if (!event.target.matches('.service-select')) return;
 
@@ -312,8 +327,8 @@
 
             const row = event.target.closest('.item-row');
             const description = row.querySelector('input[name*="[description]"]');
-            if (description && !description.value.trim()) {
-                description.value = option.textContent.split(' — ')[0].trim();
+            if (description && !description.value.trim() && option.dataset.name) {
+                description.value = option.dataset.name;
             }
 
             const rate = parseFloat(option.dataset.rate);
