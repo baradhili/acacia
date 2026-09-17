@@ -324,7 +324,3 @@
 - [x] display the uploaded logo in the top left if it exists when viewing the bill record
 
 - [x] use company logo that is uploaded on pdf invoice
-
-- [ ] 
-
-- [ ] 
