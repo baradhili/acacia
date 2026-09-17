@@ -31,21 +31,12 @@
         </button>
     </div>
 
-    <!-- Widget Grid -->
+    <!-- Widget Grid — renders the widget registry (core + module
+         contributions); ids match the drag-order preferences keys. -->
     <div id="widget-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div class="widget-card" data-widget="TotalClientsWidget">@widget(\App\Widgets\TotalClientsWidget::class)</div>
-        <div class="widget-card" data-widget="OutstandingInvoicesWidget">@widget(\App\Widgets\OutstandingInvoicesWidget::class)</div>
-        <div class="widget-card" data-widget="HoursThisMonthWidget">@widget(\App\Widgets\HoursThisMonthWidget::class)</div>
-        <div class="widget-card" data-widget="GstPayableWidget">@widget(\App\Widgets\GstPayableWidget::class)</div>
-        <div class="widget-card md:col-span-2 lg:col-span-4" data-widget="CashFlowWidget">@widget(\App\Widgets\CashFlowWidget::class)</div>
-        <div class="widget-card md:col-span-1 lg:col-span-2" data-widget="ARAgingWidget">@widget(\App\Widgets\ARAgingWidget::class)</div>
-        <div class="widget-card md:col-span-1 lg:col-span-2" data-widget="BankBalanceWidget">@widget(\App\Widgets\BankBalanceWidget::class)</div>
-        <div class="widget-card md:col-span-1 lg:col-span-1" data-widget="RecentInvoicesWidget">@widget(\App\Widgets\RecentInvoicesWidget::class)</div>
-        <div class="widget-card md:col-span-1 lg:col-span-1" data-widget="RecentPaymentsWidget">@widget(\App\Widgets\RecentPaymentsWidget::class)</div>
-        <div class="widget-card md:col-span-1 lg:col-span-2" data-widget="OutstandingPOBudgetsWidget">@widget(\App\Widgets\OutstandingPOBudgetsWidget::class)</div>
-        <div class="widget-card md:col-span-1 lg:col-span-2" data-widget="UnbilledTimeWidget">@widget(\App\Widgets\UnbilledTimeWidget::class)</div>
-        <div class="widget-card md:col-span-1 lg:col-span-2" data-widget="PnLTrendWidget">@widget(\App\Widgets\PnLTrendWidget::class)</div>
-
+        @foreach ($dashboardWidgets as $widget)
+            <div class="widget-card {{ $widget['span'] }}" data-widget="{{ $widget['id'] }}">@widget($widget['class'])</div>
+        @endforeach
     </div>
 </div>
 @endsection

@@ -5,7 +5,10 @@ namespace Tests\Feature;
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\User;
+use App\Support\Nav;
+use App\Support\Widgets;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Route;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -267,5 +270,60 @@ class NavigationTest extends TestCase
             $response = $this->get($page);
             $response->assertStatus(200);
         }
+    }
+
+    /**
+     * The registry contract: every registered link must resolve to a
+     * real route (catches stale route names at CI time), role gates
+     * match the previous hardcoded @hasanyrole guards, and module or
+     * core additions can slot in by position.
+     */
+    public function test_registry_items_resolve_routes_and_respect_roles(): void
+    {
+        $nav = app(Nav::class);
+
+        // Every registered route name exists (sidebar, topbar, children).
+        $all = collect($nav->sidebar())
+            ->merge($nav->topbar())
+            ->flatMap(fn ($item) => isset($item['children'])
+                ? collect($item['children'])->push($item)
+                : collect([$item]))
+            ->filter(fn ($item) => ($item['type'] ?? null) === 'link');
+
+        $routes = collect(Route::getRoutes()->getRoutesByName())->keys();
+        foreach ($all as $item) {
+            // Add-shortcut routes are extras, not the link itself.
+            $this->assertTrue(
+                $routes->contains($item['route']) || isset($item['add']),
+                "Nav item {$item['label']} points at missing route {$item['route']}"
+            );
+        }
+
+        // Role filtering: staff keeps the ungated items, loses the gated.
+        $this->actingAs($this->staff);
+        $this->assertContains('Reports', array_column($nav->topbar(), 'label'));
+        $this->assertNotContains('Accounting', array_column($nav->topbar(), 'label'));
+        $this->assertNotContains('Setup', array_column($nav->topbar(), 'label'));
+        $this->assertNotContains('Payroll', array_column($nav->sidebar(), 'label'));
+
+        $this->actingAs($this->admin);
+        foreach (['Reports', 'Accounting', 'Shares', 'Setup'] as $label) {
+            $this->assertContains($label, array_column($nav->topbar(), 'label'));
+        }
+        $this->assertContains('Payroll', array_column($nav->sidebar(), 'label'));
+    }
+
+    public function test_dashboard_renders_the_widget_registry(): void
+    {
+        $widgets = app(Widgets::class);
+
+        $this->actingAs($this->admin)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('data-widget="TotalClientsWidget"', false)
+            ->assertSee('data-widget="PnLTrendWidget"', false);
+
+        $this->assertNotEmpty($widgets->all());
+        $this->assertContains('CashFlowWidget', array_column($widgets->all(), 'id'));
     }
 }
