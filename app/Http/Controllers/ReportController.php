@@ -1103,7 +1103,7 @@ class ReportController extends Controller
     }
 
     /**
-     * The previous financial year's net BAS total when it has not been
+     * The previous financial year's BAS totals when its net has not been
      * settled — the first line of the report table, so a year that was
      * never paid to the ATO cannot quietly disappear. Null (no line)
      * when the prior year netted to nothing, or once a GST settlement
@@ -1111,7 +1111,7 @@ class ReportController extends Controller
      * settlement screen records, which one catch-up payment clears
      * across any number of quarters.
      *
-     * @return array{fy_end: int, start: Carbon, end: Carbon, net: float}|null
+     * @return array{fy_end: int, start: Carbon, end: Carbon, totals: array}|null
      */
     protected function priorYearUnsettled(int $fyEnd): ?array
     {
@@ -1133,7 +1133,7 @@ class ReportController extends Controller
             'fy_end' => $fyEnd - 1,
             'start' => $prior['fyStart'],
             'end' => $prior['fyEnd'],
-            'net' => $net,
+            'totals' => $prior['totals'],
         ];
     }
 

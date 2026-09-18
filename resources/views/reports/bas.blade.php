@@ -103,22 +103,33 @@
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
                             @if (($priorYear ?? null))
+                                @php($p = $priorYear['totals'])
                                 <tr class="bg-amber-50">
                                     <td class="px-4 py-3 text-sm font-semibold text-amber-900">FY{{ $priorYear['fy_end'] }} total</td>
                                     <td class="px-4 py-3 text-sm text-amber-800 whitespace-nowrap">{{ $priorYear['start']->format('d/m/Y') }} – {{ $priorYear['end']->format('d/m/Y') }}</td>
-                                    <td class="px-4 py-3 text-sm text-amber-800" colspan="7">
-                                        Prior year net BAS not settled with the ATO
-                                        @hasanyrole('admin|accountant')
-                                            — <a href="{{ route('bas-settlements.index') }}" class="underline hover:text-amber-950">record the settlement</a>
-                                        @endhasanyrole
-                                    </td>
-                                    <td class="px-4 py-3 text-sm text-right font-semibold {{ $priorYear['net'] >= 0 ? 'text-amber-900' : 'text-indigo-600' }}">
-                                        ${{ number_format($priorYear['net'], 2) }}
-                                        <span class="block text-xs font-normal {{ $priorYear['net'] >= 0 ? 'text-amber-700' : 'text-indigo-500' }}">
-                                            {{ $priorYear['net'] >= 0 ? 'payable, unsettled' : 'refundable, unsettled' }}
+                                    <td class="px-4 py-3 text-sm text-amber-900 text-right">${{ number_format($p['g1'], 2) }}</td>
+                                    <td class="px-4 py-3 text-sm text-amber-900 text-right">${{ number_format($p['g10'], 2) }}</td>
+                                    <td class="px-4 py-3 text-sm text-amber-900 text-right">${{ number_format($p['g11'], 2) }}</td>
+                                    <td class="px-4 py-3 text-sm text-amber-900 text-right">${{ number_format($p['w1'], 2) }}</td>
+                                    <td class="px-4 py-3 text-sm text-amber-900 text-right">${{ number_format($p['w2'], 2) }}</td>
+                                    <td class="px-4 py-3 text-sm text-green-600 text-right font-medium">${{ number_format($p['gst_sales'], 2) }}</td>
+                                    <td class="px-4 py-3 text-sm text-red-600 text-right font-medium">${{ number_format($p['gst_purchases'], 2) }}</td>
+                                    <td class="px-4 py-3 text-sm text-right font-semibold {{ $p['net'] >= 0 ? 'text-amber-900' : 'text-indigo-600' }}">
+                                        ${{ number_format($p['net'], 2) }}
+                                        <span class="block text-xs font-normal {{ $p['net'] >= 0 ? 'text-amber-700' : 'text-indigo-500' }}">
+                                            {{ $p['net'] >= 0 ? 'payable, unsettled' : 'refundable, unsettled' }}
                                         </span>
                                     </td>
-                                    <td class="px-4 py-3 text-xs text-amber-700">before Q1</td>
+                                    <td class="px-4 py-3 text-sm">
+                                        <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800"
+                                            title="Prior year net BAS not settled with the ATO">
+                                            Not settled
+                                        </span>
+                                        @hasanyrole('admin|accountant')
+                                            <a href="{{ route('bas-settlements.index') }}"
+                                                class="block text-xs text-amber-700 underline hover:text-amber-900 mt-1">Record it</a>
+                                        @endhasanyrole
+                                    </td>
                                 </tr>
                             @endif
                             @foreach ($statement['quarters'] as $q)

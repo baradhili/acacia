@@ -13,7 +13,7 @@ class BasExport implements FromCollection, ShouldAutoSize, WithTitle
 
     protected $statement;
 
-    /** @var array{fy_end: int, start: Carbon, end: Carbon, net: float}|null */
+    /** @var array{fy_end: int, start: Carbon, end: Carbon, totals: array}|null */
     protected $priorYear;
 
     public function __construct(int $fyEnd, array $statement, ?array $priorYear = null)
@@ -47,17 +47,18 @@ class BasExport implements FromCollection, ShouldAutoSize, WithTitle
         ]);
 
         if ($this->priorYear !== null) {
+            $p = $this->priorYear['totals'];
             $data->push([
-                'FY'.$this->priorYear['fy_end'].' total',
+                'FY'.$this->priorYear['fy_end'].' total (not settled with the ATO)',
                 $this->priorYear['start']->format('d/m/Y').' - '.$this->priorYear['end']->format('d/m/Y'),
-                'Prior year net BAS not settled with the ATO',
-                '',
-                '',
-                '',
-                '',
-                '',
-                '',
-                number_format($this->priorYear['net'], 2),
+                number_format($p['g1'], 2),
+                number_format($p['g10'], 2),
+                number_format($p['g11'], 2),
+                number_format($p['w1'], 2),
+                number_format($p['w2'], 2),
+                number_format($p['gst_sales'], 2),
+                number_format($p['gst_purchases'], 2),
+                number_format($p['net'], 2),
             ]);
         }
 

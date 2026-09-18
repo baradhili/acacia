@@ -99,12 +99,13 @@ class BasPriorYearLineTest extends TestCase
             ->get('/reports/bas?fy=2027')
             ->assertOk()
             ->assertSee('FY2026 total', false)
-            ->assertSee('Prior year net BAS not settled with the ATO', false)
+            ->assertSee('Not settled', false)
             ->assertSee('payable, unsettled', false)
             ->assertSee('1,000.00', false)
             ->assertViewHas('priorYear', fn ($prior) => $prior !== null
                 && $prior['fy_end'] === 2026
-                && abs($prior['net'] - 1000.0) < 0.005);
+                && abs($prior['totals']['gst_sales'] - 1000.0) < 0.005
+                && abs($prior['totals']['net'] - 1000.0) < 0.005);
     }
 
     public function test_the_line_clears_once_a_settlement_covers_the_prior_year(): void

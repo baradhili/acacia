@@ -74,11 +74,18 @@
         </thead>
         <tbody>
             @if (($priorYear ?? null))
+            @php($p = $priorYear['totals'])
             <tr class="prior-row">
-                <td>FY{{ $priorYear['fy_end'] }} total</td>
+                <td>FY{{ $priorYear['fy_end'] }} total<br><small>not settled with the ATO</small></td>
                 <td>{{ $priorYear['start']->format('d/m/Y') }} – {{ $priorYear['end']->format('d/m/Y') }}</td>
-                <td class="text-right" colspan="7">Prior year net BAS not settled with the ATO</td>
-                <td class="text-right">${{ number_format($priorYear['net'], 2) }}</td>
+                <td class="text-right">${{ number_format($p['g1'], 2) }}</td>
+                <td class="text-right">${{ number_format($p['g10'], 2) }}</td>
+                <td class="text-right">${{ number_format($p['g11'], 2) }}</td>
+                <td class="text-right">${{ number_format($p['w1'], 2) }}</td>
+                <td class="text-right">${{ number_format($p['w2'], 2) }}</td>
+                <td class="text-right">${{ number_format($p['gst_sales'], 2) }}</td>
+                <td class="text-right">${{ number_format($p['gst_purchases'], 2) }}</td>
+                <td class="text-right">${{ number_format($p['net'], 2) }}</td>
             </tr>
             @endif
             @foreach ($statement['quarters'] as $q)
