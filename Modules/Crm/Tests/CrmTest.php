@@ -396,6 +396,7 @@ class CrmTest extends TestCase
             ->get('/dashboard')
             ->assertOk()
             ->assertSee('data-widget="PipelineWidget"', false)
-            ->assertSee('Sales pipeline');
+            ->assertSee('Sales Pipeline')
+            ->assertSee('widget-handle');
     }
 }
