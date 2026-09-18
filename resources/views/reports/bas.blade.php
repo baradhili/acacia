@@ -102,6 +102,25 @@
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
+                            @if (($priorYear ?? null))
+                                <tr class="bg-amber-50">
+                                    <td class="px-4 py-3 text-sm font-semibold text-amber-900">FY{{ $priorYear['fy_end'] }} total</td>
+                                    <td class="px-4 py-3 text-sm text-amber-800 whitespace-nowrap">{{ $priorYear['start']->format('d/m/Y') }} – {{ $priorYear['end']->format('d/m/Y') }}</td>
+                                    <td class="px-4 py-3 text-sm text-amber-800" colspan="7">
+                                        Prior year net BAS not settled with the ATO
+                                        @hasanyrole('admin|accountant')
+                                            — <a href="{{ route('bas-settlements.index') }}" class="underline hover:text-amber-950">record the settlement</a>
+                                        @endhasanyrole
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-right font-semibold {{ $priorYear['net'] >= 0 ? 'text-amber-900' : 'text-indigo-600' }}">
+                                        ${{ number_format($priorYear['net'], 2) }}
+                                        <span class="block text-xs font-normal {{ $priorYear['net'] >= 0 ? 'text-amber-700' : 'text-indigo-500' }}">
+                                            {{ $priorYear['net'] >= 0 ? 'payable, unsettled' : 'refundable, unsettled' }}
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 text-xs text-amber-700">before Q1</td>
+                                </tr>
+                            @endif
                             @foreach ($statement['quarters'] as $q)
                                 <tr>
                                     <td class="px-4 py-3 text-sm font-medium text-gray-900">{{ $q['label'] }}</td>

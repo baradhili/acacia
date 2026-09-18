@@ -16,6 +16,7 @@
         .text-red { color: #dc2626; }
         .text-green { color: #16a34a; }
         .total-row { font-weight: bold; background-color: #f5f5f5; }
+        .prior-row { background-color: #fffbeb; font-weight: 600; }
         .summary { margin-bottom: 30px; }
         .summary-box {
             display: inline-block;
@@ -72,6 +73,14 @@
             </tr>
         </thead>
         <tbody>
+            @if (($priorYear ?? null))
+            <tr class="prior-row">
+                <td>FY{{ $priorYear['fy_end'] }} total</td>
+                <td>{{ $priorYear['start']->format('d/m/Y') }} – {{ $priorYear['end']->format('d/m/Y') }}</td>
+                <td class="text-right" colspan="7">Prior year net BAS not settled with the ATO</td>
+                <td class="text-right">${{ number_format($priorYear['net'], 2) }}</td>
+            </tr>
+            @endif
             @foreach ($statement['quarters'] as $q)
             <tr>
                 <td>{{ $q['label'] }}</td>

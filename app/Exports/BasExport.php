@@ -2,6 +2,7 @@
 
 namespace App\Exports;
 
+use Carbon\Carbon;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithTitle;
@@ -12,10 +13,14 @@ class BasExport implements FromCollection, ShouldAutoSize, WithTitle
 
     protected $statement;
 
-    public function __construct(int $fyEnd, array $statement)
+    /** @var array{fy_end: int, start: Carbon, end: Carbon, net: float}|null */
+    protected $priorYear;
+
+    public function __construct(int $fyEnd, array $statement, ?array $priorYear = null)
     {
         $this->fyEnd = $fyEnd;
         $this->statement = $statement;
+        $this->priorYear = $priorYear;
     }
 
     public function collection()
@@ -40,6 +45,21 @@ class BasExport implements FromCollection, ShouldAutoSize, WithTitle
             '1B GST on purchases',
             'Net GST',
         ]);
+
+        if ($this->priorYear !== null) {
+            $data->push([
+                'FY'.$this->priorYear['fy_end'].' total',
+                $this->priorYear['start']->format('d/m/Y').' - '.$this->priorYear['end']->format('d/m/Y'),
+                'Prior year net BAS not settled with the ATO',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                number_format($this->priorYear['net'], 2),
+            ]);
+        }
 
         foreach ($this->statement['quarters'] as $q) {
             $data->push([

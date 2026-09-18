@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Exports\AccountStatementExport;
 use App\Exports\BasExport;
 use App\Exports\CompanyTaxExport;
+use App\Models\BasSettlement;
 use App\Models\BasStatement;
 use App\Models\Bill;
 use App\Models\BillItem;
@@ -1093,11 +1094,47 @@ class ReportController extends Controller
         $fyEnd = (int) $request->get('fy', $currentFyEnd);
 
         $statement = $this->buildBasStatement($fyEnd);
+        $priorYear = $this->priorYearUnsettled($fyEnd);
         $availableFys = range($currentFyEnd, $currentFyEnd - 5);
 
         return view('reports.bas', compact(
-            'fyEnd', 'currentFyEnd', 'availableFys', 'statement'
+            'fyEnd', 'currentFyEnd', 'availableFys', 'statement', 'priorYear'
         ));
+    }
+
+    /**
+     * The previous financial year's net BAS total when it has not been
+     * settled — the first line of the report table, so a year that was
+     * never paid to the ATO cannot quietly disappear. Null (no line)
+     * when the prior year netted to nothing, or once a GST settlement
+     * has covered through that year's end — the balance-side action the
+     * settlement screen records, which one catch-up payment clears
+     * across any number of quarters.
+     *
+     * @return array{fy_end: int, start: Carbon, end: Carbon, net: float}|null
+     */
+    protected function priorYearUnsettled(int $fyEnd): ?array
+    {
+        $prior = $this->buildBasStatement($fyEnd - 1);
+        $net = round((float) $prior['totals']['net'], 2);
+
+        if (abs($net) < 0.005) {
+            return null;
+        }
+
+        $settled = BasSettlement::query()
+            ->where('entity_id', $this->ifrsEntity()->id)
+            ->where('type', BasSettlement::TYPE_GST)
+            ->whereNull('reversed_at')
+            ->whereDate('as_at', '>=', $prior['fyEnd']->toDateString())
+            ->exists();
+
+        return $settled ? null : [
+            'fy_end' => $fyEnd - 1,
+            'start' => $prior['fyStart'],
+            'end' => $prior['fyEnd'],
+            'net' => $net,
+        ];
     }
 
     /**
@@ -1384,6 +1421,7 @@ class ReportController extends Controller
         $pdf = Pdf::loadView('reports.pdf.bas', [
             'fyEnd' => $fyEnd,
             'statement' => $statement,
+            'priorYear' => $this->priorYearUnsettled($fyEnd),
         ]);
 
         return $pdf->download("BAS_FY{$fyEnd}.pdf");
@@ -1437,7 +1475,7 @@ class ReportController extends Controller
         $fyEnd = (int) $request->get('fy', $currentFyEnd);
         $statement = $this->buildBasStatement($fyEnd);
 
-        $export = new BasExport($fyEnd, $statement);
+        $export = new BasExport($fyEnd, $statement, $this->priorYearUnsettled($fyEnd));
 
         return Excel::download($export, "BAS_FY{$fyEnd}.xlsx");
     }
