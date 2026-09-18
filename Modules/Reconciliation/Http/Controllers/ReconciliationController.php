@@ -94,8 +94,9 @@ class ReconciliationController extends Controller
     }
 
     /**
-     * The manual match screen for one pending bank line: likely
-     * candidates (±14 days to allow for bank lag, amount-close) plus a
+     * The manual match screen for one pending bank line: payment
+     * candidates (±14 days to allow for bank lag, amount-close — client
+     * payments for money in, supplier payments for money out) plus a
      * reference/counterparty search that ignores the amount for the
      * lines the bank grossed up or split.
      */
@@ -125,7 +126,7 @@ class ReconciliationController extends Controller
     public function storeMatch(Request $request, BankTransaction $transaction)
     {
         $validated = $request->validate([
-            'type' => ['required', 'in:invoice,payment,bill,ledger'],
+            'type' => ['required', 'in:payment,bill_payment,ledger'],
             'target_id' => ['required', 'integer'],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
@@ -139,7 +140,7 @@ class ReconciliationController extends Controller
 
         if (! $ok) {
             return back()->withInput()
-                ->with('error', "Could not match to {$validated['type']} #{$validated['target_id']} — it may not exist, or the bank line is already matched.");
+                ->with('error', "Could not match to {$validated['type']} #{$validated['target_id']} — it may not exist, it may already be reconciled to another bank line, or this bank line is already matched.");
         }
 
         return redirect()->route('reconciliation.index')

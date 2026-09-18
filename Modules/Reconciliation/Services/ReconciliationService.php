@@ -390,8 +390,8 @@ class ReconciliationService
      * Attempt to auto-match a Wise transaction against IFRS ledgers,
      * then — when the strict pass misses — via a learned counterparty
      * rule (a previous match from the same payer/payee resolved to a
-     * client or supplier; a fresh unconsumed payment/bill of theirs
-     * with a matching amount counts).
+     * client or supplier; a fresh unconsumed payment of theirs with a
+     * matching amount counts).
      */
     public function matchTransaction(BankTransaction $wiseTransaction): ?int
     {
@@ -478,6 +478,7 @@ class ReconciliationService
                     null,
                 ],
                 'bill' => [null, Bill::find($transaction->matched_transaction_id)?->supplier_id],
+                'bill_payment' => [null, BillPayment::find($transaction->matched_transaction_id)?->supplier_id],
                 default => [null, null], // ledger matches carry no counterparty identity
             };
 
@@ -527,8 +528,8 @@ class ReconciliationService
     /**
      * The learned pass for one bank line: if its counterparty previously
      * resolved to a client (credits) or supplier (debits), look for a
-     * fresh payment/bill of theirs — matching amount and date window,
-     * not already consumed by another matched bank line.
+     * fresh payment of theirs — matching amount and date window, not
+     * already consumed by another matched bank line.
      *
      * @return array{type: string, id: int}|null
      */
@@ -573,24 +574,24 @@ class ReconciliationService
         }
 
         if ($rule->supplier_id && $transaction->type === BankTransaction::TYPE_DEBIT) {
-            $bill = Bill::query()
+            $billPayment = BillPayment::query()
                 ->where('supplier_id', $rule->supplier_id)
-                ->whereIn('status', [Bill::STATUS_OPEN, Bill::STATUS_PARTIALLY_PAID, Bill::STATUS_PAID])
-                ->whereBetween('total', [$amount - self::AMOUNT_TOLERANCE, $amount + self::AMOUNT_TOLERANCE])
-                ->whereBetween('bill_date', [$dateFrom, $dateTo])
+                ->where('status', BillPayment::STATUS_COMPLETED)
+                ->whereBetween('amount', [$amount - self::AMOUNT_TOLERANCE, $amount + self::AMOUNT_TOLERANCE])
+                ->whereBetween('payment_date', [$dateFrom, $dateTo])
                 ->whereNotExists(function ($query) use ($transaction) {
                     $query->selectRaw('1')
                         ->from('bank_transactions')
-                        ->whereColumn('matched_transaction_id', 'bills.id')
-                        ->where('matched_transaction_type', 'bill')
+                        ->whereColumn('matched_transaction_id', 'bill_payments.id')
+                        ->where('matched_transaction_type', 'bill_payment')
                         ->where('status', BankTransaction::STATUS_MATCHED)
                         ->when($transaction->exists, fn ($q) => $q->where('id', '!=', $transaction->id));
                 })
-                ->orderBy('bill_date')
+                ->orderBy('payment_date')
                 ->first();
 
-            if ($bill) {
-                return ['type' => 'bill', 'id' => $bill->id];
+            if ($billPayment) {
+                return ['type' => 'bill_payment', 'id' => $billPayment->id];
             }
         }
 
@@ -1408,7 +1409,7 @@ class ReconciliationService
         ?string $notes = null
     ): bool {
         // Validate transaction type ('expense' kept as a legacy alias)
-        $validTypes = ['invoice', 'payment', 'bill', 'expense', 'ledger'];
+        $validTypes = ['invoice', 'payment', 'bill', 'bill_payment', 'expense', 'ledger'];
         if (! in_array($transactionType, $validTypes)) {
             Log::warning('Invalid transaction type for manual override', [
                 'transaction_type' => $transactionType,
@@ -1432,6 +1433,25 @@ class ReconciliationService
         // Validate transaction is not already matched
         if ($bankTransaction->status === BankTransaction::STATUS_MATCHED) {
             Log::warning('Bank transaction already matched, cannot manually override', [
+                'bank_transaction_id' => $bankTransaction->id,
+            ]);
+
+            return false;
+        }
+
+        // A payment target is a money movement — once one bank line has
+        // reconciled it, another cannot claim it again (the learned
+        // matcher enforces the same no-reuse rule).
+        if (in_array($transactionType, ['payment', 'bill_payment'], true)
+            && BankTransaction::query()
+                ->where('status', BankTransaction::STATUS_MATCHED)
+                ->where('matched_transaction_type', $transactionType)
+                ->where('matched_transaction_id', $transactionId)
+                ->exists()
+        ) {
+            Log::warning('Target transaction already reconciled by another bank line', [
+                'transaction_type' => $transactionType,
+                'transaction_id' => $transactionId,
                 'bank_transaction_id' => $bankTransaction->id,
             ]);
 
@@ -1510,13 +1530,36 @@ class ReconciliationService
             'invoice' => Invoice::find($id),
             'payment' => Payment::find($id),
             'bill', 'expense' => Bill::find($id),
+            'bill_payment' => BillPayment::find($id),
             'ledger' => Ledger::find($id),
             default => null,
         };
     }
 
     /**
-     * Get available IFRS transactions for manual linking
+     * Subquery excluding payment targets another matched bank line has
+     * already reconciled — the learned matcher's no-reuse rule, applied
+     * to the manual candidate tiers too.
+     */
+    protected function notAlreadyReconciled(string $type): \Closure
+    {
+        return function ($query) use ($type) {
+            $query->selectRaw('1')
+                ->from('bank_transactions')
+                ->whereColumn('matched_transaction_id', $type === 'bill_payment' ? 'bill_payments.id' : 'payments.id')
+                ->where('matched_transaction_type', $type)
+                ->where('status', BankTransaction::STATUS_MATCHED);
+        };
+    }
+
+    /**
+     * Get available transactions for manual linking
+     *
+     * A bank line is a money movement, so by default it is offered
+     * payments only — client payments for money in, supplier payments
+     * (bill payments) for money out — never the invoice/bill documents
+     * or their ledger entries. An explicit $type still selects any
+     * single tier for programmatic callers.
      *
      * @param  BankTransaction  $bankTransaction  The bank transaction to match
      * @param  string  $type  Filter by transaction type (optional)
@@ -1541,10 +1584,17 @@ class ReconciliationService
     ): Collection {
         $days = max(1, (int) ($opts['days'] ?? self::DATE_TOLERANCE_DAYS));
         $q = isset($opts['q']) && trim((string) $opts['q']) !== '' ? mb_strtolower(trim((string) $opts['q'])) : null;
-        $amount = (float) $bankTransaction->amount;
+        // Bank debits are stored negative while invoice/payment/bill
+        // amounts are positive — compare magnitudes.
+        $amount = abs((float) $bankTransaction->amount);
         $dateFrom = $bankTransaction->transaction_date->copy()->subDays($days);
         $dateTo = $bankTransaction->transaction_date->copy()->addDays($days);
-        $tolerance = self::AMOUNT_TOLERANCE;
+        // Searching drops the amount constraint so fee-adjusted or
+        // split movements stay findable by reference or name.
+        $tolerance = $q !== null ? null : self::AMOUNT_TOLERANCE;
+
+        // Default to the payment tier matching the money's direction.
+        $type = $type ?? ($bankTransaction->type === BankTransaction::TYPE_CREDIT ? 'payment' : 'bill_payment');
 
         $results = collect();
 
@@ -1580,8 +1630,17 @@ class ReconciliationService
                     $amount - $tolerance,
                     $amount + $tolerance,
                 ]))
+                // Search predicates belong in the query, before the
+                // limit — an in-memory filter would only see the first
+                // $limit rows the database happened to return.
+                ->when($q !== null, fn ($query) => $query->where(function ($w) use ($q) {
+                    $w->where('payment_number', 'like', "%{$q}%")
+                        ->orWhere('reference', 'like', "%{$q}%")
+                        ->orWhereHas('client', fn ($c) => $c->where('name', 'like', "%{$q}%"));
+                }))
                 ->whereBetween('payment_date', [$dateFrom, $dateTo])
                 ->where('status', Payment::STATUS_COMPLETED)
+                ->whereNotExists($this->notAlreadyReconciled('payment'))
                 ->limit($limit)
                 ->get()
                 ->map(function ($payment) {
@@ -1621,6 +1680,39 @@ class ReconciliationService
                     ];
                 });
             $results = $results->merge($bills);
+        }
+
+        // Search bill payments (supplier payments) if type is null or
+        // 'bill_payment' — money paid out to suppliers is recorded here,
+        // not in the client-facing payments table.
+        if ($type === null || $type === 'bill_payment') {
+            $billPayments = BillPayment::query()
+                ->when($tolerance !== null, fn ($query) => $query->whereBetween('amount', [
+                    $amount - $tolerance,
+                    $amount + $tolerance,
+                ]))
+                ->when($q !== null, fn ($query) => $query->where(function ($w) use ($q) {
+                    $w->where('payment_number', 'like', "%{$q}%")
+                        ->orWhere('reference', 'like', "%{$q}%")
+                        ->orWhereHas('supplier', fn ($s) => $s->where('name', 'like', "%{$q}%"));
+                }))
+                ->whereBetween('payment_date', [$dateFrom, $dateTo])
+                ->where('status', BillPayment::STATUS_COMPLETED)
+                ->whereNotExists($this->notAlreadyReconciled('bill_payment'))
+                ->limit($limit)
+                ->get()
+                ->map(function ($billPayment) {
+                    return [
+                        'type' => 'bill_payment',
+                        'id' => $billPayment->id,
+                        'reference' => $billPayment->payment_number,
+                        'amount' => $billPayment->amount,
+                        'date' => $billPayment->payment_date,
+                        'supplier' => $billPayment->supplier?->name ?? 'Unknown',
+                        'status' => $billPayment->status,
+                    ];
+                });
+            $results = $results->merge($billPayments);
         }
 
         // Search ledger entries if type is null or 'ledger'. The IFRS

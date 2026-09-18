@@ -123,7 +123,7 @@
                             </td>
                             <td class="px-4 py-3 text-sm text-gray-600">
                                 <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800">
-                                    {{ ucfirst($transaction->matched_transaction_type ?? '?') }} #{{ $transaction->matched_transaction_id }}
+                                    {{ ['bill_payment' => 'Supplier payment'][$transaction->matched_transaction_type ?? ''] ?? ucfirst($transaction->matched_transaction_type ?? '?') }} #{{ $transaction->matched_transaction_id }}
                                 </span>
                             </td>
                             <td class="px-4 py-3 text-sm text-gray-600">{{ $transaction->matched_at?->format('d M Y H:i') }}</td>

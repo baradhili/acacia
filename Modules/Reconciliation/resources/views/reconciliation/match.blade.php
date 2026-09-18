@@ -52,7 +52,7 @@
                         Search by reference or name (any amount, ±60 days)
                     </label>
                     <input type="text" name="q" id="q" value="{{ $search }}" maxlength="100"
-                        placeholder="e.g. INV-2026, Acme, AWS"
+                        placeholder="e.g. PAY-2026-0001, Acme, AWS"
                         class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
                 </div>
                 <button type="submit"
@@ -62,7 +62,8 @@
 
         @if ($search === '')
             <p class="px-4 py-2 text-xs text-gray-500 bg-gray-50 border-b border-gray-100">
-                Amount-close candidates within ±14 days of the bank date.
+                Amount-close payments within ±14 days of the bank date —
+                {{ $transaction->type === \Modules\Reconciliation\Models\BankTransaction::TYPE_CREDIT ? 'client payments received' : 'supplier payments made' }}.
             </p>
         @endif
 
@@ -83,7 +84,7 @@
                         <tr class="hover:bg-gray-50">
                             <td class="px-4 py-3">
                                 <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-800">
-                                    {{ ucfirst($candidate['type']) }}
+                                    {{ ['bill_payment' => 'Supplier payment'][$candidate['type']] ?? ucfirst($candidate['type']) }}
                                 </span>
                             </td>
                             <td class="px-4 py-3 text-sm text-gray-900">{{ $candidate['reference'] }}</td>
@@ -93,9 +94,9 @@
                             <td class="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
                                 {{ \Carbon\Carbon::parse($candidate['date'])->format('d M Y') }}
                             </td>
-                            <td class="px-4 py-3 text-sm text-right whitespace-nowrap {{ (float) $candidate['amount'] === (float) $transaction->amount ? 'text-gray-900' : 'text-amber-700 font-medium' }}">
+                            <td class="px-4 py-3 text-sm text-right whitespace-nowrap {{ abs((float) $candidate['amount']) === abs((float) $transaction->amount) ? 'text-gray-900' : 'text-amber-700 font-medium' }}">
                                 ${{ number_format(abs((float) $candidate['amount']), 2) }}
-                                @if ((float) $candidate['amount'] !== (float) $transaction->amount)
+                                @if (abs((float) $candidate['amount']) !== abs((float) $transaction->amount))
                                     <span class="block text-xs font-normal text-gray-400">differs from bank line</span>
                                 @endif
                             </td>
@@ -136,8 +137,7 @@
                 <select name="type" id="manual_type"
                     class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                     <option value="payment">Payment</option>
-                    <option value="invoice">Invoice</option>
-                    <option value="bill">Bill</option>
+                    <option value="bill_payment">Supplier payment</option>
                     <option value="ledger">Ledger entry</option>
                 </select>
             </div>
