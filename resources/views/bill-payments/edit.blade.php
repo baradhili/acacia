@@ -101,4 +101,5 @@
         </div>
     </form>
 
+    <x-document-upload :model="$billPayment" />
 @endsection

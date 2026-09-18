@@ -7,6 +7,8 @@ use App\Models\BillPayment;
 use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class BillPaymentTest extends TestCase
@@ -14,6 +16,7 @@ class BillPaymentTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected Supplier $supplier;
 
     protected function setUp(): void
@@ -32,7 +35,7 @@ class BillPaymentTest extends TestCase
         $bill = Bill::create(['supplier_id' => $this->supplier->id]);
         for ($i = 0; $i < $count; $i++) {
             $bill->items()->create([
-                'description' => 'Item ' . ($i + 1),
+                'description' => 'Item '.($i + 1),
                 'quantity' => 1,
                 'unit_price' => $unitPrice,
                 'tax_rate' => 10, // unit_price is GST-inclusive
@@ -298,5 +301,35 @@ class BillPaymentTest extends TestCase
         $this->assertEquals(BillPayment::STATUS_VOID, $payment->fresh()->status);
         $this->assertEquals(Bill::STATUS_OPEN, $bill->fresh()->status);
         $this->assertEquals(0, $payment->allocations()->count());
+    }
+
+    public function test_document_can_be_uploaded_to_payment_from_edit_page(): void
+    {
+        $payment = BillPayment::createWithUniqueNumber([
+            'supplier_id' => $this->supplier->id,
+            'amount' => 110,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+        ]);
+
+        // The show page links to the edit page for uploads, so the
+        // upload widget must render there.
+        $this->actingAs($this->user)
+            ->get(route('bill-payments.edit', $payment))
+            ->assertOk()
+            ->assertSee('documentUploadArea')
+            ->assertSee('name="documentable_type" value="BillPayment"', false);
+
+        Storage::fake('public');
+        $this->actingAs($this->user)
+            ->post(route('documents.store'), [
+                'documentable_type' => 'BillPayment',
+                'documentable_id' => $payment->id,
+                'file' => UploadedFile::fake()->create('receipt.pdf', 100, 'application/pdf'),
+            ])
+            ->assertStatus(201);
+
+        $this->assertEquals(1, $payment->documents()->count());
+        Storage::disk('public')->assertExists($payment->documents()->first()->file_path);
     }
 }

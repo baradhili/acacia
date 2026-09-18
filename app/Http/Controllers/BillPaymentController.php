@@ -54,7 +54,7 @@ class BillPaymentController extends Controller
             'supplier_id' => 'required|exists:suppliers,id',
             'amount' => 'required|numeric|min:0.01',
             'payment_date' => ['required', 'date', new NotInClosedPeriod],
-            'payment_method' => 'required|in:' . implode(',', array_keys(BillPayment::paymentMethods())),
+            'payment_method' => 'required|in:'.implode(',', array_keys(BillPayment::paymentMethods())),
             'reference' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
             'allocate_type' => 'required|in:manual,no',
@@ -67,7 +67,7 @@ class BillPaymentController extends Controller
         // (The form indexes pairs as bill_allocations[{bill_id}][...] — bare
         // [] names never pair bill_id and amount into one row in PHP.)
         $allocations = array_filter($validated['bill_allocations'] ?? [], function ($allocation) {
-            return !empty($allocation['bill_id']) && (float) ($allocation['amount'] ?? 0) > 0;
+            return ! empty($allocation['bill_id']) && (float) ($allocation['amount'] ?? 0) > 0;
         });
 
         if ($validated['allocate_type'] === 'manual' && empty($allocations)) {
@@ -105,7 +105,8 @@ class BillPaymentController extends Controller
                 ->with('success', 'Supplier payment recorded successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->withInput()->with('error', 'Error recording payment: ' . $e->getMessage());
+
+            return back()->withInput()->with('error', 'Error recording payment: '.$e->getMessage());
         }
     }
 
@@ -123,7 +124,7 @@ class BillPaymentController extends Controller
                 ->with('error', 'Void payments cannot be edited.');
         }
 
-        $billPayment->load(['supplier', 'allocations.bill']);
+        $billPayment->load(['supplier', 'allocations.bill', 'documents']);
         $suppliers = Supplier::orderBy('name')->pluck('name', 'id');
         $paymentMethods = BillPayment::paymentMethods();
 
@@ -140,7 +141,7 @@ class BillPaymentController extends Controller
             'supplier_id' => 'required|exists:suppliers,id',
             'amount' => 'required|numeric|min:0.01',
             'payment_date' => ['required', 'date', new NotInClosedPeriod],
-            'payment_method' => 'required|in:' . implode(',', array_keys(BillPayment::paymentMethods())),
+            'payment_method' => 'required|in:'.implode(',', array_keys(BillPayment::paymentMethods())),
             'reference' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
         ]);
@@ -151,8 +152,8 @@ class BillPaymentController extends Controller
         $allocatedAmount = (float) $billPayment->allocated_amount;
         if ((float) $validated['amount'] < $allocatedAmount) {
             return back()->withInput()->with('error',
-                'Amount cannot be less than $' . number_format($allocatedAmount, 2)
-                . ' already allocated to bills. Remove the allocations first.');
+                'Amount cannot be less than $'.number_format($allocatedAmount, 2)
+                .' already allocated to bills. Remove the allocations first.');
         }
 
         // Reject changing the supplier when allocations exist — those
@@ -187,7 +188,8 @@ class BillPaymentController extends Controller
                 ->with('success', 'Payment updated successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->withInput()->with('error', 'Error updating payment: ' . $e->getMessage());
+
+            return back()->withInput()->with('error', 'Error updating payment: '.$e->getMessage());
         }
     }
 
@@ -223,7 +225,8 @@ class BillPaymentController extends Controller
                 ->with('success', 'Payment deleted successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', 'Error deleting payment: ' . $e->getMessage());
+
+            return back()->with('error', 'Error deleting payment: '.$e->getMessage());
         }
     }
 
@@ -245,13 +248,13 @@ class BillPaymentController extends Controller
         $paymentDate = Carbon::parse($billPayment->payment_date);
         if ($lockService->isDateBlocked($paymentDate)) {
             return back()->with('error', $lockService->dateBlockedMessage($paymentDate)
-                . ' The payment cannot be voided while its year is closed.');
+                .' The payment cannot be voided while its year is closed.');
         }
 
         try {
             $billPayment->void();
         } catch (\Throwable $e) {
-            return back()->with('error', 'Error voiding payment: ' . $e->getMessage());
+            return back()->with('error', 'Error voiding payment: '.$e->getMessage());
         }
 
         return back()->with('success', "Payment {$billPayment->payment_number} voided and its ledger entry reversed.");
@@ -272,9 +275,9 @@ class BillPaymentController extends Controller
             // Same correlated-subquery pattern as Bill::scopeOverdue.
             ->whereRaw(
                 'COALESCE(bills.total, 0) - COALESCE(('
-                . 'SELECT SUM(amount) FROM bill_payment_allocations'
-                . ' WHERE bill_payment_allocations.bill_id = bills.id'
-                . '), 0) > 0'
+                .'SELECT SUM(amount) FROM bill_payment_allocations'
+                .' WHERE bill_payment_allocations.bill_id = bills.id'
+                .'), 0) > 0'
             )
             ->get()
             ->map(function ($bill) {
@@ -331,7 +334,7 @@ class BillPaymentController extends Controller
             return back()->with('error', 'This payment is void.');
         }
 
-        if (!$billPayment->allocations()->where('bill_id', $bill->id)->exists()) {
+        if (! $billPayment->allocations()->where('bill_id', $bill->id)->exists()) {
             return back()->with('error', 'Could not remove allocation.');
         }
 
@@ -341,13 +344,13 @@ class BillPaymentController extends Controller
         $paymentDate = Carbon::parse($billPayment->payment_date);
         if ($lockService->isDateBlocked($paymentDate)) {
             return back()->with('error', $lockService->dateBlockedMessage($paymentDate)
-                . ' The allocation cannot be removed while the year is closed.');
+                .' The allocation cannot be removed while the year is closed.');
         }
 
         try {
             BillLifecycleService::unapplyPayment($bill, $billPayment);
         } catch (\Throwable $e) {
-            return back()->with('error', 'Could not remove allocation: ' . $e->getMessage());
+            return back()->with('error', 'Could not remove allocation: '.$e->getMessage());
         }
 
         return back()->with('success',
