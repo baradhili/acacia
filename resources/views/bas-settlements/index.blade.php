@@ -82,6 +82,16 @@
                 @endforeach
             </tbody>
         </table>
+
+        @if ($priorGstCarry ?? null)
+            <div class="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                <strong>Rolls in FY{{ $priorGstCarry['fy_end'] }}:</strong>
+                ${{ number_format(abs($priorGstCarry['net']), 2) }}
+                {{ $priorGstCarry['net'] >= 0 ? 'payable' : 'refundable' }} carried from the prior
+                financial year sits inside this GST position — recording a settlement now rolls it
+                in with the current year's quarters in one ATO payment, no separate settlement needed.
+            </div>
+        @endif
     </div>
 
     <div class="bg-white rounded-lg shadow p-6 max-w-4xl mb-6">

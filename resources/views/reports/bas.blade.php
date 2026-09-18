@@ -127,7 +127,10 @@
                                         </span>
                                         @hasanyrole('admin|accountant')
                                             <a href="{{ route('bas-settlements.index') }}"
-                                                class="block text-xs text-amber-700 underline hover:text-amber-900 mt-1">Record it</a>
+                                                class="block text-xs text-amber-700 underline hover:text-amber-900 mt-1"
+                                                title="Recording the next quarterly settlement rolls this year in with it — one ATO payment">
+                                                Roll into the next settlement
+                                            </a>
                                         @endhasanyrole
                                     </td>
                                 </tr>

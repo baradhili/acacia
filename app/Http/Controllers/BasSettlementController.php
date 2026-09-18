@@ -35,6 +35,7 @@ class BasSettlementController extends Controller
 
         return view('bas-settlements.index', [
             'positions' => $this->service->positions($effectiveAsAt),
+            'priorGstCarry' => $this->service->priorYearsCarry($effectiveAsAt),
             'positionAsAt' => $effectiveAsAt->toDateString(),
             'quarterEnds' => $quarterEnds,
             'defaultAsAt' => $effectiveAsAt->toDateString(),

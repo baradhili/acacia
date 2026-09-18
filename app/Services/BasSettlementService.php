@@ -159,6 +159,46 @@ class BasSettlementService
     }
 
     /**
+     * The prior financial year's component still inside a settlement
+     * recorded as at $asAt: the type's position the day before the
+     * as-at date's financial year began. One settlement is balance-
+     * based, so recording it rolls this carry in with the current
+     * year's quarters — the note that says so.
+     *
+     * Null when nothing carries over, or once anything of this type
+     * has been settled since that FY began — a settlement's journal
+     * clears prior-year and current-year balances together, and the
+     * split is no longer derivable from the ledger.
+     *
+     * @return array{fy_end: int, net: float}|null
+     */
+    public function priorYearsCarry(Carbon $asAt, string $type = BasSettlement::TYPE_GST): ?array
+    {
+        $entity = IfrsPosting::resolveEntity();
+        $year = ReportingPeriod::year($asAt, $entity);
+        ['start' => $fyStart] = (new FiscalYearService)->bounds($entity, $year);
+
+        $carried = $this->positionFor(
+            $entity,
+            $this->accountsFor($type, $entity),
+            $fyStart->copy()->subDay()->endOfDay()
+        )['net'];
+
+        if (abs($carried) < 0.005) {
+            return null;
+        }
+
+        $settledSince = BasSettlement::query()
+            ->where('entity_id', $entity->id)
+            ->where('type', $type)
+            ->whereNull('reversed_at')
+            ->whereDate('settled_at', '>=', $fyStart->toDateString())
+            ->exists();
+
+        return $settledSince ? null : ['fy_end' => $year, 'net' => $carried];
+    }
+
+    /**
      * @param  array{payable: ?Account, receivable: ?Account}  $accounts
      * @return array{payable: float, receivable: float, net: float}
      */
