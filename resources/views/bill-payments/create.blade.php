@@ -69,7 +69,7 @@
 
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Payment Method *</label>
-                    <select name="payment_method" required
+                    <select name="payment_method" id="paymentMethodSelect" required
                         class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
                         @foreach ($paymentMethods as $value => $label)
                             <option value="{{ $value }}" {{ old('payment_method') == $value ? 'selected' : '' }}>
@@ -79,6 +79,25 @@
                     @error('payment_method')
                         <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
                     @enderror
+                </div>
+
+                <div id="employeeField" class="hidden">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Paid by employee *</label>
+                    <select name="employee_id"
+                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                        <option value="">Select Employee</option>
+                        @foreach ($employees as $id => $name)
+                            <option value="{{ $id }}" {{ old('employee_id') == $id ? 'selected' : '' }}>{{ $name }}</option>
+                        @endforeach
+                    </select>
+                    @error('employee_id')
+                        <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
+                    @enderror
+                    <p class="text-gray-500 text-xs mt-1">
+                        Date the payment when the employee actually paid. It awaits approval, then posts to
+                        Employee Reimbursements Payable — not the bank — until you reimburse them (GST credit is
+                        claimable when reimbursed within 6 months).
+                    </p>
                 </div>
 
                 <div>
@@ -140,6 +159,16 @@
 
 @push('scripts')
     <script>
+        const methodSelect = document.getElementById('paymentMethodSelect');
+        const employeeField = document.getElementById('employeeField');
+
+        function syncEmployeeField() {
+            employeeField.classList.toggle('hidden', methodSelect.value !== 'employee_reimbursement');
+            employeeField.querySelector('select').required = methodSelect.value === 'employee_reimbursement';
+        }
+        methodSelect.addEventListener('change', syncEmployeeField);
+        syncEmployeeField();
+
         document.querySelectorAll('input[name="allocate_type"]').forEach(radio => {
             radio.addEventListener('change', function() {
                 const manualSection = document.getElementById('manualAllocation');

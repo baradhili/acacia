@@ -251,7 +251,7 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Payment Method *</label>
-                    <select name="payment_method"
+                    <select name="payment_method" id="paidNowMethod"
                         class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
                         @foreach ($paymentMethods as $value => $label)
                             <option value="{{ $value }}" {{ old('payment_method') == $value ? 'selected' : '' }}>
@@ -259,6 +259,19 @@
                         @endforeach
                     </select>
                     @error('payment_method')
+                        <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
+                    @enderror
+                </div>
+                <div id="employeeField" class="hidden">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Paid by employee *</label>
+                    <select name="employee_id"
+                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                        <option value="">Select Employee</option>
+                        @foreach ($employees as $id => $name)
+                            <option value="{{ $id }}" {{ old('employee_id') == $id ? 'selected' : '' }}>{{ $name }}</option>
+                        @endforeach
+                    </select>
+                    @error('employee_id')
                         <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
                     @enderror
                 </div>
@@ -500,13 +513,28 @@
 
             attachEventListeners();
 
-            // Paid-at-entry toggle
+            // Paid-at-entry toggle + employee-paid field wiring. The
+            // employee picker is only visible (and required) while
+            // paid-at-entry is ticked AND the method is employee
+            // reimbursement — a required field inside a hidden container
+            // would silently block form submission.
             const paidNowToggle = document.getElementById('paidNowToggle');
             const paidNowFields = document.getElementById('paidNowFields');
+            const paidNowMethod = document.getElementById('paidNowMethod');
+            const employeeField = document.getElementById('employeeField');
+
+            function syncEmployeeField() {
+                const employeeMethod = paidNowToggle.checked && paidNowMethod.value === 'employee_reimbursement';
+                employeeField.classList.toggle('hidden', !employeeMethod);
+                employeeField.querySelector('select').required = employeeMethod;
+            }
             function syncPaidNow() {
                 paidNowFields.classList.toggle('hidden', !paidNowToggle.checked);
+                syncEmployeeField();
             }
+
             paidNowToggle.addEventListener('change', syncPaidNow);
+            paidNowMethod.addEventListener('change', syncEmployeeField);
             syncPaidNow();
         </script>
     @endpush

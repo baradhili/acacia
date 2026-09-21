@@ -3,6 +3,31 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] — 2026-09-21
+
+### Added — employee expense reimbursements (paid-by-employee supplier payments)
+
+Expenses an employee paid out of pocket are now captured without ever
+setting the employee up as a supplier: record the bill from the real
+supplier as always, then record its supplier payment with the new
+"Paid by employee" method and pick the employee (Payroll's employee
+list). The capture sits **pending approval** — nothing reaches the
+ledger, and its bill stays unpaid — until an admin/accountant approves
+it, at which point it posts `Dr Expense / Dr GST Receivable / Cr
+Employee Reimbursements Payable (2280)` instead of touching the bank.
+Paying the employee back is a new **Reimbursement** payment
+(`Dr 2280 / Cr Bank`) that the bank reconciliation matches against the
+transfer — manually, by id, or via the learned counterparty rules
+(debit bank lines now surface supplier payments and reimbursements).
+A pending-approval filter, Approve & Post / Void actions, and an
+"owed to employees" summary cover the workflow; a Reimbursements
+nav entry groups it. Guards: method/employee lock once posted,
+reimbursements cannot exceed what is owed, and an already-reimbursed
+capture cannot be voided (void the reimbursement first). The
+`ifrs:post-payments` backfill now retries reimbursement payments too
+and skips anything still pending approval. Account 2280 is seeded on
+fresh installs and created lazily on existing ones.
+
 ## [Unreleased] — 2026-09-03
 
 ### Fixed — a sole accountant/admin can approve their own year-end close

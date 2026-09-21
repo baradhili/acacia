@@ -31,6 +31,15 @@
                 <input type="date" name="end_date" value="{{ request('end_date') }}"
                     class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
             </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select name="status" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    <option value="">All</option>
+                    <option value="pending" {{ request('status') === 'pending' ? 'selected' : '' }}>Pending approval</option>
+                    <option value="completed" {{ request('status') === 'completed' ? 'selected' : '' }}>Completed</option>
+                    <option value="void" {{ request('status') === 'void' ? 'selected' : '' }}>Void</option>
+                </select>
+            </div>
             <button type="submit" class="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-700">
                 Filter
             </button>
@@ -63,10 +72,19 @@
                                 <span class="ml-1 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-500">
                                     Void
                                 </span>
+                            @elseif($payment->status === 'pending')
+                                <span class="ml-1 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                    Pending approval
+                                </span>
                             @endif
                             <x-document-icon :count="$payment->documents_count" />
                         </td>
-                        <td class="px-6 py-4 text-gray-900">{{ $payment->supplier->name ?? '-' }}</td>
+                        <td class="px-6 py-4 text-gray-900">
+                            {{ $payment->supplier->name ?? '-' }}
+                            @if($payment->employee_id)
+                                <span class="block text-xs text-gray-500">paid by {{ $payment->employee?->name }}</span>
+                            @endif
+                        </td>
                         <td class="px-6 py-4 text-gray-900">{{ $payment->payment_date->format('d M Y') }}</td>
                         <td class="px-6 py-4 text-gray-900">{{ $payment->formatted_method }}</td>
                         <td class="px-6 py-4 text-right text-gray-900">${{ number_format($payment->amount, 2) }}</td>

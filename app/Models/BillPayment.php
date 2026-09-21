@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Services\IfrsPosting;
+use App\Services\PrepaymentService;
 use IFRS\Models\Account;
 use IFRS\Models\Entity;
 use IFRS\Models\LineItem;
@@ -13,7 +14,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Log;
+use Modules\Payroll\Models\Employee;
 
 class BillPayment extends Model
 {
@@ -21,13 +24,16 @@ class BillPayment extends Model
 
     // Status constants
     const STATUS_PENDING = 'pending';
+
     const STATUS_COMPLETED = 'completed';
+
     const STATUS_VOID = 'void';
 
     protected $fillable = [
         'payment_number',
         'supplier_id',
         'paid_by',
+        'employee_id',
         'amount',
         'payment_date',
         'payment_method',
@@ -44,15 +50,25 @@ class BillPayment extends Model
 
     // Payment method constants
     const METHOD_BANK_TRANSFER = 'bank_transfer';
+
     const METHOD_CREDIT_CARD = 'credit_card';
+
     const METHOD_CASH = 'cash';
+
     const METHOD_CHEQUE = 'cheque';
+
     const METHOD_OTHER = 'other';
+
+    const METHOD_EMPLOYEE_REIMBURSEMENT = 'employee_reimbursement';
 
     // IFRS account codes for supplier-payment posting
     const IFRS_BANK_ACCOUNT_CODE = 320; // Operating Account
+
     const IFRS_DEFAULT_EXPENSE_ACCOUNT_CODE = 8900; // Other Expenses (fallback for legacy items)
+
     const IFRS_GST_VAT_CODE = 'G'; // Seeded "GST 10%" Vat, linked to account 2200 (GST Payable)
+
+    const IFRS_REIMBURSEMENT_ACCOUNT_CODE = 2280; // Employee Reimbursements Payable
 
     /**
      * The Vat used for purchase GST legs: input tax credits are
@@ -64,11 +80,30 @@ class BillPayment extends Model
     public static function purchaseGstVat(Entity $entity): ?Vat
     {
         return Vat::where('code', config('subscriptions.purchase_gst_vat_code', 'I'))
-                ->where('entity_id', $entity->id)
-                ->first()
+            ->where('entity_id', $entity->id)
+            ->first()
             ?? Vat::where('code', self::IFRS_GST_VAT_CODE)
                 ->where('entity_id', $entity->id)
                 ->first();
+    }
+
+    /**
+     * The Employee Reimbursements Payable account (2280): the liability
+     * an employee-paid supplier payment credits until the company pays
+     * the employee back. Seeded by IFRSSeeder on fresh installs; lazily
+     * created here so existing installs get it at first posting (same
+     * pattern as PayrollService's wages payable).
+     */
+    public static function ensureReimbursementAccount(Entity $entity): Account
+    {
+        return Account::firstOrCreate(
+            ['entity_id' => $entity->id, 'code' => self::IFRS_REIMBURSEMENT_ACCOUNT_CODE],
+            [
+                'account_type' => Account::CURRENT_LIABILITY,
+                'name' => 'Employee Reimbursements Payable',
+                'currency_id' => $entity->currency_id,
+            ],
+        );
     }
 
     /**
@@ -76,6 +111,12 @@ class BillPayment extends Model
      * or an already-posted skip), so the backfill command can report it.
      */
     public ?string $lastPostingError = null;
+
+    /**
+     * Reason void() refused (null after a successful void or a
+     * non-guarded refusal like already-void), so controllers can say why.
+     */
+    public ?string $lastVoidError = null;
 
     protected static function boot()
     {
@@ -99,7 +140,7 @@ class BillPayment extends Model
             ->first();
 
         if ($lastPayment) {
-            preg_match('/SPAY-' . $year . '-(\d+)/', $lastPayment->payment_number, $matches);
+            preg_match('/SPAY-'.$year.'-(\d+)/', $lastPayment->payment_number, $matches);
             $nextNumber = isset($matches[1]) ? ((int) $matches[1]) + 1 : 1;
         } else {
             $nextNumber = 1;
@@ -123,8 +164,8 @@ class BillPayment extends Model
         for ($i = 1; $i <= $attempts; $i++) {
             try {
                 return self::create($attributes);
-            } catch (\Illuminate\Database\QueryException $e) {
-                if (!self::isUniqueViolation($e) || $i === $attempts) {
+            } catch (QueryException $e) {
+                if (! self::isUniqueViolation($e) || $i === $attempts) {
                     throw $e;
                 }
             }
@@ -138,9 +179,10 @@ class BillPayment extends Model
      * MySQL (SQLSTATE 23000 / driver code 1062) and SQLite (SQLSTATE 23000 /
      * driver codes 19, 2067) via the shared SQLSTATE.
      */
-    protected static function isUniqueViolation(\Illuminate\Database\QueryException $e): bool
+    protected static function isUniqueViolation(QueryException $e): bool
     {
         $errorInfo = $e->errorInfo ?? [];
+
         // errorInfo[0] is the SQLSTATE; errorInfo[1] is the driver-specific code.
         return ($errorInfo[0] ?? null) === '23000'
             || ($errorInfo[1] ?? null) === 1062;
@@ -154,12 +196,23 @@ class BillPayment extends Model
             self::METHOD_CASH => 'Cash',
             self::METHOD_CHEQUE => 'Cheque',
             self::METHOD_OTHER => 'Other',
+            self::METHOD_EMPLOYEE_REIMBURSEMENT => 'Paid by employee',
         ];
     }
 
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);
+    }
+
+    /**
+     * The employee who paid out of pocket — only set when
+     * payment_method is employee_reimbursement. The employee is owed
+     * the money until a ReimbursementPayment clears it.
+     */
+    public function employee(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class);
     }
 
     public function payer(): BelongsTo
@@ -178,7 +231,7 @@ class BillPayment extends Model
      */
     public function prepayments(): HasMany
     {
-        return $this->hasMany(\App\Models\Prepayment::class);
+        return $this->hasMany(Prepayment::class);
     }
 
     /**
@@ -217,8 +270,8 @@ class BillPayment extends Model
      * Allocate payment to specific bill.
      *
      * @throws \InvalidArgumentException if $amount is <= 0 or exceeds the
-     *         payment's unallocated balance. Callers run inside transactions
-     *         so the throw rolls back any partial work cleanly.
+     *                                   payment's unallocated balance. Callers run inside transactions
+     *                                   so the throw rolls back any partial work cleanly.
      */
     public function allocateToBill(Bill $bill, float $amount): BillPaymentAllocation
     {
@@ -230,7 +283,7 @@ class BillPayment extends Model
         if ($amount > $unallocated) {
             throw new \InvalidArgumentException(
                 "Cannot allocate {$amount} to bill {$bill->id}: "
-                . "only {$unallocated} unallocated on payment {$this->id}."
+                ."only {$unallocated} unallocated on payment {$this->id}."
             );
         }
 
@@ -265,6 +318,7 @@ class BillPayment extends Model
         if ($allocation) {
             $allocation->delete();
             $bill->updateStatusFromPayments();
+
             return true;
         }
 
@@ -286,7 +340,7 @@ class BillPayment extends Model
      */
     public function getFormattedAmountAttribute(): string
     {
-        return config('australian.currency.symbol', 'A$') . number_format($this->amount, 2);
+        return config('australian.currency.symbol', 'A$').number_format($this->amount, 2);
     }
 
     /**
@@ -321,6 +375,12 @@ class BillPayment extends Model
      *   Dr Expense  (per-account debit lines)       — net amount
      *   Dr GST      (account 430, auto via addVat) — GST component (input credit)
      *
+     * When payment_method is employee_reimbursement the employee paid the
+     * supplier out of pocket, so the credit leg replaces Bank with
+     * Employee Reimbursements Payable (2280) — the bank is untouched
+     * until a ReimbursementPayment pays the employee back. The expense
+     * and GST legs are identical either way.
+     *
      * DESIGN DECISION — cash basis, do not reverse: bills are subledger
      * documents only and deliberately NEVER post to IFRS (no Accounts
      * Payable). Supplier payments are the sole expense ledger event, and
@@ -347,12 +407,21 @@ class BillPayment extends Model
 
         if ($this->ifrs_payment_id) {
             Log::info("Bill payment {$this->id} already posted to IFRS", ['ifrs_payment_id' => $this->ifrs_payment_id]);
+
             return (int) $this->ifrs_payment_id;
         }
 
         if ($this->status === self::STATUS_VOID) {
             $this->lastPostingError = 'bill payment is void — voided payments are never posted';
             Log::info("Bill payment {$this->id} is void; not posting to IFRS");
+
+            return null;
+        }
+
+        if ($this->status === self::STATUS_PENDING) {
+            $this->lastPostingError = 'bill payment is pending approval — approve it before posting';
+            Log::info("Bill payment {$this->id} is pending approval; not posting to IFRS");
+
             return null;
         }
 
@@ -364,22 +433,32 @@ class BillPayment extends Model
             // and fatals for authed users without an entity until
             // resolveEntity() lends them the fallback in-memory.
             $entity = IfrsPosting::resolveEntity();
-            if (!$entity) {
+            if (! $entity) {
                 $this->lastPostingError = 'no IFRS entity';
                 Log::error('No IFRS entity available for bill payment posting', ['bill_payment_id' => $this->id]);
+
                 return null;
             }
 
-            $bankAccount = Account::where('code', self::IFRS_BANK_ACCOUNT_CODE)->first();
+            // Employee-paid purchases never touch the bank: the employee
+            // financed them, so the credit lands on the Employee
+            // Reimbursements Payable liability until the company pays the
+            // employee back (ReimbursementPayment clears it Dr 2280 / Cr 320).
+            $employeePaid = $this->payment_method === self::METHOD_EMPLOYEE_REIMBURSEMENT;
+            $mainAccount = $employeePaid
+                ? self::ensureReimbursementAccount($entity)
+                : Account::where('code', self::IFRS_BANK_ACCOUNT_CODE)->first();
             $defaultExpenseAccount = Account::where('code', self::IFRS_DEFAULT_EXPENSE_ACCOUNT_CODE)->first();
 
-            if (!$bankAccount || !$defaultExpenseAccount) {
-                $this->lastPostingError = 'IFRS accounts not found (bank ' . self::IFRS_BANK_ACCOUNT_CODE
-                    . ' / expense ' . self::IFRS_DEFAULT_EXPENSE_ACCOUNT_CODE . ')';
+            if (! $mainAccount || ! $defaultExpenseAccount) {
+                $this->lastPostingError = 'IFRS accounts not found ('.($employeePaid ? 'reimbursement ' : 'bank ')
+                    .($employeePaid ? self::IFRS_REIMBURSEMENT_ACCOUNT_CODE : self::IFRS_BANK_ACCOUNT_CODE)
+                    .' / expense '.self::IFRS_DEFAULT_EXPENSE_ACCOUNT_CODE.')';
                 Log::error('IFRS accounts not found for bill payment posting', [
-                    'bank_code' => self::IFRS_BANK_ACCOUNT_CODE,
+                    'main_code' => $employeePaid ? self::IFRS_REIMBURSEMENT_ACCOUNT_CODE : self::IFRS_BANK_ACCOUNT_CODE,
                     'expense_code' => self::IFRS_DEFAULT_EXPENSE_ACCOUNT_CODE,
                 ]);
+
                 return null;
             }
 
@@ -392,7 +471,7 @@ class BillPayment extends Model
             $groups = [];
             foreach ($this->allocations as $allocation) {
                 $bill = $allocation->bill()->with('items')->first();
-                if (!$bill) {
+                if (! $bill) {
                     continue;
                 }
                 foreach (self::allocationGroups($bill, (float) $allocation->amount, $defaultExpenseAccount) as $key => $cents) {
@@ -405,16 +484,21 @@ class BillPayment extends Model
                 Log::error('Nothing to post for bill payment — no allocatable bill items', [
                     'bill_payment_id' => $this->id,
                 ]);
+
                 return null;
             }
 
-            // Main account = Bank, credited = true → Cr Bank (asset decreases).
+            // Main account, credited = true → Cr Bank (asset decreases) or,
+            // for an employee-paid purchase, Cr Employee Reimbursements
+            // Payable (liability increases — the employee is owed it back).
             $journalEntry = new JournalEntry([
                 'transaction_date' => IfrsPosting::transactionDate($this->payment_date, $entity),
-                'account_id' => $bankAccount->id,
+                'account_id' => $mainAccount->id,
                 'credited' => true,
                 'entity_id' => $entity->id,
-                'narration' => "Supplier payment: {$this->payment_number} to {$this->supplier?->name}",
+                'narration' => $employeePaid
+                    ? "Employee expense: {$this->payment_number} paid by {$this->employee?->name} to {$this->supplier?->name}"
+                    : "Supplier payment: {$this->payment_number} to {$this->supplier?->name}",
                 'reference' => $this->payment_number,
             ]);
 
@@ -471,7 +555,7 @@ class BillPayment extends Model
             // schedules. Best-effort like the posting itself: a failure
             // here never invalidates the ledger entry.
             try {
-                \App\Services\PrepaymentService::createFromPayment($this, $entity);
+                PrepaymentService::createFromPayment($this, $entity);
             } catch (\Throwable $e) {
                 Log::error('Failed to create prepayments for bill payment', [
                     'bill_payment_id' => $this->id,
@@ -497,6 +581,7 @@ class BillPayment extends Model
                 'error' => $e->getMessage(),
                 'exception' => get_class($e),
             ]);
+
             return null;
         }
     }
@@ -542,7 +627,7 @@ class BillPayment extends Model
             }
 
             $accountId = $item->expense_account_id ?: $defaultExpenseAccount?->id;
-            if (!$accountId) {
+            if (! $accountId) {
                 continue;
             }
 
@@ -550,7 +635,7 @@ class BillPayment extends Model
             // gst = inclusive amount (vat_inclusive posting backs the
             // GST out); gstadd = ex-GST amount (package adds GST on
             // top); free = no GST.
-            $key = $accountId . '-' . ($taxable ? ($item->gst_added ? 'gstadd' : 'gst') : 'free');
+            $key = $accountId.'-'.($taxable ? ($item->gst_added ? 'gstadd' : 'gst') : 'free');
             $groups[$key] = ($groups[$key] ?? 0) + $shareCents;
         }
 
@@ -599,14 +684,14 @@ class BillPayment extends Model
                 ->get() as $entry
             ) {
                 try {
-                    if (\App\Services\PrepaymentService::reverseAmortisation($entry, throw: $throw)) {
+                    if (PrepaymentService::reverseAmortisation($entry, throw: $throw)) {
                         $reversed++;
                     }
                 } catch (\Throwable $e) {
                     if ($throw) {
                         throw $e;
                     }
-                    \Illuminate\Support\Facades\Log::error('Failed to reverse prepayment amortisation', [
+                    Log::error('Failed to reverse prepayment amortisation', [
                         'bill_payment_id' => $this->id,
                         'prepayment_amortisation_id' => $entry->id,
                         'error' => $e->getMessage(),
@@ -628,6 +713,30 @@ class BillPayment extends Model
     {
         if ($this->status === self::STATUS_VOID) {
             return false;
+        }
+
+        // Voiding a completed employee-paid capture lowers what the
+        // company owes that employee. When the money has already been
+        // reimbursed, voiding would drive the balance negative and leave
+        // the reimbursement's Cr Bank dangle against nothing — void the
+        // reimbursement payment first.
+        if (
+            $this->status === self::STATUS_COMPLETED
+            && $this->payment_method === self::METHOD_EMPLOYEE_REIMBURSEMENT
+            && $this->employee_id
+        ) {
+            $outstanding = ReimbursementPayment::outstandingFor((int) $this->employee_id);
+            if (round($outstanding - (float) $this->amount, 2) < 0) {
+                $this->lastVoidError = 'this employee-paid expense has already been reimbursed — void the reimbursement payment first';
+                Log::warning('Refusing to void reimbursed employee-paid bill payment', [
+                    'bill_payment_id' => $this->id,
+                    'employee_id' => $this->employee_id,
+                    'outstanding' => $outstanding,
+                    'amount' => $this->amount,
+                ]);
+
+                return false;
+            }
         }
 
         // Prepayment schedules funded by this payment stop amortising:

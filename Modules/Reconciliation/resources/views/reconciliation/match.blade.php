@@ -63,7 +63,7 @@
         @if ($search === '')
             <p class="px-4 py-2 text-xs text-gray-500 bg-gray-50 border-b border-gray-100">
                 Amount-close payments within ±14 days of the bank date —
-                {{ $transaction->type === \Modules\Reconciliation\Models\BankTransaction::TYPE_CREDIT ? 'client payments received' : 'supplier payments made' }}.
+                {{ $transaction->type === \Modules\Reconciliation\Models\BankTransaction::TYPE_CREDIT ? 'client payments received' : 'supplier payments and employee reimbursements made' }}.
             </p>
         @endif
 
@@ -84,12 +84,15 @@
                         <tr class="hover:bg-gray-50">
                             <td class="px-4 py-3">
                                 <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-800">
-                                    {{ ['bill_payment' => 'Supplier payment'][$candidate['type']] ?? ucfirst($candidate['type']) }}
+                                    {{ [
+                                        'bill_payment' => 'Supplier payment',
+                                        'reimbursement_payment' => 'Employee reimbursement',
+                                    ][$candidate['type']] ?? ucfirst($candidate['type']) }}
                                 </span>
                             </td>
                             <td class="px-4 py-3 text-sm text-gray-900">{{ $candidate['reference'] }}</td>
                             <td class="px-4 py-3 text-sm text-gray-600">
-                                {{ $candidate['client'] ?? $candidate['supplier'] ?? $candidate['account'] ?? '—' }}
+                                {{ $candidate['client'] ?? $candidate['supplier'] ?? $candidate['employee'] ?? $candidate['account'] ?? '—' }}
                             </td>
                             <td class="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
                                 {{ \Carbon\Carbon::parse($candidate['date'])->format('d M Y') }}
@@ -138,6 +141,7 @@
                     class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                     <option value="payment">Payment</option>
                     <option value="bill_payment">Supplier payment</option>
+                    <option value="reimbursement_payment">Employee reimbursement</option>
                     <option value="ledger">Ledger entry</option>
                 </select>
             </div>

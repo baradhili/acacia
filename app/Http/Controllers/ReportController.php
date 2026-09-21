@@ -1892,7 +1892,7 @@ class ReportController extends Controller
             ->where('status', '!=', BillPayment::STATUS_VOID)->count();
         if ($unpostedPayments || $unpostedBillPayments) {
             $warnings[] = sprintf(
-                '%d client payment(s) and %d bill payment(s) are not posted to the IFRS ledger and are excluded from this report.',
+                '%d client payment(s) and %d bill payment(s) are not posted to the IFRS ledger and are excluded from this report (employee expenses pending approval included).',
                 $unpostedPayments,
                 $unpostedBillPayments
             );

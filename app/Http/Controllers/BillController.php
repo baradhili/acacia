@@ -7,8 +7,10 @@ use App\Models\BillPayment;
 use App\Models\CompanyProfile;
 use App\Models\Project;
 use App\Models\Supplier;
+use App\Rules\ActiveEmployee;
 use App\Rules\NotInClosedPeriod;
 use App\Services\BillLifecycleService;
+use App\Services\EmployeeDirectory;
 use App\Services\IfrsPosting;
 use App\Services\PeriodLockService;
 use Carbon\Carbon;
@@ -49,6 +51,7 @@ class BillController extends Controller
         $purchaseAccounts = Bill::purchaseAccounts();
         $expenseAccounts = Bill::expenseAccounts();
         $paymentMethods = BillPayment::paymentMethods();
+        $employees = EmployeeDirectory::active();
 
         $selectedSupplier = $request->supplier_id ? Supplier::find($request->supplier_id) : null;
         $selectedProject = $request->project_id ? Project::find($request->project_id) : null;
@@ -59,6 +62,7 @@ class BillController extends Controller
             'purchaseAccounts',
             'expenseAccounts',
             'paymentMethods',
+            'employees',
             'selectedSupplier',
             'selectedProject'
         ));
@@ -102,6 +106,7 @@ class BillController extends Controller
             'paid_now' => 'nullable|boolean',
             'payment_date' => ['required_if:paid_now,1', 'nullable', 'date', new NotInClosedPeriod],
             'payment_method' => 'required_if:paid_now,1|nullable|in:'.implode(',', array_keys(BillPayment::paymentMethods())),
+            'employee_id' => ['nullable', 'required_if:payment_method,'.BillPayment::METHOD_EMPLOYEE_REIMBURSEMENT, new ActiveEmployee],
             'payment_reference' => 'nullable|string|max:255',
             // Receipts uploaded alongside a bill paid at entry
             'documents' => 'nullable|array',
@@ -156,20 +161,30 @@ class BillController extends Controller
             }
 
             // Paid-at-entry: create the payment, allocate the full total and
-            // post to the ledger in the same transaction.
+            // post to the ledger in the same transaction. Employee-paid
+            // expenses sit pending instead — approval posts them.
             if (! empty($validated['paid_now'])) {
+                $employeePaid = $validated['payment_method'] === BillPayment::METHOD_EMPLOYEE_REIMBURSEMENT;
+
                 $payment = BillPayment::createWithUniqueNumber([
                     'supplier_id' => $bill->supplier_id,
                     'paid_by' => Auth::id(),
+                    'employee_id' => $employeePaid ? $validated['employee_id'] : null,
                     'amount' => $bill->total,
                     'payment_date' => $validated['payment_date'] ?? $validated['bill_date'],
                     'payment_method' => $validated['payment_method'],
                     'reference' => $validated['payment_reference'] ?? null,
+                    'status' => $employeePaid ? BillPayment::STATUS_PENDING : BillPayment::STATUS_COMPLETED,
                 ]);
 
                 $payment->allocateToBill($bill, (float) $bill->total);
 
                 DB::commit();
+
+                if ($employeePaid) {
+                    return redirect()->route('bills.show', $bill)
+                        ->with('success', 'Bill captured as an employee-paid expense — awaiting approval before it posts to the ledger.');
+                }
 
                 // Ledger posting is best-effort (logged, non-fatal), matching
                 // the receipts flow.
@@ -196,9 +211,10 @@ class BillController extends Controller
         // "shared with other bills?" check in the Unapply action.
         $bill->load(['supplier', 'project', 'creator', 'items', 'allocations.billPayment.allocations', 'documents']);
         $paymentMethods = BillPayment::paymentMethods();
+        $employees = EmployeeDirectory::active();
         $companyProfile = CompanyProfile::forEntity(IfrsPosting::resolveEntity()?->id);
 
-        return view('bills.show', compact('bill', 'paymentMethods', 'companyProfile'));
+        return view('bills.show', compact('bill', 'paymentMethods', 'employees', 'companyProfile'));
     }
 
     public function edit(Bill $bill)
@@ -413,30 +429,50 @@ class BillController extends Controller
             return back()->with('error', 'Payments can only be recorded against outstanding bills.');
         }
 
-        $amountDue = (float) $bill->amount_due;
+        // Cap by what is genuinely still available: total minus ALL
+        // allocations, including pending-approval employee captures —
+        // otherwise a second payment could over-pay the bill once the
+        // pending claim approves.
+        $amountAvailable = round((float) $bill->total - (float) $bill->committed_amount, 2);
+        if ($amountAvailable <= 0) {
+            return back()->with('error',
+                'This bill is already fully covered by payments (some may still be pending approval).');
+        }
         $validated = $request->validate([
-            'amount' => 'required|numeric|min:0.01|max:'.$amountDue,
+            'amount' => 'required|numeric|min:0.01|max:'.$amountAvailable,
             'payment_date' => ['required', 'date', new NotInClosedPeriod],
             'payment_method' => 'required|in:'.implode(',', array_keys(BillPayment::paymentMethods())),
+            'employee_id' => ['nullable', 'required_if:payment_method,'.BillPayment::METHOD_EMPLOYEE_REIMBURSEMENT, new ActiveEmployee],
             'reference' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
         ]);
 
         DB::beginTransaction();
         try {
+            // Employee-paid expenses sit pending until approved; company
+            // payments complete and post straight away.
+            $employeePaid = $validated['payment_method'] === BillPayment::METHOD_EMPLOYEE_REIMBURSEMENT;
+
             $payment = BillPayment::createWithUniqueNumber([
                 'supplier_id' => $bill->supplier_id,
                 'paid_by' => Auth::id(),
+                'employee_id' => $employeePaid ? $validated['employee_id'] : null,
                 'amount' => $validated['amount'],
                 'payment_date' => $validated['payment_date'],
                 'payment_method' => $validated['payment_method'],
                 'reference' => $validated['reference'] ?? null,
                 'notes' => $validated['notes'] ?? null,
+                'status' => $employeePaid ? BillPayment::STATUS_PENDING : BillPayment::STATUS_COMPLETED,
             ]);
 
             $payment->allocateToBill($bill, (float) $validated['amount']);
 
             DB::commit();
+
+            if ($employeePaid) {
+                return redirect()->route('bills.show', $bill)
+                    ->with('success', 'Employee expense captured — awaiting approval before it posts to the ledger.');
+            }
 
             // Ledger posting is best-effort (logged, non-fatal).
             $payment->postToIFRS();

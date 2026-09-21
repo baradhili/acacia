@@ -126,7 +126,7 @@ class ReconciliationController extends Controller
     public function storeMatch(Request $request, BankTransaction $transaction)
     {
         $validated = $request->validate([
-            'type' => ['required', 'in:payment,bill_payment,ledger'],
+            'type' => ['required', 'in:payment,bill_payment,reimbursement_payment,ledger'],
             'target_id' => ['required', 'integer'],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);

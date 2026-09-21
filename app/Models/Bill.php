@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\QueryException;
 
 class Bill extends Model
 {
@@ -43,10 +44,15 @@ class Bill extends Model
     // Status constants — mirrors Invoice with `open` (bill received and
     // confirmed, awaiting payment) in place of the AR `sent`.
     const STATUS_DRAFT = 'draft';
+
     const STATUS_OPEN = 'open';
+
     const STATUS_PARTIALLY_PAID = 'partially_paid';
+
     const STATUS_PAID = 'paid';
+
     const STATUS_OVERDUE = 'overdue';
+
     const STATUS_CANCELLED = 'cancelled';
 
     // Valid state transitions
@@ -93,7 +99,7 @@ class Bill extends Model
             ->first();
 
         if ($lastBill) {
-            preg_match('/BILL-' . $year . '-(\d+)/', $lastBill->bill_number, $matches);
+            preg_match('/BILL-'.$year.'-(\d+)/', $lastBill->bill_number, $matches);
             $nextNumber = isset($matches[1]) ? ((int) $matches[1]) + 1 : 1;
         } else {
             $nextNumber = 1;
@@ -117,8 +123,8 @@ class Bill extends Model
         for ($i = 1; $i <= $attempts; $i++) {
             try {
                 return self::create($attributes);
-            } catch (\Illuminate\Database\QueryException $e) {
-                if (!self::isUniqueViolation($e) || $i === $attempts) {
+            } catch (QueryException $e) {
+                if (! self::isUniqueViolation($e) || $i === $attempts) {
                     throw $e;
                 }
             }
@@ -132,9 +138,10 @@ class Bill extends Model
      * MySQL (SQLSTATE 23000 / driver code 1062) and SQLite (SQLSTATE 23000 /
      * driver codes 19, 2067) via the shared SQLSTATE.
      */
-    protected static function isUniqueViolation(\Illuminate\Database\QueryException $e): bool
+    protected static function isUniqueViolation(QueryException $e): bool
     {
         $errorInfo = $e->errorInfo ?? [];
+
         // errorInfo[0] is the SQLSTATE; errorInfo[1] is the driver-specific code.
         return ($errorInfo[0] ?? null) === '23000'
             || ($errorInfo[1] ?? null) === 1062;
@@ -155,7 +162,7 @@ class Bill extends Model
         ])
             ->orderBy('code')
             ->get()
-            ->mapWithKeys(fn ($account) => [$account->id => $account->code . ' — ' . $account->name])
+            ->mapWithKeys(fn ($account) => [$account->id => $account->code.' — '.$account->name])
             ->all();
     }
 
@@ -168,7 +175,7 @@ class Bill extends Model
      */
     public static function purchaseAccounts(): array
     {
-        $format = fn ($account) => $account->code . ' — ' . $account->name;
+        $format = fn ($account) => $account->code.' — '.$account->name;
 
         $groups = [
             'Expenses' => Account::whereIn('account_type', [
@@ -266,11 +273,16 @@ class Bill extends Model
     }
 
     /**
-     * Get amount paid against this bill
+     * Get amount paid against this bill. Only completed payments count —
+     * allocations from a pending-approval payment (e.g. an employee-paid
+     * expense awaiting sign-off) must not mark the bill paid. Voided
+     * payments never linger: void() deletes their allocations.
      */
     public function getAmountPaidAttribute(): float
     {
-        return $this->allocations()->sum('amount');
+        return (float) $this->allocations()
+            ->whereHas('billPayment', fn ($query) => $query->where('status', BillPayment::STATUS_COMPLETED))
+            ->sum('amount');
     }
 
     /**
@@ -282,6 +294,21 @@ class Bill extends Model
     }
 
     /**
+     * Allocations from every non-void payment — completed AND pending
+     * (pending-approval employee captures; void deletes its allocations,
+     * the filter is belt-and-braces). Guards that must reserve the
+     * balance against later claims — edit locking, payment caps — use
+     * this; paid-status computation uses amount_paid, which only counts
+     * completed payments.
+     */
+    public function getCommittedAmountAttribute(): float
+    {
+        return (float) $this->allocations()
+            ->whereHas('billPayment', fn ($query) => $query->where('status', '!=', BillPayment::STATUS_VOID))
+            ->sum('amount');
+    }
+
+    /**
      * Get payment percentage
      */
     public function getPaymentPercentageAttribute(): float
@@ -289,6 +316,7 @@ class Bill extends Model
         if ($this->total == 0) {
             return 0;
         }
+
         return ($this->amount_paid / (float) $this->total) * 100;
     }
 
@@ -300,6 +328,7 @@ class Bill extends Model
         if (in_array($this->status, [self::STATUS_PAID, self::STATUS_CANCELLED])) {
             return false;
         }
+
         // Compare Carbon-to-Carbon at day granularity: due_date before the
         // start of today means the bill is overdue.
         return $this->due_date && $this->due_date->isBefore(now()->startOfDay());
@@ -311,6 +340,7 @@ class Bill extends Model
     public function canTransitionTo(string $status): bool
     {
         $allowedTransitions = self::$transitions[$this->status] ?? [];
+
         return in_array($status, $allowedTransitions);
     }
 
@@ -327,7 +357,7 @@ class Bill extends Model
      */
     public function transitionTo(string $status): bool
     {
-        if (!$this->canTransitionTo($status)) {
+        if (! $this->canTransitionTo($status)) {
             return false;
         }
 
@@ -379,16 +409,18 @@ class Bill extends Model
      * always unpaid; open/overdue bills are editable until the first
      * payment lands (payments post Dr Expense / Cr Bank to IFRS
      * apportioned from the current items, so item edits after posting
-     * would desync the ledger). Paid bills are corrected by unapplying
-     * the payment (which reverses its ledger share) first.
+     * would desync the ledger) — including a pending-approval capture,
+     * whose approval would post against stale items. Paid bills are
+     * corrected by unapplying the payment (which reverses its ledger
+     * share) first.
      */
     public function canBeEdited(): bool
     {
-        return !in_array($this->status, [
+        return ! in_array($this->status, [
             self::STATUS_CANCELLED,
             self::STATUS_PAID,
             self::STATUS_PARTIALLY_PAID,
-        ]) && (float) $this->amount_paid === 0.0;
+        ]) && (float) $this->committed_amount === 0.0;
     }
 
     /**
@@ -426,28 +458,31 @@ class Bill extends Model
     /**
      * Scope for overdue bills: either already flagged overdue, or any
      * open/partially_paid bill past its due_date that still has an
-     * outstanding balance (amount_paid < total). The balance check excludes
-     * bills that are effectively paid but whose status hasn't been flipped
-     * to paid yet, so they don't show as overdue forever.
+     * outstanding balance (amount_paid < total). The balance check counts
+     * only COMPLETED payments — a pending-approval employee capture has
+     * not paid anything yet, so it must not mask an overdue bill — and
+     * excludes bills that are effectively paid but whose status hasn't
+     * been flipped to paid yet, so they don't show as overdue forever.
      */
     public function scopeOverdue($query)
     {
         return $query->where('status', self::STATUS_OVERDUE)
             ->orWhere(function ($q) {
                 $q->whereIn('status', [self::STATUS_OPEN, self::STATUS_PARTIALLY_PAID])
-                  ->where('due_date', '<', now()->toDateString())
+                    ->where('due_date', '<', now()->toDateString())
                   // For bills with a positive total, require an outstanding
-                  // balance (total > sum of allocations). Zero-total bills
+                  // balance (total > completed allocations). Zero-total bills
                   // fall through (the status/due_date checks alone apply).
-                  ->where(function ($q) {
-                      $q->where('total', '<=', 0)
-                        ->orWhereRaw(
-                            'bills.total - COALESCE(('
-                            . 'SELECT SUM(amount) FROM bill_payment_allocations'
-                            . ' WHERE bill_payment_allocations.bill_id = bills.id'
-                            . '), 0) > 0'
-                        );
-                  });
+                    ->where(function ($q) {
+                        $q->where('total', '<=', 0)
+                            ->orWhereRaw(
+                                'bills.total - COALESCE(('
+                                .'SELECT SUM(bill_payment_allocations.amount) FROM bill_payment_allocations'
+                                .' JOIN bill_payments ON bill_payments.id = bill_payment_allocations.bill_payment_id'
+                                .' WHERE bill_payment_allocations.bill_id = bills.id'
+                                ." AND bill_payments.status = '".BillPayment::STATUS_COMPLETED.'\'), 0) > 0'
+                            );
+                    });
             });
     }
 
@@ -464,7 +499,7 @@ class Bill extends Model
      */
     public function getFormattedTotalAttribute(): string
     {
-        return config('australian.currency.symbol', 'A$') . number_format($this->total, 2);
+        return config('australian.currency.symbol', 'A$').number_format($this->total, 2);
     }
 
     /**
@@ -472,9 +507,10 @@ class Bill extends Model
      */
     public function getDaysUntilDueAttribute(): int
     {
-        if (!$this->due_date) {
+        if (! $this->due_date) {
             return 0;
         }
+
         return now()->diffInDays($this->due_date, false);
     }
 
@@ -521,7 +557,7 @@ class Bill extends Model
             // directly, not via is_overdue — that accessor returns false
             // while the model is still marked paid, which we are about to
             // revert from.
-            if (!in_array($this->status, [self::STATUS_DRAFT, self::STATUS_CANCELLED])) {
+            if (! in_array($this->status, [self::STATUS_DRAFT, self::STATUS_CANCELLED])) {
                 $overdue = $this->due_date && $this->due_date->isBefore(now()->startOfDay());
                 $this->update([
                     'status' => $overdue ? self::STATUS_OVERDUE : self::STATUS_OPEN,

@@ -63,7 +63,8 @@
 
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Payment Method *</label>
-                    <select name="payment_method" required
+                    <select name="payment_method" id="paymentMethodSelect" required
+                        {{ $billPayment->ifrs_payment_id ? 'disabled' : '' }}
                         class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
                         @foreach ($paymentMethods as $value => $label)
                             <option value="{{ $value }}"
@@ -71,7 +72,28 @@
                                 {{ $label }}</option>
                         @endforeach
                     </select>
+                    @if ($billPayment->ifrs_payment_id)
+                        <input type="hidden" name="payment_method" value="{{ $billPayment->payment_method }}">
+                        <p class="text-gray-500 text-xs mt-1">
+                            Locked — the method picks the ledger's credit leg, so posted payments cannot switch it.
+                        </p>
+                    @endif
                     @error('payment_method')
+                        <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div id="employeeField" class="hidden">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Paid by employee *</label>
+                    <select name="employee_id"
+                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                        <option value="">Select Employee</option>
+                        @foreach ($employees as $id => $name)
+                            <option value="{{ $id }}"
+                                {{ old('employee_id', $billPayment->employee_id) == $id ? 'selected' : '' }}>{{ $name }}</option>
+                        @endforeach
+                    </select>
+                    @error('employee_id')
                         <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
                     @enderror
                 </div>
@@ -103,3 +125,18 @@
 
     <x-document-upload :model="$billPayment" />
 @endsection
+
+@push('scripts')
+    <script>
+        const methodSelect = document.getElementById('paymentMethodSelect');
+        const employeeField = document.getElementById('employeeField');
+
+        function syncEmployeeField() {
+            const employeeMethod = methodSelect.value === 'employee_reimbursement';
+            employeeField.classList.toggle('hidden', !employeeMethod);
+            employeeField.querySelector('select').required = employeeMethod;
+        }
+        methodSelect.addEventListener('change', syncEmployeeField);
+        syncEmployeeField();
+    </script>
+@endpush

@@ -192,6 +192,9 @@ class IFRSSeeder extends Seeder
         $this->createAccount('Dividends Payable', Account::CURRENT_LIABILITY, 2260, $entity);
         $this->createAccount('Director Loan Payable', Account::CURRENT_LIABILITY, 2270, $entity);
 
+        // Employee Expenses (New)
+        $this->createAccount('Employee Reimbursements Payable', Account::CURRENT_LIABILITY, 2280, $entity);
+
         // ============================================
         // EQUITY ACCOUNTS (Codes 3000-3999)
         // ============================================

@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\BillPayment;
 use App\Models\Payment;
+use App\Models\ReimbursementPayment;
 use Illuminate\Console\Command;
 
 /**
@@ -34,13 +35,21 @@ class PostPaymentsToIfrs extends Command
             ->orderBy('id')
             ->get();
 
+        // Pending = employee expense awaiting approval, not a posting
+        // failure — the approve action posts those.
         $billPayments = BillPayment::whereNull('ifrs_payment_id')
-            ->where('status', '!=', BillPayment::STATUS_VOID)
+            ->where('status', BillPayment::STATUS_COMPLETED)
             ->orderBy('id')
             ->get();
 
-        if ($payments->isEmpty() && $billPayments->isEmpty()) {
+        $reimbursements = ReimbursementPayment::whereNull('ifrs_transaction_id')
+            ->where('status', ReimbursementPayment::STATUS_COMPLETED)
+            ->orderBy('id')
+            ->get();
+
+        if ($payments->isEmpty() && $billPayments->isEmpty() && $reimbursements->isEmpty()) {
             $this->info('No unposted payments found.');
+
             return Command::SUCCESS;
         }
 
@@ -57,6 +66,7 @@ class PostPaymentsToIfrs extends Command
 
             if ($dryRun) {
                 $this->warn("  Would post {$label}");
+
                 continue;
             }
 
@@ -79,6 +89,7 @@ class PostPaymentsToIfrs extends Command
 
             if ($dryRun) {
                 $this->warn("  Would post {$label}");
+
                 continue;
             }
 
@@ -91,11 +102,34 @@ class PostPaymentsToIfrs extends Command
             }
         }
 
+        foreach ($reimbursements as $reimbursement) {
+            $label = sprintf(
+                'reimbursement %s (%s, $%s)',
+                $reimbursement->payment_number,
+                $reimbursement->payment_date->format('d/m/Y'),
+                number_format($reimbursement->amount, 2),
+            );
+
+            if ($dryRun) {
+                $this->warn("  Would post {$label}");
+
+                continue;
+            }
+
+            if ($reimbursement->postToIFRS()) {
+                $this->info("  Posted {$label}");
+                $posted++;
+            } else {
+                $this->error("  FAILED  {$label} — {$reimbursement->lastPostingError}");
+                $failed++;
+            }
+        }
+
         $this->newLine();
         if ($dryRun) {
             $this->warn(sprintf(
                 'Dry run — no changes made. %d payment(s) would be posted.',
-                $payments->count() + $billPayments->count(),
+                $payments->count() + $billPayments->count() + $reimbursements->count(),
             ));
         } else {
             $this->info('Summary:');

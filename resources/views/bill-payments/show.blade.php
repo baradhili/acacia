@@ -11,10 +11,22 @@
                     <span class="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-500">
                         Void
                     </span>
+                @elseif ($billPayment->status === 'pending')
+                    <span class="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                        Pending approval
+                    </span>
                 @endif
             </p>
         </div>
         <div class="flex gap-2">
+            @if ($billPayment->status === 'pending' && $billPayment->employee_id)
+                <form action="{{ route('bill-payments.approve', $billPayment) }}" method="POST" class="inline">
+                    @csrf
+                    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg">
+                        Approve &amp; Post
+                    </button>
+                </form>
+            @endif
             @if ($billPayment->status !== 'void')
                 @if ($billPayment->unallocated_amount > 0)
                     <button type="button" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg"
@@ -182,6 +194,19 @@
                         <dt class="text-sm text-gray-500">Payment Method</dt>
                         <dd class="font-medium">{{ $billPayment->formatted_method }}</dd>
                     </div>
+                    @if ($billPayment->employee_id)
+                        <div>
+                            <dt class="text-sm text-gray-500">Paid by Employee</dt>
+                            <dd class="font-medium">
+                                {{ $billPayment->employee?->name }}
+                                <span class="block text-xs text-gray-500">
+                                    owed until reimbursed — {{ \App\Models\ReimbursementPayment::outstandingFor((int) $billPayment->employee_id) > 0
+                                        ? '$' . number_format(\App\Models\ReimbursementPayment::outstandingFor((int) $billPayment->employee_id), 2) . ' outstanding'
+                                        : 'nothing outstanding' }}
+                                </span>
+                            </dd>
+                        </div>
+                    @endif
                     @if ($billPayment->reference)
                         <div>
                             <dt class="text-sm text-gray-500">Reference</dt>

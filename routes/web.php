@@ -24,6 +24,7 @@ use App\Http\Controllers\PrepaymentController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\PurchaseOrderController;
+use App\Http\Controllers\ReimbursementPaymentController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\ShareClassController;
@@ -215,6 +216,14 @@ Route::middleware('auth')->group(function () {
     Route::post('/bill-payments/{billPayment}/allocate', [BillPaymentController::class, 'allocate'])->name('bill-payments.allocate');
     Route::post('/bill-payments/{billPayment}/remove-allocation/{bill}', [BillPaymentController::class, 'removeAllocation'])->name('bill-payments.removeAllocation');
     Route::post('/bill-payments/{billPayment}/void', [BillPaymentController::class, 'void'])->name('bill-payments.void');
+    Route::post('/bill-payments/{billPayment}/approve', [BillPaymentController::class, 'approve'])
+        ->middleware('role:admin|accountant')->name('bill-payments.approve');
+
+    // Reimbursement payments (paying employees back for expenses they financed)
+    Route::resource('reimbursement-payments', ReimbursementPaymentController::class)
+        ->except(['edit', 'update', 'destroy']);
+    Route::post('/reimbursement-payments/{reimbursementPayment}/void', [ReimbursementPaymentController::class, 'void'])
+        ->name('reimbursement-payments.void');
 
     // Documents (API)
     Route::get('/documents', [DocumentController::class, 'index'])->name('documents.index');

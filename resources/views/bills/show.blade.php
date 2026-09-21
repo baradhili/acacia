@@ -225,7 +225,7 @@
                     </div>
                 </div>
 
-                @if($bill->amount_due > 0 && !in_array($bill->status, ['draft', 'cancelled']))
+                @if($bill->committed_amount < (float) $bill->total && !in_array($bill->status, ['draft', 'cancelled']))
                     <div class="mt-4 flex gap-2">
                         <button type="button" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg"
                             onclick="document.getElementById('paymentModal').classList.remove('hidden')">
@@ -307,7 +307,7 @@
                     <a href="{{ route('bills.index') }}" class="block text-indigo-600 hover:text-indigo-800">
                         ← Back to Bills
                     </a>
-                    @if($bill->amount_due > 0 && !in_array($bill->status, ['draft', 'cancelled']))
+                    @if($bill->committed_amount < (float) $bill->total && !in_array($bill->status, ['draft', 'cancelled']))
                         <a href="{{ route('bill-payments.create', ['supplier_id' => $bill->supplier_id]) }}"
                             class="block text-indigo-600 hover:text-indigo-800">
                             Pay via Supplier Payment →
@@ -322,15 +322,24 @@
     <div id="paymentModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div class="bg-white rounded-lg p-6 w-full max-w-md">
             <h3 class="text-lg font-semibold mb-4">Record Payment for Bill #{{ $bill->bill_number }}</h3>
-            <p class="text-gray-600 mb-4">Balance Due: <strong>${{ number_format($bill->amount_due, 2) }}</strong></p>
+            <p class="text-gray-600 mb-4">
+                Balance Due: <strong>${{ number_format($bill->amount_due, 2) }}</strong>
+                @php($available = max(0, round((float) $bill->total - (float) $bill->committed_amount, 2)))
+                @if ($available < (float) $bill->amount_due)
+                    <span class="block text-xs text-amber-700">
+                        ${{ number_format($bill->amount_due - $available, 2) }} awaiting approval —
+                        ${{ number_format($available, 2) }} payable now
+                    </span>
+                @endif
+            </p>
 
             <form action="{{ route('bills.recordPayment', $bill) }}" method="POST">
                 @csrf
                 <div class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Amount *</label>
-                        <input type="number" name="amount" value="{{ $bill->amount_due }}"
-                            step="0.01" min="0.01" max="{{ $bill->amount_due }}" required
+                        <input type="number" name="amount" value="{{ $available }}"
+                            step="0.01" min="0.01" max="{{ $available }}" required
                             class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
                     </div>
                     <div>
@@ -340,10 +349,20 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Payment Method *</label>
-                        <select name="payment_method" required
+                        <select name="payment_method" id="paymentMethodSelect" required
                             class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
                             @foreach ($paymentMethods as $value => $label)
                                 <option value="{{ $value }}">{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div id="employeeField" class="hidden">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Paid by employee *</label>
+                        <select name="employee_id"
+                            class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                            <option value="">Select Employee</option>
+                            @foreach ($employees as $id => $name)
+                                <option value="{{ $id }}">{{ $name }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -366,5 +385,15 @@
             </form>
         </div>
     </div>
+
+    <script>
+        const paymentMethodSelect = document.getElementById('paymentMethodSelect');
+        const employeeField = document.getElementById('employeeField');
+        paymentMethodSelect.addEventListener('change', function() {
+            const employeeMethod = this.value === 'employee_reimbursement';
+            employeeField.classList.toggle('hidden', !employeeMethod);
+            employeeField.querySelector('select').required = employeeMethod;
+        });
+    </script>
 
 @endsection
