@@ -69,7 +69,8 @@ class UnreconciledBankMovementsTest extends TestCase
             'name' => 'Test Entity',
             'locale' => 'en_AU',
             'multi_currency' => false,
-            'year_start' => 1,
+            // July start like production: FY 2026 = 1 Jul 2026 – 30 Jun 2027.
+            'year_start' => 7,
         ]);
 
         $currency = Currency::create([
@@ -448,6 +449,22 @@ class UnreconciledBankMovementsTest extends TestCase
         $this->assertSame(BankTransaction::STATUS_MATCHED, $line->status);
         $this->assertSame('ledger', $line->matched_transaction_type);
         $this->assertCount(0, $this->service->getUnreconciledBankMovements());
+    }
+
+    public function test_only_movements_inside_the_open_financial_year_show(): void
+    {
+        // The open FY for a July-start entity with "now" in September
+        // 2026 is FY 2026: 1 Jul 2026 – 30 Jun 2027. Last financial
+        // year's movements are closed history and never wait on this
+        // panel.
+        $acme = $this->client();
+        $lastFyPayment = $this->postedPayment($acme, 1200.00, '2026-05-12');
+        $thisFyPayment = $this->postedPayment($acme, 1500.00, '2026-09-10');
+
+        $movements = $this->service->getUnreconciledBankMovements();
+
+        $this->assertNotNull($movements->firstWhere('reference', $thisFyPayment->payment_number));
+        $this->assertNull($movements->firstWhere('reference', $lastFyPayment->payment_number));
     }
 
     public function test_index_screen_lists_the_unreconciled_movements(): void

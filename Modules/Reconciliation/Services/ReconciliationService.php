@@ -10,6 +10,8 @@ use App\Models\Payment;
 use App\Models\ReimbursementPayment;
 use App\Models\Supplier;
 use App\Models\User;
+use App\Services\FiscalYearService;
+use App\Services\IfrsPosting;
 use Carbon\Carbon;
 use IFRS\Models\Account;
 use IFRS\Models\Balance;
@@ -344,13 +346,14 @@ class ReconciliationService
      * transaction. A posting and its reversal share the transaction
      * reference (the payment number), so once both are unreconciled
      * they net to zero on the bank account and drop out together — only
-     * book entries with a bank impact remain. Payment tiers whose table
-     * is unavailable (migration pending) degrade individually — their
-     * movements still list, labelled by the IFRS transaction type — so
-     * the panel never shows a false "everything reconciled". Like the
-     * manual-match ledger tier, the whole view degrades to an empty
-     * list rather than failing the screen when the IFRS entity scope
-     * cannot resolve.
+     * book entries with a bank impact remain. Only movements inside the
+     * open financial year are listed; closed years are history.
+     * Payment tiers whose table is unavailable (migration pending)
+     * degrade individually — their movements still list, labelled by
+     * the IFRS transaction type — so the panel never shows a false
+     * "everything reconciled". Like the manual-match ledger tier, the
+     * whole view degrades to an empty list rather than failing the
+     * screen when the IFRS entity scope cannot resolve.
      *
      * @return Collection<int, array{
      *     date: Carbon, account: string, amount: float, origin: string,
@@ -367,9 +370,25 @@ class ReconciliationService
             }
             $accountNames = $bankAccounts->pluck('name', 'id');
 
+            // Book-side reconciliation works the open financial year only
+            // (July–June, or the admin's pinned year): earlier years are
+            // closed history, so their movements never belong on this
+            // panel. Without a resolvable entity there is no year to
+            // bound, and the panel shows everything rather than nothing.
+            $fiscalYear = app(FiscalYearService::class);
+            $entity = IfrsPosting::resolveEntity();
+            $bounds = $entity
+                ? $fiscalYear->bounds($entity, $fiscalYear->currentYear($entity))
+                : null;
+
             $movements = DB::table((new Ledger)->getTable())
                 ->whereIn('post_account', $bankAccounts->pluck('id'))
                 ->whereNull('deleted_at')
+                // periodEnd lands on the FY's final day at midnight;
+                // widen to end-of-day so same-day postings stay inside.
+                ->when($bounds !== null, fn ($query) => $query
+                    ->where('posting_date', '>=', $bounds['start'])
+                    ->where('posting_date', '<=', $bounds['end']->copy()->endOfDay()))
                 ->groupBy('transaction_id', 'post_account')
                 ->selectRaw('transaction_id, post_account, MIN(id) as ledger_id, SUM(CASE WHEN entry_type = ? THEN amount ELSE -amount END) as amount', [Balance::DEBIT])
                 ->get();
