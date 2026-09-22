@@ -27,14 +27,16 @@ class ReconciliationController extends Controller
             ->orderByDesc('matched_at')
             ->limit(25)
             ->get();
+        $unreconciledLedger = $this->reconciliation->getUnreconciledBankMovements();
 
         $stats = [
             'pending' => $pending->count(),
             'matched' => BankTransaction::matched()->count(),
             'ignored' => BankTransaction::where('status', BankTransaction::STATUS_IGNORED)->count(),
+            'in_books' => $unreconciledLedger->count(),
         ];
 
-        return view('reconciliation.index', compact('pending', 'matched', 'stats'));
+        return view('reconciliation.index', compact('pending', 'matched', 'unreconciledLedger', 'stats'));
     }
 
     public function import()

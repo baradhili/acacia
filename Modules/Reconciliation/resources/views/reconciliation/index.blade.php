@@ -33,7 +33,7 @@
         </div>
     @endif
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
         <div class="bg-white rounded-lg shadow p-6">
             <p class="text-sm text-gray-500">Pending</p>
             <p class="text-2xl font-bold text-amber-600">{{ number_format($stats['pending']) }}</p>
@@ -45,6 +45,10 @@
         <div class="bg-white rounded-lg shadow p-6">
             <p class="text-sm text-gray-500">Ignored</p>
             <p class="text-2xl font-bold text-gray-500">{{ number_format($stats['ignored']) }}</p>
+        </div>
+        <div class="bg-white rounded-lg shadow p-6">
+            <p class="text-sm text-gray-500">In books, not on statement</p>
+            <p class="text-2xl font-bold text-sky-600">{{ number_format($stats['in_books']) }}</p>
         </div>
     </div>
 
@@ -89,6 +93,54 @@
                         <tr>
                             <td colspan="6" class="px-4 py-6 text-sm text-gray-500">
                                 Nothing pending — import a CSV export to bring in new bank movements.
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+        <div class="px-4 py-3 border-b border-gray-200 flex justify-between items-center">
+            <h2 class="text-lg font-semibold text-gray-800">In the books, not on the bank statement</h2>
+            <span class="text-xs text-gray-500">latest first</span>
+        </div>
+        <p class="px-4 py-2 text-xs text-gray-500 border-b border-gray-100">
+            Ledger movements on a bank account that no matched bank line accounts for — recorded in the ERP but never confirmed by the statement import.
+        </p>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bank account</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Origin</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Counterparty</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    @forelse ($unreconciledLedger as $movement)
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{{ $movement['date']->format('d M Y') }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600">{{ $movement['account'] }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-900">{{ $movement['description'] ?? '—' }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600">
+                                {{ $movement['origin'] }}@if ($movement['reference'])
+                                    <span class="text-gray-400">·</span> <span class="text-gray-500">{{ $movement['reference'] }}</span>
+                                @endif
+                            </td>
+                            <td class="px-4 py-3 text-sm text-gray-600">{{ $movement['counterparty'] ?? '—' }}</td>
+                            <td class="px-4 py-3 text-sm text-right whitespace-nowrap {{ $movement['amount'] < 0 ? 'text-red-600' : 'text-green-700' }}">
+                                {{ $movement['amount'] < 0 ? '-' : '' }}${{ number_format(abs($movement['amount']), 2) }}
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="6" class="px-4 py-6 text-sm text-gray-500">
+                                Every movement in the books is matched to a bank line.
                             </td>
                         </tr>
                     @endforelse

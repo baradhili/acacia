@@ -12,8 +12,11 @@ use App\Models\Supplier;
 use App\Models\User;
 use Carbon\Carbon;
 use IFRS\Models\Account;
+use IFRS\Models\Balance;
 use IFRS\Models\Ledger;
+use IFRS\Models\Transaction;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Modules\Reconciliation\Models\BankTransaction;
@@ -26,6 +29,23 @@ class ReconciliationService
     private const AMOUNT_TOLERANCE = 0.01; // $0.01 tolerance for amount matching
 
     private const DATE_TOLERANCE_DAYS = 3; // 3 days tolerance for date matching
+
+    /**
+     * Display labels for the IFRS transaction types that can post bank
+     * movements outside the payment tiers (journals, bills, ...).
+     */
+    private const IFRS_TRANSACTION_LABELS = [
+        Transaction::CS => 'Cash sale',
+        Transaction::IN => 'Client invoice',
+        Transaction::CN => 'Credit note',
+        Transaction::RC => 'Client receipt',
+        Transaction::CP => 'Cash purchase',
+        Transaction::BL => 'Supplier bill',
+        Transaction::DN => 'Debit note',
+        Transaction::PY => 'Supplier payment',
+        Transaction::CE => 'Contra entry',
+        Transaction::JN => 'Journal entry',
+    ];
 
     /**
      * Import a bank statement CSV export (Wise). Two layouts are
@@ -307,6 +327,157 @@ class ReconciliationService
             'matched' => BankTransaction::matched()->count(),
             'ignored' => BankTransaction::where('status', BankTransaction::STATUS_IGNORED)->count(),
         ];
+    }
+
+    /**
+     * The reverse view of the pending bank lines: ledger movements on a
+     * bank account that no matched bank line accounts for — money the
+     * books say moved through the bank but the statement import never
+     * confirmed. Each row is one IFRS transaction's net movement on one
+     * bank account (debits money in, credits money out), traced back to
+     * the payment that posted it — client payment, supplier payment or
+     * employee reimbursement — or labelled by its IFRS transaction type
+     * when it came from a journal entry or another direct posting.
+     *
+     * A movement is reconciled when a matched bank line links to its
+     * payment, or (for direct postings) to either leg of its ledger
+     * transaction. Payment tiers whose table is unavailable (migration
+     * pending) degrade individually — their movements still list,
+     * labelled by the IFRS transaction type — so the panel never shows
+     * a false "everything reconciled". Like the manual-match ledger
+     * tier, the whole view degrades to an empty list rather than
+     * failing the screen when the IFRS entity scope cannot resolve.
+     */
+    public function getUnreconciledBankMovements(): Collection
+    {
+        try {
+            $bankAccounts = Account::where('account_type', Account::BANK)->get(['id', 'name']);
+            if ($bankAccounts->isEmpty()) {
+                return collect();
+            }
+            $accountNames = $bankAccounts->pluck('name', 'id');
+
+            $movements = DB::table((new Ledger)->getTable())
+                ->whereIn('post_account', $bankAccounts->pluck('id'))
+                ->whereNull('deleted_at')
+                ->groupBy('transaction_id', 'post_account')
+                ->selectRaw('transaction_id, post_account, SUM(CASE WHEN entry_type = ? THEN amount ELSE -amount END) as amount', [Balance::DEBIT])
+                ->get();
+
+            if ($movements->isEmpty()) {
+                return collect();
+            }
+
+            $transactionIds = $movements->pluck('transaction_id')->unique()->values();
+            $transactions = DB::table((new Transaction)->getTable())
+                ->whereIn('id', $transactionIds)
+                ->get(['id', 'transaction_date', 'transaction_no', 'transaction_type', 'narration'])
+                ->keyBy('id');
+
+            // What the matched bank lines have already reconciled, as a
+            // set of IFRS transaction ids: the transaction a matched
+            // payment posted, or — for a direct 'ledger' link — the
+            // transaction of whichever ledger row was linked (either
+            // leg counts).
+            $matched = BankTransaction::matched()
+                ->whereNotNull('matched_transaction_type')
+                ->get(['matched_transaction_type', 'matched_transaction_id'])
+                ->groupBy('matched_transaction_type')
+                ->map(fn ($rows) => $rows->pluck('matched_transaction_id')->filter());
+
+            $reconciledTransactionIds = DB::table((new Ledger)->getTable())
+                ->whereIn('id', $matched->get('ledger', collect()))
+                ->pluck('transaction_id')
+                ->merge($this->tierOrEmpty(fn () => Payment::whereIn('id', $matched->get('payment', collect()))->pluck('ifrs_receipt_id')))
+                ->merge($this->tierOrEmpty(fn () => BillPayment::whereIn('id', $matched->get('bill_payment', collect()))->pluck('ifrs_payment_id')))
+                ->merge($this->tierOrEmpty(fn () => ReimbursementPayment::whereIn('id', $matched->get('reimbursement_payment', collect()))->pluck('ifrs_transaction_id')))
+                ->filter()
+                ->unique();
+
+            // Which ERP payment posted each transaction, for the label and
+            // the counterparty column.
+            $payments = $this->tierOrEmpty(fn () => Payment::whereIn('ifrs_receipt_id', $transactionIds)
+                ->with('client:id,name')
+                ->get()
+                ->keyBy('ifrs_receipt_id'));
+            $billPayments = $this->tierOrEmpty(fn () => BillPayment::whereIn('ifrs_payment_id', $transactionIds)
+                ->with('supplier:id,name')
+                ->get()
+                ->keyBy('ifrs_payment_id'));
+            $reimbursements = $this->tierOrEmpty(fn () => ReimbursementPayment::whereIn('ifrs_transaction_id', $transactionIds)
+                ->with('employee:id,name')
+                ->get()
+                ->keyBy('ifrs_transaction_id'));
+
+            return $movements
+                ->map(function ($movement) use ($accountNames, $transactions, $reconciledTransactionIds, $payments, $billPayments, $reimbursements) {
+                    $transaction = $transactions->get($movement->transaction_id);
+                    if (! $transaction) {
+                        return null;
+                    }
+
+                    if ($payment = $payments->get($movement->transaction_id)) {
+                        [$origin, $reference, $counterparty] = [
+                            'Client payment', $payment->payment_number, $payment->client?->name,
+                        ];
+                    } elseif ($billPayment = $billPayments->get($movement->transaction_id)) {
+                        [$origin, $reference, $counterparty] = [
+                            'Supplier payment', $billPayment->payment_number, $billPayment->supplier?->name,
+                        ];
+                    } elseif ($reimbursement = $reimbursements->get($movement->transaction_id)) {
+                        [$origin, $reference, $counterparty] = [
+                            'Employee reimbursement', $reimbursement->payment_number, $reimbursement->employee?->name,
+                        ];
+                    } else {
+                        [$origin, $reference, $counterparty] = [
+                            self::IFRS_TRANSACTION_LABELS[$transaction->transaction_type] ?? 'Ledger entry',
+                            $transaction->transaction_no, null,
+                        ];
+                    }
+
+                    if ($reconciledTransactionIds->contains($movement->transaction_id)) {
+                        return null;
+                    }
+
+                    return [
+                        'date' => Carbon::parse($transaction->transaction_date),
+                        'account' => $accountNames[$movement->post_account] ?? 'Bank account',
+                        'amount' => (float) $movement->amount,
+                        'origin' => $origin,
+                        'reference' => $reference,
+                        'counterparty' => $counterparty,
+                        'description' => $transaction->narration,
+                    ];
+                })
+                ->filter()
+                ->sortByDesc(fn ($row) => [$row['date']->timestamp, $row['reference']])
+                ->values();
+        } catch (\Throwable $e) {
+            Log::warning('Unreconciled bank-account movements unavailable', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return collect();
+        }
+    }
+
+    /**
+     * Run one payment-tier lookup, degrading to an empty result when
+     * the tier is unavailable (e.g. its migration is still pending on
+     * this install) instead of failing the whole unreconciled-movements
+     * view.
+     */
+    protected function tierOrEmpty(callable $lookup): Collection
+    {
+        try {
+            return $lookup();
+        } catch (\Throwable $e) {
+            Log::warning('Reconciliation payment tier unavailable', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return collect();
+        }
     }
 
     /**
