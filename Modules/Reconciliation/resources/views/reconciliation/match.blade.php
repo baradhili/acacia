@@ -63,7 +63,8 @@
         @if ($search === '')
             <p class="px-4 py-2 text-xs text-gray-500 bg-gray-50 border-b border-gray-100">
                 Amount-close payments within ±14 days of the bank date —
-                {{ $transaction->type === \Modules\Reconciliation\Models\BankTransaction::TYPE_CREDIT ? 'client payments received' : 'supplier payments and employee reimbursements made' }}.
+                {{ $transaction->type === \Modules\Reconciliation\Models\BankTransaction::TYPE_CREDIT ? 'client payments received' : 'supplier payments and employee reimbursements made' }}
+                — plus unreconciled ledger movements (reversals, direct postings) with no payment behind them.
             </p>
         @endif
 

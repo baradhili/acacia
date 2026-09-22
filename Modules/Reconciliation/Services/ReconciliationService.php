@@ -341,12 +341,22 @@ class ReconciliationService
      *
      * A movement is reconciled when a matched bank line links to its
      * payment, or (for direct postings) to either leg of its ledger
-     * transaction. Payment tiers whose table is unavailable (migration
-     * pending) degrade individually — their movements still list,
-     * labelled by the IFRS transaction type — so the panel never shows
-     * a false "everything reconciled". Like the manual-match ledger
-     * tier, the whole view degrades to an empty list rather than
-     * failing the screen when the IFRS entity scope cannot resolve.
+     * transaction. A posting and its reversal share the transaction
+     * reference (the payment number), so once both are unreconciled
+     * they net to zero on the bank account and drop out together — only
+     * book entries with a bank impact remain. Payment tiers whose table
+     * is unavailable (migration pending) degrade individually — their
+     * movements still list, labelled by the IFRS transaction type — so
+     * the panel never shows a false "everything reconciled". Like the
+     * manual-match ledger tier, the whole view degrades to an empty
+     * list rather than failing the screen when the IFRS entity scope
+     * cannot resolve.
+     *
+     * @return Collection<int, array{
+     *     date: Carbon, account: string, amount: float, origin: string,
+     *     reference: mixed, counterparty: mixed, description: mixed,
+     *     ledger_id: int, transaction_id: int,
+     * }>
      */
     public function getUnreconciledBankMovements(): Collection
     {
@@ -361,7 +371,7 @@ class ReconciliationService
                 ->whereIn('post_account', $bankAccounts->pluck('id'))
                 ->whereNull('deleted_at')
                 ->groupBy('transaction_id', 'post_account')
-                ->selectRaw('transaction_id, post_account, SUM(CASE WHEN entry_type = ? THEN amount ELSE -amount END) as amount', [Balance::DEBIT])
+                ->selectRaw('transaction_id, post_account, MIN(id) as ledger_id, SUM(CASE WHEN entry_type = ? THEN amount ELSE -amount END) as amount', [Balance::DEBIT])
                 ->get();
 
             if ($movements->isEmpty()) {
@@ -371,7 +381,7 @@ class ReconciliationService
             $transactionIds = $movements->pluck('transaction_id')->unique()->values();
             $transactions = DB::table((new Transaction)->getTable())
                 ->whereIn('id', $transactionIds)
-                ->get(['id', 'transaction_date', 'transaction_no', 'transaction_type', 'narration'])
+                ->get(['id', 'transaction_date', 'transaction_no', 'transaction_type', 'reference', 'narration'])
                 ->keyBy('id');
 
             // What the matched bank lines have already reconciled, as a
@@ -409,10 +419,14 @@ class ReconciliationService
                 ->get()
                 ->keyBy('ifrs_transaction_id'));
 
-            return $movements
+            $rows = $movements
                 ->map(function ($movement) use ($accountNames, $transactions, $reconciledTransactionIds, $payments, $billPayments, $reimbursements) {
                     $transaction = $transactions->get($movement->transaction_id);
                     if (! $transaction) {
+                        return null;
+                    }
+
+                    if ($reconciledTransactionIds->contains($movement->transaction_id)) {
                         return null;
                     }
 
@@ -429,14 +443,19 @@ class ReconciliationService
                             'Employee reimbursement', $reimbursement->payment_number, $reimbursement->employee?->name,
                         ];
                     } else {
-                        [$origin, $reference, $counterparty] = [
-                            self::IFRS_TRANSACTION_LABELS[$transaction->transaction_type] ?? 'Ledger entry',
-                            $transaction->transaction_no, null,
+                        // Every reversal this app writes narrates as
+                        // "Reversal of ..." — surfaced so money-back
+                        // entries waiting for their own bank line stand
+                        // out. Their reference column carries the payment
+                        // number they reverse, which identifies them far
+                        // better than the journal number.
+                        $origin = Str::startsWith(mb_strtolower((string) $transaction->narration), 'reversal of')
+                            ? 'Reversal'
+                            : (self::IFRS_TRANSACTION_LABELS[$transaction->transaction_type] ?? 'Ledger entry');
+                        [$reference, $counterparty] = [
+                            $transaction->reference !== null && $transaction->reference !== '' ? $transaction->reference : $transaction->transaction_no,
+                            null,
                         ];
-                    }
-
-                    if ($reconciledTransactionIds->contains($movement->transaction_id)) {
-                        return null;
                     }
 
                     return [
@@ -447,9 +466,28 @@ class ReconciliationService
                         'reference' => $reference,
                         'counterparty' => $counterparty,
                         'description' => $transaction->narration,
+                        'ledger_id' => (int) $movement->ledger_id,
+                        'transaction_id' => (int) $movement->transaction_id,
+                        // Postings and their reversals share the reference;
+                        // used only to net pairs, stripped before returning.
+                        '_net_key' => $transaction->reference !== null && $transaction->reference !== ''
+                            ? $transaction->reference
+                            : 'txn-'.$movement->transaction_id,
                     ];
                 })
-                ->filter()
+                ->filter();
+
+            // A posting and its reversal share the transaction reference,
+            // so group by (bank account, reference) and drop what nets to
+            // nothing: no bank impact, nothing to reconcile.
+            $nettedOut = $rows
+                ->groupBy(fn ($row) => $row['account'].'|'.$row['_net_key'])
+                ->filter(fn ($group) => abs($group->sum('amount')) < 0.005)
+                ->keys();
+
+            return $rows
+                ->reject(fn ($row) => $nettedOut->contains($row['account'].'|'.$row['_net_key']))
+                ->map(fn ($row) => collect($row)->except('_net_key')->all())
                 ->sortByDesc(fn ($row) => [$row['date']->timestamp, $row['reference']])
                 ->values();
         } catch (\Throwable $e) {
@@ -559,31 +597,33 @@ class ReconciliationService
     }
 
     /**
-     * Attempt to auto-match a Wise transaction against IFRS ledgers,
-     * then — when the strict pass misses — via a learned counterparty
-     * rule (a previous match from the same payer/payee resolved to a
-     * client or supplier; a fresh unconsumed payment of theirs with a
-     * matching amount counts).
+     * Attempt to auto-match a Wise transaction against the books, then
+     * — when the strict pass misses — via a learned counterparty rule
+     * (a previous match from the same payer/payee resolved to a client
+     * or supplier; a fresh unconsumed payment of theirs with a matching
+     * amount counts). The strict pass only considers book entries with
+     * a bank impact — unreconciled bank-account movements — so it never
+     * claims an entry the bank never touched.
      */
     public function matchTransaction(BankTransaction $wiseTransaction): ?int
     {
-        $matchedLedger = $this->findMatchingLedger($wiseTransaction);
+        $matchedMovement = $this->findMatchingBankMovement($wiseTransaction);
 
-        if ($matchedLedger) {
-            $wiseTransaction->markAsMatched($matchedLedger->id, 'ledger');
+        if ($matchedMovement) {
+            $wiseTransaction->markAsMatched($matchedMovement['ledger_id'], 'ledger');
 
             $this->logHistory(
                 $wiseTransaction,
                 ReconciliationHistory::ACTION_AUTO_MATCH,
                 ReconciliationHistory::STATUS_SUCCESS,
-                $matchedLedger->id,
+                $matchedMovement['ledger_id'],
                 'ledger',
-                "Auto-matched to ledger entry #{$matchedLedger->id} ({$matchedLedger->reference})"
+                "Auto-matched to bank movement #{$matchedMovement['ledger_id']} ({$matchedMovement['reference']})"
             );
 
             $this->learnFromMatch($wiseTransaction);
 
-            return $matchedLedger->id;
+            return $matchedMovement['ledger_id'];
         }
 
         $learned = $this->learnedMatchFor($wiseTransaction);
@@ -802,38 +842,37 @@ class ReconciliationService
     }
 
     /**
-     * Find a matching ledger entry
+     * Find an unreconciled bank movement for a bank line: same
+     * direction (money-in movements pair with credit lines), amount
+     * within tolerance, date within tolerance, and a matching
+     * reference. The old ledger-wide query matched entries on any
+     * account; bank reconciliation only clears entries that touched
+     * the bank, and movements already reconciled by another line are
+     * excluded at the source.
+     *
+     * @return array|null the movement row, or null when none matches
      */
-    private function findMatchingLedger(BankTransaction $wiseTransaction): ?Ledger
+    private function findMatchingBankMovement(BankTransaction $wiseTransaction): ?array
     {
-        $query = Ledger::query();
-
-        // Match by reference
-        $query->where('reference', 'like', '%'.$wiseTransaction->reference.'%');
-
-        // Match by amount (with tolerance)
-        $amount = $wiseTransaction->amount;
-        $query->whereBetween('amount', [
-            $amount - self::AMOUNT_TOLERANCE,
-            $amount + self::AMOUNT_TOLERANCE,
-        ]);
-
-        // Match by date (with tolerance)
-        $dateFrom = $wiseTransaction->transaction_date->copy()
-            ->subDays(self::DATE_TOLERANCE_DAYS);
-        $dateTo = $wiseTransaction->transaction_date->copy()
-            ->addDays(self::DATE_TOLERANCE_DAYS);
-
-        $query->whereBetween('date', [$dateFrom, $dateTo]);
-
-        // For credits, look for debit entries and vice versa
-        if ($wiseTransaction->type === BankTransaction::TYPE_CREDIT) {
-            $query->where('entry_type', 'debit');
-        } else {
-            $query->where('entry_type', 'credit');
+        if (empty($wiseTransaction->reference)) {
+            // Without a reference an amount+date coincidence is not
+            // evidence — leave the line to the learned or manual pass.
+            return null;
         }
 
-        return $query->first();
+        $amount = abs((float) $wiseTransaction->amount);
+
+        return $this->getUnreconciledBankMovements()
+            ->first(function ($movement) use ($wiseTransaction, $amount) {
+                $sameDirection = $wiseTransaction->type === BankTransaction::TYPE_CREDIT
+                    ? $movement['amount'] > 0
+                    : $movement['amount'] < 0;
+
+                return $sameDirection
+                    && abs(abs($movement['amount']) - $amount) <= self::AMOUNT_TOLERANCE
+                    && abs($wiseTransaction->transaction_date->diffInDays($movement['date'])) <= self::DATE_TOLERANCE_DAYS
+                    && $this->referencesMatch($wiseTransaction->reference, (string) $movement['reference']);
+            });
     }
 
     /**
@@ -1766,10 +1805,13 @@ class ReconciliationService
      * Get available transactions for manual linking
      *
      * A bank line is a money movement, so by default it is offered
-     * payments only — client payments for money in, supplier payments
-     * (bill payments) for money out — never the invoice/bill documents
-     * or their ledger entries. An explicit $type still selects any
-     * single tier for programmatic callers.
+     * payments — client payments for money in, supplier payments (bill
+     * payments) and employee reimbursements for money out — never the
+     * invoice/bill documents or their ledger entries. When no payment
+     * was made or received, the fallback tier offers unreconciled bank
+     * movements (reversals and other direct postings) to match
+     * against. An explicit $type still selects any single tier for
+     * programmatic callers.
      *
      * @param  BankTransaction  $bankTransaction  The bank transaction to match
      * @param  string  $type  Filter by transaction type (optional)
@@ -1964,40 +2006,51 @@ class ReconciliationService
             $results = $results->merge($reimbursements);
         }
 
-        // Search ledger entries if a ledger tier was requested. The IFRS
-        // models carry an entity scope that fatals with no entity
-        // context (a caller whose entity was never set up), so the
-        // ledger tier degrades to "no candidates" instead of failing
-        // the whole screen.
-        if (in_array('ledger', $types)) {
-            try {
-                $ledgers = Ledger::query()
-                    ->when($tolerance !== null, fn ($query) => $query->whereBetween('amount', [
-                        $amount - $tolerance,
-                        $amount + $tolerance,
-                    ]))
-                    ->whereBetween('date', [$dateFrom, $dateTo])
-                    ->with('account')
-                    ->limit($limit)
-                    ->get()
-                    ->map(function ($ledger) {
-                        return [
-                            'type' => 'ledger',
-                            'id' => $ledger->id,
-                            'reference' => $ledger->reference ?? "Ledger-{$ledger->id}",
-                            'amount' => $ledger->amount,
-                            'date' => $ledger->date,
-                            'account' => $ledger->account?->name ?? 'Unknown',
-                            'entry_type' => $ledger->entry_type,
-                        ];
-                    });
-                $results = $results->merge($ledgers);
-            } catch (\Throwable $e) {
-                Log::warning('Ledger candidates unavailable for manual matching', [
-                    'bank_transaction_id' => $bankTransaction->id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
+        // Fallback tier: book entries with a bank impact but no payment
+        // behind them — reversals and other direct postings. When no
+        // payment was made or received, the bank line can still clear
+        // against the movement itself. Sourced from the
+        // unreconciled-movements view, so anything another matched line
+        // already reconciled is never offered twice; movements traced to
+        // a payment are skipped here because the payment tiers above
+        // already offer those.
+        if ($type === null || $type === 'ledger') {
+            $movementCandidates = $this->getUnreconciledBankMovements()
+                ->filter(function ($movement) use ($bankTransaction, $amount, $tolerance, $dateFrom, $dateTo) {
+                    if (in_array($movement['origin'], ['Client payment', 'Supplier payment', 'Employee reimbursement'], true)) {
+                        return false;
+                    }
+
+                    // Direction: money-in movements pair with credit lines.
+                    $sameDirection = $bankTransaction->type === BankTransaction::TYPE_CREDIT
+                        ? $movement['amount'] > 0
+                        : $movement['amount'] < 0;
+                    if (! $sameDirection) {
+                        return false;
+                    }
+
+                    if ($tolerance !== null && abs(abs($movement['amount']) - $amount) > $tolerance) {
+                        return false;
+                    }
+
+                    return $movement['date']->between($dateFrom, $dateTo);
+                })
+                ->map(function ($movement) {
+                    return [
+                        'type' => 'ledger',
+                        'id' => $movement['ledger_id'],
+                        'reference' => $movement['reference'] !== null && $movement['reference'] !== ''
+                            ? $movement['reference']
+                            : "Ledger-{$movement['ledger_id']}",
+                        'amount' => abs($movement['amount']),
+                        'date' => $movement['date'],
+                        'account' => $movement['counterparty']
+                            ? "{$movement['counterparty']} ({$movement['origin']})"
+                            : "{$movement['origin']} — {$movement['account']}",
+                        'entry_type' => $movement['amount'] > 0 ? 'D' : 'C',
+                    ];
+                });
+            $results = $results->merge($movementCandidates);
         }
 
         if ($q !== null) {
