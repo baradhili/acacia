@@ -10,6 +10,7 @@ use App\Models\User;
 use IFRS\Models\Account;
 use IFRS\Models\Currency;
 use IFRS\Models\Entity;
+use IFRS\Models\LineItem;
 use IFRS\Models\ReportingPeriod;
 use IFRS\Models\Transaction;
 use IFRS\Models\Vat;
@@ -449,9 +450,43 @@ class BillPaymentTest extends TestCase
             ])
             ->assertSessionHas('error');
 
+        // The rejection must be visible on the edit screen (the flash
+        // banner), not silent.
+        $this->get("/bill-payments/{$payment->id}/edit")
+            ->assertOk()
+            ->assertSee('Payment method and employee cannot change');
+
         $fresh = $payment->fresh();
         $this->assertSame(BillPayment::METHOD_BANK_TRANSFER, $fresh->payment_method);
         $this->assertEquals($txnId, $fresh->ifrs_payment_id);
+    }
+
+    public function test_input_gst_applies_once_per_line(): void
+    {
+        // $8.08 GST-inclusive has a 4+-decimal tax component (0.73454…):
+        // the exact shape that duplicated the applied vat — and its
+        // ledger legs — when the line item was saved twice.
+        $this->seedIfrs();
+        $bill = $this->createOpenBill(8.08);
+        $payment = BillPayment::createWithUniqueNumber([
+            'supplier_id' => $this->supplier->id,
+            'amount' => 8.08,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => BillPayment::METHOD_BANK_TRANSFER,
+        ]);
+        $payment->allocateToBill($bill, 8.08);
+        $this->assertNotNull($payment->postToIFRS());
+
+        $line = LineItem::where('transaction_id', $payment->ifrs_payment_id)->first();
+        $this->assertSame(1, DB::table('ifrs_applied_vats')
+            ->where('line_item_id', $line->id)
+            ->count());
+
+        $vatAccountId = Vat::where('code', 'G')->value('account_id');
+        $this->assertSame(1, DB::table('ifrs_ledgers')
+            ->where('transaction_id', $payment->ifrs_payment_id)
+            ->where('post_account', $vatAccountId)
+            ->count());
     }
 
     public function test_admin_switching_a_posted_payment_to_employee_method_reverses_and_reposts(): void

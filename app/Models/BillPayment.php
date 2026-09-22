@@ -535,9 +535,11 @@ class BillPayment extends Model
                 if ($taxable) {
                     // Taxable line: vat_inclusive makes the package debit the
                     // expense account the net amount and auto-debit the GST
-                    // account for the GST component.
+                    // account for the GST component. No ->save() here — the
+                    // transaction's saveLineItems() saves the line again and
+                    // a second applyVats() duplicates the applied-vat row
+                    // whenever the tax carries more than 4 decimal places.
                     $expenseLine->addVat($gstVat);
-                    $expenseLine->save(); // persist the applied vat
                 }
                 // GST-free line: full amount to the expense account, no Vat.
 

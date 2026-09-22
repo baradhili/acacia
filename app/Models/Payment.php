@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Log;
 
 class Payment extends Model
@@ -20,7 +21,9 @@ class Payment extends Model
 
     // Status constants
     const STATUS_PENDING = 'pending';
+
     const STATUS_COMPLETED = 'completed';
+
     const STATUS_VOID = 'void';
 
     protected $fillable = [
@@ -44,14 +47,20 @@ class Payment extends Model
 
     // Payment method constants
     const METHOD_BANK_TRANSFER = 'bank_transfer';
+
     const METHOD_CREDIT_CARD = 'credit_card';
+
     const METHOD_CASH = 'cash';
+
     const METHOD_CHEQUE = 'cheque';
+
     const METHOD_OTHER = 'other';
 
     // IFRS Account codes for payment posting
     const IFRS_BANK_ACCOUNT_CODE = 320; // Operating Account
+
     const IFRS_REVENUE_ACCOUNT_CODE = 4100; // Consulting Revenue
+
     const IFRS_GST_VAT_CODE = 'G'; // Seeded "GST 10%" Vat, linked to account 2200 (GST Payable)
 
     /**
@@ -82,7 +91,7 @@ class Payment extends Model
             ->first();
 
         if ($lastPayment) {
-            preg_match('/PAY-' . $year . '-(\d+)/', $lastPayment->payment_number, $matches);
+            preg_match('/PAY-'.$year.'-(\d+)/', $lastPayment->payment_number, $matches);
             $nextNumber = isset($matches[1]) ? ((int) $matches[1]) + 1 : 1;
         } else {
             $nextNumber = 1;
@@ -106,8 +115,8 @@ class Payment extends Model
         for ($i = 1; $i <= $attempts; $i++) {
             try {
                 return self::create($attributes);
-            } catch (\Illuminate\Database\QueryException $e) {
-                if (!self::isUniqueViolation($e) || $i === $attempts) {
+            } catch (QueryException $e) {
+                if (! self::isUniqueViolation($e) || $i === $attempts) {
                     throw $e;
                 }
             }
@@ -121,9 +130,10 @@ class Payment extends Model
      * MySQL (SQLSTATE 23000 / driver code 1062) and SQLite (SQLSTATE 23000 /
      * driver codes 19, 2067) via the shared SQLSTATE.
      */
-    protected static function isUniqueViolation(\Illuminate\Database\QueryException $e): bool
+    protected static function isUniqueViolation(QueryException $e): bool
     {
         $errorInfo = $e->errorInfo ?? [];
+
         // errorInfo[0] is the SQLSTATE; errorInfo[1] is the driver-specific code.
         return ($errorInfo[0] ?? null) === '23000'
             || ($errorInfo[1] ?? null) === 1062;
@@ -196,6 +206,7 @@ class Payment extends Model
         if ($this->amount < 0) {
             return abs($this->amount) - $this->allocated_amount;
         }
+
         return max(0, (float) $this->amount - $this->allocated_amount);
     }
 
@@ -211,8 +222,8 @@ class Payment extends Model
      * Allocate payment to specific invoice.
      *
      * @throws \InvalidArgumentException if $amount is <= 0 or exceeds the
-     *         payment's unallocated balance. Callers run inside transactions
-     *         so the throw rolls back any partial work cleanly.
+     *                                   payment's unallocated balance. Callers run inside transactions
+     *                                   so the throw rolls back any partial work cleanly.
      */
     public function allocateToInvoice(Invoice $invoice, float $amount): PaymentAllocation
     {
@@ -224,7 +235,7 @@ class Payment extends Model
         if ($amount > $unallocated) {
             throw new \InvalidArgumentException(
                 "Cannot allocate {$amount} to invoice {$invoice->id}: "
-                . "only {$unallocated} unallocated on payment {$this->id}."
+                ."only {$unallocated} unallocated on payment {$this->id}."
             );
         }
 
@@ -255,13 +266,14 @@ class Payment extends Model
     public function removeAllocation(Invoice $invoice): bool
     {
         $allocation = $this->allocations()->where('invoice_id', $invoice->id)->first();
-        
+
         if ($allocation) {
             $allocation->delete();
             $invoice->updateStatusFromPayments();
+
             return true;
         }
-        
+
         return false;
     }
 
@@ -280,7 +292,7 @@ class Payment extends Model
      */
     public function getFormattedAmountAttribute(): string
     {
-        return config('australian.currency.symbol', 'A$') . number_format($this->amount, 2);
+        return config('australian.currency.symbol', 'A$').number_format($this->amount, 2);
     }
 
     /**
@@ -344,12 +356,14 @@ class Payment extends Model
 
         if ($this->ifrs_receipt_id) {
             Log::info("Payment {$this->id} already posted to IFRS", ['ifrs_receipt_id' => $this->ifrs_receipt_id]);
+
             return (int) $this->ifrs_receipt_id;
         }
 
         if ($this->status === self::STATUS_VOID) {
             $this->lastPostingError = 'payment is void — voided payments are never posted';
             Log::info("Payment {$this->id} is void; not posting to IFRS");
+
             return null;
         }
 
@@ -361,9 +375,10 @@ class Payment extends Model
             // and fatals for authed users without an entity until
             // resolveEntity() lends them the fallback in-memory.
             $entity = IfrsPosting::resolveEntity();
-            if (!$entity) {
+            if (! $entity) {
                 $this->lastPostingError = 'no IFRS entity';
                 Log::error('No IFRS entity available for payment posting', ['payment_id' => $this->id]);
+
                 return null;
             }
 
@@ -371,13 +386,14 @@ class Payment extends Model
             $bankAccount = Account::where('code', self::IFRS_BANK_ACCOUNT_CODE)->first();
             $revenueAccount = Account::where('code', self::IFRS_REVENUE_ACCOUNT_CODE)->first();
 
-            if (!$bankAccount || !$revenueAccount) {
+            if (! $bankAccount || ! $revenueAccount) {
                 $this->lastPostingError = 'IFRS accounts not found (bank '
-                    . self::IFRS_BANK_ACCOUNT_CODE . ' / revenue ' . self::IFRS_REVENUE_ACCOUNT_CODE . ')';
+                    .self::IFRS_BANK_ACCOUNT_CODE.' / revenue '.self::IFRS_REVENUE_ACCOUNT_CODE.')';
                 Log::error('IFRS accounts not found for payment posting', [
                     'bank_code' => self::IFRS_BANK_ACCOUNT_CODE,
                     'revenue_code' => self::IFRS_REVENUE_ACCOUNT_CODE,
                 ]);
+
                 return null;
             }
 
@@ -414,7 +430,7 @@ class Payment extends Model
             $allocatedCents = 0;
             foreach ($this->allocations as $allocation) {
                 $invoice = $allocation->invoice()->with('items')->first();
-                if (!$invoice) {
+                if (! $invoice) {
                     continue;
                 }
                 foreach (self::allocationGroups($invoice, (float) $allocation->amount) as $treatment => $cents) {
@@ -447,8 +463,12 @@ class Payment extends Model
                 ]);
 
                 if ($treatment === 'gst' && $gstVat) {
+                    // No ->save() here: the transaction's saveLineItems()
+                    // persists the line (and its applied vat) again, and a
+                    // second applyVats() duplicates the applied-vat row
+                    // whenever the tax carries more than 4 decimal places
+                    // (firstOrCreate misses the stored rounded amount).
                     $revenueLine->addVat($gstVat);
-                    $revenueLine->save(); // persist the applied vat
                 }
 
                 // Lines are persisted before addLineItem() — unsaved items
@@ -481,6 +501,7 @@ class Payment extends Model
                 'error' => $e->getMessage(),
                 'exception' => get_class($e),
             ]);
+
             return null;
         }
     }

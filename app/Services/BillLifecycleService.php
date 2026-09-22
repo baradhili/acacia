@@ -46,14 +46,14 @@ class BillLifecycleService
      * editable again (the "unpay, then edit" workflow).
      *
      * @throws \RuntimeException when the payment is not allocated to
-     *         this bill, or any ledger reversal fails (period closed,
-     *         accounts/entity missing). The DB transaction rolls back.
+     *                           this bill, or any ledger reversal fails (period closed,
+     *                           accounts/entity missing). The DB transaction rolls back.
      */
     public static function unapplyPayment(Bill $bill, BillPayment $payment): void
     {
         $allocation = $payment->allocations()->where('bill_id', $bill->id)->first();
 
-        if (!$allocation) {
+        if (! $allocation) {
             throw new \RuntimeException(
                 "Payment {$payment->payment_number} is not allocated to bill {$bill->bill_number}."
             );
@@ -73,7 +73,7 @@ class BillLifecycleService
      * documents are removed along with their files.
      *
      * @throws \RuntimeException when any ledger reversal fails. The DB
-     *         transaction rolls back and nothing is deleted.
+     *                           transaction rolls back and nothing is deleted.
      */
     public static function deleteBill(Bill $bill): int
     {
@@ -86,10 +86,11 @@ class BillLifecycleService
 
             foreach ($allocations as $allocation) {
                 $payment = $allocation->billPayment;
-                if (!$payment) {
+                if (! $payment) {
                     // Orphaned allocation (payment already hard-deleted) —
                     // nothing in the ledger behind it, just drop it.
                     $allocation->delete();
+
                     continue;
                 }
 
@@ -169,8 +170,9 @@ class BillLifecycleService
         // a "completed" payment with a reversed ledger. Any remainder it
         // never allocated never hit the ledger either; record a fresh
         // payment instead of resurrecting this one.
-        if (!$payment->allocations()->exists() && $payment->status !== BillPayment::STATUS_VOID) {
+        if (! $payment->allocations()->exists() && $payment->status !== BillPayment::STATUS_VOID) {
             $payment->update(['status' => BillPayment::STATUS_VOID]);
+
             return true;
         }
 
@@ -186,23 +188,23 @@ class BillLifecycleService
      * original was reported in.
      *
      * @throws \RuntimeException on any posting prerequisite failure or
-     *         Throwable from the IFRS package (closed reporting period,
-     *         missing accounts, etc.) — never leaves a half-posted
-     *         reversal.
+     *                           Throwable from the IFRS package (closed reporting period,
+     *                           missing accounts, etc.) — never leaves a half-posted
+     *                           reversal.
      */
     private static function reverseAllocationShare(Bill $bill, BillPayment $payment, float $amount): void
     {
         $entity = IfrsPosting::resolveEntity();
-        if (!$entity) {
+        if (! $entity) {
             throw new \RuntimeException('No IFRS entity available for the reversal.');
         }
 
         $bankAccount = Account::where('code', BillPayment::IFRS_BANK_ACCOUNT_CODE)->first();
         $defaultExpenseAccount = Account::where('code', BillPayment::IFRS_DEFAULT_EXPENSE_ACCOUNT_CODE)->first();
-        if (!$bankAccount || !$defaultExpenseAccount) {
+        if (! $bankAccount || ! $defaultExpenseAccount) {
             throw new \RuntimeException(
-                'IFRS accounts not found (bank ' . BillPayment::IFRS_BANK_ACCOUNT_CODE
-                . ' / expense ' . BillPayment::IFRS_DEFAULT_EXPENSE_ACCOUNT_CODE . ').'
+                'IFRS accounts not found (bank '.BillPayment::IFRS_BANK_ACCOUNT_CODE
+                .' / expense '.BillPayment::IFRS_DEFAULT_EXPENSE_ACCOUNT_CODE.').'
             );
         }
 
@@ -253,8 +255,11 @@ class BillLifecycleService
                 ]);
 
                 if ($taxable) {
+                    // No ->save() here — the reversal's saveLineItems()
+                    // saves the line again and a second applyVats()
+                    // duplicates the applied-vat row whenever the tax
+                    // carries more than 4 decimal places.
                     $line->addVat($gstVat);
-                    $line->save(); // persist the applied vat
                 }
 
                 $reversal->addLineItem($line);
@@ -264,7 +269,7 @@ class BillLifecycleService
         } catch (\Throwable $e) {
             throw new \RuntimeException(
                 "Failed to reverse the ledger share of payment {$payment->payment_number} "
-                . "for bill {$bill->bill_number}: {$e->getMessage()}", 0, $e
+                ."for bill {$bill->bill_number}: {$e->getMessage()}", 0, $e
             );
         }
     }

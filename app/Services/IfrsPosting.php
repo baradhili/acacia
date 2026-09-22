@@ -158,7 +158,10 @@ class IfrsPosting
                 foreach ($line->appliedVats as $appliedVat) {
                     $reversalLine->addVat($appliedVat->vat);
                 }
-                $reversalLine->save(); // persist the applied vats
+                // No ->save() here: the reversal's saveLineItems() saves the
+                // line again, and a second applyVats() duplicates the
+                // applied-vat row whenever the tax carries more than 4
+                // decimal places (firstOrCreate misses the rounded amount).
 
                 $reversal->addLineItem($reversalLine);
             }
