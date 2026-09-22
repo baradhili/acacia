@@ -587,6 +587,92 @@ class BillPayment extends Model
     }
 
     /**
+     * Rewind a posted payment's ledger entry and re-post it on the
+     * corrected method's credit leg (bank vs Employee Reimbursements
+     * Payable) — the admin path for fixing a method after posting. The
+     * original entry stays for audit with a mirrored reversal beside it
+     * (same date, same reference, so bank reconciliation nets the pair),
+     * prepayment schedules are voided and recreated by the re-post, and
+     * the payment keeps its id, allocations and reconciliation links.
+     *
+     * Refuses when leaving the employee method would drive the
+     * employee's reimbursement balance negative (already reimbursed —
+     * void the reimbursement payment first), mirroring void(). Returns
+     * true on success; on failure the reason is on $this->lastPostingError.
+     */
+    public function repostWithMethod(string $method, ?int $employeeId = null): bool
+    {
+        if (! $this->ifrs_payment_id) {
+            $this->lastPostingError = 'payment is not posted';
+
+            return false;
+        }
+
+        if (
+            $this->payment_method === self::METHOD_EMPLOYEE_REIMBURSEMENT
+            && $method !== self::METHOD_EMPLOYEE_REIMBURSEMENT
+            && $this->employee_id
+        ) {
+            $outstanding = ReimbursementPayment::outstandingFor((int) $this->employee_id);
+            if (round($outstanding - (float) $this->amount, 2) < 0) {
+                $this->lastPostingError = 'this employee-paid expense has already been reimbursed — void the reimbursement payment first';
+                Log::warning('Refusing method correction on reimbursed employee-paid bill payment', [
+                    'bill_payment_id' => $this->id,
+                    'employee_id' => $this->employee_id,
+                    'outstanding' => $outstanding,
+                    'amount' => $this->amount,
+                ]);
+
+                return false;
+            }
+        }
+
+        try {
+            // Prepayments hang off this posting's legs — void them (and
+            // their amortisations) before the reversal; the re-post
+            // recreates the schedules.
+            $this->voidPrepayments(throw: true);
+
+            IfrsPosting::reverseTransaction(
+                (int) $this->ifrs_payment_id,
+                "Reversal of supplier payment: {$this->payment_number} (method corrected)",
+                $this->payment_number,
+                throw: true,
+            );
+
+            // postToIFRS() skips payments that already carry a
+            // transaction id — clear it so the corrected posting runs.
+            $this->forceFill(['ifrs_payment_id' => null])->save();
+
+            $this->update([
+                'payment_method' => $method,
+                'employee_id' => $method === self::METHOD_EMPLOYEE_REIMBURSEMENT ? $employeeId : null,
+            ]);
+            $this->refresh();
+
+            if ($this->postToIFRS() === null) {
+                throw new \RuntimeException($this->lastPostingError ?? 're-post failed');
+            }
+
+            Log::info("Bill payment {$this->id} re-posted on corrected method", [
+                'method' => $method,
+                'employee_id' => $this->employee_id,
+            ]);
+
+            return true;
+        } catch (\Throwable $e) {
+            $this->lastPostingError = $e->getMessage();
+            Log::error('Failed to re-post bill payment on corrected method', [
+                'bill_payment_id' => $this->id,
+                'error' => $e->getMessage(),
+                'exception' => get_class($e),
+            ]);
+
+            return false;
+        }
+    }
+
+    /**
      * Apportion one allocation across a bill's line items, aggregated by
      * (expense account, GST treatment) — the shared building block of
      * postToIFRS() and the per-bill share reversal in

@@ -138,7 +138,7 @@ class BillPaymentController extends Controller
         return view('bill-payments.show', compact('billPayment'));
     }
 
-    public function edit(BillPayment $billPayment)
+    public function edit(Request $request, BillPayment $billPayment)
     {
         if ($billPayment->status === BillPayment::STATUS_VOID) {
             return redirect()->route('bill-payments.show', $billPayment)
@@ -150,7 +150,13 @@ class BillPaymentController extends Controller
         $paymentMethods = BillPayment::paymentMethods();
         $employees = EmployeeDirectory::active();
 
-        return view('bill-payments.edit', compact('billPayment', 'suppliers', 'paymentMethods', 'employees'));
+        // Admins may correct the method on posted payments: bank-side
+        // relabels are metadata-only, and anything involving the
+        // employee method unwinds and re-posts the entry on update.
+        $canEditMethod = ! $billPayment->ifrs_payment_id
+            || $request->user()->hasRole('admin');
+
+        return view('bill-payments.edit', compact('billPayment', 'suppliers', 'paymentMethods', 'employees', 'canEditMethod'));
     }
 
     public function update(Request $request, BillPayment $billPayment)
@@ -190,13 +196,39 @@ class BillPaymentController extends Controller
         }
 
         // The method picks the ledger's credit leg (bank vs Employee
-        // Reimbursements Payable), so it is locked once posted.
+        // Reimbursements Payable), so it is locked once posted. Admins
+        // may correct it: a bank-side relabel (cash/transfer/card/cheque
+        // all credit the same bank account) is metadata-only, while a
+        // change onto or off the employee method — or a different
+        // employee — unwinds the posted entry (mirrored reversal, then a
+        // fresh posting on the corrected leg) via repostWithMethod().
+        // The unwind must mirror what was posted, so amount and date
+        // cannot change in the same request.
         $employeeId = (int) ($validated['employee_id'] ?? 0) ?: null;
-        if ($billPayment->ifrs_payment_id
-            && ($validated['payment_method'] !== $billPayment->payment_method
-                || $employeeId !== ($billPayment->employee_id ?: null))) {
-            return back()->withInput()->with('error',
-                'Payment method and employee cannot change after the payment posts to the ledger. Void and re-enter instead.');
+        $methodChanged = $validated['payment_method'] !== $billPayment->payment_method;
+        $employeeChanged = $employeeId !== ($billPayment->employee_id ?: null);
+        $repostNeeded = false;
+
+        if ($billPayment->ifrs_payment_id && ($methodChanged || $employeeChanged)) {
+            if (! $request->user()->hasRole('admin')) {
+                return back()->withInput()->with('error',
+                    'Payment method and employee cannot change after the payment posts to the ledger. Void and re-enter instead.');
+            }
+
+            $involvesEmployeeMethod = $validated['payment_method'] === BillPayment::METHOD_EMPLOYEE_REIMBURSEMENT
+                || $billPayment->payment_method === BillPayment::METHOD_EMPLOYEE_REIMBURSEMENT;
+
+            if ($involvesEmployeeMethod || $employeeChanged) {
+                if ((float) $validated['amount'] !== (float) $billPayment->amount) {
+                    return back()->withInput()->with('error',
+                        'Change the payment method on its own — an amount change cannot ride along on a posted-method correction.');
+                }
+                if ($validated['payment_date'] !== $billPayment->payment_date->format('Y-m-d')) {
+                    return back()->withInput()->with('error',
+                        'Change the payment method on its own — a date change cannot ride along on a posted-method correction.');
+                }
+                $repostNeeded = true;
+            }
         }
 
         // Pending exists only in the employee-approval flow; another
@@ -213,13 +245,25 @@ class BillPaymentController extends Controller
                 'supplier_id' => $validated['supplier_id'],
                 'amount' => $validated['amount'],
                 'payment_date' => $validated['payment_date'],
-                'payment_method' => $validated['payment_method'],
-                'employee_id' => $validated['payment_method'] === BillPayment::METHOD_EMPLOYEE_REIMBURSEMENT
-                    ? ($validated['employee_id'] ?? null)
-                    : null,
                 'reference' => $validated['reference'] ?? null,
                 'notes' => $validated['notes'] ?? null,
             ]);
+
+            if ($repostNeeded) {
+                if (! $billPayment->repostWithMethod($validated['payment_method'], $employeeId)) {
+                    DB::rollBack();
+
+                    return back()->withInput()->with('error',
+                        'Could not re-post the payment on the corrected method: '.$billPayment->lastPostingError.'.');
+                }
+            } else {
+                $billPayment->update([
+                    'payment_method' => $validated['payment_method'],
+                    'employee_id' => $validated['payment_method'] === BillPayment::METHOD_EMPLOYEE_REIMBURSEMENT
+                        ? ($validated['employee_id'] ?? null)
+                        : null,
+                ]);
+            }
 
             // Recompute allocated bill statuses against the new amount.
             foreach ($billPayment->allocations as $allocation) {

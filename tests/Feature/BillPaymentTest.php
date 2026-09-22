@@ -4,11 +4,21 @@ namespace Tests\Feature;
 
 use App\Models\Bill;
 use App\Models\BillPayment;
+use App\Models\ReimbursementPayment;
 use App\Models\Supplier;
 use App\Models\User;
+use IFRS\Models\Account;
+use IFRS\Models\Currency;
+use IFRS\Models\Entity;
+use IFRS\Models\ReportingPeriod;
+use IFRS\Models\Transaction;
+use IFRS\Models\Vat;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Modules\Payroll\Models\Employee;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class BillPaymentTest extends TestCase
@@ -301,6 +311,239 @@ class BillPaymentTest extends TestCase
         $this->assertEquals(BillPayment::STATUS_VOID, $payment->fresh()->status);
         $this->assertEquals(Bill::STATUS_OPEN, $bill->fresh()->status);
         $this->assertEquals(0, $payment->allocations()->count());
+    }
+
+    /**
+     * Minimum IFRS chart for posting supplier payments: entity + period,
+     * bank (320), revenue (4100), GST Payable (2200, CONTROL for the
+     * GST 10% Vat) and the expense accounts bills post to. 2280 is
+     * created lazily by BillPayment::ensureReimbursementAccount().
+     */
+    protected function seedIfrs(): void
+    {
+        $entity = Entity::create([
+            'name' => 'Test Entity',
+            'locale' => 'en_AU',
+            'multi_currency' => false,
+            'year_start' => 1,
+        ]);
+
+        $currency = Currency::create([
+            'name' => 'Australian Dollar',
+            'currency_code' => 'AUD',
+            'entity_id' => $entity->id,
+        ]);
+        $entity->update(['currency_id' => $currency->id]);
+
+        ReportingPeriod::create([
+            'period_count' => 1,
+            'calendar_year' => (int) now()->format('Y'),
+            'status' => ReportingPeriod::OPEN,
+            'entity_id' => $entity->id,
+        ]);
+
+        foreach ([
+            ['Operating Account', Account::BANK, 320],
+            ['Consulting Revenue', Account::OPERATING_REVENUE, 4100],
+            ['GST Payable', Account::CONTROL, 2200],
+            ['Travel & Accommodation', Account::OPERATING_EXPENSE, 5300],
+            ['Other Expenses', Account::OTHER_EXPENSE, 8900],
+        ] as [$name, $type, $code]) {
+            Account::create([
+                'name' => $name,
+                'account_type' => $type,
+                'code' => $code,
+                'currency_id' => $currency->id,
+                'entity_id' => $entity->id,
+            ]);
+        }
+
+        Vat::create([
+            'name' => 'GST 10%',
+            'code' => 'G',
+            'rate' => 10,
+            'account_id' => Account::where('code', 2200)->value('id'),
+            'entity_id' => $entity->id,
+        ]);
+    }
+
+    protected function admin(): User
+    {
+        Role::firstOrCreate(['name' => 'admin']);
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+
+        return $admin;
+    }
+
+    protected function employee(): Employee
+    {
+        return Employee::create([
+            'entity_id' => Entity::first()->id,
+            'name' => 'Jane Smith',
+            'employment_type' => 'employee',
+            'payment_basis' => 'salary',
+            'status' => Employee::STATUS_ACTIVE,
+        ]);
+    }
+
+    /**
+     * A completed, allocated and posted bank-transfer payment for a
+     * $110 (GST-inclusive) bill.
+     */
+    protected function postedBankPayment(): BillPayment
+    {
+        $bill = $this->createOpenBill();
+        $payment = BillPayment::createWithUniqueNumber([
+            'supplier_id' => $this->supplier->id,
+            'amount' => 110,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => BillPayment::METHOD_BANK_TRANSFER,
+        ]);
+        $payment->allocateToBill($bill, 110);
+        $this->assertNotNull($payment->postToIFRS());
+
+        return $payment;
+    }
+
+    public function test_admin_can_relabel_method_on_a_posted_payment_without_touching_the_ledger(): void
+    {
+        $this->seedIfrs();
+        $payment = $this->postedBankPayment();
+        $txnId = $payment->ifrs_payment_id;
+        $txnCount = Transaction::count();
+
+        $this->actingAs($this->admin())
+            ->put("/bill-payments/{$payment->id}", [
+                'supplier_id' => $this->supplier->id,
+                'amount' => 110,
+                'payment_date' => now()->toDateString(),
+                'payment_method' => BillPayment::METHOD_CASH,
+                'reference' => null,
+                'notes' => null,
+            ])
+            ->assertRedirect(route('bill-payments.show', $payment))
+            ->assertSessionHas('success');
+
+        $fresh = $payment->fresh();
+        $this->assertSame(BillPayment::METHOD_CASH, $fresh->payment_method);
+        // Bank-side relabel: same posting, no new ledger entries.
+        $this->assertEquals($txnId, $fresh->ifrs_payment_id);
+        $this->assertSame($txnCount, Transaction::count());
+    }
+
+    public function test_non_admin_cannot_change_method_on_a_posted_payment(): void
+    {
+        $this->seedIfrs();
+        $payment = $this->postedBankPayment();
+        $txnId = $payment->ifrs_payment_id;
+
+        $this->actingAs($this->user)
+            ->put("/bill-payments/{$payment->id}", [
+                'supplier_id' => $this->supplier->id,
+                'amount' => 110,
+                'payment_date' => now()->toDateString(),
+                'payment_method' => BillPayment::METHOD_CASH,
+                'reference' => null,
+                'notes' => null,
+            ])
+            ->assertSessionHas('error');
+
+        $fresh = $payment->fresh();
+        $this->assertSame(BillPayment::METHOD_BANK_TRANSFER, $fresh->payment_method);
+        $this->assertEquals($txnId, $fresh->ifrs_payment_id);
+    }
+
+    public function test_admin_switching_a_posted_payment_to_employee_method_reverses_and_reposts(): void
+    {
+        $this->seedIfrs();
+        $employee = $this->employee();
+        $payment = $this->postedBankPayment();
+        $oldTxnId = $payment->ifrs_payment_id;
+
+        $this->actingAs($this->admin())
+            ->put("/bill-payments/{$payment->id}", [
+                'supplier_id' => $this->supplier->id,
+                'amount' => 110,
+                'payment_date' => now()->toDateString(),
+                'payment_method' => BillPayment::METHOD_EMPLOYEE_REIMBURSEMENT,
+                'employee_id' => $employee->id,
+                'reference' => null,
+                'notes' => null,
+            ])
+            ->assertRedirect(route('bill-payments.show', $payment))
+            ->assertSessionHas('success');
+
+        $fresh = $payment->fresh();
+        $this->assertSame(BillPayment::METHOD_EMPLOYEE_REIMBURSEMENT, $fresh->payment_method);
+        $this->assertEquals($employee->id, $fresh->employee_id);
+        $this->assertNotNull($fresh->ifrs_payment_id);
+        $this->assertNotEquals($oldTxnId, $fresh->ifrs_payment_id);
+
+        // The original posting, its mirrored reversal and the corrected
+        // posting all carry the payment number as reference.
+        $txnIds = Transaction::where('reference', $payment->payment_number)->pluck('id');
+        $this->assertCount(3, $txnIds);
+
+        // The bank legs net to zero: the original Cr Bank is mirrored
+        // back by the reversal, and the corrected posting never touches
+        // the bank — it credits Employee Reimbursements Payable instead.
+        $bankId = Account::where('code', 320)->value('id');
+        $bankNet = DB::table('ifrs_ledgers')
+            ->whereIn('transaction_id', $txnIds)
+            ->where('post_account', $bankId)
+            ->selectRaw('SUM(CASE WHEN entry_type = "D" THEN amount ELSE -amount END) as net')
+            ->value('net');
+        $this->assertEquals(0.0, round((float) $bankNet, 2));
+
+        $payableId = Account::where('code', 2280)->value('id');
+        $this->assertNotNull($payableId);
+        $this->assertDatabaseHas('ifrs_ledgers', [
+            'transaction_id' => $fresh->ifrs_payment_id,
+            'post_account' => $payableId,
+            'entry_type' => 'C',
+        ]);
+    }
+
+    public function test_admin_cannot_switch_employee_method_when_already_reimbursed(): void
+    {
+        $this->seedIfrs();
+        $employee = $this->employee();
+        $bill = $this->createOpenBill();
+
+        $capture = BillPayment::createWithUniqueNumber([
+            'supplier_id' => $this->supplier->id,
+            'employee_id' => $employee->id,
+            'amount' => 110,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => BillPayment::METHOD_EMPLOYEE_REIMBURSEMENT,
+        ]);
+        $capture->allocateToBill($bill, 110);
+        $this->assertNotNull($capture->postToIFRS());
+
+        $reimbursement = ReimbursementPayment::create([
+            'employee_id' => $employee->id,
+            'amount' => 110,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
+            'status' => ReimbursementPayment::STATUS_COMPLETED,
+        ]);
+        $this->assertNotNull($reimbursement->postToIFRS());
+
+        $this->actingAs($this->admin())
+            ->put("/bill-payments/{$capture->id}", [
+                'supplier_id' => $this->supplier->id,
+                'amount' => 110,
+                'payment_date' => now()->toDateString(),
+                'payment_method' => BillPayment::METHOD_BANK_TRANSFER,
+                'reference' => null,
+                'notes' => null,
+            ])
+            ->assertSessionHas('error');
+
+        $fresh = $capture->fresh();
+        $this->assertSame(BillPayment::METHOD_EMPLOYEE_REIMBURSEMENT, $fresh->payment_method);
+        $this->assertNotNull($fresh->ifrs_payment_id);
     }
 
     public function test_document_can_be_uploaded_to_payment_from_edit_page(): void

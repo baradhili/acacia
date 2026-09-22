@@ -64,7 +64,7 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Payment Method *</label>
                     <select name="payment_method" id="paymentMethodSelect" required
-                        {{ $billPayment->ifrs_payment_id ? 'disabled' : '' }}
+                        {{ $billPayment->ifrs_payment_id && ! ($canEditMethod ?? false) ? 'disabled' : '' }}
                         class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
                         @foreach ($paymentMethods as $value => $label)
                             <option value="{{ $value }}"
@@ -72,10 +72,15 @@
                                 {{ $label }}</option>
                         @endforeach
                     </select>
-                    @if ($billPayment->ifrs_payment_id)
+                    @if ($billPayment->ifrs_payment_id && ! ($canEditMethod ?? false))
                         <input type="hidden" name="payment_method" value="{{ $billPayment->payment_method }}">
                         <p class="text-gray-500 text-xs mt-1">
                             Locked — the method picks the ledger's credit leg, so posted payments cannot switch it.
+                        </p>
+                    @elseif ($billPayment->ifrs_payment_id)
+                        <p class="text-gray-500 text-xs mt-1">
+                            Admin: correcting the method is allowed — switching to or from employee-paid reverses the posted
+                            entry and re-posts it on the corrected leg (amount and date must be unchanged).
                         </p>
                     @endif
                     @error('payment_method')

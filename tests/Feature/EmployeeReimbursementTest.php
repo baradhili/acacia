@@ -252,8 +252,13 @@ class EmployeeReimbursementTest extends TestCase
         $bill = $this->createOpenBill();
         $payment = $this->captureEmployeePayment($bill);
         $this->actingAs($this->user)->post(route('bill-payments.approve', $payment));
+        $postedTxnId = $payment->refresh()->ifrs_payment_id;
 
-        $this->actingAs($this->user)
+        // Regular users keep the lock: method and employee cannot change
+        // on a posted payment.
+        $plainUser = User::factory()->create(['entity_id' => $this->entity->id]);
+
+        $this->actingAs($plainUser)
             ->put(route('bill-payments.update', $payment), [
                 'supplier_id' => $this->supplier->id,
                 'amount' => 110,
@@ -265,6 +270,26 @@ class EmployeeReimbursementTest extends TestCase
             ->assertSessionHas('error');
 
         $this->assertEquals('employee_reimbursement', $payment->refresh()->payment_method);
+
+        // Admins may correct the method: the posted entry is unwound
+        // (mirrored reversal) and re-posted on the bank leg — the
+        // employee stops being owed the money.
+        $this->actingAs($this->user)
+            ->put(route('bill-payments.update', $payment), [
+                'supplier_id' => $this->supplier->id,
+                'amount' => 110,
+                'payment_date' => now()->toDateString(),
+                'payment_method' => 'bank_transfer',
+                'reference' => null,
+                'notes' => null,
+            ])
+            ->assertSessionHas('success');
+
+        $fresh = $payment->refresh();
+        $this->assertEquals('bank_transfer', $fresh->payment_method);
+        $this->assertNull($fresh->employee_id);
+        $this->assertNotEquals($postedTxnId, $fresh->ifrs_payment_id);
+        $this->assertEquals(0, ReimbursementPayment::outstandingFor($this->employee->id));
     }
 
     public function test_pending_capture_cannot_switch_method(): void
