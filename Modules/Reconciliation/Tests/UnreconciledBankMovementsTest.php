@@ -288,12 +288,16 @@ class UnreconciledBankMovementsTest extends TestCase
         $this->assertSame('Client payment', $receiptRow['origin']);
         $this->assertSame('Acme Corp', $receiptRow['counterparty']);
         $this->assertSame(1500.0, $receiptRow['amount']);
+        $this->assertSame('payment', $receiptRow['source_type']);
+        $this->assertEquals($receipt->id, $receiptRow['source_id']);
 
         $reimbursementRow = $movements->firstWhere('reference', $reimbursement->payment_number);
         $this->assertNotNull($reimbursementRow);
         $this->assertSame('Employee reimbursement', $reimbursementRow['origin']);
         $this->assertSame('Jane Smith', $reimbursementRow['counterparty']);
         $this->assertSame(-110.0, $reimbursementRow['amount']);
+        $this->assertSame('reimbursement_payment', $reimbursementRow['source_type']);
+        $this->assertEquals($reimbursement->id, $reimbursementRow['source_id']);
 
         $this->assertNull($movements->firstWhere('reference', $supplierPayment->payment_number));
     }
@@ -476,7 +480,9 @@ class UnreconciledBankMovementsTest extends TestCase
             ->assertOk()
             ->assertSee('In the books, not on the bank statement')
             ->assertSee('In books, not on statement')
-            ->assertSee($receipt->payment_number);
+            ->assertSee($receipt->payment_number)
+            // The payment number links to its record.
+            ->assertSee(route('payments.show', $receipt));
 
         $this->assertTrue($response->viewData('stats')['in_books'] === 1);
 

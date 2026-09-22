@@ -359,6 +359,7 @@ class ReconciliationService
      *     date: Carbon, account: string, amount: float, origin: string,
      *     reference: mixed, counterparty: mixed, description: mixed,
      *     ledger_id: int, transaction_id: int,
+     *     source_type: string|null, source_id: int|null,
      * }>
      */
     public function getUnreconciledBankMovements(): Collection
@@ -450,16 +451,19 @@ class ReconciliationService
                     }
 
                     if ($payment = $payments->get($movement->transaction_id)) {
-                        [$origin, $reference, $counterparty] = [
+                        [$origin, $reference, $counterparty, $sourceType, $sourceId] = [
                             'Client payment', $payment->payment_number, $payment->client?->name,
+                            'payment', $payment->id,
                         ];
                     } elseif ($billPayment = $billPayments->get($movement->transaction_id)) {
-                        [$origin, $reference, $counterparty] = [
+                        [$origin, $reference, $counterparty, $sourceType, $sourceId] = [
                             'Supplier payment', $billPayment->payment_number, $billPayment->supplier?->name,
+                            'bill_payment', $billPayment->id,
                         ];
                     } elseif ($reimbursement = $reimbursements->get($movement->transaction_id)) {
-                        [$origin, $reference, $counterparty] = [
+                        [$origin, $reference, $counterparty, $sourceType, $sourceId] = [
                             'Employee reimbursement', $reimbursement->payment_number, $reimbursement->employee?->name,
+                            'reimbursement_payment', $reimbursement->id,
                         ];
                     } else {
                         // Every reversal this app writes narrates as
@@ -471,8 +475,10 @@ class ReconciliationService
                         $origin = Str::startsWith(mb_strtolower((string) $transaction->narration), 'reversal of')
                             ? 'Reversal'
                             : (self::IFRS_TRANSACTION_LABELS[$transaction->transaction_type] ?? 'Ledger entry');
-                        [$reference, $counterparty] = [
+                        [$reference, $counterparty, $sourceType, $sourceId] = [
                             $transaction->reference !== null && $transaction->reference !== '' ? $transaction->reference : $transaction->transaction_no,
+                            null,
+                            null,
                             null,
                         ];
                     }
@@ -487,6 +493,10 @@ class ReconciliationService
                         'description' => $transaction->narration,
                         'ledger_id' => (int) $movement->ledger_id,
                         'transaction_id' => (int) $movement->transaction_id,
+                        // The ERP record behind the movement, for linking
+                        // to it; null for direct postings and reversals.
+                        'source_type' => $sourceType,
+                        'source_id' => $sourceId,
                         // Postings and their reversals share the reference;
                         // used only to net pairs, stripped before returning.
                         '_net_key' => $transaction->reference !== null && $transaction->reference !== ''

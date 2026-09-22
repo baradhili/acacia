@@ -129,7 +129,20 @@
                             <td class="px-4 py-3 text-sm text-gray-900">{{ $movement['description'] ?? '—' }}</td>
                             <td class="px-4 py-3 text-sm text-gray-600">
                                 {{ $movement['origin'] }}@if ($movement['reference'])
-                                    <span class="text-gray-400">·</span> <span class="text-gray-500">{{ $movement['reference'] }}</span>
+                                    <span class="text-gray-400">·</span>
+                                    @if ($movement['source_type'])
+                                        @php
+                                            $sourceRoute = [
+                                                'payment' => 'payments.show',
+                                                'bill_payment' => 'bill-payments.show',
+                                                'reimbursement_payment' => 'reimbursement-payments.show',
+                                            ][$movement['source_type']] ?? null;
+                                        @endphp
+                                        <a href="{{ $sourceRoute ? route($sourceRoute, $movement['source_id']) : '#' }}"
+                                            class="text-indigo-600 hover:text-indigo-800">{{ $movement['reference'] }}</a>
+                                    @else
+                                        <span class="text-gray-500">{{ $movement['reference'] }}</span>
+                                    @endif
                                 @endif
                             </td>
                             <td class="px-4 py-3 text-sm text-gray-600">{{ $movement['counterparty'] ?? '—' }}</td>
