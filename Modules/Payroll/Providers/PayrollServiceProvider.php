@@ -9,8 +9,9 @@ use Illuminate\Support\ServiceProvider;
  * The Payroll module's boot: routes, views, migrations, its config
  * (exposed under the top-level 'payroll' key exactly as before the
  * module existed, so PayrollService's config reads are untouched) and
- * its contributions to the shell — the sidebar Payroll entry and the
- * PSI Assessment item under the Setup dropdown.
+ * its contributions to the shell — the sidebar Payroll entry, the
+ * Employees topbar section and the PSI Assessment item under the
+ * Setup dropdown.
  */
 class PayrollServiceProvider extends ServiceProvider
 {
@@ -30,6 +31,7 @@ class PayrollServiceProvider extends ServiceProvider
 
         $nav = $this->app->make(Nav::class);
         $nav->addSidebar($this->sidebarItems());
+        $nav->addTopbar($this->topbarItems());
         $nav->addTopbarChild('Setup', $this->setupPsiItem());
     }
 
@@ -48,6 +50,24 @@ class PayrollServiceProvider extends ServiceProvider
         return [
             'type' => 'link', 'label' => 'PSI Assessment', 'route' => 'psi.index',
             'active' => ['psi.*'], 'position' => 67,
+        ];
+    }
+
+    /**
+     * The Employees topbar section. The dropdown itself carries no
+     * roles — it also hosts staff-visible children other modules slot
+     * in via addTopbarChild('Employees', ...) — while the payee master
+     * data child keeps the payroll admin/accountant gate its routes
+     * enforce (the list is where payees are edited).
+     */
+    protected function topbarItems(): array
+    {
+        return [
+            ['type' => 'dropdown', 'label' => 'Employees', 'position' => 30,
+                'active' => ['payroll.employees.*'], 'children' => [
+                    ['type' => 'link', 'label' => 'Payroll employees', 'route' => 'payroll.employees.index',
+                        'active' => ['payroll.employees.*'], 'roles' => ['admin', 'accountant']],
+                ]],
         ];
     }
 }

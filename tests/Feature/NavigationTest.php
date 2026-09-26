@@ -87,10 +87,11 @@ class NavigationTest extends TestCase
         $response = $this->actingAs($this->admin)->get('/dashboard');
 
         $response->assertStatus(200);
-        // The three topbar dropdowns carry the moved sidebar sections.
+        // The four topbar dropdowns carry the moved sidebar sections.
         $response->assertSee('Reports');
         $response->assertSee('Accounting');
         $response->assertSee('Shares');
+        $response->assertSee('Employees');
         // Reports dropdown items
         $response->assertSee('Time by Client');
         $response->assertSee('Balance Sheet');
@@ -102,6 +103,21 @@ class NavigationTest extends TestCase
         // Shares dropdown items
         $response->assertSee('Shareholders');
         $response->assertSee('Franking Account');
+        // Employees dropdown: payee master data (where payees are edited)
+        // and the Resumes module's child
+        $response->assertSee('Payroll employees');
+    }
+
+    public function test_staff_sees_employees_dropdown_without_payroll_master_data(): void
+    {
+        $response = $this->actingAs($this->staff)->get('/dashboard');
+
+        $response->assertStatus(200);
+        // The Employees section stays visible through its Resumes child,
+        // but the admin/accountant-gated payee master data filters out.
+        $response->assertSee('Employees');
+        $response->assertSee('Resumes');
+        $response->assertDontSee('Payroll employees');
     }
 
     public function test_staff_sees_reports_but_not_accounting_or_shares_dropdowns(): void
