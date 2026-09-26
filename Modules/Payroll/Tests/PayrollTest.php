@@ -270,4 +270,32 @@ class PayrollTest extends TestCase
         $this->actingAs($staff)->get('/payroll')->assertForbidden();
         $this->actingAs($this->admin())->get('/payroll')->assertOk()->assertSee('New pay run');
     }
+
+    public function test_editing_a_payee_loads_their_record(): void
+    {
+        $jane = $this->employee();
+
+        // If implicit binding skips (controller variable not matching
+        // the route parameter), edit renders the blank "Add payee"
+        // form instead of Jane's record.
+        $this->actingAs($this->admin())
+            ->get(route('payroll.employees.edit', $jane))
+            ->assertOk()
+            ->assertSee('Edit payee')
+            ->assertSee($jane->name)
+            ->assertSee('value="'.$jane->tfn.'"', false);
+
+        $this->actingAs($this->admin())
+            ->put(route('payroll.employees.update', $jane), [
+                'name' => 'Jane Renamed',
+                'employment_type' => Employee::TYPE_EMPLOYEE,
+                'payment_basis' => Employee::BASIS_HOURLY,
+                'hourly_rate' => 55,
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('payroll.employees.index'));
+
+        $this->assertSame(1, Employee::count());
+        $this->assertSame('Jane Renamed', $jane->fresh()->name);
+    }
 }

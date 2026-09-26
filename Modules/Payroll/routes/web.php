@@ -28,7 +28,14 @@ Route::middleware(['web', 'auth', 'role:admin|accountant'])->group(function () {
     Route::post('/payroll/runs/{run}/process', [PayrollController::class, 'process'])->name('payroll.runs.process');
     Route::post('/payroll/runs/{run}/reverse', [PayrollController::class, 'reverse'])->name('payroll.runs.reverse');
     Route::delete('/payroll/runs/{run}', [PayrollController::class, 'destroy'])->name('payroll.runs.destroy');
-    Route::resource('payroll-employees', PayrollEmployeeController::class)->except(['show'])->names('payroll.employees');
+    // The parameter must be 'employee': implicit binding matches the
+    // controller signature ($employee), and the auto-generated
+    // 'payroll_employee' silently skips it — edit/update/destroy then
+    // receive an empty model and the form falls back to "Add payee".
+    Route::resource('payroll-employees', PayrollEmployeeController::class)
+        ->except(['show'])
+        ->names('payroll.employees')
+        ->parameters(['payroll-employees' => 'employee']);
 
     // PSI assessment: 80% rule, PSB results test, attribution
     Route::get('/psi', [PsiController::class, 'index'])->name('psi.index');
