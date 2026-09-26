@@ -16,6 +16,7 @@
   <a href="https://laravel.com"><img alt="Laravel" src="https://img.shields.io/badge/Laravel-13-red"></a>
   <a href="CONTRIBUTING.md"><img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-brightgreen"></a>
   <a href="https://github.com/baradhili/acacia/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/baradhili/acacia"></a>
+  ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/baradhili/acacia?utm_source=oss&utm_medium=github&utm_campaign=baradhili%2Facacia&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 </p>
 
 ---
