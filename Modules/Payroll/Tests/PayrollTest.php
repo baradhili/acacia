@@ -295,8 +295,11 @@ class PayrollTest extends TestCase
             ->assertOk()
             ->assertDontSee('name="_method"');
 
+        // submit the way the browser does: a POST body carrying
+        // _method=PUT — exercises the spoofing the form relies on
         $this->actingAs($this->admin())
-            ->put(route('payroll.employees.update', $jane), [
+            ->post(route('payroll.employees.update', $jane), [
+                '_method' => 'PUT',
                 'name' => 'Jane Renamed',
                 'employment_type' => Employee::TYPE_EMPLOYEE,
                 'payment_basis' => Employee::BASIS_HOURLY,
