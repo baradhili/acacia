@@ -7,7 +7,7 @@ Laravel Forge is the recommended deployment method for traditional VPS hosting.
 - Ubuntu 20.04+ (recommended)
 - 2GB+ RAM
 - Nginx
-- PHP 8.2+
+- PHP 8.3+
 - MySQL 8.0+ or PostgreSQL 15+
 - Redis
 - Supervisor
@@ -170,13 +170,21 @@ forge ssh "cat ~/.forge/env/{site}"
 ## Recommended Forge Settings
 
 ### PHP Version
-Use PHP 8.2+ with the following extensions:
+Use PHP 8.3+ with the following extensions:
 - pdo_mysql
 - redis
 - bcmath
 - xml
 - gd
 - zip
+
+### Optional system dependencies
+- **LuaLaTeX** (`texlive-latex-base` + `texlive-fonts-recommended`, binary
+  `lualatex`) — the Resumes module's PDF export compiles LaTeX on the
+  server. Without it the module degrades gracefully (PDF export shows an
+  error; JSON, LaTeX-source and DOCX exports still work). Configure the
+  binary path via `RESUMES_LATEX_BIN` and toggle with
+  `RESUMES_LATEX_ENABLED`.
 
 ### Nginx Configuration
 Use default Forge Nginx template with these additions:

@@ -6,7 +6,7 @@ Laravel Sail provides a simple Docker-based development environment using Larave
 
 - Docker Desktop (macOS/Windows) or Docker Engine (Linux)
 - Docker Compose
-- PHP 8.2+ (optional, for local CLI access)
+- PHP 8.3+ (optional, for local CLI access)
 
 ## Quick Start
 

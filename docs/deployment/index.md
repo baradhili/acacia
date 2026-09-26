@@ -16,7 +16,7 @@ This guide covers three deployment options for the Professional Services Account
 
 Before deploying, ensure you have:
 
-- [ ] PHP 8.2+ installed locally for testing
+- [ ] PHP 8.3+ installed locally for testing
 - [ ] Composer dependencies installed
 - [ ] `.env` file configured with production values
 - [ ] Database migrations tested

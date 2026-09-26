@@ -127,6 +127,10 @@ What it does:
   `storage/app/backups/db/`).
 - Archives everything on the public storage disk (uploads, client and
   company logos, profile photos) to `{BACKUP_PATH}/files/*.tar.gz`.
+  Module data is covered too: anything a module keeps out of the public
+  disk lives in the database (e.g. the Resumes module stores resume
+  content as `parsed_data` rows and regenerates every export, so there
+  is nothing extra to archive).
 - Prunes old archives beyond the configured retention, per type
   (database dumps and file archives each keep their own N).
 

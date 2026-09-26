@@ -25,6 +25,7 @@ Place your Markdown documentation files in the `docs/` folder:
 docs/
 ├── index.md              # Home page
 ├── getting-started.md    # Installation guide
+├── modules.md            # Module architecture and authoring rules
 ├── deployment/            # Deployment documentation
 │   ├── index.md
 │   ├── forge.md
@@ -106,6 +107,9 @@ export default defineConfig({
     ],
     
     sidebar: {
+      '/': [
+        { text: 'Modules', link: '/modules' }
+      ],
       '/deployment/': [
         { text: 'Overview', link: '/deployment/' },
         { text: 'Laravel Forge', link: '/deployment/forge' },

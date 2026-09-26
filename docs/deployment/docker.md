@@ -238,6 +238,12 @@ EXPOSE 9000
 CMD ["php-fpm"]
 ```
 
+> **Optional:** the Resumes module's PDF export needs LuaLaTeX on the host
+> (add `texlive-latex-base` and `texlive-fonts-recommended` to the
+> `apk add` layer — sizeable). Without it the module still runs; PDF
+> download degrades to an error while JSON / LaTeX-source / DOCX exports
+> keep working. `RESUMES_LATEX_ENABLED=false` disables the attempt.
+
 ### `docker/supervisor.conf`
 
 ```ini
