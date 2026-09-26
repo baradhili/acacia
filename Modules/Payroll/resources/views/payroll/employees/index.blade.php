@@ -27,6 +27,7 @@
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payee</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Login</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Basis</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tax</th>
@@ -41,6 +42,14 @@
                             <td class="px-4 py-3">
                                 <div class="font-medium text-gray-900">{{ $employee->name }}</div>
                                 <div class="text-xs text-gray-500">{{ $employee->email ?: '—' }}</div>
+                            </td>
+                            <td class="px-4 py-3 text-gray-600">
+                                @if ($employee->user)
+                                    <div class="font-medium text-gray-900">{{ $employee->user->name }}</div>
+                                    <div class="text-xs text-gray-500">{{ $employee->user->email }}</div>
+                                @else
+                                    <span class="text-xs text-gray-400">no linked user</span>
+                                @endif
                             </td>
                             <td class="px-4 py-3 text-gray-600">{{ ucfirst($employee->employment_type) }}</td>
                             <td class="px-4 py-3 text-gray-600">
@@ -85,7 +94,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="px-4 py-8 text-center text-gray-500">No payees yet.</td>
+                            <td colspan="8" class="px-4 py-8 text-center text-gray-500">No payees yet.</td>
                         </tr>
                     @endforelse
                 </tbody>

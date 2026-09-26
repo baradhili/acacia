@@ -13,6 +13,7 @@ use IFRS\Models\Entity;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Modules\Payroll\Models\Employee;
 use Modules\Payroll\Models\PayRun;
+use Modules\Payroll\Observers\UserObserver;
 use Modules\Payroll\Services\PayrollService;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -38,7 +39,7 @@ class PayrollTest extends TestCase
 
         $this->travelTo(Carbon::parse('2026-09-15 09:00'));
 
-        foreach (['admin', 'accountant', 'staff'] as $role) {
+        foreach (['admin', 'accountant', 'staff', 'client'] as $role) {
             Role::firstOrCreate(['name' => $role]);
         }
 
@@ -297,7 +298,9 @@ class PayrollTest extends TestCase
 
         // submit the way the browser does: a POST body carrying
         // _method=PUT — exercises the spoofing the form relies on
-        $this->actingAs($this->admin())
+        $admin = $this->admin(); // resolve before counting: each call makes a fresh user/payee
+        $countBefore = Employee::count();
+        $this->actingAs($admin)
             ->post(route('payroll.employees.update', $jane), [
                 '_method' => 'PUT',
                 'name' => 'Jane Renamed',
@@ -308,7 +311,51 @@ class PayrollTest extends TestCase
             ])
             ->assertRedirect(route('payroll.employees.index'));
 
-        $this->assertSame(1, Employee::count());
+        // the update must change Jane, not duplicate her (the count is
+        // relative — user creation now seeds linked payees)
+        $this->assertSame($countBefore, Employee::count());
         $this->assertSame('Jane Renamed', $jane->fresh()->name);
+    }
+
+    public function test_every_staff_user_is_seeded_a_linked_payee(): void
+    {
+        $admin = $this->admin();
+
+        $payee = Employee::where('user_id', $admin->id)->first();
+        $this->assertNotNull($payee);
+        $this->assertSame($admin->name, $payee->name);
+        $this->assertSame($admin->email, $payee->email);
+        $this->assertSame($this->entity->id, $payee->entity_id);
+
+        // portal clients are customers, not payees — but the check
+        // only bites when the role is held at seeding time (roles are
+        // usually assigned after creation; the client role itself is
+        // slated for removal)
+        $client = tap(User::withoutEvents(
+            fn () => User::factory()->create(['entity_id' => $this->entity->id])
+        ))->assignRole('client');
+
+        $this->assertNull(UserObserver::ensureEmployeeFor($client));
+        $this->assertNull(Employee::where('user_id', $client->id)->first());
+    }
+
+    public function test_the_sync_command_backfills_missing_payees(): void
+    {
+        $admin = $this->admin();
+        // a user whose payee predates the observer (or was removed)
+        Employee::where('user_id', $admin->id)->delete();
+        $this->assertNull(Employee::where('user_id', $admin->id)->first());
+
+        $this->artisan('payroll:sync-users')
+            ->expectsOutputToContain("Created payee for {$admin->name}")
+            ->assertSuccessful();
+
+        $payee = Employee::where('user_id', $admin->id)->first();
+        $this->assertNotNull($payee);
+        $this->assertSame($admin->name, $payee->name);
+
+        // idempotent: nothing new on a second run
+        $this->artisan('payroll:sync-users')->assertSuccessful();
+        $this->assertSame(1, Employee::where('user_id', $admin->id)->count());
     }
 }

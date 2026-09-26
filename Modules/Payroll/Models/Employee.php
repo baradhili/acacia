@@ -2,6 +2,7 @@
 
 namespace Modules\Payroll\Models;
 
+use App\Models\User;
 use App\Support\AuNumbers;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;

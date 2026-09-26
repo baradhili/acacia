@@ -330,3 +330,5 @@
 - [x] display the uploaded logo in the top left if it exists when viewing the bill record
 
 - [x] use company logo that is uploaded on pdf invoice
+
+- [ ] Remove the "client" role concept from the app — audit RoleSeeder's roles list, any `client` role checks/assignments and portal-client user handling; user accounts should be staff-side only (admin/accountant/staff). (Sep 2026, requested while making all users show as payroll payees — the payroll UserObserver currently skips client-role users defensively)

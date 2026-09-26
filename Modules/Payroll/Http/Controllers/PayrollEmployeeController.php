@@ -19,7 +19,7 @@ class PayrollEmployeeController extends Controller
     public function index()
     {
         return view('payroll.employees.index', [
-            'employees' => Employee::orderBy('name')->get(),
+            'employees' => Employee::with('user')->orderBy('name')->get(),
         ]);
     }
 

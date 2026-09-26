@@ -2,8 +2,11 @@
 
 namespace Modules\Payroll\Providers;
 
+use App\Models\User;
 use App\Support\Nav;
 use Illuminate\Support\ServiceProvider;
+use Modules\Payroll\Console\Commands\SyncUsersCommand;
+use Modules\Payroll\Observers\UserObserver;
 
 /**
  * The Payroll module's boot: routes, views, migrations, its config
@@ -22,6 +25,15 @@ class PayrollServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
 
         $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
+
+        // Every staff-side user shows as a payee (portal clients
+        // excepted) — seeded on user creation, backfilled with
+        // payroll:sync-users.
+        User::observe(UserObserver::class);
+
+        $this->commands([
+            SyncUsersCommand::class,
+        ]);
 
         // Views resolve by their existing feature-namespaced names
         // ('payroll.index', 'psi.index') via the added location; the
