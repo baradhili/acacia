@@ -1,0 +1,10 @@
+{
+    "name": "acacia/resumes",
+    "description": "Acacia ERP employee resumes module",
+    "type": "acacia-module",
+    "autoload": {
+        "psr-4": {
+            "Modules\\Resumes\\": ""
+        }
+    }
+}

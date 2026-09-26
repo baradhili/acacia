@@ -3,5 +3,6 @@
     "Payroll": true,
     "Probe": false,
     "Reconciliation": true,
+    "Resumes": true,
     "Shares": true
 }

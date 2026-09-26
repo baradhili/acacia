@@ -73,6 +73,10 @@
                             <td class="px-4 py-3 text-right space-x-3">
                                 <a href="{{ route('payroll.employees.edit', $employee) }}"
                                     class="text-indigo-600 hover:text-indigo-900 font-medium">Edit</a>
+                                @if (\Route::has('resumes.index'))
+                                    <a href="{{ route('resumes.index', ['employee' => $employee->id]) }}"
+                                        class="text-indigo-600 hover:text-indigo-900 font-medium">Resume</a>
+                                @endif
                                 <form method="POST" action="{{ route('payroll.employees.destroy', $employee) }}" class="inline">
                                     @csrf @method('DELETE')
                                     <button class="text-red-600 hover:text-red-800 font-medium">Delete</button>

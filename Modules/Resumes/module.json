@@ -1,0 +1,17 @@
+{
+    "name": "Resumes",
+    "alias": "resumes",
+    "description": "Employee resumes on the modified JSON Resume schema: upload against a payroll payee, keyword-tailor, and export to PDF (LaTeX), DOCX or JSON. Requires the Payroll module.",
+    "keywords": [
+        "resumes",
+        "employees",
+        "recruitment"
+    ],
+    "priority": 0,
+    "version": "1.0.0",
+    "providers": [
+        "Modules\\Resumes\\Providers\\ResumesServiceProvider"
+    ],
+    "files": [],
+    "core": true
+}
