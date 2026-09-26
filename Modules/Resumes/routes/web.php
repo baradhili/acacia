@@ -7,10 +7,12 @@ use Modules\Resumes\Http\Controllers\ResumeController;
 |--------------------------------------------------------------------------
 | Resumes module routes
 |--------------------------------------------------------------------------
-| Open to every signed-in user (deliberate: staffing decisions need
-| wider visibility than the payroll master data these hang off).
-| 'web' is explicit — provider-loaded routes inherit no group, and
-| without SubstituteBindings the controllers receive empty models.
+| Viewing and exporting are open to every signed-in user (staffing
+| decisions need wider visibility than the payroll master data these
+| hang off); changing resumes (upload/delete) is gated in the
+| controller to admins and the payee's linked user. 'web' is
+| explicit — provider-loaded routes inherit no group, and without
+| SubstituteBindings the controllers receive empty models.
 */
 
 Route::middleware(['web', 'auth'])->group(function () {

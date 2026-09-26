@@ -18,14 +18,18 @@ use RuntimeException;
 
 /**
  * Resume uploads against a payroll payee, keyword tailoring and the
- * four exports (JSON, PDF via LaTeX, LaTeX source, DOCX). Open to
- * every signed-in user — resumes are staffing-facing, unlike the
- * payroll data they hang off.
+ * four exports (JSON, PDF via LaTeX, LaTeX source, DOCX). Viewing and
+ * exporting are open to every signed-in user — resumes are
+ * staffing-facing, unlike the payroll data they hang off — but
+ * changing them (upload/delete) is limited to admins and the payee's
+ * linked user.
  */
 class ResumeController extends Controller
 {
     public function index(Request $request)
     {
+        $user = $request->user();
+
         $query = Resume::with(['employee', 'uploadedBy'])
             ->where('entity_id', IfrsPosting::resolveEntity()->id)
             ->orderByDesc('uploaded_at');
@@ -39,15 +43,24 @@ class ResumeController extends Controller
             'employee' => $request->filled('employee')
                 ? Employee::find($request->integer('employee'))
                 : null,
+            // upload button: admins, or users with a payee of their own
+            'canUpload' => $user->hasRole('admin')
+                || Employee::where('user_id', $user->id)->exists(),
         ]);
     }
 
     public function create()
     {
+        // only payees this user may upload for — admins see all,
+        // everyone else just their own linked payee
+        $employees = Employee::where('entity_id', IfrsPosting::resolveEntity()->id)
+            ->orderBy('name')
+            ->get()
+            ->filter(fn ($employee) => Resume::canUploadFor(request()->user(), $employee))
+            ->pluck('name', 'id');
+
         return view('resumes.upload', [
-            'employees' => Employee::where('entity_id', IfrsPosting::resolveEntity()->id)
-                ->orderBy('name')
-                ->pluck('name', 'id'),
+            'employees' => $employees,
         ]);
     }
 
@@ -63,6 +76,8 @@ class ResumeController extends Controller
         ]);
 
         $employee = Employee::findOrFail($request->integer('employee_id'));
+
+        abort_unless(Resume::canUploadFor($request->user(), $employee), 403);
 
         $data = $this->decode($request);
         $data = JsonResumeValidator::normalize($data);
@@ -113,8 +128,10 @@ class ResumeController extends Controller
         ]);
     }
 
-    public function destroy(Resume $resume)
+    public function destroy(Request $request, Resume $resume)
     {
+        abort_unless($resume->canBeManagedBy($request->user()), 403);
+
         $resume->delete();
 
         return redirect()->route('resumes.index')->with('success', 'Resume deleted.');

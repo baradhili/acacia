@@ -21,14 +21,15 @@ use Tests\TestCase;
  * record), keyword tailoring (any/all match, project cross-references,
  * emptied-section cleanup), and the four exports — filtered JSON, the
  * LaTeX source, a real LuaLaTeX-compiled PDF and a PHPWord DOCX.
- * Access is open to every signed-in user, unlike payroll itself.
+ * Viewing and exporting are open to every signed-in user; managing
+ * (upload/delete) is limited to admins and the payee's linked user.
  */
 class ResumeTest extends TestCase
 {
-    public function test_staff_can_upload_browse_and_delete_a_resume(): void
+    public function test_staff_can_upload_browse_and_delete_their_own_resume(): void
     {
-        $employee = $this->employee();
         $staff = $this->staff();
+        $employee = $this->employee(['user_id' => $staff->id]);
 
         $response = $this->actingAs($staff)
             ->post(route('resumes.store'), [
@@ -50,6 +51,43 @@ class ResumeTest extends TestCase
         $this->assertSame(0, Resume::count());
     }
 
+    public function test_only_admins_or_the_owning_employee_can_manage_resumes(): void
+    {
+        $resume = $this->resume(); // an unlinked payee's resume
+
+        // plain staff can still view and export…
+        $this->actingAs($this->staff())
+            ->get(route('resumes.index'))->assertOk()->assertSee('Richard Hendriks');
+        $this->actingAs($this->staff())
+            ->get(route('resumes.show', $resume))->assertOk();
+
+        // …but not upload for a payee that isn't theirs, nor delete
+        $this->actingAs($this->staff())
+            ->post(route('resumes.store'), [
+                'employee_id' => $resume->employee_id,
+                'resume_file' => $this->resumeFile(),
+            ])->assertForbidden();
+        $this->actingAs($this->staff())
+            ->delete(route('resumes.destroy', $resume))->assertForbidden();
+        $this->assertSame(1, Resume::count());
+
+        // the owning employee — the payee's linked user — can delete it
+        $owner = $this->staff();
+        $resume->employee->forceFill(['user_id' => $owner->id])->save();
+        $this->actingAs($owner)
+            ->delete(route('resumes.destroy', $resume))->assertRedirect(route('resumes.index'));
+
+        // and admins can manage any payee's resume
+        $adminResume = $this->resume();
+        $this->actingAs($this->admin())
+            ->delete(route('resumes.destroy', $adminResume))->assertRedirect(route('resumes.index'));
+        $this->actingAs($this->admin())
+            ->post(route('resumes.store'), [
+                'employee_id' => $adminResume->employee_id,
+                'resume_file' => $this->resumeFile(),
+            ])->assertRedirect();
+    }
+
     public function test_uploads_must_match_the_schema(): void
     {
         $employee = $this->employee();
@@ -58,7 +96,7 @@ class ResumeTest extends TestCase
         $tampered = $this->resumeData();
         $tampered['work'] = 'CEO at Pied Piper';
 
-        $this->actingAs($this->staff())
+        $this->actingAs($this->admin())
             ->post(route('resumes.store'), [
                 'employee_id' => $employee->id,
                 'resume_file' => $this->resumeFile($tampered),
@@ -68,7 +106,7 @@ class ResumeTest extends TestCase
         $this->assertStringContainsString('[work]', session('errors')->first('resume_file'));
 
         // malformed JSON is rejected before the schema runs
-        $this->actingAs($this->staff())
+        $this->actingAs($this->admin())
             ->post(route('resumes.store'), [
                 'employee_id' => $employee->id,
                 'resume_file' => UploadedFile::fake()->createWithContent('resume.json', '{not json'),
@@ -84,7 +122,7 @@ class ResumeTest extends TestCase
         $data = $this->resumeData();
         unset($data['basics']['name'], $data['basics']['email']);
 
-        $this->actingAs($this->staff())
+        $this->actingAs($this->admin())
             ->post(route('resumes.store'), [
                 'employee_id' => $employee->id,
                 'resume_file' => $this->resumeFile($data),
@@ -240,6 +278,11 @@ class ResumeTest extends TestCase
     protected function staff(): User
     {
         return tap(User::factory()->create(['entity_id' => IfrsPosting::resolveEntity()->id]))->assignRole('staff');
+    }
+
+    protected function admin(): User
+    {
+        return tap(User::factory()->create(['entity_id' => IfrsPosting::resolveEntity()->id]))->assignRole('admin');
     }
 
     protected function resume(?Employee $employee = null): Resume

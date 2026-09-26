@@ -12,8 +12,10 @@
                 Uploaded on the JSON Resume schema, keyword-tailored and exportable to PDF, DOCX or JSON.
             </p>
         </div>
-        <a href="{{ route('resumes.create') }}"
-            class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm">Upload resume</a>
+        @if ($canUpload)
+            <a href="{{ route('resumes.create') }}"
+                class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm">Upload resume</a>
+        @endif
     </div>
 
     @if (session('success'))
@@ -61,10 +63,12 @@
                             <td class="px-4 py-3 text-right space-x-3">
                                 <a href="{{ route('resumes.show', $resume) }}"
                                     class="text-indigo-600 hover:text-indigo-900 font-medium">View</a>
-                                <form method="POST" action="{{ route('resumes.destroy', $resume) }}" class="inline">
-                                    @csrf @method('DELETE')
-                                    <button class="text-red-600 hover:text-red-800 font-medium">Delete</button>
-                                </form>
+                                @if ($resume->canBeManagedBy(auth()->user()))
+                                    <form method="POST" action="{{ route('resumes.destroy', $resume) }}" class="inline">
+                                        @csrf @method('DELETE')
+                                        <button class="text-red-600 hover:text-red-800 font-medium">Delete</button>
+                                    </form>
+                                @endif
                             </td>
                         </tr>
                     @empty

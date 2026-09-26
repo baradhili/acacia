@@ -54,4 +54,24 @@ class Resume extends Model
     {
         return $this->basics['email'] ?? '';
     }
+
+    /**
+     * Who may change or remove this resume: admins, or the user the
+     * payee record is linked to (the owning employee). Everyone
+     * signed in can still view and export.
+     */
+    public function canBeManagedBy(User $user): bool
+    {
+        return $user->hasRole('admin')
+            || ($this->employee && $this->employee->user_id === $user->id);
+    }
+
+    /**
+     * Who may upload a resume against a payee: admins, or the user
+     * the payee record is linked to.
+     */
+    public static function canUploadFor(User $user, Employee $employee): bool
+    {
+        return $user->hasRole('admin') || $employee->user_id === $user->id;
+    }
 }
