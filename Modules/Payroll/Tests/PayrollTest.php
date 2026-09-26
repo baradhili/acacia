@@ -283,7 +283,17 @@ class PayrollTest extends TestCase
             ->assertOk()
             ->assertSee('Edit payee')
             ->assertSee($jane->name)
-            ->assertSee('value="'.$jane->tfn.'"', false);
+            ->assertSee('value="'.$jane->tfn.'"', false)
+            // the form must spoof PUT: a bare POST hits a PUT-only
+            // route and dies with MethodNotAllowedHttpException
+            ->assertSee('name="_method" value="PUT"', false);
+
+        // the create form must NOT spoof — that would turn the store
+        // POST into a PUT and 405 it instead
+        $this->actingAs($this->admin())
+            ->get(route('payroll.employees.create'))
+            ->assertOk()
+            ->assertDontSee('name="_method"');
 
         $this->actingAs($this->admin())
             ->put(route('payroll.employees.update', $jane), [

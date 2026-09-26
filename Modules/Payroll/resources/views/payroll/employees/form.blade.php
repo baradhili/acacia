@@ -18,6 +18,7 @@
     <form method="POST" action="{{ $employee->exists ? route('payroll.employees.update', $employee) : route('payroll.employees.store') }}"
         class="bg-white rounded-lg shadow p-6 max-w-3xl space-y-4">
         @csrf
+        @if ($employee->exists) @method('PUT') @endif
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
