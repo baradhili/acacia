@@ -9,8 +9,8 @@ use Modules\Resumes\Console\Commands\FetchResumeSchemaCommand;
 /**
  * The Resumes module's boot: routes, views, migrations, its config
  * (exposed under the top-level 'resumes' key) and its contribution
- * to the shell — the sidebar Resumes entry, visible to every
- * signed-in user.
+ * to the shell — the Resumes item in the Employees topbar section,
+ * visible to every signed-in user.
  */
 class ResumesServiceProvider extends ServiceProvider
 {
@@ -33,26 +33,16 @@ class ResumesServiceProvider extends ServiceProvider
         ]);
 
         $nav = $this->app->make(Nav::class);
-        $nav->addSidebar($this->sidebarItems());
         // The Employees section Payroll owns; no-op when Payroll is
         // disabled, since the dropdown then never exists.
         $nav->addTopbarChild('Employees', $this->employeesResumesItem());
     }
 
-    protected function sidebarItems(): array
-    {
-        return [
-            // No 'roles' key: resumes are deliberately visible to all
-            // authenticated users, unlike the payroll data below them.
-            ['type' => 'link', 'label' => 'Resumes', 'route' => 'resumes.index', 'active' => ['resumes.*'],
-                'icon' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>',
-                'add' => 'resumes.create', 'addTitle' => 'Upload Resume', 'position' => 26],
-        ];
-    }
-
     protected function employeesResumesItem(): array
     {
         return [
+            // No 'roles' key: resumes are deliberately visible to all
+            // authenticated users, unlike the payroll data above them.
             'type' => 'link', 'label' => 'Resumes', 'route' => 'resumes.index', 'active' => ['resumes.*'],
         ];
     }
