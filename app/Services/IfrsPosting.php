@@ -57,7 +57,8 @@ class IfrsPosting
 
     /**
      * Ensure an OPEN reporting period exists for the fiscal year $date falls
-     * in (mirrors ReportController::getReportingPeriod() / IFRSSeeder).
+     * in (mirrors ResolvesReportingContext::getReportingPeriod() /
+     * IFRSSeeder).
      * Transaction::save() throws MissingReportingPeriod when the period row
      * is absent, and the seeder only creates the current FY — a payment dated
      * in any other fiscal year would fail forever without this. Idempotent:
