@@ -122,6 +122,27 @@ class SkillTest extends TestCase
         $this->actingAs($admin)->get(route('skills.services.show', $service))->assertOk();
     }
 
+    public function test_library_search_matches_percent_and_underscore_literally(): void
+    {
+        $this->skill(['name' => '100% Complete', 'description' => 'full completion']);
+        $this->skill(['name' => '100 Percent Complete']);
+        $this->skill(['name' => 'Tax_Planning']);
+        $this->skill(['name' => 'Tax Planning']);
+
+        // '%' and '_' are user text here, not wildcards
+        $this->actingAs($this->admin())
+            ->get(route('skills.index', ['q' => '100%']))
+            ->assertOk()
+            ->assertSee('100% Complete')
+            ->assertDontSee('100 Percent Complete');
+
+        $this->actingAs($this->admin())
+            ->get(route('skills.index', ['q' => 'Tax_']))
+            ->assertOk()
+            ->assertSee('Tax_Planning')
+            ->assertDontSee('Tax Planning');
+    }
+
     public function test_admins_set_an_employees_skills_with_proficiency(): void
     {
         $employee = $this->employee();

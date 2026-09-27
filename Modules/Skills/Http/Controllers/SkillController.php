@@ -24,11 +24,18 @@ class SkillController extends Controller
             ->withCount(['employees', 'services'])
             ->orderBy('name')
             ->when($request->filled('q'), function (Builder $query) use ($request) {
-                $term = str_replace(['%', '_'], ['\%', '\_'], $request->input('q'));
+                // instr(), not LIKE: a search for "100%" or "tax_"
+                // must match those characters literally. LIKE
+                // wildcards cannot be escaped portably across the
+                // SQLite test connection and the MySQL dev one
+                // (MySQL's LIKE has no ESCAPE clause; SQLite treats a
+                // backslash as an ordinary character), while instr()
+                // is a plain literal substring test on both.
+                $term = mb_strtolower((string) $request->input('q'));
 
                 return $query->where(function (Builder $query) use ($term) {
-                    $query->where('name', 'like', "%{$term}%")
-                        ->orWhere('description', 'like', "%{$term}%");
+                    $query->whereRaw('instr(lower(name), ?) > 0', [$term])
+                        ->orWhereRaw('instr(lower(description), ?) > 0', [$term]);
                 });
             })
             ->when($request->filled('category'), function (Builder $query) use ($request) {
