@@ -69,7 +69,7 @@
             <table class="min-w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payee</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Staff</th>
                         <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Hours</th>
                         <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Gross</th>
                         <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">PAYG</th>
@@ -123,7 +123,7 @@
                 class="bg-white rounded-lg shadow p-6 grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
                 @csrf
                 <div class="md:col-span-2">
-                    <label class="block text-xs font-medium text-gray-500 mb-1">Payee</label>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Staff member</label>
                     <select name="employee_id" required class="w-full border-gray-300 rounded-lg text-sm">
                         @foreach ($employees as $employee)
                             <option value="{{ $employee->id }}">
@@ -157,7 +157,7 @@
             </form>
         @else
             <p class="text-sm text-gray-500">
-                Every active payee is already on this run.
+                Every active staff member is already on this run.
             </p>
         @endif
     @else

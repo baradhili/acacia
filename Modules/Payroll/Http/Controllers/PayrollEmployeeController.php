@@ -7,6 +7,7 @@ use App\Rules\AuNumber;
 use App\Services\IfrsPosting;
 use Illuminate\Http\Request;
 use Modules\Payroll\Models\Employee;
+use Modules\Payroll\Services\PayrollService;
 
 /**
  * Payroll employee master data: pay basis and rates, tax treatment
@@ -35,6 +36,21 @@ class PayrollEmployeeController extends Controller
         ]);
 
         return redirect()->route('payroll.employees.index')->with('success', 'Employee added.');
+    }
+
+    /**
+     * Read-only payee view: the payroll master data, then the
+     * skills and resumes panels the other modules slot in below it
+     * (guarded includes in the view — nothing cross-module here).
+     * The SG rate in force today is passed so a payee without a
+     * custom super rate shows the default payroll would apply.
+     */
+    public function show(Employee $employee, PayrollService $payroll)
+    {
+        return view('payroll.employees.show', [
+            'employee' => $employee->load('user'),
+            'sgRate' => $payroll->sgRate(now()),
+        ]);
     }
 
     public function edit(Employee $employee)

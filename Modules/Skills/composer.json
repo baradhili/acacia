@@ -1,0 +1,10 @@
+{
+    "name": "acacia/skills",
+    "description": "Acacia ERP skills library module",
+    "type": "acacia-module",
+    "autoload": {
+        "psr-4": {
+            "Modules\\Skills\\": ""
+        }
+    }
+}

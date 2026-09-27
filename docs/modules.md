@@ -15,9 +15,10 @@ hook into.
 | `Reconciliation` | Bank statement import, matching + learning, counterparty rules | bank tables live in the core squashed schema |
 | `Shares` | Shareholding ledger, franking account, dividend runs | company identity (CompanyShareholder/ShareClass) stays core |
 | `Crm` | Leads through the sales funnel, activity history, client conversion, monthly sales targets | first module authored in place (its migrations ship in the module) |
-| `Resumes` | Employee resumes on the modified JSON Resume schema: upload against a payroll payee, keyword tailoring, PDF (LuaLaTeX) / DOCX (PHPWord) / JSON / LaTeX exports | depends on Payroll (employees FK); schema vendored in the module; view/export open to all signed-in staff, upload/delete limited to admins and the payee's linked user (`employees.user_id`) |
+| `Resumes` | Employee resumes on the modified JSON Resume schema: upload against a payroll payee, keyword tailoring, PDF (LuaLaTeX) / DOCX (PHPWord) / JSON / LaTeX exports | depends on Payroll (employees FK); schema vendored in the module; view/export open to all signed-in staff, upload/delete limited to admins and the payee's linked user (`employees.user_id`); ships the partial the payroll payee view lists |
+| `Skills` | The skill register: a library of skills linked to payroll payees at a proficiency level (beginner → expert) and to the core service catalogue as required skills | depends on Payroll (employee_skill FK); the core `Service` model stays untouched — both link tables are owned by the module; browsing open to all signed-in staff, editing (library CRUD + both matrices) limited to admins/accountants; the payroll payee view lists a payee's skills via a `Route::has`-guarded include (the Resumes pattern); bulk import from Rich Skills Descriptor (RSD) JSON files — idempotent on the RSD id, full descriptor kept in `skills.rsd` |
 
-All five carry `"core": true` in their manifest — they ship with the app and
+All six carry `"core": true` in their manifest — they ship with the app and
 cannot be uninstalled from the GUI (only disabled). `modules_statuses.json`
 is committed so fresh clones boot with them enabled; disabling from the GUI
 rewrites it locally, which is per-deployment state.

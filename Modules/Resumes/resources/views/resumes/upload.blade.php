@@ -6,7 +6,7 @@
         <h1 class="text-2xl font-bold text-gray-800">Upload resume</h1>
         <p class="text-sm text-gray-500 mt-1">
             A JSON file on the <span class="font-medium">JSON Resume v1.0.0 schema</span> (the baradhili
-            modification — see the schema's README). Name and email are filled in from the payee
+            modification — see the schema's README). Name and email are filled in from the staff
             record when the file leaves them out.
         </p>
     </div>
@@ -17,8 +17,8 @@
 
     @if ($employees->isEmpty())
         <div class="bg-white rounded-lg shadow p-6 max-w-2xl text-sm text-gray-600">
-            You can't upload resumes: only admins and a payee's own linked user can.
-            Your account isn't linked to a payee record — ask an admin to link it
+            You can't upload resumes: only admins and a staff member's own linked user can.
+            Your account isn't linked to a staff record — ask an admin to link it
             (Payroll employees screen) or to upload on your behalf.
         </div>
     @else
@@ -27,9 +27,9 @@
         @csrf
 
         <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Payee</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Staff member</label>
             <select name="employee_id" required class="w-full border-gray-300 rounded-lg text-sm">
-                <option value="" disabled {{ old('employee_id') ? '' : 'selected' }}>Select a payee…</option>
+                <option value="" disabled {{ old('employee_id') ? '' : 'selected' }}>Select a staff member…</option>
                 @foreach ($employees as $id => $name)
                     <option value="{{ $id }}" {{ old('employee_id') == $id ? 'selected' : '' }}>{{ $name }}</option>
                 @endforeach

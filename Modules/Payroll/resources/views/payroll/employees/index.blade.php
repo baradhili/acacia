@@ -11,7 +11,7 @@
             </p>
         </div>
         <a href="{{ route('payroll.employees.create') }}"
-            class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm">Add payee</a>
+            class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm">Add staff member</a>
     </div>
 
     @if (session('success'))
@@ -26,7 +26,7 @@
             <table class="min-w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payee</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Staff</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Login</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Basis</th>
@@ -62,8 +62,13 @@
                                 @endif
                             </td>
                             <td class="px-4 py-3 text-gray-600">
-                                {{ $employee->tfn ? 'TFN on file' : 'NO TFN — 47%' }} ·
-                                scale {{ $employee->taxScale() }}
+                                @if ($employee->withholdsPayg())
+                                    {{ $employee->tfn ? 'TFN on file' : 'NO TFN — 47%' }} ·
+                                    scale {{ $employee->taxScale() }}
+                                @else
+                                    {{ $employee->tfn ? 'TFN on file' : 'no TFN' }} ·
+                                    no PAYG withholding
+                                @endif
                             </td>
                             <td class="px-4 py-3">
                                 @if($employee->is_closely_linked)
@@ -80,12 +85,10 @@
                                 </span>
                             </td>
                             <td class="px-4 py-3 text-right space-x-3">
+                                <a href="{{ route('payroll.employees.show', $employee) }}"
+                                    class="text-indigo-600 hover:text-indigo-900 font-medium">View</a>
                                 <a href="{{ route('payroll.employees.edit', $employee) }}"
                                     class="text-indigo-600 hover:text-indigo-900 font-medium">Edit</a>
-                                @if (\Route::has('resumes.index'))
-                                    <a href="{{ route('resumes.index', ['employee' => $employee->id]) }}"
-                                        class="text-indigo-600 hover:text-indigo-900 font-medium">Resume</a>
-                                @endif
                                 <form method="POST" action="{{ route('payroll.employees.destroy', $employee) }}" class="inline">
                                     @csrf @method('DELETE')
                                     <button class="text-red-600 hover:text-red-800 font-medium">Delete</button>
@@ -94,7 +97,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="px-4 py-8 text-center text-gray-500">No payees yet.</td>
+                            <td colspan="8" class="px-4 py-8 text-center text-gray-500">No staff yet.</td>
                         </tr>
                     @endforelse
                 </tbody>

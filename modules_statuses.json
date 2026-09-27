@@ -4,5 +4,6 @@
     "Probe": false,
     "Reconciliation": true,
     "Resumes": true,
-    "Shares": true
+    "Shares": true,
+    "Skills": true
 }

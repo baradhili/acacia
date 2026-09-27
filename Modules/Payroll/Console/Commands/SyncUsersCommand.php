@@ -26,13 +26,13 @@ class SyncUsersCommand extends Command
         foreach (User::orderBy('id')->get() as $user) {
             if (UserObserver::ensureEmployeeFor($user)) {
                 $created++;
-                $this->line("  Created payee for {$user->name}");
+                $this->line("  Created staff record for {$user->name}");
             } else {
                 $skipped++;
             }
         }
 
-        $this->info("Synced: {$created} payee(s) created, {$skipped} user(s) already had one or are portal clients.");
+        $this->info("Synced: {$created} staff record(s) created, {$skipped} user(s) already had one or are portal clients.");
 
         return Command::SUCCESS;
     }
