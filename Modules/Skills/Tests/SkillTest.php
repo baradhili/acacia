@@ -166,7 +166,9 @@ class SkillTest extends TestCase
 
     public function test_the_payroll_employee_view_shows_skills_and_resumes(): void
     {
-        $employee = $this->employee();
+        // super_rate is stored as a fraction (0.115 = 11.5%) — the
+        // view must render the percentage, not "0.115%"
+        $employee = $this->employee(['super_rate' => 0.115]);
         $skill = $this->skill(['name' => 'BAS Preparation']);
         EmployeeSkill::create(['employee_id' => $employee->id, 'skill_id' => $skill->id, 'proficiency' => 'advanced']);
         $resume = Resume::create([
@@ -184,6 +186,8 @@ class SkillTest extends TestCase
             ->get(route('payroll.employees.show', $employee))
             ->assertOk()
             ->assertSee('Payroll details')
+            ->assertSee('11.5%')
+            ->assertDontSee('0.115%')
             ->assertSee('Skills held')
             ->assertSee('BAS Preparation')
             ->assertSee('Advanced')

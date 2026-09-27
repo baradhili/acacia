@@ -68,7 +68,8 @@
                 <dt class="text-xs font-medium text-gray-500 uppercase">Super</dt>
                 <dd class="mt-1 text-gray-900">
                     @if ($employee->super_rate !== null)
-                        {{ rtrim(rtrim(number_format((float) $employee->super_rate, 2), '0'), '.') }}%
+                        {{-- stored as a fraction (0.115 = 11.5%): PayrollService multiplies earnings by it --}}
+                        {{ rtrim(rtrim(number_format((float) $employee->super_rate * 100, 2), '0'), '.') }}%
                         @if ($employee->super_fund) · {{ $employee->super_fund }} @endif
                         @if ($employee->super_member_id) · {{ $employee->super_member_id }} @endif
                     @else
