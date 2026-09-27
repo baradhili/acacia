@@ -80,6 +80,8 @@
                                 </span>
                             </td>
                             <td class="px-4 py-3 text-right space-x-3">
+                                <a href="{{ route('payroll.employees.show', $employee) }}"
+                                    class="text-indigo-600 hover:text-indigo-900 font-medium">View</a>
                                 <a href="{{ route('payroll.employees.edit', $employee) }}"
                                     class="text-indigo-600 hover:text-indigo-900 font-medium">Edit</a>
                                 @if (\Route::has('resumes.index'))

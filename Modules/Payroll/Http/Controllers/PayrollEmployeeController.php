@@ -37,6 +37,18 @@ class PayrollEmployeeController extends Controller
         return redirect()->route('payroll.employees.index')->with('success', 'Employee added.');
     }
 
+    /**
+     * Read-only payee view: the payroll master data, then the
+     * skills and resumes panels the other modules slot in below it
+     * (guarded includes in the view — nothing cross-module here).
+     */
+    public function show(Employee $employee)
+    {
+        return view('payroll.employees.show', [
+            'employee' => $employee->load('user'),
+        ]);
+    }
+
     public function edit(Employee $employee)
     {
         return view('payroll.employees.form', ['employee' => $employee]);

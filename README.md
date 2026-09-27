@@ -155,7 +155,7 @@ Running Acacia in a production environment and need guaranteed response times, c
 - Payees hold skills at a proficiency level (beginner → expert)
 - Services marked as requiring selected skills
 - Per-skill view of who holds it and which services need it
-- Payee views (edit page + index) list the payee's linked skills
+- Read-only payee view: payroll data, linked skills and resume links on one page
 - Browsing open to all signed-in staff; editing limited to admins/accountants
 
 ### Purchase Orders (Internal Budgets)

@@ -8,6 +8,7 @@ use App\Services\IfrsPosting;
 use Database\Seeders\IFRSSeeder;
 use Illuminate\Support\Facades\Auth;
 use Modules\Payroll\Models\Employee;
+use Modules\Resumes\Models\Resume;
 use Modules\Skills\Models\EmployeeSkill;
 use Modules\Skills\Models\ServiceSkill;
 use Modules\Skills\Models\Skill;
@@ -163,25 +164,44 @@ class SkillTest extends TestCase
             ->assertSee('École de Danse');
     }
 
-    public function test_the_payroll_employee_views_show_their_linked_skills(): void
+    public function test_the_payroll_employee_view_shows_skills_and_resumes(): void
     {
         $employee = $this->employee();
         $skill = $this->skill(['name' => 'BAS Preparation']);
         EmployeeSkill::create(['employee_id' => $employee->id, 'skill_id' => $skill->id, 'proficiency' => 'advanced']);
+        $resume = Resume::create([
+            'employee_id' => $employee->id,
+            'entity_id' => IfrsPosting::resolveEntity()->id,
+            'uploaded_by' => User::factory()->create(['entity_id' => IfrsPosting::resolveEntity()->id])->id,
+            'original_filename' => 'sample-resume.json',
+            'parsed_data' => ['basics' => ['name' => 'Richard Hendriks CV']],
+            'uploaded_at' => now(),
+        ]);
 
-        // the payee edit page: payroll master data plus the skills panel
+        // the payee view: payroll master data, the skills panel
+        // below it, and the payee's resumes
         $this->actingAs($this->admin())
-            ->get(route('payroll.employees.edit', $employee))
+            ->get(route('payroll.employees.show', $employee))
             ->assertOk()
+            ->assertSee('Payroll details')
             ->assertSee('Skills held')
             ->assertSee('BAS Preparation')
-            ->assertSee('Advanced');
+            ->assertSee('Advanced')
+            ->assertSee('Resumes')
+            ->assertSee('Richard Hendriks CV')
+            ->assertSee(route('resumes.show', $resume));
 
-        // and the payee index row links straight to the matrix
+        // the index row links to the view (and the skills matrix)
         $this->actingAs($this->admin())
             ->get(route('payroll.employees.index'))
             ->assertOk()
+            ->assertSee(route('payroll.employees.show', $employee))
             ->assertSee(route('skills.employees.show', $employee));
+
+        // payroll master data stays admin/accountant territory
+        $this->actingAs($this->staff())
+            ->get(route('payroll.employees.show', $employee))
+            ->assertForbidden();
     }
 
     public function test_fixed_fee_services_do_not_get_an_hourly_suffix(): void

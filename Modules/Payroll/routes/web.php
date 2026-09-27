@@ -33,7 +33,6 @@ Route::middleware(['web', 'auth', 'role:admin|accountant'])->group(function () {
     // 'payroll_employee' silently skips it — edit/update/destroy then
     // receive an empty model and the form falls back to "Add payee".
     Route::resource('payroll-employees', PayrollEmployeeController::class)
-        ->except(['show'])
         ->names('payroll.employees')
         ->parameters(['payroll-employees' => 'employee']);
 
