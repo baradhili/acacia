@@ -156,6 +156,7 @@ Running Acacia in a production environment and need guaranteed response times, c
 - Services marked as requiring selected skills
 - Per-skill view of who holds it and which services need it
 - Read-only payee view: payroll data, linked skills and resume links on one page
+- Bulk import from Rich Skills Descriptor (RSD) JSON files, idempotent on the RSD id
 - Browsing open to all signed-in staff; editing limited to admins/accountants
 
 ### Purchase Orders (Internal Budgets)

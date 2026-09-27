@@ -24,7 +24,11 @@ class Skill extends Model
 
     public const PROFICIENCY_EXPERT = 'expert';
 
-    protected $fillable = ['name', 'description', 'category'];
+    protected $fillable = ['name', 'description', 'category', 'source_id', 'rsd'];
+
+    protected $casts = [
+        'rsd' => 'array',
+    ];
 
     /**
      * Proficiency levels carried on the employee link, weakest to

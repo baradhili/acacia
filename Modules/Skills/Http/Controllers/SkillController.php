@@ -4,10 +4,13 @@ namespace Modules\Skills\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -166,6 +169,100 @@ class SkillController extends Controller
         $skill->delete();
 
         return redirect()->route('skills.index')->with('success', 'Skill deleted.');
+    }
+
+    /**
+     * Bulk-import skills from Rich Skills Descriptor (RSD) JSON files,
+     * one descriptor per file (the resource_mgr import).
+     *
+     * Each file maps skillName/skillStatement/category onto the library
+     * and keeps the full descriptor in the rsd column. Files carrying
+     * their RSD id update the existing skill with that source_id, so
+     * re-importing is idempotent. Failures are per file — a bad file is
+     * reported by name and never blocks the rest of the upload.
+     *
+     * @throws ValidationException If no files were uploaded or any is not a JSON file.
+     */
+    public function uploadRsd(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'files' => ['required', 'array'],
+            'files.*' => ['required', 'file', 'mimes:json', 'max:5120'],
+        ]);
+
+        $imported = 0;
+        $failures = [];
+
+        foreach ($request->file('files') as $file) {
+            if ($error = $this->importRsdFile($file)) {
+                $failures[] = $file->getClientOriginalName().': '.$error;
+            } else {
+                $imported++;
+            }
+        }
+
+        $redirect = redirect()->route('skills.index');
+        if ($imported > 0) {
+            $redirect->with('success', "Imported {$imported} skill".Str::plural('s', $imported).' from RSD files.');
+        }
+        if ($failures !== []) {
+            $redirect->with('error', 'Some files were skipped — '.implode(' · ', $failures));
+        }
+
+        return $redirect;
+    }
+
+    /**
+     * Import one RSD file. Returns null on success, or a one-line
+     * reason the file was skipped (never throws for data problems —
+     * the caller reports it and carries on with the next file).
+     */
+    protected function importRsdFile(UploadedFile $file): ?string
+    {
+        $data = json_decode((string) file_get_contents($file->getRealPath()), true);
+
+        if (! is_array($data)) {
+            return 'not valid JSON';
+        }
+
+        $name = $data['skillName'] ?? null;
+        if (! is_string($name) || trim($name) === '') {
+            return 'missing skillName';
+        }
+        if (mb_strlen($name) > 255) {
+            return 'skillName longer than 255 characters';
+        }
+
+        $category = $data['category'] ?? null;
+        if ($category !== null && (! is_string($category) || mb_strlen($category) > 255)) {
+            return 'category is not a string of at most 255 characters';
+        }
+
+        // name/description/category come from the descriptor; the
+        // descriptor itself is kept whole, and its id (an IRI) makes
+        // re-imports update rather than duplicate
+        $attributes = [
+            'name' => trim($name),
+            'description' => is_string($data['skillStatement'] ?? null) ? $data['skillStatement'] : null,
+            'category' => is_string($category) && $category !== '' ? $category : null,
+            'rsd' => $data,
+        ];
+        $sourceId = is_string($data['id'] ?? null) && $data['id'] !== '' ? $data['id'] : null;
+
+        try {
+            if ($sourceId !== null) {
+                Skill::updateOrCreate(['source_id' => $sourceId], $attributes);
+            } else {
+                // no id: keyed on nothing, so a plain create — a name
+                // clash with an existing skill is a failure, not a
+                // silent overwrite
+                Skill::create($attributes);
+            }
+
+            return null;
+        } catch (UniqueConstraintViolationException) {
+            return 'its name or RSD id is already used by a different skill';
+        }
     }
 
     /**

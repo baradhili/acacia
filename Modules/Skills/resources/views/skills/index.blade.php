@@ -2,16 +2,46 @@
 @section('title', 'Skills')
 @section('content')
 
-    <div class="mb-6 flex justify-between items-center">
-        <div>
-            <h1 class="text-2xl font-bold text-gray-800">Skills</h1>
-            <p class="text-sm text-gray-500 mt-1">
-                The practice's skill register — who holds each skill and which services require it.
-            </p>
+    <div x-data="{ importing: false }">
+        <div class="mb-6 flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">Skills</h1>
+                <p class="text-sm text-gray-500 mt-1">
+                    The practice's skill register — who holds each skill and which services require it.
+                </p>
+            </div>
+            @if ($canManage)
+                <div class="flex gap-2">
+                    <button type="button" @click="importing = ! importing"
+                        class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm">Import RSD</button>
+                    <a href="{{ route('skills.create') }}"
+                        class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm">Add skill</a>
+                </div>
+            @endif
         </div>
+
         @if ($canManage)
-            <a href="{{ route('skills.create') }}"
-                class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm">Add skill</a>
+            <form method="POST" action="{{ route('skills.rsd') }}" enctype="multipart/form-data"
+                x-show="importing" style="display: none"
+                class="mb-4 bg-white rounded-lg shadow p-4">
+                @csrf
+                <label class="block text-sm font-medium text-gray-700 mb-1" for="rsd-files">
+                    Rich Skills Descriptor files
+                </label>
+                <input id="rsd-files" type="file" name="files[]" multiple required accept=".json,application/json"
+                    class="block w-full text-sm text-gray-600 border-gray-300 rounded-lg">
+                <p class="mt-2 text-xs text-gray-500">
+                    One JSON descriptor per file — skillName, skillStatement and category are imported and the
+                    full descriptor kept. Re-importing a descriptor updates the existing skill (matched on its
+                    RSD id); bad files are reported and skipped, never blocking the rest.
+                </p>
+                <div class="mt-3 flex justify-end gap-2">
+                    <button type="button" @click="importing = false"
+                        class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 text-sm hover:bg-gray-50">Cancel</button>
+                    <button type="submit"
+                        class="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">Import</button>
+                </div>
+            </form>
         @endif
     </div>
 

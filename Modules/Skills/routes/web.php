@@ -24,6 +24,7 @@ use Modules\Skills\Http\Controllers\SkillController;
 Route::middleware(['web', 'auth', 'role:admin|accountant'])->group(function () {
     Route::get('/skills/create', [SkillController::class, 'create'])->name('skills.create');
     Route::post('/skills', [SkillController::class, 'store'])->name('skills.store');
+    Route::post('/skills/rsd', [SkillController::class, 'uploadRsd'])->name('skills.rsd');
     Route::get('/skills/{skill}/edit', [SkillController::class, 'edit'])->name('skills.edit');
     Route::match(['put', 'patch'], '/skills/{skill}', [SkillController::class, 'update'])->name('skills.update');
     Route::delete('/skills/{skill}', [SkillController::class, 'destroy'])->name('skills.destroy');

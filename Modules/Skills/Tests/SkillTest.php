@@ -6,6 +6,7 @@ use App\Models\Service;
 use App\Models\User;
 use App\Services\IfrsPosting;
 use Database\Seeders\IFRSSeeder;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Modules\Payroll\Models\Employee;
 use Modules\Payroll\Services\PayrollService;
@@ -197,12 +198,12 @@ class SkillTest extends TestCase
             ->assertSee('Richard Hendriks CV')
             ->assertSee(route('resumes.show', $resume));
 
-        // the index row links to the view (and the skills matrix)
+        // the index row links to the view (skills and resumes live
+        // on the view page, not the list — see 5552755)
         $this->actingAs($this->admin())
             ->get(route('payroll.employees.index'))
             ->assertOk()
-            ->assertSee(route('payroll.employees.show', $employee))
-            ->assertSee(route('skills.employees.show', $employee));
+            ->assertSee(route('payroll.employees.show', $employee));
 
         // payroll master data stays admin/accountant territory
         $this->actingAs($this->staff())
@@ -262,6 +263,83 @@ class SkillTest extends TestCase
             ->get(route('payroll.employees.show', $employee))
             ->assertOk()
             ->assertSee('Scale '.$employee->taxScale());
+    }
+
+    public function test_admins_can_bulk_import_rsd_skills(): void
+    {
+        $admin = $this->admin();
+
+        $this->actingAs($admin)
+            ->post(route('skills.rsd'), [
+                'files' => [
+                    $this->rsdFile(),
+                    $this->rsdFile([
+                        'id' => 'https://example.org/rsd/skill/xero-bank-feeds',
+                        'skillName' => 'Xero Bank Feeds',
+                        'category' => 'Software',
+                    ]),
+                ],
+            ])
+            ->assertRedirect(route('skills.index'))
+            ->assertSessionHas('success');
+
+        $this->assertSame(2, Skill::count());
+        $bas = Skill::firstWhere('name', 'BAS Preparation (Imported)');
+        $this->assertNotNull($bas);
+        $this->assertSame('Tax', $bas->category);
+        $this->assertSame('Prepares and lodges business activity statements end to end, including GST reconciliation and PAYG labels.', $bas->description);
+        $this->assertSame('https://example.org/rsd/skill/bas-preparation', $bas->source_id);
+        $this->assertSame(['BAS', 'GST', 'lodgement'], $bas->rsd['keywords']);
+
+        // the descriptor is kept whole on the skill page
+        $this->actingAs($admin)
+            ->get(route('skills.show', $bas))
+            ->assertOk()
+            ->assertSee('Imported from a Rich Skills Descriptor')
+            ->assertSee('lodgement');
+
+        // re-importing by the same RSD id updates, never duplicates
+        $this->actingAs($admin)
+            ->post(route('skills.rsd'), [
+                'files' => [$this->rsdFile(['skillStatement' => 'Updated statement.'])],
+            ])
+            ->assertRedirect(route('skills.index'));
+
+        $this->assertSame(2, Skill::count());
+        $this->assertSame('Updated statement.', $bas->fresh()->description);
+    }
+
+    public function test_rsd_import_failures_are_reported_per_file(): void
+    {
+        $this->skill(['name' => 'Taken Name']); // hand-entered: no source_id
+
+        $response = $this->actingAs($this->admin())
+            ->post(route('skills.rsd'), [
+                'files' => [
+                    UploadedFile::fake()->createWithContent('bad.json', 'not json at all'),
+                    UploadedFile::fake()->createWithContent('no-name.json', json_encode(['id' => 'https://example.org/x'])),
+                    $this->rsdFile(['skillName' => 'Taken Name']),
+                ],
+            ])
+            ->assertRedirect(route('skills.index'))
+            ->assertSessionHas('error');
+
+        $error = session('error');
+        $this->assertStringContainsString('bad.json: not valid JSON', $error);
+        $this->assertStringContainsString('no-name.json: missing skillName', $error);
+        $this->assertStringContainsString('already used by a different skill', $error);
+
+        // only the hand-entered skill exists: every file was skipped
+        $this->assertSame(1, Skill::count());
+    }
+
+    public function test_staff_cannot_import_rsd_skills(): void
+    {
+        $this->actingAs($this->staff())
+            ->post(route('skills.rsd'), ['files' => [$this->rsdFile()]])
+            ->assertForbidden();
+
+        $this->assertSame(0, Skill::count());
     }
 
     public function test_fixed_fee_services_do_not_get_an_hourly_suffix(): void
@@ -445,6 +523,19 @@ class SkillTest extends TestCase
             'name' => 'BAS Preparation',
             'category' => 'Tax',
         ], $attributes));
+    }
+
+    protected function rsdFile(array $overrides = []): UploadedFile
+    {
+        $descriptor = array_merge(
+            json_decode(file_get_contents(__DIR__.'/fixtures/rsd-sample.json'), true),
+            $overrides
+        );
+
+        return UploadedFile::fake()->createWithContent(
+            'rsd-'.count(Skill::all()).'.json',
+            json_encode($descriptor, JSON_UNESCAPED_SLASHES)
+        );
     }
 
     protected function employee(array $attributes = []): Employee

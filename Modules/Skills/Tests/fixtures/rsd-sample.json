@@ -1,0 +1,15 @@
+{
+    "@context": "https://example.org/rsd/json-ld-context.json",
+    "id": "https://example.org/rsd/skill/bas-preparation",
+    "type": "skos:Concept",
+    "skillName": "BAS Preparation (Imported)",
+    "skillStatement": "Prepares and lodges business activity statements end to end, including GST reconciliation and PAYG labels.",
+    "category": "Tax",
+    "keywords": ["BAS", "GST", "lodgement"],
+    "employers": ["Acme Taxation"],
+    "occupations": ["Accountant", "Bookkeeper"],
+    "certifications": [],
+    "license": "CC-BY-4.0",
+    "derivedFrom": ["https://example.org/rsd/skill/taxation"],
+    "author": { "name": "Acacia" }
+}

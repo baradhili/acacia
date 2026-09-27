@@ -37,6 +37,21 @@
         <div class="mb-6 bg-white rounded-lg shadow p-4 text-sm text-gray-700">{{ $skill->description }}</div>
     @endif
 
+    @if ($skill->rsd)
+        <div class="mb-6 bg-white rounded-lg shadow p-4 text-sm">
+            <p class="text-xs text-gray-500 uppercase font-medium mb-2">
+                Imported from a Rich Skills Descriptor{{ $skill->source_id ? ' — '.Str::limit($skill->source_id, 60) : '' }}
+            </p>
+            @if (is_array($skill->rsd['keywords'] ?? null) && filled($skill->rsd['keywords']))
+                <div class="flex flex-wrap gap-2">
+                    @foreach ($skill->rsd['keywords'] as $keyword)
+                        <span class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs">{{ is_scalar($keyword) ? (string) $keyword : json_encode($keyword) }}</span>
+                    @endforeach
+                </div>
+            @endif
+        </div>
+    @endif
+
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div class="bg-white rounded-lg shadow overflow-hidden">
             <div class="px-4 py-3 bg-gray-50 text-xs font-medium text-gray-500 uppercase border-b border-gray-200">
