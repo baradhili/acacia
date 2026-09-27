@@ -1,7 +1,8 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace Modules\Practice\Http\Controllers;
 
+use App\Http\Controllers\Controller;
 use App\Models\Client;
 use App\Models\Project;
 use App\Models\TimeEntry;
@@ -65,7 +66,7 @@ class TimeReportController extends Controller
         $totalHours = $byClient->sum('total_hours');
         $totalAmount = $byClient->sum('total_amount');
 
-        return view('reports.time-by-client', compact(
+        return view('practice.time-by-client', compact(
             'byClient', 'clients', 'startDate', 'endDate', 'clientId',
             'totalHours', 'totalAmount'
         ));
@@ -113,7 +114,7 @@ class TimeReportController extends Controller
         $totalHours = $byStaff->sum('total_hours');
         $totalAmount = $byStaff->sum('total_amount');
 
-        return view('reports.time-by-staff', compact(
+        return view('practice.time-by-staff', compact(
             'byStaff', 'staff', 'startDate', 'endDate', 'userId',
             'totalHours', 'totalAmount'
         ));
@@ -166,7 +167,7 @@ class TimeReportController extends Controller
         $totalHours = $byProject->sum('total_hours');
         $totalAmount = $byProject->sum('total_amount');
 
-        return view('reports.time-by-project', compact(
+        return view('practice.time-by-project', compact(
             'byProject', 'projects', 'startDate', 'endDate', 'projectId',
             'totalHours', 'totalAmount'
         ));
@@ -230,7 +231,7 @@ class TimeReportController extends Controller
             ->sortBy(fn ($row) => $row['project']?->name)
             ->values();
 
-        return view('reports.project-timesheet', [
+        return view('practice.project-timesheet', [
             'byProject' => $byProject,
             'projects' => Project::orderBy('name')->pluck('name', 'id'),
             'clients' => Client::orderBy('name')->pluck('name', 'id'),

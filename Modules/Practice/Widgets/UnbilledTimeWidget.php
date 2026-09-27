@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Widgets;
+namespace Modules\Practice\Widgets;
 
 use App\Models\TimeEntry;
 use Arrilot\Widgets\AbstractWidget;
@@ -40,7 +40,7 @@ class UnbilledTimeWidget extends AbstractWidget
         $totalHours = $entries->sum('hours');
         $totalAmount = $entries->sum('amount');
 
-        return view('widgets.unbilled_time', [
+        return view('practice.widgets.unbilled_time', [
             'entries' => $entries,
             'count' => $entries->count(),
             'total_hours' => round($totalHours, 2),

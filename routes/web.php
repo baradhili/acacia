@@ -31,7 +31,6 @@ use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\ShareClassController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TimeEntryController;
-use App\Http\Controllers\TimeReportController;
 use App\Http\Controllers\UserController;
 use App\Models\Client;
 use Illuminate\Support\Facades\Route;
@@ -154,7 +153,6 @@ Route::middleware('auth')->group(function () {
     Route::resource('projects', ProjectController::class);
     Route::post('/projects/{project}/staff/assign', [ProjectController::class, 'assignStaff'])->name('projects.staff.assign');
     Route::delete('/projects/{project}/staff/{user}', [ProjectController::class, 'removeStaff'])->name('projects.staff.remove');
-    Route::get('/projects/{project}/profitability', [ProjectController::class, 'profitability'])->name('projects.profitability.show');
 
     // Time Entries
     Route::resource('time-entries', TimeEntryController::class);
@@ -236,14 +234,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/estimates/{estimate}/convert-to-invoice', [EstimateController::class, 'convertToInvoice'])->name('estimates.convertToInvoice');
     Route::post('/estimates/{estimate}/duplicate', [EstimateController::class, 'duplicate'])->name('estimates.duplicate');
 
-    // Reports
-    Route::get('/reports/time-by-client', [TimeReportController::class, 'timeByClient'])->name('reports.time-by-client');
-    Route::get('/reports/time-by-staff', [TimeReportController::class, 'timeByStaff'])->name('reports.time-by-staff');
-    Route::get('/reports/time-by-project', [TimeReportController::class, 'timeByProject'])->name('reports.time-by-project');
-    Route::get('/reports/project-timesheet', [TimeReportController::class, 'projectTimesheet'])->name('reports.project-timesheet');
-    Route::get('/reports/project-profitability', [ProjectController::class, 'profitabilityIndex'])
-        ->middleware('role:admin|accountant')
-        ->name('projects.profitability');
+    // Reports — the time/project reporting moved to Modules/Practice
+    // (its routes/web.php) under the same URLs and route names.
 
     // Financial Reports
     Route::get('/reports/trial-balance', [FinancialStatementController::class, 'trialBalance'])->name('reports.trial-balance');

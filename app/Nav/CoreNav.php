@@ -7,14 +7,12 @@ use App\Support\Widgets;
 use App\Widgets\ARAgingWidget;
 use App\Widgets\BankBalanceWidget;
 use App\Widgets\CashFlowWidget;
-use App\Widgets\HoursThisMonthWidget;
 use App\Widgets\OutstandingInvoicesWidget;
 use App\Widgets\OutstandingPOBudgetsWidget;
 use App\Widgets\PnLTrendWidget;
 use App\Widgets\RecentInvoicesWidget;
 use App\Widgets\RecentPaymentsWidget;
 use App\Widgets\TotalClientsWidget;
-use App\Widgets\UnbilledTimeWidget;
 
 /**
  * The core's own navigation and dashboard registrations — every link
@@ -96,21 +94,15 @@ class CoreNav
     public static function topbar(): array
     {
         $gated = ['admin', 'accountant'];
-        // Positions leave slots for module children: the Taxation module
-        // slots BAS (28) and Company Tax Return (29) between Account
-        // Schedule and Prepayment Schedule; Practice owns the Time &
-        // Projects group (10-15). Children sort by position (stable for
-        // equals), so dropdown order stays as shipped.
+        // Positions leave slots for module children: Practice owns the
+        // Time & Projects group (10-15) and Taxation slots BAS (28) and
+        // Company Tax Return (29) between Account Schedule and Prepayment
+        // Schedule. Children sort by position (stable for equals), so
+        // dropdown order stays as shipped.
         $link = fn (string $label, string $route, array $active, int $position = 0) => ['type' => 'link', 'label' => $label, 'route' => $route, 'active' => $active, 'position' => $position];
 
         return [
-            ['type' => 'dropdown', 'label' => 'Reports', 'position' => 10, 'active' => ['reports.*', 'projects.profitability'], 'children' => [
-                ['type' => 'heading', 'label' => 'Time & Projects', 'position' => 10],
-                $link('Time by Client', 'reports.time-by-client', ['reports.time-by-client'], 11),
-                $link('Time by Staff', 'reports.time-by-staff', ['reports.time-by-staff'], 12),
-                $link('Time by Project', 'reports.time-by-project', ['reports.time-by-project'], 13),
-                $link('Project Timesheet', 'reports.project-timesheet', ['reports.project-timesheet'], 14),
-                $link('Project Profitability', 'projects.profitability', ['projects.profitability'], 15),
+            ['type' => 'dropdown', 'label' => 'Reports', 'position' => 10, 'active' => ['reports.*'], 'children' => [
                 ['type' => 'divider', 'position' => 20],
                 ['type' => 'heading', 'label' => 'IFRS Reports', 'position' => 21],
                 $link('Balance Sheet', 'reports.balance-sheet', ['reports.balance-sheet'], 22),
@@ -152,14 +144,12 @@ class CoreNav
         return [
             [TotalClientsWidget::class, ''],
             [OutstandingInvoicesWidget::class, ''],
-            [HoursThisMonthWidget::class, ''],
             [CashFlowWidget::class, 'md:col-span-2 lg:col-span-4'],
             [ARAgingWidget::class, 'md:col-span-1 lg:col-span-2'],
             [BankBalanceWidget::class, 'md:col-span-1 lg:col-span-2'],
             [RecentInvoicesWidget::class, 'md:col-span-1 lg:col-span-1'],
             [RecentPaymentsWidget::class, 'md:col-span-1 lg:col-span-1'],
             [OutstandingPOBudgetsWidget::class, 'md:col-span-1 lg:col-span-2'],
-            [UnbilledTimeWidget::class, 'md:col-span-1 lg:col-span-2'],
             [PnLTrendWidget::class, 'md:col-span-1 lg:col-span-2'],
         ];
     }

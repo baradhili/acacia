@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Feature;
+namespace Modules\Practice\Tests;
 
 use App\Models\Client;
 use App\Models\Invoice;

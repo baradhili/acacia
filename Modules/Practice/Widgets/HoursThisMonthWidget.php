@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Widgets;
+namespace Modules\Practice\Widgets;
 
 use App\Models\TimeEntry;
 use Arrilot\Widgets\AbstractWidget;
@@ -17,7 +17,7 @@ class HoursThisMonthWidget extends AbstractWidget
             Carbon::now()->endOfMonth()->toDateString(),
         ])->sum('hours');
 
-        return view('widgets.hours_this_month', [
+        return view('practice.widgets.hours_this_month', [
             'hours' => number_format($hours, 1),
         ]);
     }
