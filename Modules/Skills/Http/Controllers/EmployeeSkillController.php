@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Modules\Payroll\Models\Employee;
 use Modules\Skills\Models\EmployeeSkill;
@@ -62,7 +63,7 @@ class EmployeeSkillController extends Controller
      * default to beginner, including for existing links. Unknown IDs are ignored;
      * missing, null, or empty skills clears the set. Database errors propagate.
      *
-     * @throws \Illuminate\Validation\ValidationException If either array, a checkbox value, or any submitted proficiency is invalid.
+     * @throws ValidationException If either array, a checkbox value, or any submitted proficiency is invalid.
      */
     public function update(Request $request, Employee $employee): RedirectResponse
     {

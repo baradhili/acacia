@@ -8,6 +8,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Modules\Skills\Models\ServiceSkill;
 use Modules\Skills\Models\Skill;
@@ -59,7 +60,7 @@ class ServiceSkillController extends Controller
      * Unknown IDs are ignored; missing, null, or empty skills clears the set.
      * Failed link writes roll back the transaction; database errors propagate.
      *
-     * @throws \Illuminate\Validation\ValidationException If skills is not an array or null, or a checkbox value is invalid.
+     * @throws ValidationException If skills is not an array or null, or a checkbox value is invalid.
      */
     public function update(Request $request, Service $service): RedirectResponse
     {
