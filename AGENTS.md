@@ -10,7 +10,8 @@ firms: cash-basis accounting over an Eloquent IFRS double-entry ledger, time
 tracking, invoicing, Wise bank reconciliation, BAS-ready GST. Blade +
 Tailwind + Alpine frontend; Spatie roles (`admin`, `accountant`, `staff`);
 core app under `app/` plus feature modules under `Modules/`
-(nwidart/laravel-modules v13): Payroll, Reconciliation, Shares, Crm, Resumes.
+(nwidart/laravel-modules v13): Payroll, Reconciliation, Shares, Crm, Resumes,
+Skills.
 
 ## Commands
 

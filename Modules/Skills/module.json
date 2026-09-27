@@ -1,0 +1,18 @@
+{
+    "name": "Skills",
+    "alias": "skills",
+    "description": "The practice's skill library, linked on one side to the payees who hold each skill at a proficiency level and on the other to the services that require it. Requires the Payroll module.",
+    "keywords": [
+        "skills",
+        "employees",
+        "services",
+        "staffing"
+    ],
+    "priority": 0,
+    "version": "1.0.0",
+    "providers": [
+        "Modules\\Skills\\Providers\\SkillsServiceProvider"
+    ],
+    "files": [],
+    "core": true
+}

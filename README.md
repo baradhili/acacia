@@ -149,6 +149,14 @@ Running Acacia in a production environment and need guaranteed response times, c
 - Project profitability (revenue − cost)
 - Assigned staff with project-specific charge-out rates
 
+### Skills (Skills module)
+
+- Practice-wide skill register with categories and search
+- Payees hold skills at a proficiency level (beginner → expert)
+- Services marked as requiring selected skills
+- Per-skill view of who holds it and which services need it
+- Browsing open to all signed-in staff; editing limited to admins/accountants
+
 ### Purchase Orders (Internal Budgets)
 
 - Create POs for a client/project with a budgeted amount
