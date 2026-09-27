@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Feature;
+namespace Modules\Taxation\Tests;
 
 use App\Models\User;
 use App\Services\IfrsPosting;

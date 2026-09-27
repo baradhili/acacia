@@ -66,10 +66,10 @@
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
-                @foreach (\App\Models\BasSettlement::TYPES as $type)
+                @foreach (\Modules\Taxation\Models\BasSettlement::TYPES as $type)
                     @php($position = $positions[$type])
                     <tr>
-                        <td class="py-2 pr-4 font-medium text-gray-700">{{ \App\Models\BasSettlement::typeLabel($type) }}</td>
+                        <td class="py-2 pr-4 font-medium text-gray-700">{{ \Modules\Taxation\Models\BasSettlement::typeLabel($type) }}</td>
                         <td class="py-2 pr-4 text-right">${{ number_format($position['payable'], 2) }}</td>
                         <td class="py-2 pr-4 text-right">${{ number_format($position['receivable'], 2) }}</td>
                         <td class="py-2 text-right font-bold {{ $position['net'] >= 0 ? 'text-red-700' : 'text-green-700' }}">
@@ -109,12 +109,12 @@
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
                 <div class="mt-1 flex flex-col gap-1.5">
-                    @foreach (\App\Models\BasSettlement::TYPES as $type)
+                    @foreach (\Modules\Taxation\Models\BasSettlement::TYPES as $type)
                         <label class="flex items-center">
                             <input type="radio" name="type" value="{{ $type }}"
-                                {{ old('type', \App\Models\BasSettlement::TYPE_GST) === $type ? 'checked' : '' }}
+                                {{ old('type', \Modules\Taxation\Models\BasSettlement::TYPE_GST) === $type ? 'checked' : '' }}
                                 class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                            <span class="ml-2 text-sm text-gray-700">{{ \App\Models\BasSettlement::typeLabel($type) }}</span>
+                            <span class="ml-2 text-sm text-gray-700">{{ \Modules\Taxation\Models\BasSettlement::typeLabel($type) }}</span>
                         </label>
                     @endforeach
                 </div>
@@ -182,7 +182,7 @@
                 <tbody class="divide-y divide-gray-100">
                     @foreach ($settlements as $settlement)
                         <tr class="{{ $settlement->isReversed() ? 'text-gray-400 line-through' : '' }}">
-                            <td class="py-2 pr-4 font-medium text-gray-700">{{ \App\Models\BasSettlement::typeLabel($settlement->type ?: \App\Models\BasSettlement::TYPE_GST) }}</td>
+                            <td class="py-2 pr-4 font-medium text-gray-700">{{ \Modules\Taxation\Models\BasSettlement::typeLabel($settlement->type ?: \Modules\Taxation\Models\BasSettlement::TYPE_GST) }}</td>
                             <td class="py-2 pr-4">{{ $settlement->as_at->format('d M Y') }}</td>
                             <td class="py-2 pr-4">{{ $settlement->settled_at->format('d M Y') }}</td>
                             <td class="py-2 pr-4 text-right">${{ number_format($settlement->gst_payable, 2) }}</td>
@@ -190,8 +190,8 @@
                             <td class="py-2 pr-4 text-right font-medium">${{ number_format($settlement->bank_amount, 2) }}</td>
                             <td class="py-2 pr-4">
                                 <span class="px-2 py-0.5 rounded-full text-xs font-semibold
-                                    {{ $settlement->direction === \App\Models\BasSettlement::DIRECTION_PAY ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800' }}">
-                                    {{ $settlement->direction === \App\Models\BasSettlement::DIRECTION_PAY ? 'paid to ATO' : 'refund' }}
+                                    {{ $settlement->direction === \Modules\Taxation\Models\BasSettlement::DIRECTION_PAY ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800' }}">
+                                    {{ $settlement->direction === \Modules\Taxation\Models\BasSettlement::DIRECTION_PAY ? 'paid to ATO' : 'refund' }}
                                 </span>
                             </td>
                             <td class="py-2 pr-4 text-gray-500">{{ $settlement->reference }}</td>

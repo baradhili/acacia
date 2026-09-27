@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Exports;
+namespace Modules\Taxation\Exports;
 
 use Carbon\Carbon;
 use Maatwebsite\Excel\Concerns\FromCollection;

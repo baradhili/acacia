@@ -95,11 +95,16 @@ class NavigationTest extends TestCase
         // Reports dropdown items
         $response->assertSee('Time by Client');
         $response->assertSee('Balance Sheet');
+        // ... including the Taxation module's children (which register
+        // before the core dropdown exists — the deferred attach)
+        $response->assertSee('BAS (GST)');
         $response->assertSee('Company Tax Return');
         $response->assertSee('BAS Settlements');
         // Accounting dropdown items
         $response->assertSee('Prepayments');
         $response->assertSee('Domain Names');
+        // Setup dropdown: the Payroll module's PSI child attaches too
+        $response->assertSee('PSI Assessment');
         // Shares dropdown items
         $response->assertSee('Shareholders');
         $response->assertSee('Franking Account');

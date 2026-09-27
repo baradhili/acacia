@@ -8,7 +8,11 @@
             <p class="text-sm text-gray-500 mt-1">
                 Australian pay runs: PAYG withheld per the ATO formulas (NAT 1004), super on ordinary
                 earnings, and the accrual/payment journals — withheld PAYG lands in the same liability the
-                <a href="{{ route('bas-settlements.index') }}" class="text-indigo-600 hover:underline">BAS settlement screen</a> nets.
+                @if (\Route::has('bas-settlements.index'))
+                    <a href="{{ route('bas-settlements.index') }}" class="text-indigo-600 hover:underline">BAS settlement screen</a> nets.
+                @else
+                    BAS settlement screen nets.
+                @endif
             </p>
         </div>
         <div class="flex gap-2">

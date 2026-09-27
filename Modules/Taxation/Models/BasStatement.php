@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Models;
+namespace Modules\Taxation\Models;
 
 use IFRS\Models\Entity;
 use Illuminate\Database\Eloquent\Model;
@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * A BAS quarter frozen at lodgement — the figures as lodged, kept so
  * backdated postings can never rewrite a BAS already sent to the ATO
- * (ReportController::buildBasStatement prefers these over live ledger
+ * (TaxReportController::buildBasStatement prefers these over live ledger
  * recomputation). Freezing again refreshes the figures; unfreezing
  * deletes the row and returns the quarter to live recomputation.
  */

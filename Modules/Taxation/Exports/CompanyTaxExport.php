@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Exports;
+namespace Modules\Taxation\Exports;
 
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;

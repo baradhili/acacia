@@ -1,9 +1,8 @@
 <?php
 
-namespace Tests\Feature\Bas;
+namespace Modules\Taxation\Tests\Bas;
 
 use App\Models\User;
-use App\Services\BasSettlementService;
 use App\Services\IfrsPosting;
 use Carbon\Carbon;
 use Database\Seeders\IFRSSeeder;
@@ -12,6 +11,7 @@ use IFRS\Models\Entity;
 use IFRS\Models\LineItem;
 use IFRS\Transactions\JournalEntry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Modules\Taxation\Services\BasSettlementService;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 

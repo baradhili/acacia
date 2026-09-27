@@ -1,5 +1,7 @@
 <?php
 
+use IFRS\Models\Account;
+
 /**
  * ATO Company Tax Return — Label Mapping
  *
@@ -86,8 +88,8 @@ return [
     */
 
     'fallback' => [
-        \IFRS\Models\Account::OPERATING_REVENUE => 'C',
-        \IFRS\Models\Account::NON_OPERATING_REVENUE => 'R',
+        Account::OPERATING_REVENUE => 'C',
+        Account::NON_OPERATING_REVENUE => 'R',
         'expense' => 'S',
     ],
 

@@ -1,8 +1,7 @@
 <?php
 
-namespace Tests\Feature\Bas;
+namespace Modules\Taxation\Tests\Bas;
 
-use App\Models\BasStatement;
 use App\Models\User;
 use App\Services\IfrsPosting;
 use Carbon\Carbon;
@@ -14,6 +13,7 @@ use IFRS\Models\LineItem;
 use IFRS\Models\ReportingPeriod;
 use IFRS\Transactions\JournalEntry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Modules\Taxation\Models\BasStatement;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 

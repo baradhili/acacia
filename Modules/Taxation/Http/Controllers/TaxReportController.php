@@ -1,17 +1,13 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace Modules\Taxation\Http\Controllers;
 
-use App\Exports\BasExport;
-use App\Exports\CompanyTaxExport;
 use App\Http\Controllers\Concerns\ResolvesReportingContext;
-use App\Models\BasSettlement;
-use App\Models\BasStatement;
+use App\Http\Controllers\Controller;
 use App\Models\BillPayment;
 use App\Models\CompanyProfile;
 use App\Models\FiscalYearClose;
 use App\Models\Payment;
-use App\Services\BasSettlementService;
 use App\Services\FiscalYearService;
 use App\Services\OpeningBalances;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -27,6 +23,11 @@ use Maatwebsite\Excel\Facades\Excel;
 use Modules\Payroll\Models\PayRun;
 use Modules\Shares\Models\DividendDeclaration;
 use Modules\Shares\Services\FrankingService;
+use Modules\Taxation\Exports\BasExport;
+use Modules\Taxation\Exports\CompanyTaxExport;
+use Modules\Taxation\Models\BasSettlement;
+use Modules\Taxation\Models\BasStatement;
+use Modules\Taxation\Services\BasSettlementService;
 
 /**
  * Australian statutory reporting on the cash basis the ledger keeps:
@@ -158,7 +159,7 @@ class TaxReportController extends Controller
             ? app(BasSettlementService::class)->position($endDate)
             : ['payable' => 0.0, 'receivable' => 0.0, 'net' => 0.0];
 
-        return view('reports.gst', compact(
+        return view('taxation.gst', compact(
             'startDate', 'endDate',
             'gstCollected', 'totalReceipts',
             'gstPaid', 'totalPayments',
@@ -183,7 +184,7 @@ class TaxReportController extends Controller
         $priorYear = $this->priorYearUnsettled($fyEnd);
         $availableFys = range($currentFyEnd, $currentFyEnd - 5);
 
-        return view('reports.bas', compact(
+        return view('taxation.bas', compact(
             'fyEnd', 'currentFyEnd', 'availableFys', 'statement', 'priorYear'
         ));
     }
@@ -465,7 +466,7 @@ class TaxReportController extends Controller
         $fyEnd = (int) $request->get('fy', $currentFyEnd);
         $statement = $this->buildBasStatement($fyEnd);
 
-        $pdf = Pdf::loadView('reports.pdf.bas', [
+        $pdf = Pdf::loadView('taxation.pdf.bas', [
             'fyEnd' => $fyEnd,
             'statement' => $statement,
             'priorYear' => $this->priorYearUnsettled($fyEnd),
@@ -502,7 +503,7 @@ class TaxReportController extends Controller
         $statement = $this->buildCompanyTaxStatement($fyEnd);
         $availableFys = range($currentFyEnd, $currentFyEnd - 5);
 
-        return view('reports.company-tax', compact(
+        return view('taxation.company-tax', compact(
             'fyEnd', 'currentFyEnd', 'availableFys', 'statement'
         ));
     }
@@ -516,7 +517,7 @@ class TaxReportController extends Controller
         $fyEnd = (int) $request->get('fy', $currentFyEnd);
         $statement = $this->buildCompanyTaxStatement($fyEnd);
 
-        $pdf = Pdf::loadView('reports.pdf.company-tax', [
+        $pdf = Pdf::loadView('taxation.pdf.company-tax', [
             'fyEnd' => $fyEnd,
             'statement' => $statement,
         ]);

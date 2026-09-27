@@ -7,7 +7,6 @@ use App\Support\Widgets;
 use App\Widgets\ARAgingWidget;
 use App\Widgets\BankBalanceWidget;
 use App\Widgets\CashFlowWidget;
-use App\Widgets\GstPayableWidget;
 use App\Widgets\HoursThisMonthWidget;
 use App\Widgets\OutstandingInvoicesWidget;
 use App\Widgets\OutstandingPOBudgetsWidget;
@@ -97,34 +96,36 @@ class CoreNav
     public static function topbar(): array
     {
         $gated = ['admin', 'accountant'];
-        $link = fn (string $label, string $route, array $active) => ['type' => 'link', 'label' => $label, 'route' => $route, 'active' => $active];
+        // Positions leave slots for module children: the Taxation module
+        // slots BAS (28) and Company Tax Return (29) between Account
+        // Schedule and Prepayment Schedule; Practice owns the Time &
+        // Projects group (10-15). Children sort by position (stable for
+        // equals), so dropdown order stays as shipped.
+        $link = fn (string $label, string $route, array $active, int $position = 0) => ['type' => 'link', 'label' => $label, 'route' => $route, 'active' => $active, 'position' => $position];
 
         return [
-            ['type' => 'dropdown', 'label' => 'Reports', 'position' => 10, 'active' => ['reports.*', 'bas-settlements.*', 'projects.profitability'], 'children' => [
-                ['type' => 'heading', 'label' => 'Time & Projects'],
-                $link('Time by Client', 'reports.time-by-client', ['reports.time-by-client']),
-                $link('Time by Staff', 'reports.time-by-staff', ['reports.time-by-staff']),
-                $link('Time by Project', 'reports.time-by-project', ['reports.time-by-project']),
-                $link('Project Timesheet', 'reports.project-timesheet', ['reports.project-timesheet']),
-                $link('Project Profitability', 'projects.profitability', ['projects.profitability']),
-                ['type' => 'divider'],
-                ['type' => 'heading', 'label' => 'IFRS Reports'],
-                $link('Balance Sheet', 'reports.balance-sheet', ['reports.balance-sheet']),
-                $link('Trial Balance', 'reports.trial-balance', ['reports.trial-balance']),
-                $link('Income Statement', 'reports.income-statement', ['reports.income-statement']),
-                $link('Cash Flow', 'reports.cash-flow', ['reports.cash-flow']),
-                $link('Account Statement', 'reports.account-statement', ['reports.account-statement']),
-                $link('Account Schedule', 'reports.account-schedule', ['reports.account-schedule']),
-                $link('BAS (GST)', 'reports.bas', ['reports.bas']),
-                $link('Company Tax Return', 'reports.company-tax', ['reports.company-tax']),
-                $link('Prepayment Schedule', 'reports.prepayment-schedule', ['reports.prepayment-schedule']),
+            ['type' => 'dropdown', 'label' => 'Reports', 'position' => 10, 'active' => ['reports.*', 'projects.profitability'], 'children' => [
+                ['type' => 'heading', 'label' => 'Time & Projects', 'position' => 10],
+                $link('Time by Client', 'reports.time-by-client', ['reports.time-by-client'], 11),
+                $link('Time by Staff', 'reports.time-by-staff', ['reports.time-by-staff'], 12),
+                $link('Time by Project', 'reports.time-by-project', ['reports.time-by-project'], 13),
+                $link('Project Timesheet', 'reports.project-timesheet', ['reports.project-timesheet'], 14),
+                $link('Project Profitability', 'projects.profitability', ['projects.profitability'], 15),
+                ['type' => 'divider', 'position' => 20],
+                ['type' => 'heading', 'label' => 'IFRS Reports', 'position' => 21],
+                $link('Balance Sheet', 'reports.balance-sheet', ['reports.balance-sheet'], 22),
+                $link('Trial Balance', 'reports.trial-balance', ['reports.trial-balance'], 23),
+                $link('Income Statement', 'reports.income-statement', ['reports.income-statement'], 24),
+                $link('Cash Flow', 'reports.cash-flow', ['reports.cash-flow'], 25),
+                $link('Account Statement', 'reports.account-statement', ['reports.account-statement'], 26),
+                $link('Account Schedule', 'reports.account-schedule', ['reports.account-schedule'], 27),
+                $link('Prepayment Schedule', 'reports.prepayment-schedule', ['reports.prepayment-schedule'], 30),
             ]],
 
             ['type' => 'dropdown', 'label' => 'Accounting', 'position' => 20, 'roles' => $gated,
-                'active' => ['prepayments.*', 'domains.*', 'bas-settlements.*'], 'children' => [
+                'active' => ['prepayments.*', 'domains.*'], 'children' => [
                     $link('Prepayments', 'prepayments.index', ['prepayments.*']),
                     $link('Domain Names', 'domains.index', ['domains.*']),
-                    $link('BAS Settlements', 'bas-settlements.index', ['bas-settlements.*']),
                 ]],
 
             ['type' => 'dropdown', 'label' => 'Setup', 'position' => 40, 'roles' => $gated,
@@ -152,7 +153,6 @@ class CoreNav
             [TotalClientsWidget::class, ''],
             [OutstandingInvoicesWidget::class, ''],
             [HoursThisMonthWidget::class, ''],
-            [GstPayableWidget::class, ''],
             [CashFlowWidget::class, 'md:col-span-2 lg:col-span-4'],
             [ARAgingWidget::class, 'md:col-span-1 lg:col-span-2'],
             [BankBalanceWidget::class, 'md:col-span-1 lg:col-span-2'],

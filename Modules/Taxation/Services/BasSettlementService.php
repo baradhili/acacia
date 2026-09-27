@@ -1,9 +1,12 @@
 <?php
 
-namespace App\Services;
+namespace Modules\Taxation\Services;
 
-use App\Models\BasSettlement;
 use App\Models\BillPayment;
+use App\Services\FiscalYearService;
+use App\Services\IfrsPosting;
+use App\Services\OpeningBalances;
+use App\Services\PeriodLockService;
 use Carbon\Carbon;
 use IFRS\Models\Account;
 use IFRS\Models\Entity;
@@ -14,6 +17,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Modules\Shares\Models\FrankingAccountEntry;
 use Modules\Shares\Services\FrankingService;
+use Modules\Taxation\Models\BasSettlement;
 
 /**
  * Records BAS settlements: the ATO payment (or refund) that nets a tax
@@ -48,7 +52,7 @@ class BasSettlementService
 
     /**
      * The GST accounts the entity's Vats post to — the same resolution
-     * ReportController::ledgerGst uses: the output Vat (G) posts to the
+     * TaxReportController::ledgerGst uses: the output Vat (G) posts to the
      * payable account, the input Vat (I) to the receivable account, and
      * legacy databases where purchases fall back to the output Vat
      * share one account (settled on its own, receivable null).

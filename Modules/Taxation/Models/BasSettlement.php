@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Models;
+namespace Modules\Taxation\Models;
 
 use IFRS\Models\Entity;
 use IFRS\Models\Transaction;

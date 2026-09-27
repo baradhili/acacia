@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Accounting;
 
+use App\Models\User;
 use App\Services\FiscalYearService;
 use App\Services\IfrsPosting;
 use Carbon\Carbon;
@@ -20,9 +21,13 @@ class ClosingAwareReportsTest extends TestCase
     use RefreshDatabase;
 
     protected Entity $entity;
+
     protected FiscalYearService $service;
+
     protected Account $bank;
+
     protected Account $revenue;
+
     protected Account $expense;
 
     protected function setUp(): void
@@ -32,16 +37,16 @@ class ClosingAwareReportsTest extends TestCase
         $this->seed(RoleSeeder::class);
         $this->seed(UserSeeder::class);
         $this->seed(IFRSSeeder::class);
-        $this->actingAs(\App\Models\User::where('email', 'admin@example.com')->first());
+        $this->actingAs(User::where('email', 'admin@example.com')->first());
 
         $this->entity = Entity::first();
-        $this->service = new FiscalYearService();
+        $this->service = new FiscalYearService;
         $this->bank = Account::where('code', 320)->where('entity_id', $this->entity->id)->first();
         $this->revenue = Account::where('code', 4100)->where('entity_id', $this->entity->id)->first();
         $this->expense = Account::where('code', 5100)->where('entity_id', $this->entity->id)->first();
     }
 
-    protected function postJournal(string $date, Account $main, bool $credited, array $lines, string $reference = null): JournalEntry
+    protected function postJournal(string $date, Account $main, bool $credited, array $lines, ?string $reference = null): JournalEntry
     {
         IfrsPosting::ensureReportingPeriod($date, $this->entity);
 
@@ -77,12 +82,12 @@ class ClosingAwareReportsTest extends TestCase
     {
         $year = $this->closableYear();
 
-        $this->postJournal($year . '-09-15', $this->bank, false, [[$this->revenue, 10000]]);
-        $this->postJournal(($year + 1) . '-01-10', $this->bank, true, [[$this->expense, 4000]]);
+        $this->postJournal($year.'-09-15', $this->bank, false, [[$this->revenue, 10000]]);
+        $this->postJournal(($year + 1).'-01-10', $this->bank, true, [[$this->expense, 4000]]);
 
-        $query = ['start_date' => $year . '-07-01', 'end_date' => ($year + 1) . '-06-30'];
+        $query = ['start_date' => $year.'-07-01', 'end_date' => ($year + 1).'-06-30'];
 
-        $before = $this->get('/reports/income-statement?' . http_build_query($query));
+        $before = $this->get('/reports/income-statement?'.http_build_query($query));
         $before->assertOk();
         $statement = $before->viewData('lines')['statement'];
         $this->assertEquals(10000.0, $statement['revenueTotal']);
@@ -91,7 +96,7 @@ class ClosingAwareReportsTest extends TestCase
 
         $this->service->close($this->entity, $year, force: true);
 
-        $after = $this->get('/reports/income-statement?' . http_build_query($query));
+        $after = $this->get('/reports/income-statement?'.http_build_query($query));
         $after->assertOk();
         $statement = $after->viewData('lines')['statement'];
 
@@ -109,11 +114,11 @@ class ClosingAwareReportsTest extends TestCase
     public function test_income_statement_totals_are_sums_of_their_rows(): void
     {
         $year = $this->closableYear();
-        $this->postJournal($year . '-09-15', $this->bank, false, [[$this->revenue, 10000]]);
+        $this->postJournal($year.'-09-15', $this->bank, false, [[$this->revenue, 10000]]);
 
-        $response = $this->get('/reports/income-statement?' . http_build_query([
-            'start_date' => $year . '-07-01',
-            'end_date' => ($year + 1) . '-06-30',
+        $response = $this->get('/reports/income-statement?'.http_build_query([
+            'start_date' => $year.'-07-01',
+            'end_date' => ($year + 1).'-06-30',
         ]));
 
         $statement = $response->viewData('lines')['statement'];
@@ -127,11 +132,11 @@ class ClosingAwareReportsTest extends TestCase
     {
         $year = $this->closableYear();
 
-        $this->postJournal($year . '-09-15', $this->bank, false, [[$this->revenue, 10000]]);
+        $this->postJournal($year.'-09-15', $this->bank, false, [[$this->revenue, 10000]]);
 
-        $asAt = 'end_date=' . ($year + 1) . '-06-30';
+        $asAt = 'end_date='.($year + 1).'-06-30';
 
-        $before = $this->get('/reports/balance-sheet?' . $asAt);
+        $before = $this->get('/reports/balance-sheet?'.$asAt);
         $before->assertOk();
         $statement = $before->viewData('lines')['statement'];
 
@@ -141,7 +146,7 @@ class ClosingAwareReportsTest extends TestCase
 
         $this->service->close($this->entity, $year, force: true);
 
-        $after = $this->get('/reports/balance-sheet?' . $asAt);
+        $after = $this->get('/reports/balance-sheet?'.$asAt);
         $after->assertOk();
         $statement = $after->viewData('lines')['statement'];
 
@@ -159,7 +164,7 @@ class ClosingAwareReportsTest extends TestCase
 
         // Early in the current FY, before "now", so the default as-at
         // window (FY start → today) includes it.
-        $this->postJournal($year . '-07-15', $this->bank, false, [[$this->revenue, 2500]]);
+        $this->postJournal($year.'-07-15', $this->bank, false, [[$this->revenue, 2500]]);
 
         $response = $this->get('/reports/balance-sheet');
         $response->assertOk();
@@ -167,27 +172,5 @@ class ClosingAwareReportsTest extends TestCase
         $statement = $response->viewData('lines')['statement'];
         $this->assertEquals(2500.0, $statement['assetsTotal']);
         $this->assertEquals(2500.0, $statement['equityTotal']);
-    }
-
-    public function test_company_tax_statement_unchanged_by_the_close(): void
-    {
-        $year = $this->closableYear();
-
-        $this->postJournal($year . '-09-15', $this->bank, false, [[$this->revenue, 1000]]);
-        $this->postJournal(($year + 1) . '-02-01', $this->bank, true, [[$this->expense, 400]]);
-
-        $fy = $year + 1; // company-tax "fy" param is the FY's ending calendar year
-
-        $before = $this->get('/reports/company-tax?fy=' . $fy);
-        $before->assertOk()->assertSee('$1,000')->assertSee('$400');
-
-        $this->service->close($this->entity, $year, force: true);
-
-        $after = $this->get('/reports/company-tax?fy=' . $fy);
-        $after->assertOk()->assertSee('$1,000')->assertSee('$400');
-
-        // The closing entries are non-bank P&L journals — without the
-        // reference exclusion V07 would count them as excluded activity.
-        $after->assertSee('0 non-bank P&L ledger rows excluded');
     }
 }

@@ -1,13 +1,14 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace Modules\Taxation\Http\Controllers;
 
-use App\Models\BasSettlement;
-use App\Services\BasSettlementService;
+use App\Http\Controllers\Controller;
 use App\Services\IfrsPosting;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Modules\Taxation\Models\BasSettlement;
+use Modules\Taxation\Services\BasSettlementService;
 
 /**
  * BAS settlements — recording the ATO payment (or refund) that nets
@@ -33,7 +34,7 @@ class BasSettlementController extends Controller
         // filter and the settle form's default can never disagree.
         $effectiveAsAt = $asAt ?? ($quarterEnds !== [] ? last($quarterEnds)['end'] : now());
 
-        return view('bas-settlements.index', [
+        return view('taxation.settlements', [
             'positions' => $this->service->positions($effectiveAsAt),
             'priorGstCarry' => $this->service->priorYearsCarry($effectiveAsAt),
             'positionAsAt' => $effectiveAsAt->toDateString(),
