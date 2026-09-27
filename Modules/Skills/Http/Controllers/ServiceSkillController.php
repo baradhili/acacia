@@ -19,6 +19,9 @@ use Modules\Skills\Models\Skill;
  */
 class ServiceSkillController extends Controller
 {
+    /**
+     * Display all services by name with their required-skill counts and editing availability.
+     */
     public function index(Request $request): View
     {
         /** @var Collection $counts */
@@ -33,6 +36,9 @@ class ServiceSkillController extends Controller
         ]);
     }
 
+    /**
+     * Display the skill library with this service's current requirements and editing availability.
+     */
     public function show(Request $request, Service $service): View
     {
         return view('skills.services.show', [
@@ -46,6 +52,15 @@ class ServiceSkillController extends Controller
         ]);
     }
 
+    /**
+     * Replace required skills and redirect to the service's matrix with a success message.
+     *
+     * The skills request array maps skill IDs to accepted checkbox values.
+     * Unknown IDs are ignored; missing, null, or empty skills clears the set.
+     * Failed link writes roll back the transaction; database errors propagate.
+     *
+     * @throws \Illuminate\Validation\ValidationException If skills is not an array or null, or a checkbox value is invalid.
+     */
     public function update(Request $request, Service $service): RedirectResponse
     {
         $request->validate([

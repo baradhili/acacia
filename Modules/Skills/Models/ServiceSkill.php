@@ -17,11 +17,17 @@ class ServiceSkill extends Model
 
     protected $fillable = ['service_id', 'skill_id'];
 
+    /**
+     * Relate this requirement to its catalog service.
+     */
     public function service(): BelongsTo
     {
         return $this->belongsTo(Service::class);
     }
 
+    /**
+     * Relate this service requirement to its library skill.
+     */
     public function skill(): BelongsTo
     {
         return $this->belongsTo(Skill::class);

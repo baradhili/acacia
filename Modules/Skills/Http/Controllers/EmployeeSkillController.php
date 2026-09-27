@@ -21,6 +21,9 @@ use Modules\Skills\Models\Skill;
  */
 class EmployeeSkillController extends Controller
 {
+    /**
+     * Display all payroll payees by name with their skill counts and editing availability.
+     */
     public function index(Request $request): View
     {
         /** @var Collection $counts */
@@ -35,6 +38,9 @@ class EmployeeSkillController extends Controller
         ]);
     }
 
+    /**
+     * Display the skill library with this payee's current proficiency levels and editing availability.
+     */
     public function show(Request $request, Employee $employee): View
     {
         return view('skills.employees.show', [
@@ -48,6 +54,16 @@ class EmployeeSkillController extends Controller
         ]);
     }
 
+    /**
+     * Replace the payee's skills and redirect to their matrix with a success message.
+     *
+     * Request arrays use skill IDs as keys: skills contains accepted checkbox values,
+     * and proficiency contains levels from Skill::proficiencies(). Missing levels
+     * default to beginner, including for existing links. Unknown IDs are ignored;
+     * missing, null, or empty skills clears the set. Database errors propagate.
+     *
+     * @throws \Illuminate\Validation\ValidationException If either array, a checkbox value, or any submitted proficiency is invalid.
+     */
     public function update(Request $request, Employee $employee): RedirectResponse
     {
         $validated = $request->validate([
@@ -77,6 +93,10 @@ class EmployeeSkillController extends Controller
      * delete and the upsert share a transaction — if the write fails
      * (a checked skill deleted concurrently, say) the payee's set is
      * left untouched rather than half-replaced.
+     *
+     * The validated arrays are keyed by skill ID. Missing proficiency
+     * defaults to beginner even for an existing link; missing, null,
+     * or empty skills clears the set. Database errors propagate.
      */
     protected function sync(Employee $employee, array $validated): void
     {

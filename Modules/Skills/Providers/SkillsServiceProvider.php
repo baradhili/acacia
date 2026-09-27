@@ -12,6 +12,11 @@ use Illuminate\Support\ServiceProvider;
  */
 class SkillsServiceProvider extends ServiceProvider
 {
+    /**
+     * Register module migrations, routes, views, and the Skills navigation link.
+     * Views support both skills.* and skills::* names; navigation is added only
+     * when the Employees dropdown already exists.
+     */
     public function boot(): void
     {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
@@ -30,6 +35,9 @@ class SkillsServiceProvider extends ServiceProvider
         $nav->addTopbarChild('Employees', $this->employeesSkillsItem());
     }
 
+    /**
+     * Return a Skills navigation link with no role restriction, active for skills.* routes.
+     */
     protected function employeesSkillsItem(): array
     {
         return [

@@ -17,6 +17,13 @@ use Modules\Skills\Models\Skill;
  */
 class SkillController extends Controller
 {
+    /**
+     * Display skills by name with employee and service counts, 25 per page.
+     *
+     * A filled category filters by equality; a filled q matches a literal,
+     * case-insensitive Unicode substring in the name or description. Page
+     * numbers below one use page one. Category choices cover the full library.
+     */
     public function index(Request $request): View
     {
         $skills = Skill::query()
@@ -66,11 +73,20 @@ class SkillController extends Controller
         ]);
     }
 
+    /**
+     * Display the skill form with a new, unsaved skill.
+     */
     public function create(): View
     {
         return view('skills.form', ['skill' => new Skill]);
     }
 
+    /**
+     * Create a validated skill and redirect to its details with a success message.
+     * Database errors propagate.
+     *
+     * @throws \Illuminate\Validation\ValidationException If the skill fields fail validation.
+     */
     public function store(Request $request): RedirectResponse
     {
         $skill = Skill::create($this->validated($request));
@@ -78,6 +94,9 @@ class SkillController extends Controller
         return redirect()->route('skills.show', $skill)->with('success', 'Skill created.');
     }
 
+    /**
+     * Load linked payees and services by name and display the skill's details.
+     */
     public function show(Request $request, Skill $skill): View
     {
         $skill->load([
@@ -91,11 +110,20 @@ class SkillController extends Controller
         ]);
     }
 
+    /**
+     * Display the skill form populated with the existing skill.
+     */
     public function edit(Skill $skill): View
     {
         return view('skills.form', ['skill' => $skill]);
     }
 
+    /**
+     * Update validated fields and redirect to the skill's details with a success message.
+     * Omitted optional fields retain their values. Database errors propagate.
+     *
+     * @throws \Illuminate\Validation\ValidationException If the skill fields fail validation.
+     */
     public function update(Request $request, Skill $skill): RedirectResponse
     {
         $skill->update($this->validated($request, $skill));
@@ -103,6 +131,10 @@ class SkillController extends Controller
         return redirect()->route('skills.show', $skill)->with('success', 'Skill updated.');
     }
 
+    /**
+     * Delete the skill, cascading to its payee and service links, then redirect
+     * to the library with a success message. Database errors propagate.
+     */
     public function destroy(Skill $skill): RedirectResponse
     {
         $skill->delete();
@@ -110,6 +142,15 @@ class SkillController extends Controller
         return redirect()->route('skills.index')->with('success', 'Skill deleted.');
     }
 
+    /**
+     * Return validated skill fields, excluding a persisted $skill from name uniqueness checks.
+     *
+     * Name is required and limited to 255 characters. Description and category
+     * are optional nullable strings; category is also limited to 255 characters.
+     * Omitted optional fields are absent from the result.
+     *
+     * @throws \Illuminate\Validation\ValidationException If any field fails validation.
+     */
     protected function validated(Request $request, ?Skill $skill = null): array
     {
         $unique = Rule::unique('skills', 'name');
@@ -124,6 +165,9 @@ class SkillController extends Controller
         ]);
     }
 
+    /**
+     * Whether the authenticated request user has the admin or accountant role.
+     */
     protected function canManage(Request $request): bool
     {
         return $request->user()->hasAnyRole(['admin', 'accountant']);

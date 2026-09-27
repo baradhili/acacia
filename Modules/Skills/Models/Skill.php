@@ -40,6 +40,9 @@ class Skill extends Model
         ];
     }
 
+    /**
+     * Relate the skill to payees who hold it, with proficiency and timestamps on each pivot.
+     */
     public function employees(): BelongsToMany
     {
         return $this->belongsToMany(Employee::class, 'employee_skill', 'skill_id', 'employee_id')
@@ -47,6 +50,9 @@ class Skill extends Model
             ->withTimestamps();
     }
 
+    /**
+     * Relate the skill to services that require it, with timestamps on each pivot.
+     */
     public function services(): BelongsToMany
     {
         return $this->belongsToMany(Service::class, 'service_skill', 'skill_id', 'service_id')

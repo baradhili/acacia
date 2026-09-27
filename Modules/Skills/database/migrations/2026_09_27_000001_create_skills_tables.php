@@ -41,6 +41,9 @@ return new class extends Migration
         });
     }
 
+    /**
+     * Drop both skill link tables and the library, deleting their data if present.
+     */
     public function down(): void
     {
         Schema::dropIfExists('service_skill');

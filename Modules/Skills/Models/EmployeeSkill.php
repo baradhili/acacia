@@ -19,11 +19,17 @@ class EmployeeSkill extends Model
 
     protected $fillable = ['employee_id', 'skill_id', 'proficiency'];
 
+    /**
+     * Relate this skill link to the payroll payee who holds it.
+     */
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
     }
 
+    /**
+     * Relate this payee link to its library skill.
+     */
     public function skill(): BelongsTo
     {
         return $this->belongsTo(Skill::class);
