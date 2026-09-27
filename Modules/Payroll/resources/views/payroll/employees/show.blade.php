@@ -70,10 +70,17 @@
                     @if ($employee->super_rate !== null)
                         {{-- stored as a fraction (0.115 = 11.5%): PayrollService multiplies earnings by it --}}
                         {{ rtrim(rtrim(number_format((float) $employee->super_rate * 100, 2), '0'), '.') }}%
-                        @if ($employee->super_fund) · {{ $employee->super_fund }} @endif
-                        @if ($employee->super_member_id) · {{ $employee->super_member_id }} @endif
+                        <span class="text-gray-500">· custom rate</span>
                     @else
-                        —
+                        {{-- null = the SG rate in force at pay time; today's shown --}}
+                        {{ rtrim(rtrim(number_format($sgRate * 100, 2), '0'), '.') }}%
+                        <span class="text-gray-500">· super guarantee default</span>
+                    @endif
+                    @if ($employee->super_fund)
+                        <span class="text-gray-500">· {{ $employee->super_fund }}</span>
+                    @endif
+                    @if ($employee->super_member_id)
+                        <span class="text-gray-500">· {{ $employee->super_member_id }}</span>
                     @endif
                 </dd>
             </div>

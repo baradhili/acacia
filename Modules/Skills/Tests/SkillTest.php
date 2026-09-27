@@ -8,6 +8,7 @@ use App\Services\IfrsPosting;
 use Database\Seeders\IFRSSeeder;
 use Illuminate\Support\Facades\Auth;
 use Modules\Payroll\Models\Employee;
+use Modules\Payroll\Services\PayrollService;
 use Modules\Resumes\Models\Resume;
 use Modules\Skills\Models\EmployeeSkill;
 use Modules\Skills\Models\ServiceSkill;
@@ -206,6 +207,20 @@ class SkillTest extends TestCase
         $this->actingAs($this->staff())
             ->get(route('payroll.employees.show', $employee))
             ->assertForbidden();
+    }
+
+    public function test_the_payroll_employee_view_shows_the_super_guarantee_default(): void
+    {
+        // super_rate null: payroll falls back to the SG rate in
+        // force — the view shows that default, not a bare dash
+        $employee = $this->employee();
+        $expected = rtrim(rtrim(number_format(app(PayrollService::class)->sgRate(now()) * 100, 2), '0'), '.').'%';
+
+        $this->actingAs($this->admin())
+            ->get(route('payroll.employees.show', $employee))
+            ->assertOk()
+            ->assertSee($expected)
+            ->assertSee('super guarantee default');
     }
 
     public function test_fixed_fee_services_do_not_get_an_hourly_suffix(): void
