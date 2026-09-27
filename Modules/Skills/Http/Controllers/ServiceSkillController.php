@@ -58,17 +58,22 @@ class ServiceSkillController extends Controller
 
         // Through the pivot model rather than a relation on Service —
         // the core model stays untouched. Unknown ids are dropped;
-        // they cannot come from the rendered form.
-        ServiceSkill::where('service_id', $service->id)
-            ->whereNotIn('skill_id', $skillIds)
-            ->delete();
+        // they cannot come from the rendered form. The delete and
+        // the writes share a transaction so a mid-sync failure (a
+        // checked skill deleted concurrently, say) leaves the
+        // service's requirements untouched rather than half-replaced.
+        DB::transaction(function () use ($service, $skillIds): void {
+            ServiceSkill::where('service_id', $service->id)
+                ->whereNotIn('skill_id', $skillIds)
+                ->delete();
 
-        foreach ($skillIds as $skillId) {
-            ServiceSkill::firstOrCreate([
-                'service_id' => $service->id,
-                'skill_id' => $skillId,
-            ]);
-        }
+            foreach ($skillIds as $skillId) {
+                ServiceSkill::firstOrCreate([
+                    'service_id' => $service->id,
+                    'skill_id' => $skillId,
+                ]);
+            }
+        });
 
         return redirect()
             ->route('skills.services.show', $service)

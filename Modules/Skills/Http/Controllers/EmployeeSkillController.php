@@ -73,28 +73,33 @@ class EmployeeSkillController extends Controller
      * untouched. Upserted on the composite key: updateOrCreate would
      * silently no-op here, since Eloquent assumes a surrogate id PK
      * this table doesn't have. Unknown skill ids are dropped rather
-     * than rejected; they cannot come from the rendered form.
+     * than rejected; they cannot come from the rendered form. The
+     * delete and the upsert share a transaction — if the write fails
+     * (a checked skill deleted concurrently, say) the payee's set is
+     * left untouched rather than half-replaced.
      */
     protected function sync(Employee $employee, array $validated): void
     {
         $skillIds = Skill::whereIn('id', array_keys($validated['skills'] ?? []))->pluck('id');
 
-        EmployeeSkill::where('employee_id', $employee->id)
-            ->whereNotIn('skill_id', $skillIds)
-            ->delete();
+        DB::transaction(function () use ($employee, $skillIds, $validated): void {
+            EmployeeSkill::where('employee_id', $employee->id)
+                ->whereNotIn('skill_id', $skillIds)
+                ->delete();
 
-        EmployeeSkill::upsert(
-            $skillIds
-                ->map(fn (int $skillId) => [
-                    'employee_id' => $employee->id,
-                    'skill_id' => $skillId,
-                    'proficiency' => $validated['proficiency'][$skillId] ?? Skill::PROFICIENCY_BEGINNER,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ])
-                ->all(),
-            ['employee_id', 'skill_id'],
-            ['proficiency', 'updated_at'],
-        );
+            EmployeeSkill::upsert(
+                $skillIds
+                    ->map(fn (int $skillId) => [
+                        'employee_id' => $employee->id,
+                        'skill_id' => $skillId,
+                        'proficiency' => $validated['proficiency'][$skillId] ?? Skill::PROFICIENCY_BEGINNER,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ])
+                    ->all(),
+                ['employee_id', 'skill_id'],
+                ['proficiency', 'updated_at'],
+            );
+        });
     }
 }
