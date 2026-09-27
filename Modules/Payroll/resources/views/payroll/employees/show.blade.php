@@ -78,7 +78,10 @@
             <div>
                 <dt class="text-xs font-medium text-gray-500 uppercase">Super</dt>
                 <dd class="mt-1 text-gray-900">
-                    @if ($employee->super_rate !== null)
+                    @if (! $employee->earnsSuper())
+                        {{-- the engine's own precedence: earnsSuper() gates everything, even a stored rate --}}
+                        No super — this contractor's contract is not wholly for labour
+                    @elseif ($employee->super_rate !== null)
                         {{-- stored as a fraction (0.115 = 11.5%): PayrollService multiplies earnings by it --}}
                         {{ rtrim(rtrim(number_format((float) $employee->super_rate * 100, 2), '0'), '.') }}%
                         <span class="text-gray-500">· custom rate</span>

@@ -228,18 +228,32 @@ class SkillTest extends TestCase
         $contractor = $this->employee(['employment_type' => Employee::TYPE_CONTRACTOR]);
 
         // no scale, no threshold claim, no 47% no-TFN threat: none
-        // of those withholding rules apply to a contractor
+        // of those withholding rules apply to a contractor — and no
+        // super rate either: a contractor not labour-only earns none
         $this->actingAs($this->admin())
             ->get(route('payroll.employees.show', $contractor))
             ->assertOk()
             ->assertSee('No PAYG withholding')
             ->assertDontSee('Scale')
-            ->assertDontSee('47%');
+            ->assertDontSee('47%')
+            ->assertSee('No super')
+            ->assertDontSee('super guarantee default');
 
         $this->actingAs($this->admin())
             ->get(route('payroll.employees.index'))
             ->assertOk()
             ->assertSee('no PAYG withholding');
+
+        // a labour-only contractor still draws the SG default
+        $labourOnly = $this->employee([
+            'employment_type' => Employee::TYPE_CONTRACTOR,
+            'labour_only' => true,
+            'email' => 'labour-only@example.com',
+        ]);
+        $this->actingAs($this->admin())
+            ->get(route('payroll.employees.show', $labourOnly))
+            ->assertOk()
+            ->assertSee('super guarantee default');
 
         // employees keep the scale display
         $employee = $this->employee(['email' => 'payg-payee@example.com']);
