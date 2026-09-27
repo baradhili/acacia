@@ -154,4 +154,8 @@
             </button>
         </div>
     </form>
+
+    @if ($employee->exists && \Route::has('skills.employees.show'))
+        @include('skills::partials.payee-skills', ['employee' => $employee])
+    @endif
 @endsection

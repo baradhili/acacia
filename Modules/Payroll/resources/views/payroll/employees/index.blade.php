@@ -86,6 +86,10 @@
                                     <a href="{{ route('resumes.index', ['employee' => $employee->id]) }}"
                                         class="text-indigo-600 hover:text-indigo-900 font-medium">Resume</a>
                                 @endif
+                                @if (\Route::has('skills.employees.show'))
+                                    <a href="{{ route('skills.employees.show', $employee) }}"
+                                        class="text-indigo-600 hover:text-indigo-900 font-medium">Skills</a>
+                                @endif
                                 <form method="POST" action="{{ route('payroll.employees.destroy', $employee) }}" class="inline">
                                     @csrf @method('DELETE')
                                     <button class="text-red-600 hover:text-red-800 font-medium">Delete</button>

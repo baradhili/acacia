@@ -163,6 +163,27 @@ class SkillTest extends TestCase
             ->assertSee('École de Danse');
     }
 
+    public function test_the_payroll_employee_views_show_their_linked_skills(): void
+    {
+        $employee = $this->employee();
+        $skill = $this->skill(['name' => 'BAS Preparation']);
+        EmployeeSkill::create(['employee_id' => $employee->id, 'skill_id' => $skill->id, 'proficiency' => 'advanced']);
+
+        // the payee edit page: payroll master data plus the skills panel
+        $this->actingAs($this->admin())
+            ->get(route('payroll.employees.edit', $employee))
+            ->assertOk()
+            ->assertSee('Skills held')
+            ->assertSee('BAS Preparation')
+            ->assertSee('Advanced');
+
+        // and the payee index row links straight to the matrix
+        $this->actingAs($this->admin())
+            ->get(route('payroll.employees.index'))
+            ->assertOk()
+            ->assertSee(route('skills.employees.show', $employee));
+    }
+
     public function test_fixed_fee_services_do_not_get_an_hourly_suffix(): void
     {
         $hourly = Service::create(['name' => 'Payroll Service', 'hourly_rate' => 150]);
