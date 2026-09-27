@@ -7,7 +7,9 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Modules\Skills\Models\Skill;
 
@@ -17,6 +19,8 @@ use Modules\Skills\Models\Skill;
  */
 class SkillController extends Controller
 {
+    protected const PER_PAGE = 25;
+
     /**
      * Display skills by name with employee and service counts, 25 per page.
      *
@@ -26,13 +30,11 @@ class SkillController extends Controller
      */
     public function index(Request $request): View
     {
-        $skills = Skill::query()
-            ->withCount(['employees', 'services'])
+        $query = Skill::query()
             ->when($request->filled('category'), function (Builder $query) use ($request) {
                 $query->where('category', $request->input('category'));
             })
-            ->orderBy('name')
-            ->get();
+            ->orderBy('name');
 
         if ($request->filled('q')) {
             // The substring test happens in PHP with mb_stripos: a
@@ -41,30 +43,35 @@ class SkillController extends Controller
             // "École". SQL folding cannot do this portably: lower()
             // is ASCII-only on SQLite, and LIKE wildcards cannot be
             // escaped across the SQLite test and MySQL dev
-            // connections at all. A skill library is small enough
-            // to fold in memory.
+            // connections at all. A skill library is small enough to
+            // fold in memory — but only the columns mb_stripos
+            // reads, and the relation counts are fetched for the
+            // page, not the library.
             $term = (string) $request->input('q');
-            $skills = $skills
+            $matches = $query->get(['id', 'name', 'description', 'category'])
                 ->filter(fn (Skill $skill) => mb_stripos($skill->name."\n".(string) $skill->description, $term) !== false)
                 ->values();
+
+            $page = max(1, $request->integer('page', 1));
+            $skills = new LengthAwarePaginator(
+                $this->withRelationCounts($matches->forPage($page, self::PER_PAGE)->values()),
+                $matches->count(),
+                self::PER_PAGE,
+                $page,
+                ['path' => $request->url(), 'query' => $request->query()],
+            );
+        } else {
+            // plain browsing stays in SQL: one page of rows plus its
+            // two counts, whatever the library grows to
+            $skills = $query->withCount(['employees', 'services'])
+                ->paginate(self::PER_PAGE)
+                ->withQueryString();
         }
 
         $categories = Skill::whereNotNull('category')
             ->distinct()
             ->orderBy('category')
             ->pluck('category');
-
-        // Manual pagination: the filtered set lives in memory, not in
-        // a query builder.
-        $page = max(1, $request->integer('page', 1));
-        $perPage = 25;
-        $skills = new LengthAwarePaginator(
-            $skills->forPage($page, $perPage)->values(),
-            count($skills),
-            $perPage,
-            $page,
-            ['path' => $request->url(), 'query' => $request->query()],
-        );
 
         return view('skills.index', [
             'skills' => $skills,
@@ -82,10 +89,29 @@ class SkillController extends Controller
     }
 
     /**
+     * Attach the employees/services counts to a page of skills the
+     * search path hydrated without them (it selects only the columns
+     * mb_stripos reads), so the count subqueries run for the rows on
+     * screen rather than every match.
+     *
+     * @param  Collection<int, Skill>  $skills
+     * @return Collection<int, Skill>
+     */
+    protected function withRelationCounts($skills)
+    {
+        $counted = Skill::withCount(['employees', 'services'])
+            ->whereIn('id', $skills->pluck('id'))
+            ->get()
+            ->keyBy('id');
+
+        return $skills->map(fn (Skill $skill) => $counted[$skill->id] ?? $skill);
+    }
+
+    /**
      * Create a validated skill and redirect to its details with a success message.
      * Database errors propagate.
      *
-     * @throws \Illuminate\Validation\ValidationException If the skill fields fail validation.
+     * @throws ValidationException If the skill fields fail validation.
      */
     public function store(Request $request): RedirectResponse
     {
@@ -122,7 +148,7 @@ class SkillController extends Controller
      * Update validated fields and redirect to the skill's details with a success message.
      * Omitted optional fields retain their values. Database errors propagate.
      *
-     * @throws \Illuminate\Validation\ValidationException If the skill fields fail validation.
+     * @throws ValidationException If the skill fields fail validation.
      */
     public function update(Request $request, Skill $skill): RedirectResponse
     {
@@ -149,7 +175,7 @@ class SkillController extends Controller
      * are optional nullable strings; category is also limited to 255 characters.
      * Omitted optional fields are absent from the result.
      *
-     * @throws \Illuminate\Validation\ValidationException If any field fails validation.
+     * @throws ValidationException If any field fails validation.
      */
     protected function validated(Request $request, ?Skill $skill = null): array
     {
