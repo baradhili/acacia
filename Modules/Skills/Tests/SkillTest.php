@@ -6,14 +6,17 @@ use App\Models\Service;
 use App\Models\User;
 use App\Services\IfrsPosting;
 use Database\Seeders\IFRSSeeder;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Modules\Payroll\Models\Employee;
 use Modules\Payroll\Services\PayrollService;
 use Modules\Resumes\Models\Resume;
 use Modules\Skills\Models\EmployeeSkill;
 use Modules\Skills\Models\ServiceSkill;
 use Modules\Skills\Models\Skill;
+use PDOException;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -367,6 +370,56 @@ class SkillTest extends TestCase
         $this->assertStringContainsString('notes.txt: not valid JSON', session('error'));
         $this->assertSame(1, Skill::count());
         $this->assertNotNull(Skill::firstWhere('name', 'BAS Preparation (Imported)'));
+    }
+
+    public function test_a_lost_connection_aborts_the_import_instead_of_skipping_files(): void
+    {
+        $inserts = 0;
+        DB::beforeExecuting(function ($query, $bindings, $connection) use (&$inserts) {
+            // the database goes away just after the first descriptor lands
+            if (str_starts_with(strtolower($query), 'insert') && str_contains($query, 'skills') && ++$inserts > 1) {
+                throw new QueryException($connection->getName(), $query, $bindings, new PDOException('MySQL server has gone away'));
+            }
+        });
+
+        $this->actingAs($this->admin())
+            ->post(route('skills.rsd'), [
+                'files' => [
+                    $this->rsdFile(),
+                    $this->rsdFile(['id' => 'https://example.org/rsd/skill/xero-bank-feeds', 'skillName' => 'Xero Bank Feeds']),
+                ],
+            ])
+            ->assertStatus(500);
+
+        // the first descriptor landed; the outage surfaced as an
+        // error, not as "1 imported, 1 skipped"
+        $this->assertSame(1, Skill::count());
+    }
+
+    public function test_other_storage_rejections_stay_per_file(): void
+    {
+        $inserts = 0;
+        DB::beforeExecuting(function ($query, $bindings, $connection) use (&$inserts) {
+            // a data-shaped rejection (not a lost connection) on the
+            // second descriptor only
+            if (str_starts_with(strtolower($query), 'insert') && str_contains($query, 'skills') && ++$inserts > 1) {
+                throw new QueryException($connection->getName(), $query, $bindings, new PDOException('Data too long for column'));
+            }
+        });
+
+        $this->actingAs($this->admin())
+            ->post(route('skills.rsd'), [
+                'files' => [
+                    $this->rsdFile(),
+                    $this->rsdFile(['id' => 'https://example.org/rsd/skill/xero-bank-feeds', 'skillName' => 'Xero Bank Feeds']),
+                ],
+            ])
+            ->assertRedirect(route('skills.index'))
+            ->assertSessionHas('success')
+            ->assertSessionHas('error');
+
+        $this->assertStringContainsString('it could not be stored', session('error'));
+        $this->assertSame(1, Skill::count());
     }
 
     public function test_staff_cannot_import_rsd_skills(): void

@@ -16,6 +16,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Modules\Skills\Models\Skill;
+use Modules\Skills\Support\LostConnection;
 
 /**
  * The skill library CRUD. Viewing is open to every signed-in user;
@@ -281,9 +282,18 @@ class SkillController extends Controller
             return null;
         } catch (UniqueConstraintViolationException) {
             return 'its name or RSD id is already used by a different skill';
-        } catch (QueryException) {
-            // last-resort net: anything else the storage layer
-            // rejects fails this file, not the whole upload
+        } catch (QueryException $exception) {
+            // an infrastructure outage (connection lost, storage
+            // gone) must not masquerade as a bad file: every
+            // remaining write would "fail" per file while the
+            // banner counts imports. Rethrow and let the request
+            // error with the real cause; data-level rejections —
+            // an encoding surprise on a strict connection — stay
+            // per-file
+            if ((new LostConnection)->check($exception)) {
+                throw $exception;
+            }
+
             return 'it could not be stored';
         }
     }
