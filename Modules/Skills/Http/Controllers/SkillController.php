@@ -180,15 +180,19 @@ class SkillController extends Controller
      * and keeps the full descriptor in the rsd column. Files carrying
      * their RSD id update the existing skill with that source_id, so
      * re-importing is idempotent. Failures are per file — a bad file is
-     * reported by name and never blocks the rest of the upload.
+     * reported by name and never blocks the rest of the upload, so the
+     * request-level gate is size only: no mimes rule, since MIME/content
+     * sniffing can misjudge a malformed .json and would veto the whole
+     * batch before the per-file loop (and these files are only ever
+     * json_decoded, never stored or executed).
      *
-     * @throws ValidationException If no files were uploaded or any is not a JSON file.
+     * @throws ValidationException If no files were uploaded or any exceeds the size cap.
      */
     public function uploadRsd(Request $request): RedirectResponse
     {
         $request->validate([
             'files' => ['required', 'array'],
-            'files.*' => ['required', 'file', 'mimes:json', 'max:5120'],
+            'files.*' => ['required', 'file', 'max:5120'],
         ]);
 
         $imported = 0;

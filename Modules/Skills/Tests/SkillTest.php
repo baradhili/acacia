@@ -348,6 +348,27 @@ class SkillTest extends TestCase
             ->assertSee('no-name.json: missing skillName');
     }
 
+    public function test_a_non_json_file_in_the_batch_does_not_block_the_rest(): void
+    {
+        // any file the JSON parser rejects is skipped per file — the
+        // batch-level validation caps size only, never content, so a
+        // misjudged or wrong-extension file cannot veto the upload
+        $this->actingAs($this->admin())
+            ->post(route('skills.rsd'), [
+                'files' => [
+                    UploadedFile::fake()->createWithContent('notes.txt', 'just some notes'),
+                    $this->rsdFile(),
+                ],
+            ])
+            ->assertRedirect(route('skills.index'))
+            ->assertSessionHas('success')
+            ->assertSessionHas('error');
+
+        $this->assertStringContainsString('notes.txt: not valid JSON', session('error'));
+        $this->assertSame(1, Skill::count());
+        $this->assertNotNull(Skill::firstWhere('name', 'BAS Preparation (Imported)'));
+    }
+
     public function test_staff_cannot_import_rsd_skills(): void
     {
         $this->actingAs($this->staff())
