@@ -121,7 +121,8 @@ class SkillTest extends TestCase
         $this->actingAs($admin)->get(route('skills.employees.index'))->assertOk()->assertSee($employee->name);
         $this->actingAs($admin)->get(route('skills.employees.show', $employee))->assertOk();
         $this->actingAs($admin)->get(route('skills.services.index'))->assertOk()->assertSee('BAS Agent Service');
-        $this->actingAs($admin)->get(route('skills.services.show', $service))->assertOk();
+        $this->actingAs($admin)->get(route('skills.services.show', $service))
+            ->assertOk()->assertSee('Filter by category');
     }
 
     public function test_library_search_matches_percent_and_underscore_literally(): void
@@ -287,6 +288,33 @@ class SkillTest extends TestCase
             ->assertOk()
             ->assertSee('Setup Fee')
             ->assertDontSee('/hr');
+    }
+
+    public function test_the_employee_matrix_filters_by_category_and_labels_proficiency(): void
+    {
+        $employee = $this->employee();
+        $this->skill(['name' => 'BAS Preparation', 'category' => 'Tax']);
+        $this->skill(['name' => 'Xero Bank Feeds', 'category' => 'Software']);
+        $this->skill(['name' => 'General Advisory', 'category' => null]);
+
+        // the manage form: filter over real categories (plus an
+        // uncategorised bucket) and a labelled proficiency column
+        $this->actingAs($this->admin())
+            ->get(route('skills.employees.show', $employee))
+            ->assertOk()
+            ->assertSee('Filter by category')
+            ->assertSeeTextInOrder(['All categories', 'Software', 'Tax', 'Uncategorised'])
+            ->assertSee('Proficiency')
+            ->assertSee('Beginner, Intermediate, Advanced or Expert')
+            ->assertSee('data-category="Tax"', false)
+            ->assertSee('data-category=""', false);
+
+        // the read-only view carries no filter or form chrome
+        $this->actingAs($this->staff())
+            ->get(route('skills.employees.show', $employee))
+            ->assertOk()
+            ->assertDontSee('Filter by category')
+            ->assertDontSee('Proficiency');
     }
 
     public function test_admins_set_an_employees_skills_with_proficiency(): void
