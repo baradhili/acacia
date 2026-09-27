@@ -40,13 +40,13 @@
                 @foreach ($skills as $skill)
                     <label class="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer"
                         x-show="category === '' || category === ($el.dataset.category || '__none')"
-                        data-category="{{ $skill->category ?? '' }}">
+                        data-category="{{ filled($skill->category) ? 'c:'.$skill->category : '' }}">
                         <input type="checkbox" name="skills[{{ $skill->id }}]" value="1"
                             {{ isset($current[$skill->id]) ? 'checked' : '' }}
                             class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                         <span>
                             <span class="font-medium text-gray-900">{{ $skill->name }}</span>
-                            @if ($skill->category)
+                            @if (filled($skill->category))
                                 <span class="ml-2 text-xs text-gray-500">{{ $skill->category }}</span>
                             @endif
                         </span>

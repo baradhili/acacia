@@ -410,6 +410,11 @@ class SkillTest extends TestCase
         $this->skill(['name' => 'BAS Preparation', 'category' => 'Tax']);
         $this->skill(['name' => 'Xero Bank Feeds', 'category' => 'Software']);
         $this->skill(['name' => 'General Advisory', 'category' => null]);
+        // awkward but legal categories: '0' is falsy-looking, and
+        // '__none' collides with the Uncategorised sentinel unless
+        // option values are namespaced away from raw strings
+        $this->skill(['name' => 'Zero Rated Work', 'category' => '0']);
+        $this->skill(['name' => 'Weird Category Work', 'category' => '__none']);
 
         // the manage form: filter over real categories (plus an
         // uncategorised bucket) and a labelled proficiency column
@@ -417,10 +422,15 @@ class SkillTest extends TestCase
             ->get(route('skills.employees.show', $employee))
             ->assertOk()
             ->assertSee('Filter by category')
-            ->assertSeeTextInOrder(['All categories', 'Software', 'Tax', 'Uncategorised'])
+            ->assertSeeTextInOrder(['All categories', '0', 'Software', 'Tax', '__none', 'Uncategorised'])
+            ->assertSee('value="c:0"', false)
+            ->assertSee('value="c:__none"', false)
+            ->assertSee('value="__none">Uncategorised', false)
             ->assertSee('Proficiency')
             ->assertSee('Beginner, Intermediate, Advanced or Expert')
-            ->assertSee('data-category="Tax"', false)
+            ->assertSee('data-category="c:Tax"', false)
+            ->assertSee('data-category="c:0"', false)
+            ->assertSee('data-category="c:__none"', false)
             ->assertSee('data-category=""', false);
 
         // the read-only view carries no filter or form chrome
