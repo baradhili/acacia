@@ -6,7 +6,11 @@
         <div>
             <h1 class="text-2xl font-bold text-gray-800">{{ $service->name }}</h1>
             <p class="text-sm text-gray-500 mt-1">
-                Standard rate {{ $service->formattedRate() }}/hr ·
+                @if ($service->hourly_rate !== null)
+                    Standard rate {{ $service->formattedRate() }}/hr ·
+                @else
+                    Fixed-fee service (no standard hourly rate) ·
+                @endif
                 the skills this service requires from whoever delivers it.
             </p>
         </div>

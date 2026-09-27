@@ -143,6 +143,32 @@ class SkillTest extends TestCase
             ->assertDontSee('Tax Planning');
     }
 
+    public function test_fixed_fee_services_do_not_get_an_hourly_suffix(): void
+    {
+        $hourly = Service::create(['name' => 'Payroll Service', 'hourly_rate' => 150]);
+        $fixed = Service::create(['name' => 'Setup Fee']);
+        $skill = $this->skill();
+
+        $this->actingAs($this->admin())
+            ->get(route('skills.services.show', $hourly))
+            ->assertOk()
+            ->assertSee('$150/hr');
+
+        $this->actingAs($this->admin())
+            ->get(route('skills.services.show', $fixed))
+            ->assertOk()
+            ->assertDontSee('/hr');
+
+        // the per-skill page lists linked services the same way
+        ServiceSkill::create(['service_id' => $fixed->id, 'skill_id' => $skill->id]);
+
+        $this->actingAs($this->admin())
+            ->get(route('skills.show', $skill))
+            ->assertOk()
+            ->assertSee('Setup Fee')
+            ->assertDontSee('/hr');
+    }
+
     public function test_admins_set_an_employees_skills_with_proficiency(): void
     {
         $employee = $this->employee();

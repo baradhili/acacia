@@ -68,7 +68,7 @@
                         <a href="{{ route('skills.services.show', $service) }}" class="font-medium text-gray-900 hover:text-indigo-600">
                             {{ $service->name }}
                         </a>
-                        <span class="text-gray-500 text-xs">{{ $service->formattedRate() }}/hr</span>
+                        <span class="text-gray-500 text-xs">{{ $service->formattedRate() }}{{ $service->hourly_rate !== null ? '/hr' : '' }}</span>
                     </li>
                 @empty
                     <li class="px-4 py-8 text-center text-gray-500">No services require this skill yet.</li>
