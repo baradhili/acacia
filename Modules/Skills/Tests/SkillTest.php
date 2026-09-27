@@ -331,6 +331,14 @@ class SkillTest extends TestCase
 
         // only the hand-entered skill exists: every file was skipped
         $this->assertSame(1, Skill::count());
+
+        // and the skips are visible on the library page afterwards —
+        // a flashed error nobody renders is no feedback at all
+        $this->actingAs($this->admin())
+            ->get(route('skills.index'))
+            ->assertOk()
+            ->assertSee('bad.json: not valid JSON')
+            ->assertSee('no-name.json: missing skillName');
     }
 
     public function test_staff_cannot_import_rsd_skills(): void

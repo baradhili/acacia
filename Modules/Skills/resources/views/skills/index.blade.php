@@ -50,6 +50,10 @@
     @if (session('success'))
         <div class="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">{{ session('success') }}</div>
     @endif
+    @if (session('error'))
+        {{-- the RSD importer's per-file skips land here: a mixed batch shows both banners --}}
+        <div class="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">{{ session('error') }}</div>
+    @endif
 
     <form method="GET" class="mb-4 bg-white rounded-lg shadow p-4 flex flex-wrap items-end gap-3">
         <div class="grow">
