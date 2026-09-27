@@ -3,11 +3,10 @@
 namespace Modules\Skills\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Modules\Skills\Models\Skill;
@@ -20,36 +19,45 @@ class SkillController extends Controller
 {
     public function index(Request $request): View
     {
-        $query = Skill::query()
+        $skills = Skill::query()
             ->withCount(['employees', 'services'])
-            ->orderBy('name')
-            ->when($request->filled('q'), function (Builder $query) use ($request) {
-                // instr(), not LIKE: a search for "100%" or "tax_"
-                // must match those characters literally. LIKE
-                // wildcards cannot be escaped portably across the
-                // SQLite test connection and the MySQL dev one
-                // (MySQL's LIKE has no ESCAPE clause; SQLite treats a
-                // backslash as an ordinary character), while instr()
-                // is a plain literal substring test on both.
-                $term = mb_strtolower((string) $request->input('q'));
-
-                return $query->where(function (Builder $query) use ($term) {
-                    $query->whereRaw('instr(lower(name), ?) > 0', [$term])
-                        ->orWhereRaw('instr(lower(description), ?) > 0', [$term]);
-                });
-            })
             ->when($request->filled('category'), function (Builder $query) use ($request) {
                 $query->where('category', $request->input('category'));
-            });
+            })
+            ->orderBy('name')
+            ->get();
 
-        /** @var LengthAwarePaginator $skills */
-        $skills = $query->paginate(25)->withQueryString();
+        if ($request->filled('q')) {
+            // The substring test happens in PHP with mb_stripos: a
+            // literal match (no LIKE wildcards to escape) whose
+            // case-folding reaches beyond ASCII — "école" finds
+            // "École". SQL folding cannot do this portably: lower()
+            // is ASCII-only on SQLite, and LIKE wildcards cannot be
+            // escaped across the SQLite test and MySQL dev
+            // connections at all. A skill library is small enough
+            // to fold in memory.
+            $term = (string) $request->input('q');
+            $skills = $skills
+                ->filter(fn (Skill $skill) => mb_stripos($skill->name."\n".(string) $skill->description, $term) !== false)
+                ->values();
+        }
 
-        /** @var Collection $categories */
         $categories = Skill::whereNotNull('category')
             ->distinct()
             ->orderBy('category')
             ->pluck('category');
+
+        // Manual pagination: the filtered set lives in memory, not in
+        // a query builder.
+        $page = max(1, $request->integer('page', 1));
+        $perPage = 25;
+        $skills = new LengthAwarePaginator(
+            $skills->forPage($page, $perPage)->values(),
+            count($skills),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()],
+        );
 
         return view('skills.index', [
             'skills' => $skills,

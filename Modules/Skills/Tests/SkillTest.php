@@ -143,6 +143,26 @@ class SkillTest extends TestCase
             ->assertDontSee('Tax Planning');
     }
 
+    public function test_library_search_folds_case_beyond_ascii(): void
+    {
+        $this->skill(['name' => 'École de Danse']);
+        $this->skill(['name' => 'BAS Preparation']);
+
+        // the reviewer's case: SQL lower() leaves É uppercased on
+        // SQLite, so an instr() search cannot fold it — mb_stripos
+        // folds both sides and finds it
+        $this->actingAs($this->admin())
+            ->get(route('skills.index', ['q' => 'école de danse']))
+            ->assertOk()
+            ->assertSee('École de Danse')
+            ->assertDontSee('BAS Preparation');
+
+        $this->actingAs($this->admin())
+            ->get(route('skills.index', ['q' => 'ÉCOLE']))
+            ->assertOk()
+            ->assertSee('École de Danse');
+    }
+
     public function test_fixed_fee_services_do_not_get_an_hourly_suffix(): void
     {
         $hourly = Service::create(['name' => 'Payroll Service', 'hourly_rate' => 150]);
