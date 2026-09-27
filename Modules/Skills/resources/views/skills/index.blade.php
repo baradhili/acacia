@@ -50,7 +50,7 @@
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Skill</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payees</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Staff</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Services</th>
                         <th class="px-4 py-3"></th>
                     </tr>

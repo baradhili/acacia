@@ -11,7 +11,7 @@
             </p>
         </div>
         <a href="{{ route('skills.employees.index') }}"
-            class="px-3 py-2 border border-gray-300 rounded-lg text-gray-700 text-sm hover:bg-gray-50">All payees</a>
+            class="px-3 py-2 border border-gray-300 rounded-lg text-gray-700 text-sm hover:bg-gray-50">All staff</a>
     </div>
 
     @if ($errors->any())
@@ -26,7 +26,7 @@
 
     @if ($canManage)
         <p class="mb-4 text-sm text-gray-500">
-            Tick the skills this payee holds and pick how practised they are at each —
+            Tick the skills this staff member holds and pick how practised they are at each —
             <span class="font-medium text-gray-700">Beginner, Intermediate, Advanced or Expert</span>
             (the default is Beginner). Unticking removes the link on save.
         </p>
@@ -93,7 +93,7 @@
                         <span class="text-gray-600">{{ $proficiencies[$current[$skill->id]] ?? 'Beginner' }}</span>
                     </li>
                 @empty
-                    <li class="px-4 py-8 text-center text-gray-500">No skills recorded for this payee yet.</li>
+                    <li class="px-4 py-8 text-center text-gray-500">No skills recorded for this staff member yet.</li>
                 @endforelse
             </ul>
         </div>

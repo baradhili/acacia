@@ -13,7 +13,7 @@
     <div class="flex items-center justify-between mb-3">
         <h2 class="text-base font-semibold text-gray-800">Resumes</h2>
         <a href="{{ route('resumes.index', ['employee' => $employee->id]) }}"
-            class="text-indigo-600 hover:text-indigo-900 text-sm font-medium">All resumes for this payee</a>
+            class="text-indigo-600 hover:text-indigo-900 text-sm font-medium">All resumes for this staff member</a>
     </div>
     @if ($resumes->isNotEmpty())
         <ul class="divide-y divide-gray-200 text-sm">
@@ -28,6 +28,6 @@
             @endforeach
         </ul>
     @else
-        <p class="text-sm text-gray-500">No resumes uploaded for this payee yet.</p>
+        <p class="text-sm text-gray-500">No resumes uploaded for this staff member yet.</p>
     @endif
 </div>

@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', $employee->name.' — payee')
+@section('title', $employee->name.' — staff')
 @section('content')
 
     <div class="mb-6 flex justify-between items-start">
@@ -18,9 +18,9 @@
         </div>
         <div class="flex gap-2">
             <a href="{{ route('payroll.employees.index') }}"
-                class="px-3 py-2 border border-gray-300 rounded-lg text-gray-700 text-sm hover:bg-gray-50">All payees</a>
+                class="px-3 py-2 border border-gray-300 rounded-lg text-gray-700 text-sm hover:bg-gray-50">All staff</a>
             <a href="{{ route('payroll.employees.edit', $employee) }}"
-                class="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">Edit payee</a>
+                class="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">Edit staff member</a>
         </div>
     </div>
 

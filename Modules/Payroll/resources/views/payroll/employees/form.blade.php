@@ -1,9 +1,9 @@
 @extends('layouts.app')
-@section('title', $employee->exists ? 'Edit payee' : 'Add payee')
+@section('title', $employee->exists ? 'Edit staff member' : 'Add staff member')
 @section('content')
 
     <div class="mb-6">
-        <h1 class="text-2xl font-bold text-gray-800">{{ $employee->exists ? 'Edit payee' : 'Add payee' }}</h1>
+        <h1 class="text-2xl font-bold text-gray-800">{{ $employee->exists ? 'Edit staff member' : 'Add staff member' }}</h1>
         <p class="text-sm text-gray-500 mt-1">
             Contractors (typically personal-services workers) withhold nothing and draw no super; employees
             withhold under ATO scale {{ $employee->taxScale() }} ({{ $employee->tax_free_threshold ? 'claiming' : 'not claiming' }}
@@ -123,7 +123,7 @@
                     <input type="hidden" name="is_closely_linked" value="0">
                     <input type="checkbox" name="is_closely_linked" value="1"
                         {{ old('is_closely_linked', $employee->is_closely_linked) ? 'checked' : '' }}>
-                    Closely linked payee
+                    Closely linked staff member
                 </label>
                 <label class="flex items-center gap-2 text-sm text-gray-700" title="Paid for an individual's personal exertion — PSI rules apply">
                     <input type="hidden" name="is_personal_services" value="0">
@@ -150,7 +150,7 @@
             <a href="{{ route('payroll.employees.index') }}"
                 class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 text-sm hover:bg-gray-50">Cancel</a>
             <button class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">
-                {{ $employee->exists ? 'Save' : 'Add' }} payee
+                {{ $employee->exists ? 'Save' : 'Add' }} staff member
             </button>
         </div>
     </form>

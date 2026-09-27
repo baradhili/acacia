@@ -5,7 +5,7 @@
     <div class="mb-6">
         <h1 class="text-2xl font-bold text-gray-800">Employee skills</h1>
         <p class="text-sm text-gray-500 mt-1">
-            Every payroll payee and the skills they hold, at a proficiency level.
+            Every staff member on payroll and the skills they hold, at a proficiency level.
         </p>
     </div>
 
@@ -20,7 +20,7 @@
             <table class="min-w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payee</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Staff</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Skills held</th>
                         <th class="px-4 py-3"></th>
@@ -47,7 +47,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="4" class="px-4 py-8 text-center text-gray-500">No payroll payees yet.</td>
+                            <td colspan="4" class="px-4 py-8 text-center text-gray-500">No staff on payroll yet.</td>
                         </tr>
                     @endforelse
                 </tbody>

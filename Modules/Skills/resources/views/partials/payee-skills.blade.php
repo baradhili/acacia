@@ -27,6 +27,6 @@
             @endforeach
         </div>
     @else
-        <p class="text-sm text-gray-500">No skills recorded for this payee yet.</p>
+        <p class="text-sm text-gray-500">No skills recorded for this staff member yet.</p>
     @endif
 </div>

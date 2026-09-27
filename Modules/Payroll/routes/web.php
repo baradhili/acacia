@@ -31,7 +31,7 @@ Route::middleware(['web', 'auth', 'role:admin|accountant'])->group(function () {
     // The parameter must be 'employee': implicit binding matches the
     // controller signature ($employee), and the auto-generated
     // 'payroll_employee' silently skips it — edit/update/destroy then
-    // receive an empty model and the form falls back to "Add payee".
+    // receive an empty model and the form falls back to "Add staff member".
     Route::resource('payroll-employees', PayrollEmployeeController::class)
         ->names('payroll.employees')
         ->parameters(['payroll-employees' => 'employee']);

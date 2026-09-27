@@ -11,7 +11,7 @@
             </p>
         </div>
         <a href="{{ route('payroll.employees.create') }}"
-            class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm">Add payee</a>
+            class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm">Add staff member</a>
     </div>
 
     @if (session('success'))
@@ -26,7 +26,7 @@
             <table class="min-w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payee</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Staff</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Login</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Basis</th>
@@ -105,7 +105,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="px-4 py-8 text-center text-gray-500">No payees yet.</td>
+                            <td colspan="8" class="px-4 py-8 text-center text-gray-500">No staff yet.</td>
                         </tr>
                     @endforelse
                 </tbody>

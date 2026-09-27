@@ -277,12 +277,12 @@ class PayrollTest extends TestCase
         $jane = $this->employee();
 
         // If implicit binding skips (controller variable not matching
-        // the route parameter), edit renders the blank "Add payee"
+        // the route parameter), edit renders the blank "Add staff member"
         // form instead of Jane's record.
         $this->actingAs($this->admin())
             ->get(route('payroll.employees.edit', $jane))
             ->assertOk()
-            ->assertSee('Edit payee')
+            ->assertSee('Edit staff member')
             ->assertSee($jane->name)
             ->assertSee('value="'.$jane->tfn.'"', false)
             // the form must spoof PUT: a bare POST hits a PUT-only
@@ -347,7 +347,7 @@ class PayrollTest extends TestCase
         $this->assertNull(Employee::where('user_id', $admin->id)->first());
 
         $this->artisan('payroll:sync-users')
-            ->expectsOutputToContain("Created payee for {$admin->name}")
+            ->expectsOutputToContain("Created staff record for {$admin->name}")
             ->assertSuccessful();
 
         $payee = Employee::where('user_id', $admin->id)->first();

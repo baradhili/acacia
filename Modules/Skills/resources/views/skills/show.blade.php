@@ -14,7 +14,7 @@
             <h1 class="text-2xl font-bold text-gray-800">{{ $skill->name }}</h1>
             <p class="text-sm text-gray-500 mt-1">
                 @if ($skill->category)<span class="inline-block px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 font-medium text-xs">{{ $skill->category }}</span> · @endif
-                {{ $skill->employees->count() }} {{ Str::plural('payee', $skill->employees->count()) }} ·
+                {{ $skill->employees->count() }} {{ Str::plural('staff member', $skill->employees->count()) }} ·
                 {{ $skill->services->count() }} {{ Str::plural('service', $skill->services->count()) }}
             </p>
         </div>
@@ -40,7 +40,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div class="bg-white rounded-lg shadow overflow-hidden">
             <div class="px-4 py-3 bg-gray-50 text-xs font-medium text-gray-500 uppercase border-b border-gray-200">
-                Payees with this skill
+                Staff with this skill
             </div>
             <ul class="divide-y divide-gray-200 text-sm">
                 @forelse ($skill->employees as $employee)
@@ -53,7 +53,7 @@
                         </span>
                     </li>
                 @empty
-                    <li class="px-4 py-8 text-center text-gray-500">No payees hold this skill yet.</li>
+                    <li class="px-4 py-8 text-center text-gray-500">No staff hold this skill yet.</li>
                 @endforelse
             </ul>
         </div>
