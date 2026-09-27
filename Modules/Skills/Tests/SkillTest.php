@@ -223,6 +223,32 @@ class SkillTest extends TestCase
             ->assertSee('super guarantee default');
     }
 
+    public function test_contractors_show_no_payg_withholding_on_the_payee_views(): void
+    {
+        $contractor = $this->employee(['employment_type' => Employee::TYPE_CONTRACTOR]);
+
+        // no scale, no threshold claim, no 47% no-TFN threat: none
+        // of those withholding rules apply to a contractor
+        $this->actingAs($this->admin())
+            ->get(route('payroll.employees.show', $contractor))
+            ->assertOk()
+            ->assertSee('No PAYG withholding')
+            ->assertDontSee('Scale')
+            ->assertDontSee('47%');
+
+        $this->actingAs($this->admin())
+            ->get(route('payroll.employees.index'))
+            ->assertOk()
+            ->assertSee('no PAYG withholding');
+
+        // employees keep the scale display
+        $employee = $this->employee(['email' => 'payg-payee@example.com']);
+        $this->actingAs($this->admin())
+            ->get(route('payroll.employees.show', $employee))
+            ->assertOk()
+            ->assertSee('Scale '.$employee->taxScale());
+    }
+
     public function test_fixed_fee_services_do_not_get_an_hourly_suffix(): void
     {
         $hourly = Service::create(['name' => 'Payroll Service', 'hourly_rate' => 150]);

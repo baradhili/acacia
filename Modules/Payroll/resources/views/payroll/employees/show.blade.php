@@ -43,13 +43,24 @@
             </div>
             <div>
                 <dt class="text-xs font-medium text-gray-500 uppercase">TFN</dt>
-                <dd class="mt-1 text-gray-900">{{ $employee->tfn ?: 'NO TFN — 47% withholding' }}</dd>
+                <dd class="mt-1 text-gray-900">
+                    {{-- the 47% no-TFN rate is a withholding rule: it only threatens payees PAYG applies to --}}
+                    @if ($employee->withholdsPayg())
+                        {{ $employee->tfn ?: 'NO TFN — 47% withholding' }}
+                    @else
+                        {{ $employee->tfn ?: 'not on file' }}
+                    @endif
+                </dd>
             </div>
             <div>
                 <dt class="text-xs font-medium text-gray-500 uppercase">Tax treatment</dt>
                 <dd class="mt-1 text-gray-900">
-                    Scale {{ $employee->taxScale() }} ·
-                    {{ $employee->tax_free_threshold ? 'claiming' : 'not claiming' }} the tax-free threshold
+                    @if ($employee->withholdsPayg())
+                        Scale {{ $employee->taxScale() }} ·
+                        {{ $employee->tax_free_threshold ? 'claiming' : 'not claiming' }} the tax-free threshold
+                    @else
+                        No PAYG withholding — the contractor handles their own tax
+                    @endif
                 </dd>
             </div>
             <div>

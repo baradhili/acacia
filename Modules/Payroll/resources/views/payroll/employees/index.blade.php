@@ -62,8 +62,13 @@
                                 @endif
                             </td>
                             <td class="px-4 py-3 text-gray-600">
-                                {{ $employee->tfn ? 'TFN on file' : 'NO TFN — 47%' }} ·
-                                scale {{ $employee->taxScale() }}
+                                @if ($employee->withholdsPayg())
+                                    {{ $employee->tfn ? 'TFN on file' : 'NO TFN — 47%' }} ·
+                                    scale {{ $employee->taxScale() }}
+                                @else
+                                    {{ $employee->tfn ? 'TFN on file' : 'no TFN' }} ·
+                                    no PAYG withholding
+                                @endif
                             </td>
                             <td class="px-4 py-3">
                                 @if($employee->is_closely_linked)
