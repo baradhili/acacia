@@ -319,6 +319,11 @@ class SkillTest extends TestCase
                     UploadedFile::fake()->createWithContent('bad.json', 'not json at all'),
                     UploadedFile::fake()->createWithContent('no-name.json', json_encode(['id' => 'https://example.org/x'])),
                     $this->rsdFile(['skillName' => 'Taken Name']),
+                    // source_id is a varchar(255): over-long values are
+                    // skipped per file, not a database error
+                    $this->rsdFile(['id' => str_repeat('https://example.org/rsd/', 15)]),
+                    // and a statement over the TEXT column's 64KB
+                    $this->rsdFile(['skillStatement' => str_repeat('x', 65001)]),
                 ],
             ])
             ->assertRedirect(route('skills.index'))
@@ -328,6 +333,8 @@ class SkillTest extends TestCase
         $this->assertStringContainsString('bad.json: not valid JSON', $error);
         $this->assertStringContainsString('no-name.json: missing skillName', $error);
         $this->assertStringContainsString('already used by a different skill', $error);
+        $this->assertStringContainsString('RSD id longer than 255 characters', $error);
+        $this->assertStringContainsString('skillStatement longer than the storage limit', $error);
 
         // only the hand-entered skill exists: every file was skipped
         $this->assertSame(1, Skill::count());

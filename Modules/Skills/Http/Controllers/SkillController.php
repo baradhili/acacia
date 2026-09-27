@@ -4,6 +4,7 @@ namespace Modules\Skills\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -238,16 +239,30 @@ class SkillController extends Controller
             return 'category is not a string of at most 255 characters';
         }
 
+        // source_id is a varchar(255) and strict MySQL rejects longer
+        // values outright — check here, where it becomes a per-file
+        // skip, instead of a database error aborting the whole batch
+        $sourceId = is_string($data['id'] ?? null) && $data['id'] !== '' ? $data['id'] : null;
+        if ($sourceId !== null && mb_strlen($sourceId) > 255) {
+            return 'RSD id longer than 255 characters';
+        }
+
+        // the description column is TEXT: 64KB. Measured in bytes,
+        // since that is the storage limit, with a little margin
+        $statement = is_string($data['skillStatement'] ?? null) ? $data['skillStatement'] : null;
+        if ($statement !== null && strlen($statement) > 65000) {
+            return 'skillStatement longer than the storage limit';
+        }
+
         // name/description/category come from the descriptor; the
         // descriptor itself is kept whole, and its id (an IRI) makes
         // re-imports update rather than duplicate
         $attributes = [
             'name' => trim($name),
-            'description' => is_string($data['skillStatement'] ?? null) ? $data['skillStatement'] : null,
+            'description' => $statement,
             'category' => is_string($category) && $category !== '' ? $category : null,
             'rsd' => $data,
         ];
-        $sourceId = is_string($data['id'] ?? null) && $data['id'] !== '' ? $data['id'] : null;
 
         try {
             if ($sourceId !== null) {
@@ -262,6 +277,10 @@ class SkillController extends Controller
             return null;
         } catch (UniqueConstraintViolationException) {
             return 'its name or RSD id is already used by a different skill';
+        } catch (QueryException) {
+            // last-resort net: anything else the storage layer
+            // rejects fails this file, not the whole upload
+            return 'it could not be stored';
         }
     }
 
