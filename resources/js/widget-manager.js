@@ -12,6 +12,7 @@ document.addEventListener('alpine:init', () => {
         sortable: null,
         isEditing: false,
         saving: false,
+        loading: false,
         saveError: false,
         loadError: false,
         storeLoaded: false,
@@ -36,17 +37,29 @@ document.addEventListener('alpine:init', () => {
                 return;
             }
 
-            this.saveError = false;
-            this.loadError = false;
-            // Entering edit mode without the removed widgets' cards
-            // would leave their Add buttons inert — abort with a
-            // visible error; retrying re-enters this path.
-            if (!(await this.loadStore())) {
-                this.loadError = true;
+            // Entering edit mode is a load-then-open sequence; a
+            // second Customize click while the store fetch is pending
+            // must not start another one — its response would replace
+            // the store after the user already removed a card
+            // (discarding it while leaving its catalog row) and stack
+            // a second Sortable instance only the last of which gets
+            // cleaned up.
+            if (this.loading) {
                 return;
             }
-            this.isEditing = true;
-            this.enableDragDrop();
+            this.loading = true;
+            this.saveError = false;
+            this.loadError = false;
+            try {
+                if (!(await this.loadStore())) {
+                    this.loadError = true;
+                    return;
+                }
+                this.isEditing = true;
+                this.enableDragDrop();
+            } finally {
+                this.loading = false;
+            }
         },
 
         // Fetches the removed widgets' cards into #widget-store the
@@ -80,6 +93,9 @@ document.addEventListener('alpine:init', () => {
             if (!container) {
                 return;
             }
+            // A stale instance keeps its listeners around — only the
+            // field reference would be replaced, so destroy first.
+            this.disableDragDrop();
             this.sortable = Sortable.create(container, {
                 animation: 150,
                 handle: '.widget-handle',
