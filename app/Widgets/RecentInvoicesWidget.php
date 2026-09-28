@@ -6,6 +6,11 @@ use App\Models\Invoice;
 use Arrilot\Widgets\AbstractWidget;
 use Illuminate\View\View;
 
+/**
+ * The ten most recently created invoices, any status — a working
+ * queue (newest work on top), so creation time is the sort key, not
+ * issue date; the card renders the newest five.
+ */
 class RecentInvoicesWidget extends AbstractWidget
 {
     protected $config = [];

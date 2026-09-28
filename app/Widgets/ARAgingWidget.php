@@ -6,6 +6,13 @@ use App\Models\Invoice;
 use Arrilot\Widgets\AbstractWidget;
 use Carbon\Carbon;
 
+/**
+ * Outstanding invoice receivables bucketed by whole calendar days
+ * past due, over sent, partially paid and overdue invoices. The
+ * bucketing matches the aging report exactly: both dates compare
+ * start-of-day, so an invoice due earlier today stays Current
+ * instead of tipping into 1-30 on the current time-of-day.
+ */
 class ARAgingWidget extends AbstractWidget
 {
     protected $config = [];

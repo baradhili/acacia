@@ -8,6 +8,13 @@ use App\Models\Payment;
 use Arrilot\Widgets\AbstractWidget;
 use Carbon\Carbon;
 
+/**
+ * Cash-basis monthly trend over the trailing 12 whole calendar
+ * months: revenue is completed client payments and expenses are
+ * completed supplier payments — invoiced amounts never count as
+ * income here, matching how the app reports over the IFRS ledger.
+ * Averages are unweighted means of the twelve monthly buckets.
+ */
 class PnLTrendWidget extends AbstractWidget
 {
     protected $config = [];

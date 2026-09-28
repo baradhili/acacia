@@ -5,6 +5,11 @@ namespace App\Widgets;
 use App\Models\Payment;
 use Arrilot\Widgets\AbstractWidget;
 
+/**
+ * The ten most recent completed client payments by payment date;
+ * pending or failed payments never appear. The card renders the
+ * newest five.
+ */
 class RecentPaymentsWidget extends AbstractWidget
 {
     protected $config = [];

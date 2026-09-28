@@ -5,6 +5,13 @@ namespace App\Widgets;
 use App\Models\PurchaseOrder;
 use Arrilot\Widgets\AbstractWidget;
 
+/**
+ * Open and partially-used purchase orders that still have budget
+ * remaining, largest remaining first; the card renders the top five
+ * of the ten gathered. Spent, remaining and utilization come from
+ * the PO model's own computation so the widget can never disagree
+ * with the purchase-order screens.
+ */
 class OutstandingPOBudgetsWidget extends AbstractWidget
 {
     protected $config = [];
