@@ -1305,6 +1305,11 @@ class ReconciliationService
             $description = "Auto-created from Wise transaction {$bankTransaction->source_id}."
                 ." Description: {$bankTransaction->description}";
 
+            // Bank debits are stored negative while bill lines and
+            // payments are positive amounts — categorise and pay the
+            // magnitude (the same convention learnedMatchFor uses).
+            $amount = abs((float) $bankTransaction->amount);
+
             $bill = Bill::createWithUniqueNumber([
                 'supplier_id' => $supplierId,
                 'created_by' => $paidByUserId,
@@ -1319,7 +1324,7 @@ class ReconciliationService
             $bill->items()->create([
                 'description' => Str::limit($description, 240),
                 'quantity' => 1,
-                'unit_price' => $bankTransaction->amount,
+                'unit_price' => $amount,
                 'tax_rate' => 0,
                 'expense_account_id' => $expenseAccountId,
                 'sort_order' => 0,

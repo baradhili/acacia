@@ -5,6 +5,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-09-28
 
+### Fixed — legacy reconciliation tests resolved; auto-create purchases take the debit magnitude
+
+The three reconciliation test files excluded per-file in phpunit.xml
+(ReconciliationMatching, ReconciliationService, AutoCreateCashReceipt
+— 91 tests, 15 failing after the directory-wide exclusion let them
+drift) are deleted. Their still-current coverage now lives in
+Modules/Reconciliation/Tests/MatchingTolerancesAndMaintenanceTest: the
+strict matcher's reference/amount/date evidence and tolerance
+boundaries, the ignore/restore lifecycle with its history trail,
+auto-created receipts and purchases (guards, client scoping,
+paid-at-entry IFRS posting), and merchant-to-expense-account
+suggestions. Coverage of removed behaviour went with the files —
+`calculateMatchScore`/`getMatchingCandidates` now have no callers at
+all (deletion candidates, noted on todo-list). Deleting the files also
+unmasked a real defect the old positive-amount fixtures hid:
+`createPurchaseFromBankTransaction` fed a Wise debit's stored negative
+amount straight into the bill line, so the paid-at-entry path died on
+"Allocation amount must be greater than zero" — it now categorises and
+pays the magnitude, the convention the learned matcher already used.
+The per-file exclusions are gone from phpunit.xml; the full suite
+(988 tests) runs everything.
+
 ### Added — quarterly PAYG-I accrual journal
 
 The BAS settlements screen gained a PAYG instalment accrual card:
