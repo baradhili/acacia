@@ -27,6 +27,21 @@ pays the magnitude, the convention the learned matcher already used.
 The per-file exclusions are gone from phpunit.xml; the full suite
 (988 tests) runs everything.
 
+### Added — locales structure and a translation policy
+
+`lang/` lands with the framework's `en` base (auth, pagination,
+passwords, validation — editable in-repo now) and a deliberately empty
+`en_AU` override directory that takes effect via `APP_LOCALE=en_AU`,
+per-key fallback to `en` making a partial override complete by
+construction. AGENTS.md makes translator use mandatory for new or
+edited user-facing strings (`__()` / `trans_choice`; legacy strings
+are deliberately not bulk-converted, only as their screens are
+touched). The `.env.example`, the README example and the local `.env`
+align on the underscore form `en_AU` — the dash form the README once
+showed would never resolve the override directory. No behaviour
+change: the override is empty and the strings are the framework's own
+(full suite green under the new locale).
+
 ### Added — quarterly PAYG-I accrual journal
 
 The BAS settlements screen gained a PAYG instalment accrual card:
