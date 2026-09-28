@@ -209,15 +209,17 @@ class MatchingTolerancesAndMaintenanceTest extends TestCase
         $this->assertSame(BankTransaction::STATUS_PENDING, $line->fresh()->status);
     }
 
-    public function test_the_strict_pass_matches_a_fractional_amount_difference(): void
+    public function test_the_strict_pass_matches_a_one_cent_fee_difference(): void
     {
         $receipt = $this->postedPayment($this->client(), 1500.00, '2026-09-10');
 
-        // The bank line nets of a small fee: half a cent is well inside
-        // the one-cent amount tolerance.
+        // The bank line nets of a small fee. One cent is the only
+        // two-decimal difference inside the one-cent tolerance — the
+        // inclusive boundary itself — and amounts are stored decimal:2,
+        // so a sub-cent fixture would only round back to equality.
         $line = $this->bankLine([
             'reference' => $receipt->payment_number,
-            'amount' => 1499.995,
+            'amount' => 1499.99,
         ]);
 
         $this->assertNotNull($this->service->matchTransaction($line));
