@@ -18,7 +18,7 @@ use Modules\Shares\Models\DividendDistribution;
 /**
  * Per-shareholder dividend statement with the franking credit details the
  * recipient needs for their own tax return. Mirrors InvoiceMail: the PDF
- * is rendered from reports/pdf/dividend-statement, attached from tmp
+ * is rendered from dividends/statement-pdf, attached from tmp
  * storage and cleaned up after send.
  */
 class DividendStatementMail extends Mailable implements ShouldQueue
@@ -41,7 +41,7 @@ class DividendStatementMail extends Mailable implements ShouldQueue
     public function content(): Content
     {
         return new Content(
-            view: 'emails.dividend-statement',
+            view: 'dividends.statement-email',
             with: [
                 'distribution' => $this->distribution,
                 'companyName' => $this->companyName(),
@@ -52,7 +52,7 @@ class DividendStatementMail extends Mailable implements ShouldQueue
 
     public function attachments(): array
     {
-        $pdf = Pdf::loadView('reports.pdf.dividend-statement', [
+        $pdf = Pdf::loadView('dividends.statement-pdf', [
             'distribution' => $this->distribution,
             'companyName' => $this->companyName(),
             'companyAbn' => CompanyProfile::effectiveAbn($this->distribution->declaration->entity_id),
