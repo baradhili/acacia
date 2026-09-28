@@ -159,6 +159,139 @@
         </form>
     </div>
 
+    @if ($paygiEstimate ?? null)
+        @php($paygiRate = $paygiEstimate['rate'] !== null ? rtrim(rtrim(number_format($paygiEstimate['rate'], 2), '0'), '.') : null)
+        <div class="bg-white rounded-lg shadow p-6 max-w-4xl mb-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-1">PAYG instalment accrual</h2>
+            <p class="text-sm text-gray-500 mb-4">
+                The quarterly estimate journal that raises the income tax liability a PAYG instalment
+                settlement later nets: <code>Dr Income Tax Expense / Cr Income Tax Payable</code> for
+                the ATO-notified instalment rate × the quarter's instalment income (cash-basis
+                revenue through the bank — the same basis the company tax report uses, GST-exclusive).
+                No bank movement — the ATO payment is recorded as a payg instalment settlement below.
+            </p>
+
+            @if ($paygiRate === null)
+                <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                    <strong>Not configured:</strong> the instalment rate is unset — set
+                    <code>BAS_INSTALLMENT_RATE</code> (a percent, e.g. <code>25</code>) to enable
+                    accruals. The quarter's instalment income is still computed below for reference.
+                </div>
+            @endif
+
+            @if ($quarterEnds !== [])
+                <form method="GET" class="flex items-end gap-3 mb-4">
+                    <input type="hidden" name="as_at" value="{{ $positionAsAt }}">
+                    <div>
+                        <label for="paygi_quarter" class="block text-sm font-medium text-gray-700 mb-1">Quarter</label>
+                        <select name="paygi_quarter" id="paygi_quarter"
+                            class="mt-1 block rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            @foreach (array_reverse($quarterEnds) as $quarter)
+                                <option value="{{ $quarter['end']->toDateString() }}"
+                                    {{ $quarter['end']->toDateString() === $paygiEstimate['quarter']['end']->toDateString() ? 'selected' : '' }}>
+                                    {{ $quarter['label'] }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <button type="submit"
+                        class="px-4 py-2 bg-slate-600 text-white text-sm font-medium rounded-md hover:bg-slate-700 shrink-0">
+                        Recompute
+                    </button>
+                </form>
+            @endif
+
+            <table class="w-full text-sm border-y border-gray-100 mb-4">
+                <tbody class="divide-y divide-gray-100">
+                    <tr>
+                        <td class="py-2 pr-4 font-medium text-gray-700">Instalment income ({{ $paygiEstimate['quarter']['start']->format('d M Y') }} – {{ $paygiEstimate['quarter']['end']->format('d M Y') }})</td>
+                        <td class="py-2 text-right">${{ number_format($paygiEstimate['income'], 2) }}</td>
+                    </tr>
+                    <tr>
+                        <td class="py-2 pr-4 font-medium text-gray-700">Instalment rate</td>
+                        <td class="py-2 text-right">{{ $paygiRate !== null ? $paygiRate.'%' : '— not configured' }}</td>
+                    </tr>
+                    <tr>
+                        <td class="py-2 pr-4 font-medium text-gray-700">Accrual (Dr income tax expense / Cr income tax payable)</td>
+                        <td class="py-2 text-right font-bold">{{ $paygiEstimate['amount'] !== null ? '$'.number_format($paygiEstimate['amount'], 2) : '—' }}</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            @if ($paygiEstimate['accrued'])
+                <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                    <strong>Already accrued:</strong> a live accrual covers this quarter (dated
+                    {{ $paygiEstimate['accrual']->period_end->format('d M Y') }}) — reverse it below
+                    before accruing again, e.g. after backdated revenue.
+                </div>
+            @elseif ($paygiRate !== null)
+                <form method="POST" action="{{ route('paygi-accruals.store') }}" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    @csrf
+                    <input type="hidden" name="period_end" value="{{ $paygiEstimate['quarter']['end']->toDateString() }}">
+
+                    <div class="md:col-span-2">
+                        <label for="paygi_notes" class="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
+                        <input type="text" name="notes" id="paygi_notes" value="{{ old('notes') }}" maxlength="255"
+                            placeholder="e.g. ATO activity statement T7 rate"
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        @error('period_end') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+                    </div>
+
+                    <div class="flex items-end">
+                        <button type="submit"
+                            class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700">
+                            Record Accrual
+                        </button>
+                    </div>
+                </form>
+            @endif
+        </div>
+    @endif
+
+    @if (($paygiAccruals ?? collect())->isNotEmpty())
+        <div class="bg-white rounded-lg shadow p-6 max-w-4xl mb-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">PAYG instalment accruals</h2>
+
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                        <th class="py-2 pr-4">Quarter</th>
+                        <th class="py-2 pr-4">Accrued on</th>
+                        <th class="py-2 pr-4 text-right">Instalment income</th>
+                        <th class="py-2 pr-4 text-right">Rate</th>
+                        <th class="py-2 pr-4 text-right">Amount</th>
+                        <th class="py-2 pr-4">Notes</th>
+                        <th class="py-2"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    @foreach ($paygiAccruals as $accrual)
+                        <tr class="{{ $accrual->isReversed() ? 'text-gray-400 line-through' : '' }}">
+                            <td class="py-2 pr-4 font-medium text-gray-700">{{ $accrual->label() }}</td>
+                            <td class="py-2 pr-4">{{ $accrual->created_at->format('d M Y') }}</td>
+                            <td class="py-2 pr-4 text-right">${{ number_format($accrual->instalment_income, 2) }}</td>
+                            <td class="py-2 pr-4 text-right">{{ rtrim(rtrim(number_format($accrual->rate, 2), '0'), '.') }}%</td>
+                            <td class="py-2 pr-4 text-right font-medium">${{ number_format($accrual->amount, 2) }}</td>
+                            <td class="py-2 pr-4 text-gray-500">{{ $accrual->notes }}</td>
+                            <td class="py-2 text-right">
+                                @if ($accrual->isReversed())
+                                    <span class="text-xs text-gray-400">reversed {{ $accrual->reversed_at->format('d M Y') }}</span>
+                                @else
+                                    <form method="POST" action="{{ route('paygi-accruals.reverse', $accrual) }}"
+                                        onsubmit="return confirm('Reverse this accrual? The income tax balances will be restored and the quarter can be accrued again.')">
+                                        @csrf
+                                        <button type="submit"
+                                            class="text-xs text-red-600 hover:text-red-800 underline">Reverse</button>
+                                    </form>
+                                @endif
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    @endif
+
     <div class="bg-white rounded-lg shadow p-6 max-w-4xl">
         <h2 class="text-lg font-semibold text-gray-800 mb-4">Past settlements</h2>
 

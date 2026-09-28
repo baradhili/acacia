@@ -7,8 +7,6 @@ here once their changelog entry lands. Ordered by priority.
 
 - [ ] Bring the remaining resource_mgr concepts into acacia — services (Sep 2026) and the skills library (Sep 2026, Modules/Skills) are across; the allocations/resourcing concepts are what's left. Review https://github.com/baradhili/resource_mgr for those.
 
-- [ ] Quarterly PAYG-I accrual journal — Dr tax expense / Cr 2240 computed from the bas.installment_rate config stub (dead config until this lands; left open by the Sep 2026 PAYG settlement work).
-
 - [ ] Ability to have multiple un-related company entities with separate everything against same user - aka same user can be admin of more than one org.
 
 - [ ] Modules per company (builds on the multi-entity item above).
@@ -24,8 +22,11 @@ here once their changelog entry lands. Ordered by priority.
 - [ ] CRM follow-ups from the Sep 2026 module: email/calendar integrations, per-owner targets.
 
 - [ ] Static security testing: look at `laravel-security/pentest-scanner` or `baspa/larascan`
-- [ ] Finish the modularisation arc: extract Estimates into a module (BAS/tax landed since as Modules/Taxation), and push the verified payroll subtree split (split/erp-payroll branch) to its own repo.
+
+- [ ] Finish the modularisation arc: Create "Proposals"  module and extract Estimates into it. Add todo to flesh out proposal management.[GitHub - ICodingStack/ProposalForge: ProposalForge — Elegant &amp; Intelligent Proposal Generator Create beautiful, professional proposals and quotes in minutes with smart builder, pricing packages, real-time preview, and one-click PDF export. 100% free • Open source • Works offline · GitHub](https://github.com/ICodingStack/ProposalForge) or  [GitHub - Old-G/propsly · GitHub](https://github.com/Old-G/propsly)
 
 - [ ] https://docs.markwhen.com/ might be good to integrate into projects section - but only once we have a client module and a real project module
 
 - [ ] active security testing harness - salvatorecervone/laravel-pentest if they upgrade to 13
+
+- [ ] Add locales and update Agents for manadatory translation use

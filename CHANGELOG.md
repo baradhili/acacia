@@ -5,6 +5,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-09-28
 
+### Added — quarterly PAYG-I accrual journal
+
+The BAS settlements screen gained a PAYG instalment accrual card:
+record the quarter's estimate journal — Dr income tax expense (8400) /
+Cr income tax payable (2240) — computed as the quarter's instalment
+income × the ATO-notified instalment rate, finally putting the dead
+`bas.installment_rate` config stub (BAS_INSTALLMENT_RATE) to work;
+while the rate is unset the card shows a configuration hint and the
+accrual refuses. Instalment income is the quarter's cash-basis
+assessable income on the company tax report's Item 6 basis —
+revenue-account ledger legs from bank-settled transactions, netted
+credits-minus-debits so the GST back-out legs net out. The credit
+lands on 2240, which the payg_instalment BAS settlement then nets, so
+accrue → settle is the full quarterly workflow the September PAYG
+settlement work left open. Accruals snapshot the income and rate they
+were computed from (the rate normalized to the snapshot's four
+decimals so it always explains the posted amount), refuse a duplicate
+for a live quarter — checked inside the posting transaction behind an
+entity row lock, so concurrent requests cannot double-post (reverse
+and re-accrue after backdated revenue instead) — respect the
+locked-period/closed-year guards, and reverse with a mirrored journal
+dated the quarter end like settlements, but never while a settlement
+still covers the accrual (reverse the settlement first, so the ATO
+payment is not stranded behind a fictitious overpayment).
+
 ### Changed — reporting split: ReportController decomposed, AU statutory reporting extracted to Modules/Taxation
 
 The 2098-line report god controller is broken along its four domains —

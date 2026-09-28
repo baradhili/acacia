@@ -88,6 +88,14 @@ php artisan module:migrate Resumes                # run one module's migrations
 
 ## Docs to keep updated
 
+- Docblocks travel with the code: a behaviour change updates the
+  class/method docblock in the same commit, and touched code that lacks
+  one gains it (services, models and controllers here all carry
+  docblocks — write the invariant or rationale the code cannot show,
+  never a line-by-line narration). A stale docblock is worse than none:
+  the Sep 2026 PAYG-I reviews caught one claiming GST back-out legs
+  "never post to revenue" directly above the calculation that nets
+  exactly those legs, and guards whose docblocks no longer listed them.
 - `CHANGELOG.md` in the same branch that lands a user-visible change
   (feature, behavior change, notable fix, new module) — not batched for
   later; the September 2026 catch-up had to reconstruct three weeks of

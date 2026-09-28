@@ -129,6 +129,12 @@ return [
 
     'bas' => [
         'reporting_frequency' => env('BAS_REPORTING_FREQUENCY', 'quarterly'),
+
+        // ATO-notified PAYG instalment rate (a percent of quarterly
+        // instalment income, e.g. 25) driving the quarterly PAYG-I
+        // accrual journal — Dr income tax expense / Cr income tax
+        // payable. Null until the ATO notifies a rate; the accrual
+        // refuses while it is unset.
         'installment_rate' => env('BAS_INSTALLMENT_RATE', null),
 
         // Operating bank account (seeded code 320) that settlement
@@ -140,6 +146,10 @@ return [
         // overpayment refunded by the ATO).
         'payg_account_code' => env('BAS_PAYG_ACCOUNT_CODE', 2210),
         'income_tax_account_code' => env('BAS_INCOME_TAX_ACCOUNT_CODE', 2240),
+
+        // Income tax expense account (seeded code 8400) the quarterly
+        // PAYG-I accrual debits against 2240.
+        'tax_expense_account_code' => env('BAS_TAX_EXPENSE_ACCOUNT_CODE', 8400),
     ],
 
     /*

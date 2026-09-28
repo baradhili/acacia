@@ -5,10 +5,13 @@ namespace Modules\Taxation\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Services\IfrsPosting;
 use Carbon\Carbon;
+use Carbon\Exceptions\InvalidFormatException;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Modules\Taxation\Models\BasSettlement;
+use Modules\Taxation\Models\PaygInstalmentAccrual;
 use Modules\Taxation\Services\BasSettlementService;
+use Modules\Taxation\Services\PaygInstalmentService;
 
 /**
  * BAS settlements — recording the ATO payment (or refund) that nets
@@ -34,6 +37,21 @@ class BasSettlementController extends Controller
         // filter and the settle form's default can never disagree.
         $effectiveAsAt = $asAt ?? ($quarterEnds !== [] ? last($quarterEnds)['end'] : now());
 
+        // The PAYG-I accrual card's quarter: separately pickable (the
+        // accrual covers one exact quarter), defaulting to the same
+        // latest completed quarter end — and falling back to it when the
+        // requested date is not a BAS quarter end. Hidden before any
+        // quarter has completed — there is nothing to accrue yet.
+        $paygi = app(PaygInstalmentService::class);
+        try {
+            $paygiEnd = $request->get('paygi_quarter') ? Carbon::parse($request->get('paygi_quarter')) : null;
+        } catch (InvalidFormatException) {
+            $paygiEnd = null; // malformed query value — same as absent
+        }
+        if ($paygiEnd === null || $paygi->quarterFor($entity, $paygiEnd) === null) {
+            $paygiEnd = $quarterEnds !== [] ? last($quarterEnds)['end'] : null;
+        }
+
         return view('taxation.settlements', [
             'positions' => $this->service->positions($effectiveAsAt),
             'priorGstCarry' => $this->service->priorYearsCarry($effectiveAsAt),
@@ -42,6 +60,10 @@ class BasSettlementController extends Controller
             'defaultAsAt' => $effectiveAsAt->toDateString(),
             'settlements' => BasSettlement::where('entity_id', $entity->id)
                 ->orderByDesc('as_at')
+                ->get(),
+            'paygiEstimate' => $paygiEnd ? $paygi->estimate($entity, $paygiEnd) : null,
+            'paygiAccruals' => PaygInstalmentAccrual::where('entity_id', $entity->id)
+                ->orderByDesc('period_end')
                 ->get(),
         ]);
     }
