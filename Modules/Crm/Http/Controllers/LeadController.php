@@ -54,7 +54,11 @@ class LeadController extends Controller
 
     public function create()
     {
+        // An empty model: the create/edit form is shared and reads
+        // $lead attributes throughout — null attributes are fine, a
+        // missing model 500s the screen.
         return view('crm.leads.create', [
+            'lead' => new Lead,
             'owners' => User::orderBy('name')->pluck('name', 'id'),
         ]);
     }
