@@ -13,7 +13,7 @@ here once their changelog entry lands. Ordered by priority.
 
 - [ ] cucumber tests via behat — plan reviewed and refreshed 2026-09-28: .zcode/plans/behat-migration-plan.md (scope renewal with maintainer is the first step; suite has grown to 55 feature files + the Modules suite since the original approval).
 
-- [ ] Remove ReconciliationService dead code: `calculateMatchScore` and `getMatchingCandidates` lost their last callers when the legacy reconciliation tests were deleted (Sep 2026) — the new matcher replaced them with the candidates screen and movement-based matching. Also decide whether the auto-create receipt/purchase service methods (`autoCreateCashReceipts`/`autoCreatePurchases`/their single-line variants) should regain UI routes or be retired — currently nothing in the app calls them.
+- [ ] Decide whether the reconciliation auto-create service methods (`autoCreateCashReceipts`/`autoCreatePurchases`/their single-line variants) should regain UI routes or be retired — currently nothing in the app calls them (their dead matcher cousins `calculateMatchScore`/`getMatchingCandidates` were deleted Sep 2026 once the legacy tests went).
 
 - [ ] Flesh out dashboard layout management - allow user to move widgets, add and remove. Resize as an option.
 

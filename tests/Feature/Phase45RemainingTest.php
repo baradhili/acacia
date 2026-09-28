@@ -147,17 +147,6 @@ class Phase45RemainingTest extends TestCase
         $this->assertNull($result);
     }
 
-    public function test_reconciliation_service_has_required_methods(): void
-    {
-        $service = new ReconciliationService;
-
-        $this->assertTrue(method_exists($service, 'calculateMatchScore'));
-        $this->assertTrue(method_exists($service, 'getMatchingCandidates'));
-        $this->assertTrue(method_exists($service, 'autoMatchAll'));
-        $this->assertTrue(method_exists($service, 'manualMatch'));
-        $this->assertTrue(method_exists($service, 'matchTransaction'));
-    }
-
     public function test_reconciliation_service_tolerances_are_accessible(): void
     {
         $service = new ReconciliationService;

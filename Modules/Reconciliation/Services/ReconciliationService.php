@@ -946,58 +946,6 @@ class ReconciliationService
     }
 
     /**
-     * Get matching candidates for a Wise transaction
-     */
-    public function getMatchingCandidates(BankTransaction $wiseTransaction): Collection
-    {
-        $amount = $wiseTransaction->amount;
-        $dateFrom = $wiseTransaction->transaction_date->copy()
-            ->subDays(self::DATE_TOLERANCE_DAYS);
-        $dateTo = $wiseTransaction->transaction_date->copy()
-            ->addDays(self::DATE_TOLERANCE_DAYS);
-
-        return Ledger::query()
-            ->whereBetween('amount', [
-                $amount - self::AMOUNT_TOLERANCE,
-                $amount + self::AMOUNT_TOLERANCE,
-            ])
-            ->whereBetween('date', [$dateFrom, $dateTo])
-            ->with('account')
-            ->get();
-    }
-
-    /**
-     * Calculate match score between Wise transaction and ledger
-     */
-    public function calculateMatchScore(BankTransaction $wiseTransaction, Ledger $ledger): float
-    {
-        $score = 0;
-
-        // Reference match (40% weight)
-        if ($this->referencesMatch($wiseTransaction->reference, $ledger->reference)) {
-            $score += 40;
-        }
-
-        // Amount match (30% weight)
-        $amountDiff = abs($wiseTransaction->amount - abs($ledger->amount));
-        if ($amountDiff < 0.01) {
-            $score += 30;
-        } elseif ($amountDiff < 1.00) {
-            $score += 15;
-        }
-
-        // Date match (30% weight)
-        $daysDiff = abs($wiseTransaction->transaction_date->diffInDays($ledger->date));
-        if ($daysDiff === 0) {
-            $score += 30;
-        } elseif ($daysDiff <= self::DATE_TOLERANCE_DAYS) {
-            $score += 30 - ($daysDiff * 10);
-        }
-
-        return $score;
-    }
-
-    /**
      * Check if references match
      */
     private function referencesMatch(string $wiseRef, ?string $ledgerRef): bool
