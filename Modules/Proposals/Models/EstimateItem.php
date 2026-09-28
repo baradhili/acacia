@@ -79,10 +79,12 @@ class EstimateItem extends Model
     {
         $subtotal = $this->quantity * $this->unit_price;
 
-        // Calculate discount
-        if ($this->discount_percent > 0) {
-            $this->discount_amount = $subtotal * ($this->discount_percent / 100);
-        }
+        // The discount is always derived from the percent — a zero
+        // percent zeroes the amount rather than leaving a stale value
+        // behind from an earlier calculation.
+        $this->discount_amount = $this->discount_percent > 0
+            ? $subtotal * ($this->discount_percent / 100)
+            : 0;
 
         $afterDiscount = $subtotal - $this->discount_amount;
 

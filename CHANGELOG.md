@@ -27,6 +27,17 @@ proposal-management roadmap now queued in `todo-list.md` (builder,
 pricing packages, live preview, branded PDF, client acceptance portal —
 grounded in ProposalForge and propsly).
 
+### Fixed — a zeroed line discount no longer leaves a stale amount
+
+`EstimateItem::calculateTotals()` only rewrote `discount_amount`
+inside the `discount_percent > 0` branch, so dropping a line's
+discount percent to zero kept the earlier calculation in the row and
+the tax/total rode on it. The amount is now always derived from the
+percent — zero percent zeroes it — which is the invariant the moved
+model's docblock states (caught in the extraction's review round; no
+write path ever set a flat `discount_amount`, so no stored data can
+carry the stale shape).
+
 ## [Unreleased] — 2026-09-28
 
 ### Fixed — registry swaps no longer collide positions

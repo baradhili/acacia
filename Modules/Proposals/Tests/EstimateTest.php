@@ -663,4 +663,31 @@ class EstimateTest extends TestCase
         $this->assertTrue($estimate->canTransitionTo('rejected'));
         $this->assertTrue($estimate->canTransitionTo('expired'));
     }
+
+    public function test_zeroing_a_line_discount_clears_the_stale_amount(): void
+    {
+        $estimate = Estimate::create([
+            'client_id' => $this->client->id,
+            'issue_date' => now()->toDateString(),
+            'valid_until' => now()->addDays(30)->toDateString(),
+        ]);
+
+        $item = $estimate->items()->create([
+            'description' => 'Service',
+            'quantity' => 1,
+            'unit_price' => 200,
+            'tax_rate' => 10,
+            'discount_percent' => 10,
+        ]);
+
+        $this->assertEquals(20, (float) $item->discount_amount);
+
+        // The discount is derived from the percent on every save —
+        // dropping the percent to zero must drop the amount with it,
+        // not leave the earlier calculation behind.
+        $item->update(['discount_percent' => 0]);
+
+        $this->assertEquals(0, (float) $item->fresh()->discount_amount);
+        $this->assertEquals(220, (float) $item->fresh()->total);
+    }
 }
