@@ -13,6 +13,7 @@ document.addEventListener('alpine:init', () => {
         isEditing: false,
         saving: false,
         saveError: false,
+        loadError: false,
         storeLoaded: false,
 
         // Leaving edit mode persists first; when the save fails, edit
@@ -36,7 +37,14 @@ document.addEventListener('alpine:init', () => {
             }
 
             this.saveError = false;
-            await this.loadStore();
+            this.loadError = false;
+            // Entering edit mode without the removed widgets' cards
+            // would leave their Add buttons inert — abort with a
+            // visible error; retrying re-enters this path.
+            if (!(await this.loadStore())) {
+                this.loadError = true;
+                return;
+            }
             this.isEditing = true;
             this.enableDragDrop();
         },
@@ -45,10 +53,11 @@ document.addEventListener('alpine:init', () => {
         // first time edit mode opens (the dashboard page ships only
         // the catalog rows, keeping hidden widgets' query cost off
         // regular loads). Once loaded, the session's own add/remove
-        // moves keep the store current.
+        // moves keep the store current. Resolves whether the store is
+        // ready to edit against.
         async loadStore() {
             if (this.storeLoaded) {
-                return;
+                return true;
             }
             try {
                 const response = await fetch('/api/widget-preferences/hidden-widgets', {
@@ -59,8 +68,10 @@ document.addEventListener('alpine:init', () => {
                 }
                 document.getElementById('widget-store').innerHTML = await response.text();
                 this.storeLoaded = true;
+                return true;
             } catch (e) {
                 console.error('Failed to load removed widgets:', e);
+                return false;
             }
         },
 

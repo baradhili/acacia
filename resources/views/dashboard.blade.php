@@ -17,6 +17,13 @@
         </div>
     @endif
 
+    <!-- Store load failure: edit mode stays closed when the removed
+         widgets' cards can't be fetched, so the retry hint has to
+         live outside the edit-mode toolbar. -->
+    <div x-show="loadError" x-cloak class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+        <p class="text-red-700 text-sm">{{ __('widgets.load_failed') }}</p>
+    </div>
+
     <!-- Edit Mode toolbar: toggled from the profile menu's Customize
          Dashboard item or the Done button; leaving edit mode saves. -->
     <div x-show="isEditing" x-cloak class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">

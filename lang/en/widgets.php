@@ -17,6 +17,7 @@ return [
     'reset' => 'Reset to default',
     'reset_confirm' => 'Reset your dashboard layout to the default?',
     'save_failed' => 'The layout could not be saved — click Done to retry.',
+    'load_failed' => 'The removed widgets could not be loaded — reopen Customize Dashboard to retry.',
     'saved' => 'Dashboard layout saved',
     'reset_done' => 'Dashboard layout reset to defaults',
     'available' => 'Removed widgets',
