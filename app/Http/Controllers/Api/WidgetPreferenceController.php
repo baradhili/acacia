@@ -19,12 +19,14 @@ use Illuminate\Validation\Rule;
  * flagged complete=true by the browser client, whose payload is its
  * whole dashboard at save time (a widget registering between page
  * load and save simply rides at the tail rather than demoting the
- * save). Without the flag the payload is a patch: visibility/width
- * only, ordering untouched. Either way, rows for widgets that left
- * the registry (a disabled module's) are dropped. The single-widget
- * patch (PUT) covers add/remove/resize without a full save. Widget
- * names are validated against the registry so junk ids never become
- * preference rows.
+ * save, and one that left and returned meanwhile is unplaced for the
+ * same reason — a stale index from an earlier sequence would collide
+ * with the new one). Without the flag the payload is a patch:
+ * visibility/width only, ordering untouched. Either way, rows for
+ * widgets that left the registry (a disabled module's) are dropped.
+ * The single-widget patch (PUT) covers add/remove/resize without a
+ * full save. Widget names are validated against the registry so junk
+ * ids never become preference rows.
  */
 class WidgetPreferenceController extends Controller
 {
@@ -111,6 +113,7 @@ class WidgetPreferenceController extends Controller
             // back to registry order, so its order would silently
             // not apply).
             $reorder = ($validated['complete'] ?? false) === true;
+            $names = array_column($validated['widgets'], 'widget_name');
 
             foreach ($validated['widgets'] as $index => $widget) {
                 $data = [
@@ -125,6 +128,22 @@ class WidgetPreferenceController extends Controller
                     ['user_id' => $userId, 'widget_name' => $widget['widget_name']],
                     $data,
                 );
+            }
+
+            // A widget that left the registry while the page was open
+            // and returned before this save (registered again, so the
+            // cleanup below spares it) can still carry a position
+            // from an earlier sequence — an index that now collides
+            // with the one just written, making the dashboard render
+            // an order the user never saved. Unplace it: it rides at
+            // the tail in registry order, same as a widget the page
+            // never placed. This keeps the invariant that every
+            // non-NULL position after a complete save is unique.
+            if ($reorder) {
+                WidgetPreference::where('user_id', $userId)
+                    ->whereIn('widget_name', $this->registry->ids())
+                    ->whereNotIn('widget_name', $names)
+                    ->update(['position_y' => null]);
             }
 
             // Cleanup targets rows whose widget left the registry —

@@ -5,6 +5,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-09-28
 
+### Fixed — registry swaps no longer collide positions
+
+The sibling of the registry-growth hole: a widget unregistered while
+a dashboard page rendered (no card in the DOM) but back in the
+registry by the time the user clicked Done kept its old preference
+row — the cleanup only drops rows for widgets still outside the
+registry — with a position index from an earlier sequence. The
+complete save renumbered the submitted cards 0..n-1 and left that
+stale index alone, so it could collide with a freshly written one
+and the dashboard rendered an order the user never saved, with a
+success response. A complete save now unplaces registered-but-absent
+widgets (`position_y = NULL`): they ride at the tail in registry
+order, exactly like a widget the page never placed, and every
+non-NULL position after a complete save is unique. Widget identity
+was never the issue — ids (class basenames) are stable across
+registration changes; the failure was a stale sequence index, so no
+id-tracking redesign is needed.
+
+## [Unreleased] — 2026-09-28
+
 ### Fixed — registry growth no longer eats the drag order
 
 The count-based full-save check from the second review pass had its

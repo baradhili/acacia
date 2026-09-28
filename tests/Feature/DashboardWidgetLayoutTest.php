@@ -264,6 +264,54 @@ class DashboardWidgetLayoutTest extends TestCase
         $this->assertGridOrder($html, ['PnLTrendWidget', 'TotalClientsWidget', 'OutstandingInvoicesWidget', 'PipelineWidget']);
     }
 
+    /**
+     * The registry can also swap between page load and Done: a widget
+     * unregistered when the page rendered (no card in the DOM) but
+     * back in the registry by save time keeps its old preference row
+     * — the cleanup spares registered widgets. Its stale position
+     * must not survive to collide with the freshly written sequence;
+     * it unplaces and rides at the tail in registry order.
+     */
+    public function test_complete_save_unplaces_widgets_that_left_and_returned(): void
+    {
+        // An earlier layout with GstPayableWidget placed mid-sequence.
+        $this->actingAs($this->user)
+            ->postJson('/api/widget-preferences', [
+                'complete' => true,
+                'widgets' => [
+                    ['widget_name' => 'TotalClientsWidget', 'visible' => true],
+                    ['widget_name' => 'GstPayableWidget', 'visible' => true],
+                    ['widget_name' => 'PnLTrendWidget', 'visible' => true],
+                ],
+            ])
+            ->assertOk();
+        $this->assertSame(1, (int) WidgetPreference::where('widget_name', 'GstPayableWidget')->value('position_y'));
+
+        // A page rendered while the widget was unregistered (its
+        // module disabled) submits the cards it loaded; the widget
+        // re-registered before Done, so it is in the registry again
+        // and the save must not collide with its old index of 1.
+        $this->actingAs($this->user)
+            ->postJson('/api/widget-preferences', [
+                'complete' => true,
+                'widgets' => [
+                    ['widget_name' => 'PnLTrendWidget', 'visible' => true],
+                    ['widget_name' => 'TotalClientsWidget', 'visible' => true],
+                ],
+            ])
+            ->assertOk();
+
+        $this->assertSame(0, (int) WidgetPreference::where('widget_name', 'PnLTrendWidget')->value('position_y'));
+        $this->assertSame(1, (int) WidgetPreference::where('widget_name', 'TotalClientsWidget')->value('position_y'));
+        $this->assertNull(WidgetPreference::where('widget_name', 'GstPayableWidget')->value('position_y'));
+
+        // The dashboard shows exactly what the user saved first, the
+        // returning widget after — not an interleaving its stale
+        // index would have produced.
+        $html = $this->actingAs($this->user)->get('/dashboard')->getContent();
+        $this->assertGridOrder($html, ['PnLTrendWidget', 'TotalClientsWidget', 'OutstandingInvoicesWidget', 'HoursThisMonthWidget', 'GstPayableWidget', 'CashFlowWidget']);
+    }
+
     public function test_full_save_rejects_keyed_and_duplicated_widgets(): void
     {
         $this->actingAs($this->user)
