@@ -31,8 +31,8 @@ class CoreNav
 
     public static function registerWidgets(Widgets $widgets): void
     {
-        foreach (static::widgets() as [$class, $span, $position]) {
-            $widgets->add($class, $span, $position);
+        foreach (static::widgets() as [$class, $span, $position, $label]) {
+            $widgets->add($class, $span, $position, $label);
         }
     }
 
@@ -133,28 +133,30 @@ class CoreNav
     }
 
     /**
-     * The dashboard grid as shipped: class, span class ('' = one cell)
-     * and registry position. Positions match the previous hardcoded
-     * grid so stored drag-order preferences keep resolving AND the
-     * default order stays the shipped one — module widgets slot into
-     * the gaps (Practice's HoursThisMonthWidget 30 and
-     * UnbilledTimeWidget 110, Taxation's GstPayableWidget 40), which
-     * matters because module providers register before the core does.
+     * The dashboard grid as shipped: class, span class ('' = one
+     * cell), registry position and the label translation key the
+     * edit-mode catalog lists the widget under. Positions match the
+     * previous hardcoded grid so stored layout preferences keep
+     * resolving AND the default order stays the shipped one — module
+     * widgets slot into the gaps (Practice's HoursThisMonthWidget 30
+     * and UnbilledTimeWidget 110, Taxation's GstPayableWidget 40,
+     * Crm's PipelineWidget 130), which matters because module
+     * providers register before the core does.
      *
-     * @return list<array{0: class-string, 1: string, 2: int}>
+     * @return list<array{0: class-string, 1: string, 2: int, 3: string}>
      */
     public static function widgets(): array
     {
         return [
-            [TotalClientsWidget::class, '', 10],
-            [OutstandingInvoicesWidget::class, '', 20],
-            [CashFlowWidget::class, 'md:col-span-2 lg:col-span-4', 50],
-            [ARAgingWidget::class, 'md:col-span-1 lg:col-span-2', 60],
-            [BankBalanceWidget::class, 'md:col-span-1 lg:col-span-2', 70],
-            [RecentInvoicesWidget::class, 'md:col-span-1 lg:col-span-1', 80],
-            [RecentPaymentsWidget::class, 'md:col-span-1 lg:col-span-1', 90],
-            [OutstandingPOBudgetsWidget::class, 'md:col-span-1 lg:col-span-2', 100],
-            [PnLTrendWidget::class, 'md:col-span-1 lg:col-span-2', 120],
+            [TotalClientsWidget::class, '', 10, 'widgets.labels.total_clients'],
+            [OutstandingInvoicesWidget::class, '', 20, 'widgets.labels.outstanding_invoices'],
+            [CashFlowWidget::class, 'md:col-span-2 lg:col-span-4', 50, 'widgets.labels.cash_flow'],
+            [ARAgingWidget::class, 'md:col-span-1 lg:col-span-2', 60, 'widgets.labels.ar_aging'],
+            [BankBalanceWidget::class, 'md:col-span-1 lg:col-span-2', 70, 'widgets.labels.bank_balance'],
+            [RecentInvoicesWidget::class, 'md:col-span-1 lg:col-span-1', 80, 'widgets.labels.recent_invoices'],
+            [RecentPaymentsWidget::class, 'md:col-span-1 lg:col-span-1', 90, 'widgets.labels.recent_payments'],
+            [OutstandingPOBudgetsWidget::class, 'md:col-span-1 lg:col-span-2', 100, 'widgets.labels.outstanding_po_budgets'],
+            [PnLTrendWidget::class, 'md:col-span-1 lg:col-span-2', 120, 'widgets.labels.pnl_trend'],
         ];
     }
 }

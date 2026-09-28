@@ -5,6 +5,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-09-28
 
+### Added — per-user dashboard layout management
+
+The dashboard's edit mode (profile menu → Customize Dashboard) now
+manages a full per-user layout, not just drag order: widgets can be
+**reordered** by dragging (SortableJS, as before), **removed** (a ✕
+on each card in edit mode) and **added back** from a "Removed widgets"
+catalog under the grid — removed cards park in a hidden store
+server-side, so adding one back is a DOM move, not a fetch. **Resize**
+ships at the column-span level: a width button on each card cycles
+the shipped span → half → full width, persisted per user
+(`widget_preferences.width`, 0 = the registry's shipped span; the
+freeform drag-resize idea stays a future todo). A **Reset to default**
+button clears the saved layout. Layouts are per user and render
+server-side (`App\Support\WidgetLayout` merges the widget registry
+with the preference rows), so the order no longer flashes from
+localStorage on load.
+
+Fixing persistence also fixed the old save path, which POSTed an
+`{order}` payload the validation rejected — layouts never reached the
+database and lived only per browser. `position_y` became nullable
+(NULL = never placed by a full save → registry order) and the `width`
+default dropped to 0, so single-widget patches can't jump a widget to
+the grid front or silently read as a width override; full saves drop
+rows for widgets that left the registry (a disabled module's), and
+widget names are validated against the registry so junk ids never
+persist. The registry (`App\Support\Widgets::add`) gained a label
+translation key rendered in the catalog, and Crm's pipeline widget
+got a deliberate registry position (130, the tail) instead of the
+default 0 that jumped it ahead of the shipped grid. New UI strings go
+through the translator (`lang/en/widgets.php`, first real `en_AU`
+override file: "AR Ageing"). On whether widgets belong in modules:
+module-owned widgets already live in their modules and register from
+their providers — the boundary is right; the core widgets are
+core-domain (AR, cash flow, P&L, invoicing) and stay in `app/Widgets`.
+
+## [Unreleased] — 2026-09-28
+
 ### Removed — the reconciliation auto-create service methods
 
 `autoCreateCashReceipts`/`autoCreatePurchases` and their single-line

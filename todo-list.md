@@ -15,7 +15,7 @@ here once their changelog entry lands. Ordered by priority.
 
 - [ ] Backfill class docblocks on the ~83 pre-convention core classes (app/Models, app/Http/Controllers, widgets, console commands, remaining services — found by the Sep 2026 docblock audit). Write them as code is touched per AGENTS.md, or as one dedicated documentation pass; state invariants, not narrations.
 
-- [ ] Flesh out dashboard layout management - allow user to move widgets, add and remove. Resize as an option (or add as a future todo).
+- [ ] Freeform dashboard resize: drag handles/heights beyond the column-span cycling the layout management ships (Sep 2026) — gridstack is already in package.json if this lands.
 
 - [ ] property rental management module - the company is a landlord
 

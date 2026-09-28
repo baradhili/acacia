@@ -5,6 +5,17 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * One row of a user's saved dashboard layout, keyed by widget id (the
+ * class basename from the registry). position_y is the widget's index
+ * in the sequence the full save wrote (grid widgets first, then
+ * removed ones); NULL — the default — means no full save ever placed
+ * it and the widget renders in registry order. width is the
+ * column-span override where 0 means the registry's shipped span;
+ * visible=false is a widget removed through edit mode. position_x and
+ * collapsed are unused for now — reserved for the freeform-resize and
+ * collapse follow-ups.
+ */
 class WidgetPreference extends Model
 {
     protected $fillable = [
@@ -13,7 +24,6 @@ class WidgetPreference extends Model
         'position_x',
         'position_y',
         'width',
-        'height',
         'visible',
         'collapsed',
     ];
@@ -24,7 +34,6 @@ class WidgetPreference extends Model
         'position_x' => 'integer',
         'position_y' => 'integer',
         'width' => 'integer',
-        'height' => 'integer',
     ];
 
     public function user(): BelongsTo

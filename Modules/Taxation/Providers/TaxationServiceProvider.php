@@ -37,7 +37,7 @@ class TaxationServiceProvider extends ServiceProvider
 
         // Position 40 slots the widget into its shipped place in the
         // default grid (CoreNav::widgets() leaves the gap).
-        $this->app->make(Widgets::class)->add(GstPayableWidget::class, '', 40);
+        $this->app->make(Widgets::class)->add(GstPayableWidget::class, '', 40, 'widgets.labels.gst_payable');
     }
 
     protected function reportsBasItem(): array

@@ -37,6 +37,9 @@ class CrmServiceProvider extends ServiceProvider
                 'roles' => ['admin', 'accountant'], 'position' => 29],
         ]);
 
-        $this->app->make(Widgets::class)->add(PipelineWidget::class);
+        // Position 130 lands the pipeline at the tail of the shipped
+        // grid (CoreNav::widgets() leaves the gap after PnLTrend 120);
+        // the registry default of 0 would jump it ahead of the core.
+        $this->app->make(Widgets::class)->add(PipelineWidget::class, '', 130, 'widgets.labels.pipeline');
     }
 }

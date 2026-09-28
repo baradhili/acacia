@@ -1,0 +1,232 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\User;
+use App\Models\WidgetPreference;
+use App\Support\Widgets;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
+use Tests\TestCase;
+
+class DashboardWidgetLayoutTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected User $user;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Role::firstOrCreate(['name' => 'admin']);
+        $this->user = User::factory()->create();
+        $this->user->assignRole('admin');
+    }
+
+    /** The dashboard's grid segment — between the grid and the hidden store. */
+    private function gridHtml(string $html): string
+    {
+        $start = strpos($html, 'id="widget-grid"');
+        $end = strpos($html, 'id="widget-store"');
+        $this->assertNotFalse($start, 'dashboard has no widget grid');
+        $this->assertNotFalse($end, 'dashboard has no widget store');
+
+        return substr($html, $start, $end - $start);
+    }
+
+    /** Assert the expected widget ids render in this relative order (extras may interleave). */
+    private function assertGridOrder(string $html, array $expected): void
+    {
+        preg_match_all('/data-widget="([^"]+)"/', $this->gridHtml($html), $matches);
+        $actual = array_values(array_intersect($matches[1], $expected));
+
+        $this->assertEquals($expected, $actual, sprintf(
+            'Expected grid order [%s] but the grid renders [%s]',
+            implode(', ', $expected),
+            implode(', ', $matches[1]),
+        ));
+    }
+
+    public function test_default_dashboard_renders_the_registry_order(): void
+    {
+        $html = $this->actingAs($this->user)->get('/dashboard')->getContent();
+
+        // The shipped grid: core positions with the module widgets in
+        // their slots — Crm's pipeline now deliberately at the tail
+        // instead of the registry-default front.
+        $this->assertGridOrder($html, [
+            'TotalClientsWidget', 'OutstandingInvoicesWidget', 'HoursThisMonthWidget',
+            'GstPayableWidget', 'CashFlowWidget', 'ARAgingWidget', 'BankBalanceWidget',
+            'RecentInvoicesWidget', 'RecentPaymentsWidget', 'OutstandingPOBudgetsWidget',
+            'UnbilledTimeWidget', 'PnLTrendWidget', 'PipelineWidget',
+        ]);
+
+        // No saved layout: nothing parks in the removed-widgets store.
+        $storeStart = strpos($html, 'id="widget-store"');
+        $store = substr($html, $storeStart, strpos($html, 'id="widget-catalog"') - $storeStart);
+        $this->assertStringNotContainsString('data-widget=', $store);
+    }
+
+    public function test_full_save_reorders_hides_and_resizes(): void
+    {
+        $this->actingAs($this->user)
+            ->postJson('/api/widget-preferences', [
+                'widgets' => [
+                    ['widget_name' => 'PnLTrendWidget', 'visible' => true, 'width' => 4],
+                    ['widget_name' => 'TotalClientsWidget', 'visible' => true],
+                    ['widget_name' => 'CashFlowWidget', 'visible' => false],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $rows = WidgetPreference::where('user_id', $this->user->id)->get();
+        $this->assertSame(3, $rows->count());
+        $this->assertSame(0, (int) $rows->firstWhere('widget_name', 'PnLTrendWidget')->position_y);
+        $this->assertSame(2, (int) $rows->firstWhere('widget_name', 'CashFlowWidget')->position_y);
+
+        $html = $this->actingAs($this->user)->get('/dashboard')->getContent();
+
+        // Saved positions render first in drag order; everything the
+        // save didn't place follows in registry order; the hidden
+        // widget is out of the grid but listed in the catalog.
+        $this->assertGridOrder($html, ['PnLTrendWidget', 'TotalClientsWidget', 'OutstandingInvoicesWidget']);
+        $this->assertStringNotContainsString('data-widget="CashFlowWidget"', $this->gridHtml($html));
+        $this->assertStringContainsString('Cash Flow (30 Days)', $html);
+
+        // Width 4 overrides the shipped span (and 0 keeps it, on
+        // TotalClients' class-less card). The card's attributes span
+        // lines, so match on whitespace-normalised markup.
+        $flat = preg_replace('/\s+/', ' ', $html);
+        $this->assertStringContainsString(
+            'class="widget-card relative md:col-span-2 lg:col-span-4" data-widget="PnLTrendWidget"',
+            $flat,
+        );
+        $this->assertStringContainsString('class="widget-card relative " data-widget="TotalClientsWidget"', $flat);
+    }
+
+    public function test_single_widget_patch_hides_and_readds_in_registry_order(): void
+    {
+        $this->actingAs($this->user)
+            ->putJson('/api/widget-preferences', ['widget_name' => 'CashFlowWidget', 'visible' => false])
+            ->assertOk();
+
+        $grid = $this->gridHtml($this->actingAs($this->user)->get('/dashboard')->getContent());
+        $this->assertStringNotContainsString('data-widget="CashFlowWidget"', $grid);
+
+        // A patch never reorders: re-adding returns the widget to its
+        // registry slot (position_y stays NULL), not to the front —
+        // neighbours prove placement, not just presence.
+        $this->actingAs($this->user)
+            ->putJson('/api/widget-preferences', ['widget_name' => 'CashFlowWidget', 'visible' => true])
+            ->assertOk();
+
+        $html = $this->actingAs($this->user)->get('/dashboard')->getContent();
+        $this->assertGridOrder($html, ['GstPayableWidget', 'CashFlowWidget', 'ARAgingWidget']);
+        $this->assertNull(
+            WidgetPreference::where('user_id', $this->user->id)
+                ->where('widget_name', 'CashFlowWidget')
+                ->value('position_y'),
+        );
+    }
+
+    public function test_full_save_rejects_unknown_widget_names(): void
+    {
+        $this->actingAs($this->user)
+            ->postJson('/api/widget-preferences', [
+                'widgets' => [
+                    ['widget_name' => 'NotAWidget', 'visible' => true],
+                ],
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('widgets.0.widget_name');
+
+        $this->assertSame(0, WidgetPreference::count());
+    }
+
+    public function test_full_save_drops_rows_for_widgets_that_left_the_registry(): void
+    {
+        WidgetPreference::create([
+            'user_id' => $this->user->id,
+            'widget_name' => 'DisabledModuleWidget',
+            'visible' => true,
+        ]);
+
+        $this->actingAs($this->user)
+            ->postJson('/api/widget-preferences', [
+                'widgets' => [
+                    ['widget_name' => 'TotalClientsWidget', 'visible' => true],
+                ],
+            ])
+            ->assertOk();
+
+        $this->assertNull(WidgetPreference::where('widget_name', 'DisabledModuleWidget')->first());
+    }
+
+    public function test_layouts_are_per_user(): void
+    {
+        $other = User::factory()->create();
+        $other->assignRole('admin');
+
+        $this->actingAs($this->user)
+            ->postJson('/api/widget-preferences', [
+                'widgets' => [
+                    ['widget_name' => 'TotalClientsWidget', 'visible' => false],
+                ],
+            ])
+            ->assertOk();
+
+        // The other user's dashboard is untouched by the first user's
+        // layout.
+        $grid = $this->gridHtml($this->actingAs($other)->get('/dashboard')->getContent());
+        $this->assertStringContainsString('data-widget="TotalClientsWidget"', $grid);
+    }
+
+    public function test_reset_restores_the_default_layout(): void
+    {
+        $this->actingAs($this->user)
+            ->postJson('/api/widget-preferences', [
+                'widgets' => [
+                    ['widget_name' => 'TotalClientsWidget', 'visible' => false],
+                    ['widget_name' => 'PnLTrendWidget', 'visible' => true, 'width' => 2],
+                ],
+            ])
+            ->assertOk();
+
+        $this->actingAs($this->user)
+            ->deleteJson('/api/widget-preferences/reset')
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $this->assertSame(0, WidgetPreference::where('user_id', $this->user->id)->count());
+
+        $html = $this->actingAs($this->user)->get('/dashboard')->getContent();
+        $this->assertStringContainsString('data-widget="TotalClientsWidget"', $this->gridHtml($html));
+    }
+
+    public function test_preference_endpoints_require_authentication(): void
+    {
+        // The api/* prefix renders exceptions as JSON (bootstrap/app.php),
+        // so unauthenticated requests get 401s rather than login redirects.
+        $this->get('/api/widget-preferences')->assertStatus(401);
+        $this->postJson('/api/widget-preferences', [])->assertStatus(401);
+    }
+
+    /**
+     * The catalog contract: every registered widget carries a label
+     * key that resolves — an unlabelled registration falls back to its
+     * id, which never translates, so this fails rather than showing a
+     * class basename to users.
+     */
+    public function test_every_registered_widget_label_resolves(): void
+    {
+        foreach (app(Widgets::class)->all() as $widget) {
+            $this->assertNotSame(
+                $widget['label'],
+                __($widget['label']),
+                "{$widget['id']} registers label '{$widget['label']}' with no translation",
+            );
+        }
+    }
+}

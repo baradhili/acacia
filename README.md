@@ -251,6 +251,7 @@ Built on IFRS reports, extended with project/PO reports. The IFRS statements and
 
 ### Dashboard
 
+- Per-user layout management: reorder by dragging, add/remove widgets, change width (edit mode from the profile menu)
 - Cash flow (last 30 days)
 - AR aging summary
 - Recent invoices and payments
