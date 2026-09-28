@@ -87,11 +87,13 @@ class PayrollController extends Controller
         $employee = Employee::findOrFail($validated['employee_id']);
 
         try {
+            // hours/gross are nullable: an absent field never reaches
+            // $validated, so the null-coalescing guards the reads.
             $this->payroll->addPayslip(
                 $run,
                 $employee,
-                $validated['hours'] !== null ? (float) $validated['hours'] : null,
-                $validated['gross'] !== null ? (float) $validated['gross'] : null,
+                isset($validated['hours']) ? (float) $validated['hours'] : null,
+                isset($validated['gross']) ? (float) $validated['gross'] : null,
                 $validated['notes'] ?? null,
             );
         } catch (\Throwable $e) {
