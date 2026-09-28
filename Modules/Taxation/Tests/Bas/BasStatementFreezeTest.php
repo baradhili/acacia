@@ -110,13 +110,19 @@ class BasStatementFreezeTest extends TestCase
     {
         $this->collect(1000);
 
-        $this->actingAs($this->admin())
+        $admin = $this->admin();
+        $this->actingAs($admin)
             ->post('/bas-statements/freeze', ['fy' => $this->fyEnd, 'quarter' => 1])
             ->assertRedirect(route('reports.bas', ['fy' => $this->fyEnd]))
             ->assertSessionHas('success');
 
         $statement = BasStatement::query()->firstOrFail();
         $this->assertEqualsWithDelta(1000.0, $statement->gst_sales, 0.001);
+
+        // The lodger resolves through the core User model — an
+        // unqualified User::class here would point at a non-existent
+        // Modules\Taxation\Models\User and fail the relation.
+        $this->assertTrue($statement->lodgedBy->is($admin));
 
         // A backdated posting into the lodged quarter must not rewrite it.
         $this->collect(500);

@@ -2,6 +2,7 @@
 
 namespace Modules\Taxation\Models;
 
+use App\Models\User;
 use IFRS\Models\Entity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
