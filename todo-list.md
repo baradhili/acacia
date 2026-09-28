@@ -6,6 +6,8 @@
 
 - [ ] Review - https://github.com/baradhili/resource_mgr and look to bring services, skills allocations concepts into acacia
 
+- [ ] active security testing harness
+
 - [ ] Ability to have multiple un-related businesses against same user - aka same user can be admin of more than one org.
 
 - [ ] Modules per company
