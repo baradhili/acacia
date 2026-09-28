@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Concerns;
 
+use App\Services\IfrsPosting;
 use Carbon\Carbon;
 use IFRS\Models\Entity;
 use IFRS\Models\ReportingPeriod;
-use Illuminate\Support\Facades\Auth;
 
 /**
  * The reporting context every report controller shares: the IFRS
@@ -50,11 +50,12 @@ trait ResolvesReportingContext
 
     /**
      * The IFRS entity of the authenticated user (falling back to the first
-     * entity) — most package helpers need it explicitly in background
-     * contexts where no user is logged in.
+     * entity) — IfrsPosting owns the rule; delegating also lends the
+     * fallback entity to entity-less users in memory, which keeps the
+     * IFRS package's EntityScope from fatalling on their report queries.
      */
     protected function ifrsEntity(): ?Entity
     {
-        return Auth::user()?->entity ?? Entity::first();
+        return IfrsPosting::resolveEntity();
     }
 }

@@ -60,8 +60,8 @@ class BasStatementFreezeTest extends TestCase
     }
 
     /**
-     * Entity-bound, like real users — ReportController::ifrsEntity()
-     * reads Auth::user()->entity directly.
+     * Entity-bound, like real users — ResolvesReportingContext::ifrsEntity()
+     * reads Auth::user()->entity via IfrsPosting::resolveEntity().
      */
     protected function admin(): User
     {
