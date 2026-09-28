@@ -1,0 +1,10 @@
+{
+    "name": "acacia/proposals",
+    "description": "Acacia ERP estimates/quotes module",
+    "type": "acacia-module",
+    "autoload": {
+        "psr-4": {
+            "Modules\\Proposals\\": ""
+        }
+    }
+}

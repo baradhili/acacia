@@ -13,6 +13,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Modules\Proposals\Models\Estimate;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -30,7 +31,7 @@ class DocumentTest extends TestCase
 
         $this->user = User::factory()->create();
         $this->user->assignRole('admin');
-        
+
         Storage::fake('public');
     }
 
@@ -76,17 +77,17 @@ class DocumentTest extends TestCase
             'tax_amount' => 10,
             'total' => 110,
         ]);
-        
+
         $file = UploadedFile::fake()->create('invoice.pdf', 1024);
-        
+
         $response = $this->actingAs($this->user)->post('/documents', [
             'documentable_type' => 'Invoice',
             'documentable_id' => $invoice->id,
             'file' => $file,
         ]);
-        
+
         $response->assertStatus(201);
-        
+
         $this->assertDatabaseHas('documents', [
             'documentable_type' => 'App\\Models\\Invoice',
             'documentable_id' => $invoice->id,
@@ -99,33 +100,33 @@ class DocumentTest extends TestCase
             'documentable_type' => 'Bill',
             'documentable_id' => 1,
         ]);
-        
+
         $response->assertStatus(422);
     }
 
     public function test_document_upload_validates_file_type(): void
     {
         $file = UploadedFile::fake()->create('document.exe', 1024);
-        
+
         $response = $this->actingAs($this->user)->post('/documents', [
             'documentable_type' => 'Bill',
             'documentable_id' => 1,
             'file' => $file,
         ]);
-        
+
         $response->assertStatus(422);
     }
 
     public function test_document_upload_validates_file_size(): void
     {
         $file = UploadedFile::fake()->create('large.pdf', 30000); // 30MB
-        
+
         $response = $this->actingAs($this->user)->post('/documents', [
             'documentable_type' => 'Bill',
             'documentable_id' => 1,
             'file' => $file,
         ]);
-        
+
         $response->assertStatus(422);
     }
 
@@ -138,15 +139,15 @@ class DocumentTest extends TestCase
             'documentable_type' => 'App\\Models\\Bill',
             'documentable_id' => $bill->id,
         ]);
-        
+
         // Use the named route with short class name
         $response = $this->actingAs($this->user)->get(
             route('documents.for-model', [
                 'type' => 'Bill',
-                'id' => $bill->id
+                'id' => $bill->id,
             ])
         );
-        
+
         $response->assertStatus(200);
         $response->assertJsonCount(3);
     }
@@ -157,11 +158,11 @@ class DocumentTest extends TestCase
             'file_path' => 'uploads/test.pdf',
             'name' => 'test.pdf',
         ]);
-        
+
         Storage::disk('public')->put('uploads/test.pdf', 'test content');
-        
+
         $response = $this->actingAs($this->user)->get("/documents/{$document->id}/download");
-        
+
         $response->assertStatus(200);
         $response->assertDownload('test.pdf');
     }
@@ -171,9 +172,9 @@ class DocumentTest extends TestCase
         $document = Document::factory()->create([
             'file_path' => 'uploads/nonexistent.pdf',
         ]);
-        
+
         $response = $this->actingAs($this->user)->get("/documents/{$document->id}/download");
-        
+
         $response->assertStatus(404);
     }
 
@@ -182,11 +183,11 @@ class DocumentTest extends TestCase
         $document = Document::factory()->create([
             'file_path' => 'uploads/test.pdf',
         ]);
-        
+
         Storage::disk('public')->put('uploads/test.pdf', 'test content');
-        
+
         $response = $this->actingAs($this->user)->delete("/documents/{$document->id}");
-        
+
         $response->assertStatus(200);
         $this->assertDatabaseMissing('documents', ['id' => $document->id]);
     }
@@ -194,13 +195,13 @@ class DocumentTest extends TestCase
     public function test_delete_removes_file_from_storage(): void
     {
         Storage::disk('public')->put('uploads/test.pdf', 'test content');
-        
+
         $document = Document::factory()->create([
             'file_path' => 'uploads/test.pdf',
         ]);
-        
+
         $this->actingAs($this->user)->delete("/documents/{$document->id}");
-        
+
         Storage::disk('public')->assertMissing('uploads/test.pdf');
     }
 
@@ -209,7 +210,7 @@ class DocumentTest extends TestCase
         $document = Document::factory()->create([
             'uploaded_by' => $this->user->id,
         ]);
-        
+
         $this->assertInstanceOf(User::class, $document->uploadedBy);
         $this->assertEquals($this->user->id, $document->uploadedBy->id);
     }
@@ -255,12 +256,12 @@ class DocumentTest extends TestCase
             'tax_amount' => 10,
             'total' => 110,
         ]);
-        
+
         Document::factory()->count(3)->create([
             'documentable_type' => 'App\Models\Invoice',
             'documentable_id' => $invoice->id,
         ]);
-        
+
         $invoice->refresh();
         $this->assertCount(3, $invoice->documents);
     }
@@ -268,7 +269,7 @@ class DocumentTest extends TestCase
     public function test_can_upload_document_for_estimate(): void
     {
         $client = Client::factory()->create();
-        $estimate = \App\Models\Estimate::create([
+        $estimate = Estimate::create([
             'client_id' => $client->id,
             'estimate_number' => 'EST-2024-0001',
             'status' => 'draft',
@@ -279,27 +280,34 @@ class DocumentTest extends TestCase
             'discount_amount' => 0,
             'total' => 110,
         ]);
-        
+
         $file = UploadedFile::fake()->create('estimate.pdf', 1024);
-        
+
         $response = $this->actingAs($this->user)->post('/documents', [
             'documentable_type' => 'Estimate',
             'documentable_id' => $estimate->id,
             'file' => $file,
         ]);
-        
+
         $response->assertStatus(201);
-        
+
+        // The stored type stays the legacy 'App\Models\Estimate' string
+        // from before the Proposals module move — the module's morph
+        // map resolves it, so both legacy rows and new uploads read
+        // back against the moved class.
         $this->assertDatabaseHas('documents', [
             'documentable_type' => 'App\Models\Estimate',
             'documentable_id' => $estimate->id,
         ]);
+
+        $estimate->refresh();
+        $this->assertCount(1, $estimate->documents);
     }
 
     public function test_can_upload_document_for_purchase_order(): void
     {
         $client = Client::factory()->create();
-        $po = \App\Models\PurchaseOrder::create([
+        $po = PurchaseOrder::create([
             'client_id' => $client->id,
             'po_number' => 'PO-2024-0001',
             'title' => 'Test PO',
@@ -307,17 +315,17 @@ class DocumentTest extends TestCase
             'budgeted_amount' => 5000,
             'used_amount' => 0,
         ]);
-        
+
         $file = UploadedFile::fake()->create('po.pdf', 1024);
-        
+
         $response = $this->actingAs($this->user)->post('/documents', [
             'documentable_type' => 'PurchaseOrder',
             'documentable_id' => $po->id,
             'file' => $file,
         ]);
-        
+
         $response->assertStatus(201);
-        
+
         $this->assertDatabaseHas('documents', [
             'documentable_type' => 'App\Models\PurchaseOrder',
             'documentable_id' => $po->id,
@@ -327,7 +335,7 @@ class DocumentTest extends TestCase
     public function test_can_upload_document_for_payment(): void
     {
         $client = Client::factory()->create();
-        $payment = \App\Models\Payment::create([
+        $payment = Payment::create([
             'client_id' => $client->id,
             'payment_number' => 'PAY-2024-0001',
             'amount' => 500,
@@ -335,17 +343,17 @@ class DocumentTest extends TestCase
             'payment_method' => 'bank_transfer',
             'status' => 'completed',
         ]);
-        
+
         $file = UploadedFile::fake()->create('receipt.pdf', 1024);
-        
+
         $response = $this->actingAs($this->user)->post('/documents', [
             'documentable_type' => 'Payment',
             'documentable_id' => $payment->id,
             'file' => $file,
         ]);
-        
+
         $response->assertStatus(201);
-        
+
         $this->assertDatabaseHas('documents', [
             'documentable_type' => 'App\Models\Payment',
             'documentable_id' => $payment->id,

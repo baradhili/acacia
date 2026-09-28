@@ -111,10 +111,9 @@ class Client extends Model
         return $this->hasMany(CreditNote::class);
     }
 
-    public function estimates(): HasMany
-    {
-        return $this->hasMany(Estimate::class);
-    }
+    // Estimates live in the Proposals module (Modules\Proposals) —
+    // its Estimate model owns the client() side of the pair; the
+    // core keeps no core-to-module relation.
 
     public function documents(): MorphMany
     {

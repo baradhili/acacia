@@ -1,11 +1,22 @@
 <?php
 
-namespace App\Models;
+namespace Modules\Proposals\Models;
 
+use App\Models\InvoiceItem;
+use App\Models\Service;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * One quoted line on an estimate. Totals (discount, tax, total) are
+ * derived on every save from quantity × unit_price — never set them
+ * directly; they are recalculated before any dirty state persists.
+ * A line may reference a catalogue Service and stay linked to the
+ * rate card even when the description or price is tailored, carry a
+ * section label for grouping, and be optional (an extra quoted
+ * outside the estimate's committed totals).
+ */
 class EstimateItem extends Model
 {
     use HasFactory;

@@ -1,14 +1,14 @@
 <?php
 
-namespace Tests\Feature;
+namespace Modules\Proposals\Tests;
 
 use App\Models\Client;
-use App\Models\Estimate;
-use App\Models\EstimateItem;
 use App\Models\Invoice;
 use App\Models\Service;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Modules\Proposals\Models\Estimate;
+use Modules\Proposals\Models\EstimateItem;
 use Tests\TestCase;
 
 class EstimateTest extends TestCase

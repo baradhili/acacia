@@ -13,7 +13,6 @@ use App\Http\Controllers\CreditNoteController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DomainController;
-use App\Http\Controllers\EstimateController;
 use App\Http\Controllers\FinancialStatementController;
 use App\Http\Controllers\FinancialYearController;
 use App\Http\Controllers\InvoiceController;
@@ -226,13 +225,8 @@ Route::middleware('auth')->group(function () {
     Route::delete('/documents/{document}', [DocumentController::class, 'destroy'])->name('documents.destroy');
     Route::get('/documents/model/{type}/{id}', [DocumentController::class, 'forModel'])->name('documents.for-model');
 
-    // Estimates
-    Route::resource('estimates', EstimateController::class);
-    Route::post('/estimates/{estimate}/send', [EstimateController::class, 'send'])->name('estimates.send');
-    Route::post('/estimates/{estimate}/accept', [EstimateController::class, 'accept'])->name('estimates.accept');
-    Route::post('/estimates/{estimate}/reject', [EstimateController::class, 'reject'])->name('estimates.reject');
-    Route::post('/estimates/{estimate}/convert-to-invoice', [EstimateController::class, 'convertToInvoice'])->name('estimates.convertToInvoice');
-    Route::post('/estimates/{estimate}/duplicate', [EstimateController::class, 'duplicate'])->name('estimates.duplicate');
+    // Estimates — moved to Modules/Proposals (its routes/web.php)
+    // under the same URLs and route names.
 
     // Reports — the time/project reporting moved to Modules/Practice
     // (its routes/web.php) under the same URLs and route names.

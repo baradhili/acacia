@@ -6,13 +6,13 @@ use App\Models\Bill;
 use App\Models\BillPayment;
 use App\Models\Client;
 use App\Models\Document;
-use App\Models\Estimate;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Modules\Proposals\Models\Estimate;
 use Tests\TestCase;
 
 class DocumentIconIndexTest extends TestCase
@@ -20,7 +20,9 @@ class DocumentIconIndexTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected Client $client;
+
     protected Supplier $supplier;
 
     protected function setUp(): void
@@ -36,7 +38,11 @@ class DocumentIconIndexTest extends TestCase
     {
         for ($i = 0; $i < $times; $i++) {
             Document::factory()->create([
-                'documentable_type' => $model::class,
+                // getMorphClass() is the type string Eloquent itself
+                // would store — the class name, or the registered alias
+                // (Proposals maps Estimate back onto the legacy
+                // 'App\Models\Estimate' string).
+                'documentable_type' => $model->getMorphClass(),
                 'documentable_id' => $model->id,
             ]);
         }

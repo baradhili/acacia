@@ -1,9 +1,9 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace Modules\Proposals\Http\Controllers;
 
+use App\Http\Controllers\Controller;
 use App\Models\Client;
-use App\Models\Estimate;
 use App\Models\Invoice;
 use App\Models\Project;
 use App\Models\Service;
@@ -11,7 +11,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Modules\Crm\Models\Lead;
+use Modules\Proposals\Models\Estimate;
 
+/**
+ * The estimates screens: CRUD over draft estimates, the
+ * send → accept/reject lifecycle actions, duplication, and
+ * conversion of an accepted estimate into an invoice (optional
+ * lines only ride along when the caller ticks them in).
+ */
 class EstimateController extends Controller
 {
     /**

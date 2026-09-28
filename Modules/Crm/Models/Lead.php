@@ -3,11 +3,11 @@
 namespace Modules\Crm\Models;
 
 use App\Models\Client;
-use App\Models\Estimate;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Modules\Proposals\Models\Estimate;
 
 /**
  * A lead moving through the sales funnel: new → contacted →
@@ -142,6 +142,9 @@ class Lead extends Model
 
     /**
      * The estimate prepared through the proposal-stage shortcut.
+     * Module-to-module soft dep on Proposals: only dereference behind
+     * a Route::has guard on the estimates routes (the lead view), so
+     * a deployment without Proposals never loads it.
      */
     public function estimate(): BelongsTo
     {
