@@ -309,18 +309,24 @@ class PaygInstalmentService
                 ->lockForUpdate()
                 ->first();
 
-            // A settlement whose as-at date covers the accrual already
-            // netted its balance to the ATO — reversing only the
+            // A settlement consumed this accrual only if it was recorded
+            // after the accrual was posted (settlements net live
+            // balances — one recorded earlier never saw this journal,
+            // however its as-at date compares) AND its as-at read
+            // covers the accrual date. Reversing only a consumed
             // accrual would leave that bank payment standing and 2240
             // debited: a fictitious overpayment the next settlement
             // would "refund". The settlement must be reversed first
             // (both income-tax types settle 2240, so either can be the
-            // covering one).
+            // covering one). created_at has second precision, so a
+            // same-second pair counts as covering — conservative, it
+            // blocks a reversal rather than strands a payment.
             $covered = BasSettlement::query()
                 ->where('entity_id', $accrual->entity_id)
                 ->whereIn('type', BasSettlement::INCOME_TAX_TYPES)
                 ->whereNull('reversed_at')
                 ->whereDate('as_at', '>=', $accrual->period_end->toDateString())
+                ->where('created_at', '>=', $accrual->created_at)
                 ->exists();
 
             if ($covered) {

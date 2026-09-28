@@ -367,6 +367,40 @@ class PaygInstalmentAccrualTest extends TestCase
         $this->assertEqualsWithDelta(0.0, $this->balance($this->incomeTaxPayable), 0.001);
     }
 
+    public function test_a_settlement_recorded_before_a_backdated_accrual_does_not_block_its_reversal(): void
+    {
+        config(['australian.bas.installment_rate' => 25]);
+
+        $ends = $this->settlements->quarterEnds($this->entity);
+        $laterEnd = last($ends)['end'];
+        $earlierEnd = $ends[count($ends) - 2]['end'];
+
+        // A settlement recorded first, netting an unrelated 2240
+        // balance as at a date later than the backdated accrual's
+        // quarter end.
+        $this->postJournal(320, 2240, 500, $laterEnd->copy()->subDays(5), 'PRIOR-LIAB');
+        $settlement = $this->settlements->settle([
+            'type' => BasSettlement::TYPE_PAYG_INSTALMENT,
+            'as_at' => $laterEnd->toDateString(),
+            'settled_at' => now()->toDateString(),
+        ]);
+
+        // Then the backdated accrual for the earlier quarter — posted
+        // after the settlement, so its balance was never netted by it.
+        $this->receive(8000, $earlierEnd->copy()->subDays(10), 'BACKDATED');
+        $accrual = $this->accrue(['period_end' => $earlierEnd->toDateString()]);
+
+        // Make the creation order explicit beyond second precision: the
+        // settlement predates the accrual by an hour.
+        $settlement->forceFill(['created_at' => now()->subHour()])->save();
+
+        $this->service->reverse($accrual);
+
+        $this->assertTrue($accrual->refresh()->isReversed());
+        $this->assertEqualsWithDelta(0.0, $this->balance($this->incomeTaxExpense), 0.001);
+        $this->assertEqualsWithDelta(0.0, $this->balance($this->incomeTaxPayable), 0.001);
+    }
+
     public function test_the_rate_is_normalized_to_the_snapshots_precision(): void
     {
         config(['australian.bas.installment_rate' => 12.34567]);
