@@ -23,7 +23,7 @@ here once their changelog entry lands. Ordered by priority.
 
 - [ ] Static security testing: look at `laravel-security/pentest-scanner` or `baspa/larascan`
 
-- [ ] Finish the modularisation arc: Create "Proposals"  module and extract Estimates into it. Add todo to flesh out proposal management.[GitHub - ICodingStack/ProposalForge: ProposalForge — Elegant &amp; Intelligent Proposal Generator Create beautiful, professional proposals and quotes in minutes with smart builder, pricing packages, real-time preview, and one-click PDF export. 100% free • Open source • Works offline · GitHub](https://github.com/ICodingStack/ProposalForge) or  [GitHub - Old-G/propsly · GitHub](https://github.com/Old-G/propsly)
+- [ ] Finish the modularisation arc: Create "Proposals"  module and extract Estimates into it. Add tasks to todo-list.md to flesh out proposal management.Based on: [GitHub - ICodingStack/ProposalForge: ProposalForge — Elegant &amp; Intelligent Proposal Generator Create beautiful, professional proposals and quotes in minutes with smart builder, pricing packages, real-time preview, and one-click PDF export. 100% free • Open source • Works offline · GitHub](https://github.com/ICodingStack/ProposalForge) or  [GitHub - Old-G/propsly · GitHub](https://github.com/Old-G/propsly)
 
 - [ ] https://docs.markwhen.com/ might be good to integrate into projects section - but only once we have a client module and a real project module
 
