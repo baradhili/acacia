@@ -12,6 +12,7 @@ document.addEventListener('alpine:init', () => {
         sortable: null,
         isEditing: false,
         saving: false,
+        resetting: false,
         loading: false,
         saveError: false,
         loadError: false,
@@ -23,6 +24,13 @@ document.addEventListener('alpine:init', () => {
         // discard it on the next page load).
         async toggleEdit() {
             if (this.isEditing) {
+                // Reset owns the wire while it runs — a save landing
+                // after its DELETE would recreate the rows it just
+                // cleared, and the reload would show the saved layout
+                // instead of the defaults.
+                if (this.resetting) {
+                    return;
+                }
                 this.saving = true;
                 const saved = await this.save();
                 this.saving = false;
@@ -191,10 +199,17 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        // Reset waits out an in-flight save (and vice versa): the
+        // save POST resolving after the reset DELETE would recreate
+        // the rows the reset just cleared.
         async resetLayout(event) {
+            if (this.saving || this.resetting) {
+                return;
+            }
             if (!confirm(event.currentTarget.dataset.confirm)) {
                 return;
             }
+            this.resetting = true;
             try {
                 const response = await fetch('/api/widget-preferences/reset', {
                     method: 'DELETE',
@@ -210,6 +225,8 @@ document.addEventListener('alpine:init', () => {
             } catch (e) {
                 console.error('Failed to reset dashboard layout:', e);
                 this.saveError = true;
+            } finally {
+                this.resetting = false;
             }
         },
     }));

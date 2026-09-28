@@ -33,10 +33,11 @@
             </p>
             <div class="flex gap-2 shrink-0">
                 <button type="button" @click="resetLayout($event)" data-confirm="{{ __('widgets.reset_confirm') }}"
-                    class="px-3 py-1 border border-blue-300 text-blue-700 text-sm rounded hover:bg-blue-100">
+                    :disabled="saving || resetting"
+                    class="px-3 py-1 border border-blue-300 text-blue-700 text-sm rounded hover:bg-blue-100 disabled:opacity-50">
                     {{ __('widgets.reset') }}
                 </button>
-                <button type="button" @click="toggleEdit()" :disabled="saving"
+                <button type="button" @click="toggleEdit()" :disabled="saving || resetting"
                     class="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50">
                     {{ __('widgets.done') }}
                 </button>
