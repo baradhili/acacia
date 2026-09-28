@@ -168,7 +168,10 @@ git-installed modules, uninstalls (migrations rolled back, directory
 deleted — refused for core) and installs from a GitHub URL via
 clone→validate→move→migrate→enable with nothing left behind on
 failure. `modules_statuses.json` ships committed. Authoring doc:
-docs/modules.md; plan: .zcode/plans/modularisation.md.
+docs/modules.md; plan: .zcode/plans/modularisation.md. Remaining
+extractions: Estimates (BAS/tax landed since as Modules/Taxation), and
+pushing the verified payroll subtree split (split/erp-payroll branch)
+to its own repo (open on todo-list).
 
 ### Added — CRM module (sales funnel)
 
@@ -181,7 +184,8 @@ converts a proposal lead to a Client (details carried, lead stays
 linked) — the ERP seam — and a proposal-stage lead has an
 estimate shortcut. Targets: monthly sales goals (admin/accountant)
 measured against won-lead value. First module authored in place with
-its migrations shipping inside the module.
+its migrations shipping inside the module. Not yet: email/calendar
+integrations, per-owner targets (open on todo-list).
 
 ### Added — estimates: sections, optional extras, services linkage
 
@@ -214,7 +218,11 @@ resolved to (`reconciliation_counterparty_rules`); when the strict
 ±$0.01/±3-day ledger pass misses, the auto-matcher pairs later lines
 from the same counterparty with a fresh unconsumed payment or bill of
 theirs, and the auto-create receipt/bill flows resolve the counterparty
-from the rule before name matching.
+from the rule before name matching. Three legacy reconciliation test
+files stay excluded per-file in phpunit.xml (ReconciliationMatching,
+ReconciliationService, AutoCreateCashReceipt — they drifted while the
+whole directory was excluded); repairing them is a separate cleanup
+(open on todo-list).
 
 ### Added — PAYG instalments; income-tax settlements drive the franking account
 
@@ -225,7 +233,10 @@ the income-tax types now drives the franking account in the same
 transaction — paying credits it (TC), a refund debits it (RF), reversal
 mirrors back out — while GST and PAYG withholding stay gated out. The
 BAS report shows W1/W2 from processed pay runs attributed by pay day
-(draft runs don't count) and freezing snapshots them.
+(draft runs don't count) and freezing snapshots them. Not yet: the
+quarterly PAYG-I accrual journal (Dr tax expense / Cr 2240) computed
+from the `bas.installment_rate` config stub — dead config until it
+lands (open on todo-list).
 
 ### Added — company bank details
 
