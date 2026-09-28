@@ -277,10 +277,13 @@ class PaygInstalmentService
     /**
      * Mirror an accrual's journal back out (a recorded mistake, or the
      * precursor to re-accruing a quarter after backdated revenue) and
-     * mark the accrual reversed. The reversal keeps the original
-     * transaction date, so the same date/period guards as posting apply
-     * first, and the ledger reversal and the accrual state commit or
-     * roll back together.
+     * mark the accrual reversed. Refuses while a settlement still
+     * covers the accrual — checked under the entity row lock inside the
+     * posting transaction, the same lock settle() takes, so a
+     * settlement committing concurrently cannot slip past the check.
+     * The reversal keeps the original transaction date, so the same
+     * date/period guards as posting apply first, and the ledger
+     * reversal and the accrual state commit or roll back together.
      */
     public function reverse(PaygInstalmentAccrual $accrual): PaygInstalmentAccrual
     {
@@ -292,28 +295,40 @@ class PaygInstalmentService
             throw new \InvalidArgumentException('This accrual has no posted journal to reverse.');
         }
 
-        // A settlement whose as-at date covers the accrual already
-        // netted its balance to the ATO — reversing only the accrual
-        // would leave that bank payment standing and 2240 debited: a
-        // fictitious overpayment the next settlement would "refund".
-        // The settlement must be reversed first (both income-tax types
-        // settle 2240, so either can be the covering one).
-        $covered = BasSettlement::query()
-            ->where('entity_id', $accrual->entity_id)
-            ->whereIn('type', BasSettlement::INCOME_TAX_TYPES)
-            ->whereNull('reversed_at')
-            ->whereDate('as_at', '>=', $accrual->period_end->toDateString())
-            ->exists();
-
-        if ($covered) {
-            throw new \InvalidArgumentException(
-                'A settlement has already covered this accrual — reverse that settlement first, then the accrual.'
-            );
-        }
-
         $this->assertDatePostable($accrual->period_end, $accrual->entity, 'accrual date');
 
         return DB::transaction(function () use ($accrual) {
+            // The entity row lock accrue() and BasSettlementService::
+            // settle() also take, held to commit. Checking coverage
+            // under it closes the window where a settlement commits
+            // between this check and the reversal's posting — the
+            // settlement serialises behind (this sees it) or ahead of
+            // (its position read excludes the reversal) this lock.
+            Entity::withoutGlobalScope(EntityScope::class)
+                ->whereKey($accrual->entity_id)
+                ->lockForUpdate()
+                ->first();
+
+            // A settlement whose as-at date covers the accrual already
+            // netted its balance to the ATO — reversing only the
+            // accrual would leave that bank payment standing and 2240
+            // debited: a fictitious overpayment the next settlement
+            // would "refund". The settlement must be reversed first
+            // (both income-tax types settle 2240, so either can be the
+            // covering one).
+            $covered = BasSettlement::query()
+                ->where('entity_id', $accrual->entity_id)
+                ->whereIn('type', BasSettlement::INCOME_TAX_TYPES)
+                ->whereNull('reversed_at')
+                ->whereDate('as_at', '>=', $accrual->period_end->toDateString())
+                ->exists();
+
+            if ($covered) {
+                throw new \InvalidArgumentException(
+                    'A settlement has already covered this accrual — reverse that settlement first, then the accrual.'
+                );
+            }
+
             $reversalId = IfrsPosting::reverseTransaction(
                 $accrual->ifrs_transaction_id,
                 'Reversal of PAYG instalment accrual — '.$accrual->label(),

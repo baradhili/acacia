@@ -12,6 +12,7 @@ use IFRS\Models\Account;
 use IFRS\Models\Entity;
 use IFRS\Models\LineItem;
 use IFRS\Models\ReportingPeriod;
+use IFRS\Scopes\EntityScope;
 use IFRS\Transactions\JournalEntry;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -245,15 +246,26 @@ class BasSettlementService
             throw new \InvalidArgumentException('No accounts are configured for '.strtolower($label).' settlements — seed the chart of accounts.');
         }
 
-        ['payable' => $payable, 'receivable' => $receivable, 'net' => $net] = $this->positionFor($entity, $accounts, $asAt->copy()->endOfDay());
+        return DB::transaction(function () use ($entity, $type, $label, $accounts, $asAt, $settledAt, $data) {
+            // The entity row lock PaygInstalmentService's accrue and
+            // accrual-reverse also take, held to commit: the position
+            // this settlement nets and posts cannot shift underneath a
+            // concurrent accrual posting or accrual reversal — and a
+            // reversal's coverage check cannot miss a settlement still
+            // mid-post. All three paths serialise on this one lock.
+            Entity::withoutGlobalScope(EntityScope::class)
+                ->whereKey($entity->id)
+                ->lockForUpdate()
+                ->first();
 
-        if ($payable < 0.005 && $receivable < 0.005) {
-            throw new \InvalidArgumentException("There is no unsettled {$label} as at {$asAt->format('d M Y')}.");
-        }
+            ['payable' => $payable, 'receivable' => $receivable, 'net' => $net] = $this->positionFor($entity, $accounts, $asAt->copy()->endOfDay());
 
-        $direction = $net >= 0 ? BasSettlement::DIRECTION_PAY : BasSettlement::DIRECTION_REFUND;
+            if ($payable < 0.005 && $receivable < 0.005) {
+                throw new \InvalidArgumentException("There is no unsettled {$label} as at {$asAt->format('d M Y')}.");
+            }
 
-        return DB::transaction(function () use ($entity, $type, $accounts, $asAt, $settledAt, $payable, $receivable, $net, $direction, $data) {
+            $direction = $net >= 0 ? BasSettlement::DIRECTION_PAY : BasSettlement::DIRECTION_REFUND;
+
             $journal = $this->postSettlementJournal(
                 $entity,
                 $accounts,
