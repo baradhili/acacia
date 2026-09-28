@@ -8,13 +8,15 @@
 
 - [ ] active security testing harness
 
-- [ ] Ability to have multiple un-related businesses against same user - aka same user can be admin of more than one org.
+- [ ] Ability to have multiple un-related company entities with separate everything against same user - aka same user can be admin of more than one org.
 
 - [ ] Modules per company
 
 - [ ] property rental management module
 
 - [ ] cucumber tests via behat
+
+- [ ] Flesh out dashboard layout management - allow user to move widgets, add and remove. Resize as an option.
 
 - [x] Sales funnel/crm - targets, leads, plans - (Sep 2026, branch feat/crm-module) Done as Modules/Crm — the first module authored in place (migrations ship inside the module). Leads: guarded funnel (new → contacted → qualified → proposal → won/lost; loss reasons, re-open), estimated value + win probability, source, owner and the plan; index shows stage counts, open pipeline value, probability-weighted forecast and overdue follow-ups. Activities (call/email/meeting/note/task) log per lead. Winning = converting a proposal lead to a Client (details carried, lead stays linked) — the ERP seam. Targets: monthly sales goals (admin/accountant only) measured against won-lead value with progress bars. Sidebar Sales section + Sales pipeline dashboard widget via the module registries. Covered by Modules/Crm/Tests/CrmTest; suite 865. Not yet: email/calendar integrations, per-owner targets. The proposal-stage lead → estimate shortcut landed (pre-filled estimate linked back on the lead).
 

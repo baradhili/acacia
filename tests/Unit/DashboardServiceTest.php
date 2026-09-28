@@ -166,6 +166,28 @@ class DashboardServiceTest extends TestCase
         $this->assertEquals(500.00, $widget['current']);
     }
 
+    public function test_ar_aging_invoice_due_earlier_today_stays_current(): void
+    {
+        // Due at midnight today; the widget evaluates at the current
+        // time of day. Whole-calendar-day bucketing (both dates
+        // start-of-day, matching the aging report) keeps it Current —
+        // the fractional day difference used to tip it into 1-30.
+        Invoice::create([
+            'client_id' => $this->createClient()->id,
+            'status' => Invoice::STATUS_SENT,
+            'issue_date' => Carbon::now()->subDay(),
+            'due_date' => Carbon::now()->startOfDay(),
+            'total' => 300.00,
+            'subtotal' => 300.00,
+            'tax_amount' => 0,
+        ]);
+
+        $widget = $this->service->getARAgingWidget();
+
+        $this->assertEquals(300.00, $widget['current']);
+        $this->assertEquals(0.00, $widget['days_30']);
+    }
+
     // ========================
     // Recent Invoices Widget Tests
     // ========================
