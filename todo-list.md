@@ -3,7 +3,7 @@
 Done items are archived in [CHANGELOG.md](CHANGELOG.md) — cleared from
 here once their changelog entry lands. Ordered by priority.
 
-- [ ] Remove the "client" role concept from the app — audit RoleSeeder's roles list, any `client` role checks/assignments and portal-client user handling; user accounts should be staff-side only (admin/accountant/staff). (Sep 2026, requested while making all users show as payroll payees — the payroll UserObserver currently skips client-role users defensively, so this unpays that workaround.)
+- [ ] WAIT! - Lets think about client portal need for future - Remove the "client" role concept from the app — audit RoleSeeder's roles list, any `client` role checks/assignments and portal-client user handling; user accounts should be staff-side only (admin/accountant/staff). (Sep 2026, requested while making all users show as payroll payees — the payroll UserObserver currently skips client-role users defensively, so this unpays that workaround.)
 
 - [ ] Bring the remaining resource_mgr concepts into acacia — services (Sep 2026) and the skills library (Sep 2026, Modules/Skills) are across; the allocations/resourcing concepts are what's left. Review https://github.com/baradhili/resource_mgr for those.
 
@@ -14,8 +14,6 @@ here once their changelog entry lands. Ordered by priority.
 - [ ] cucumber tests via behat — plan reviewed and refreshed 2026-09-28: .zcode/plans/behat-migration-plan.md (scope renewal with maintainer is the first step; suite has grown to 55 feature files + the Modules suite since the original approval).
 
 - [ ] Backfill class docblocks on the ~83 pre-convention core classes (app/Models, app/Http/Controllers, widgets, console commands, remaining services — found by the Sep 2026 docblock audit). Write them as code is touched per AGENTS.md, or as one dedicated documentation pass; state invariants, not narrations.
-
-- [ ] Retire the reconciliation auto-create service methods (`autoCreateCashReceipts`/`autoCreatePurchases` and their single-line variants) — decided Sep 2026 (maintainer): no auto-create, the Match screen's create flows own this now. Nothing in the app calls them; delete them and the coverage that only they justify (their dead matcher cousins `calculateMatchScore`/`getMatchingCandidates` went the same way).
 
 - [ ] Flesh out dashboard layout management - allow user to move widgets, add and remove. Resize as an option (or add as a future todo).
 

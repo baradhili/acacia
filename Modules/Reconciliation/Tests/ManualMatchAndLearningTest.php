@@ -398,24 +398,33 @@ class ManualMatchAndLearningTest extends TestCase
         $this->assertEquals($septemberPayment->id, $septemberLine->matched_transaction_id);
     }
 
-    public function test_learned_rule_resolves_the_client_for_auto_created_receipts(): void
+    public function test_the_learned_rule_resolves_payers_no_name_matching_could(): void
     {
         // The payer's bank descriptor shares no words with the client
-        // name — only the learned rule can resolve it.
+        // name — only the learned rule can resolve it. (The auto-create
+        // flows that once consumed this resolution went with their
+        // service methods; the learned match pass is the consumer.)
         $acme = $this->client(['name' => 'Acme Corporation Pty Ltd']);
-        $payment = $this->payment($acme, 1500.00, '2026-09-10');
-        $line = $this->bankLine(['payer_name' => 'ACME PTY LD']);
-        $this->service->manualOverrideLink($line, 'payment', $payment->id);
+        $augustPayment = $this->payment($acme, 1500.00, '2026-08-10');
+        $augustLine = $this->bankLine([
+            'payer_name' => 'Totally Different Trading',
+            'reference' => 'INV-AUG',
+            'transaction_date' => Carbon::parse('2026-08-10'),
+        ]);
+        $this->service->manualOverrideLink($augustLine, 'payment', $augustPayment->id);
 
-        $nextLine = $this->bankLine([
-            'payer_name' => 'ACME PTY LD',
+        $septemberPayment = $this->payment($acme, 1200.00, '2026-09-10');
+        $septemberLine = $this->bankLine([
+            'payer_name' => 'Totally Different Trading',
             'reference' => null,
-            'source_id' => 'WISE-NEXT',
+            'amount' => 1200.00,
         ]);
 
-        $results = $this->service->autoCreateCashReceipts();
+        $results = $this->service->autoMatchAll();
 
-        $this->assertSame(1, $results['count']);
-        $this->assertSame($acme->id, $results['created'][0]->client_id);
+        $this->assertSame(1, $results['matched']);
+        $septemberLine->refresh();
+        $this->assertSame('payment', $septemberLine->matched_transaction_type);
+        $this->assertEquals($septemberPayment->id, $septemberLine->matched_transaction_id);
     }
 }

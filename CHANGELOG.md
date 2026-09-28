@@ -5,6 +5,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-09-28
 
+### Removed — the reconciliation auto-create service methods
+
+`autoCreateCashReceipts`/`autoCreatePurchases` and their single-line
+variants (`createCashReceiptFromBankTransaction`,
+`createPurchaseFromBankTransaction`), with the helpers only they used
+(`findClientForTransaction`, `findSupplierForTransaction`,
+`suggestExpenseAccount`, `postPaymentToIFRS`) — retired per
+maintainer decision: no auto-create. They had no callers since the
+Match screen took over creating what a line pays for, and they were
+broken against real imported debits until the magnitude fix bought
+them one last stay (see the entry below). The matching capability is
+untouched — every method the match screen, auto-matcher and learning
+loop call survives, and the module suite exercises them end to end.
+The one test that depended on auto-create was rewritten to prove the
+learned rule resolves payers no name matching could, against the
+match pass instead.
+
 ### Changed — test suite hardening: CI, clock-proof fixtures, payroll HTTP coverage, route smoke
 
 The general testing review's fixes, three of which caught live bugs.
