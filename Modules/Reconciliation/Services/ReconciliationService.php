@@ -1264,7 +1264,11 @@ class ReconciliationService
     }
 
     /**
-     * Auto-create a bill (paid at entry) from an unmatched Wise debit
+     * Auto-create a bill (paid at entry) from an unmatched Wise debit.
+     * Bank debits are stored negative while bill lines and payments
+     * are positive amounts, so the bill line and its payment carry the
+     * debit's magnitude, never its sign — the same convention
+     * learnedMatchFor applies when comparing debits to payment amounts.
      *
      * @param  BankTransaction  $bankTransaction  The unmatched debit transaction
      * @param  int  $supplierId  The supplier to associate with the bill
@@ -1305,9 +1309,6 @@ class ReconciliationService
             $description = "Auto-created from Wise transaction {$bankTransaction->source_id}."
                 ." Description: {$bankTransaction->description}";
 
-            // Bank debits are stored negative while bill lines and
-            // payments are positive amounts — categorise and pay the
-            // magnitude (the same convention learnedMatchFor uses).
             $amount = abs((float) $bankTransaction->amount);
 
             $bill = Bill::createWithUniqueNumber([
