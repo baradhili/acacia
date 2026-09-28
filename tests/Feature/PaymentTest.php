@@ -17,6 +17,15 @@ use IFRS\Models\Vat;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
+/**
+ * Client payments: creation and numbering, allocations across
+ * invoices (partial, over-payment, manual override, removal,
+ * reallocation and their invoice-status effects), voiding, refunds
+ * from credit notes, and the IFRS posting rules — per-item GST
+ * treatment for allocated shares, the GST-inclusive default for the
+ * unallocated remainder, and refunds netting the ledger back to
+ * zero.
+ */
 class PaymentTest extends TestCase
 {
     use RefreshDatabase;

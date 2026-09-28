@@ -11,6 +11,14 @@ use Illuminate\Support\Facades\DB;
 use Modules\Crm\Models\Lead;
 use Modules\Crm\Models\LeadActivity;
 
+/**
+ * CRM leads over HTTP: the pipeline screen (funnel, pipeline value
+ * and forecast, overdue follow-ups, owner/status/source filters),
+ * lead CRUD, status transitions, converting a won lead into a client
+ * contact, and the activity trail behind each lead. The create/edit
+ * variants share one form — create() passes the empty model that
+ * keeps it rendering.
+ */
 class LeadController extends Controller
 {
     public function index(Request $request)

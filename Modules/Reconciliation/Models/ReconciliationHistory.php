@@ -7,6 +7,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * The audit trail behind every reconciliation action on a bank line —
+ * auto and manual matches, unmatches, ignore/restore, auto-created
+ * receipts and bills — recording success or failure, the ledger-side
+ * record it linked to when one exists, and who acted. Written by
+ * ReconciliationService::logHistory() at the moment of the action, so
+ * the trail explains how a line reached its current status.
+ */
 class ReconciliationHistory extends Model
 {
     use HasFactory;

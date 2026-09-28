@@ -25,6 +25,19 @@ use Modules\Reconciliation\Models\BankTransaction;
 use Modules\Reconciliation\Models\ReconciliationCounterpartyRule;
 use Modules\Reconciliation\Models\ReconciliationHistory;
 
+/**
+ * Bank reconciliation against the Wise statement import: the CSV
+ * import (both Wise layouts), the auto-matcher — a strict pass
+ * pairing bank lines with unreconciled bank-account ledger movements
+ * by reference/amount/date inside the tolerances, then a learned
+ * pass using the counterparty rules an earlier match taught — the
+ * unreconciled-movements panel (the book side: ledger movements no
+ * matched line accounts for), the maintenance actions (ignore and
+ * restore, manual match and unmatch, each history-logged), and the
+ * auto-create flows turning an unmatched line into a client receipt
+ * or a paid supplier bill. The import stores debits negative; every
+ * amount comparison or categorisation works in magnitudes.
+ */
 class ReconciliationService
 {
     // Matching tolerances
