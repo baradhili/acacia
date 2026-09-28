@@ -14,6 +14,7 @@ use IFRS\Models\Entity;
 use IFRS\Models\ReportingPeriod;
 use IFRS\Models\Vat;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Modules\Reconciliation\Models\BankTransaction;
 use Modules\Reconciliation\Models\ReconciliationHistory;
 use Modules\Reconciliation\Services\ReconciliationService;
@@ -354,6 +355,68 @@ class MatchingTolerancesAndMaintenanceTest extends TestCase
         $credit = $this->bankLine();
         $this->assertNull($this->service->createCashReceiptFromBankTransaction($credit, 99999));
         $this->assertSame(BankTransaction::STATUS_PENDING, $credit->fresh()->status);
+    }
+
+    public function test_a_created_receipt_keeps_the_bank_date_reference_and_posts_to_ifrs(): void
+    {
+        $acme = $this->client();
+
+        $line = $this->bankLine([
+            'source_id' => 'WISE-RECEIPT-1',
+            'reference' => 'INV-2026-0042',
+            'amount' => 1500.00,
+            'transaction_date' => Carbon::parse('2026-09-10'),
+        ]);
+
+        $payment = $this->service->createCashReceiptFromBankTransaction($line, $acme->id);
+
+        $this->assertNotNull($payment);
+        $this->assertSame(Payment::STATUS_COMPLETED, $payment->status);
+        $this->assertSame(Payment::METHOD_BANK_TRANSFER, $payment->payment_method);
+        $this->assertEqualsWithDelta(1500.00, (float) $payment->amount, 0.001);
+        // The bank line's own facts carry over: its value date and the
+        // payer's reference, plus the source id in the notes trail.
+        $this->assertSame('2026-09-10', $payment->payment_date->toDateString());
+        $this->assertSame('INV-2026-0042', $payment->reference);
+        $this->assertStringContainsString('WISE-RECEIPT-1', $payment->notes);
+
+        // Posted to IFRS: Dr Bank the full tax-inclusive amount, Cr
+        // Revenue the net and Cr GST Payable the component — the
+        // unallocated receipt's default GST-inclusive treatment.
+        $this->assertNotNull($payment->ifrs_receipt_id);
+
+        $ledger = DB::table('ifrs_ledgers')
+            ->where('transaction_id', $payment->ifrs_receipt_id)
+            ->whereNull('deleted_at')
+            ->get();
+
+        $bank = Account::where('code', 320)->value('id');
+        $gst = Account::where('code', 2200)->value('id');
+
+        $this->assertEqualsWithDelta(
+            1500.00,
+            (float) $ledger->where('post_account', $bank)->where('entry_type', 'D')->sum('amount'),
+            0.001
+        );
+        $gstComponent = (float) $ledger->where('post_account', $gst)->where('entry_type', 'C')->sum('amount');
+        $this->assertEqualsWithDelta(136.36, $gstComponent, 0.01);
+
+        // The Vat line posts gross to revenue and back-outs the GST as a
+        // debit on revenue (its credit leg being the 2200 row above), so
+        // revenue keeps the net: 1500 credited less 136.36 debited.
+        $revenue = Account::where('code', 4100)->value('id');
+        $this->assertEqualsWithDelta(
+            1500.00 - $gstComponent,
+            (float) $ledger->where('post_account', $revenue)->where('entry_type', 'C')->sum('amount')
+                - (float) $ledger->where('post_account', $revenue)->where('entry_type', 'D')->sum('amount'),
+            0.001
+        );
+
+        // And the bank line itself is matched to the receipt.
+        $line->refresh();
+        $this->assertSame(BankTransaction::STATUS_MATCHED, $line->status);
+        $this->assertSame('payment', $line->matched_transaction_type);
+        $this->assertEquals($payment->id, $line->matched_transaction_id);
     }
 
     public function test_auto_created_receipts_can_be_scoped_to_one_clients_lines(): void
