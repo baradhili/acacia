@@ -14,16 +14,29 @@ document.addEventListener('alpine:init', () => {
         saving: false,
         saveError: false,
 
-        toggleEdit() {
-            this.isEditing = !this.isEditing;
-
+        // Leaving edit mode persists first; when the save fails, edit
+        // mode stays open so the toolbar error stays visible and the
+        // staged layout survives for a retry (closing would silently
+        // discard it on the next page load).
+        async toggleEdit() {
             if (this.isEditing) {
-                this.saveError = false;
-                this.enableDragDrop();
-            } else {
+                this.saving = true;
+                const saved = await this.save();
+                this.saving = false;
+
+                if (!saved) {
+                    this.saveError = true;
+                    return;
+                }
+
+                this.isEditing = false;
                 this.disableDragDrop();
-                this.save();
+                return;
             }
+
+            this.isEditing = true;
+            this.saveError = false;
+            this.enableDragDrop();
         },
 
         enableDragDrop() {
@@ -88,6 +101,8 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        // Persists the current DOM sequence; resolves false (and
+        // leaves reporting to the caller) when the request fails.
         async save() {
             const widgets = [
                 ...document.querySelectorAll('#widget-grid .widget-card'),
@@ -100,7 +115,6 @@ document.addEventListener('alpine:init', () => {
 
             try {
                 this.saving = true;
-                this.saveError = false;
                 const response = await fetch('/api/widget-preferences', {
                     method: 'POST',
                     headers: {
@@ -113,9 +127,10 @@ document.addEventListener('alpine:init', () => {
                 if (!response.ok) {
                     throw new Error(`Save failed: ${response.status}`);
                 }
+                return true;
             } catch (e) {
                 console.error('Failed to save dashboard layout:', e);
-                this.saveError = true;
+                return false;
             } finally {
                 this.saving = false;
             }
