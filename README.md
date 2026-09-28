@@ -353,7 +353,7 @@ php artisan sail:install
 
 ```dotenv
 APP_TIMEZONE=Australia/Sydney
-APP_LOCALE=en-AU
+APP_LOCALE=en_AU
 
 # Database
 DB_CONNECTION=mysql
