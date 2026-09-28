@@ -24,11 +24,16 @@ save endpoint rejected every payload) are zeroed to "shipped span" on
 the way up, and rollback back-fills NULL `position_y` rows before the
 column loses NULL instead of dying on them. **The full save** now
 writes its row updates and the stale-widget cleanup in one
-transaction, so a failure can't commit a half-moved layout. **Hidden
+transaction, so a failure can't commit a half-moved layout; its
+payload must be a list of distinct registry widgets, and its cleanup
+targets widgets that left the registry — a partial save rewrites only
+what it mentions. **Hidden
 widgets kept their query cost**: the store rendered every removed
 card via `@widget` on each dashboard load; the page now ships only
 the cheap catalog rows and a `hidden-widgets` endpoint serves the
-rendered cards the first time edit mode opens.
+rendered cards the first time edit mode opens (a failed fetch aborts
+entering edit mode with a visible error rather than opening it with
+inert Add buttons).
 
 ## [Unreleased] — 2026-09-28
 
