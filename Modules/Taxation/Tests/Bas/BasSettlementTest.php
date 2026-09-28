@@ -160,13 +160,15 @@ class BasSettlementTest extends TestCase
             ->assertOk()
             ->assertSee('value="'.$latest.'"', false);
 
-        // A requested as_at replaces it everywhere.
+        // A requested as_at replaces it everywhere — scoped to the
+        // as-at surfaces: the PAYG-I accrual card's quarter picker
+        // legitimately offers every quarter end, latest included.
         $requested = $ends[0]['end']->toDateString();
         $this->actingAs($this->admin())
             ->get('/bas-settlements?as_at='.$requested)
             ->assertOk()
             ->assertSee('value="'.$requested.'"', false)
-            ->assertDontSee('value="'.$latest.'"', false);
+            ->assertDontSee('id="settle_as_at" value="'.$latest.'"', false);
     }
 
     public function test_staff_cannot_record_a_settlement(): void

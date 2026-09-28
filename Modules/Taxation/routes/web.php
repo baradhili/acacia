@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\Taxation\Http\Controllers\BasSettlementController;
+use Modules\Taxation\Http\Controllers\PaygInstalmentController;
 use Modules\Taxation\Http\Controllers\TaxReportController;
 
 // 'web' is explicit: provider-loaded routes inherit no middleware group,
@@ -32,4 +33,7 @@ Route::middleware(['web', 'auth', 'entity', 'role:admin|accountant'])->group(fun
     Route::get('/bas-settlements', [BasSettlementController::class, 'index'])->name('bas-settlements.index');
     Route::post('/bas-settlements', [BasSettlementController::class, 'store'])->name('bas-settlements.store');
     Route::post('/bas-settlements/{settlement}/reverse', [BasSettlementController::class, 'reverse'])->name('bas-settlements.reverse');
+
+    Route::post('/paygi-accruals', [PaygInstalmentController::class, 'store'])->name('paygi-accruals.store');
+    Route::post('/paygi-accruals/{accrual}/reverse', [PaygInstalmentController::class, 'reverse'])->name('paygi-accruals.reverse');
 });
