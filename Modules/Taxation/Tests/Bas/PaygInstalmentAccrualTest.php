@@ -384,6 +384,18 @@ class PaygInstalmentAccrualTest extends TestCase
         $this->assertEqualsWithDelta(-12345.7, $this->balance($this->incomeTaxPayable), 0.001);
     }
 
+    public function test_a_malformed_paygi_quarter_parameter_falls_back_to_the_latest_quarter(): void
+    {
+        config(['australian.bas.installment_rate' => 25]);
+
+        // Not a date at all: the card falls back to the latest
+        // completed quarter instead of erroring on Carbon::parse().
+        $this->actingAs($this->admin())
+            ->get('/bas-settlements?paygi_quarter=not-a-date')
+            ->assertOk()
+            ->assertSee('PAYG instalment accrual');
+    }
+
     public function test_staff_cannot_record_an_accrual(): void
     {
         config(['australian.bas.installment_rate' => 25]);

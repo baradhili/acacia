@@ -5,6 +5,7 @@ namespace Modules\Taxation\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Services\IfrsPosting;
 use Carbon\Carbon;
+use Carbon\Exceptions\InvalidFormatException;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Modules\Taxation\Models\BasSettlement;
@@ -42,7 +43,11 @@ class BasSettlementController extends Controller
         // requested date is not a BAS quarter end. Hidden before any
         // quarter has completed — there is nothing to accrue yet.
         $paygi = app(PaygInstalmentService::class);
-        $paygiEnd = $request->get('paygi_quarter') ? Carbon::parse($request->get('paygi_quarter')) : null;
+        try {
+            $paygiEnd = $request->get('paygi_quarter') ? Carbon::parse($request->get('paygi_quarter')) : null;
+        } catch (InvalidFormatException) {
+            $paygiEnd = null; // malformed query value — same as absent
+        }
         if ($paygiEnd === null || $paygi->quarterFor($entity, $paygiEnd) === null) {
             $paygiEnd = $quarterEnds !== [] ? last($quarterEnds)['end'] : null;
         }
