@@ -3,6 +3,109 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] — 2026-09-28
+
+### Changed — reporting split: ReportController decomposed, AU statutory reporting extracted to Modules/Taxation
+
+The 2098-line report god controller is broken along its four domains —
+TimeReportController, FinancialStatementController,
+LedgerReportController, TaxReportController, BusinessReportController —
+with every public URL and route name unchanged, so bookmarks, views and
+tests are untouched. GST/BAS/company-tax reporting then moved out of
+core into **Modules/Taxation** (TaxReportController,
+BasSettlementController, BasSettlementService, the
+BasSettlement/BasStatement models, exports, config and views; the table
+migrations stay in the core schema like Reconciliation's bank tables).
+W1/W2 (Payroll) and franking (Shares) become module-to-module
+`class_exists` soft deps. The split surfaced and fixed a latent Nav
+bug: module providers boot before the core registers its dropdowns, so
+an `addTopbarChild` targeting a core-owned dropdown silently no-opped.
+
+### Added — Skills module (ported from resource_mgr)
+
+A searchable skill library (name, category, description) whose entries
+link to payroll payees at a proficiency level
+(beginner/intermediate/advanced/expert) and to catalogue services as
+required skills. Unlike upstream — loose JSON lists of skill-name
+strings — both sides are foreign-keyed link tables with cascading
+deletes. The Payroll Employee and core Service models stay untouched;
+the module owns both pivots (the ProjectStaff pattern).
+
+### Changed — module boundary repairs
+
+Shares-owned views (the dividend-statement PDF and email, the
+franking-disclosure PDF) now ship inside Modules/Shares under its
+feature dirs instead of core's `reports/pdf/` and `emails/`; and
+`ResolvesReportingContext::ifrsEntity()` delegates to
+`IfrsPosting::resolveEntity()` instead of re-implementing the rule —
+which also lends entity-less users the fallback entity in memory,
+keeping the IFRS EntityScope from fatalling on their report queries.
+
+## [Unreleased] — 2026-09-26
+
+### Added — employee resumes module
+
+baradhili/laravel-resume incorporated as **Modules/Resumes**: upload a
+JSON Resume v1.0.0 (modified schema) against a payroll payee, tailor it
+to keywords (any/all match, project cross-references, emptied sections
+stripped), and export as filtered JSON, LaTeX source, a
+LuaLaTeX-compiled PDF or a PHPWord DOCX. Upload and delete are limited
+to admins and the owning employee. No raw upload is kept on disk —
+every export regenerates from the stored `parsed_data` (the vendored
+schema is committed, never fetched at runtime).
+
+### Changed — every staff-side user is a payroll payee
+
+A module UserObserver (observing the core User) creates each new
+user's linked payee record — name, email and entity from the user — so
+staff can hold resumes and everyone appears in payroll.
+`payroll:sync-users` backfills users created before the observer
+(idempotent; run manually after upgrades), the employees screen gained
+a Login column, and the previously broken `Employee::user()` relation
+now resolves. Portal-client users are skipped defensively — the client
+role is slated for removal (todo-list).
+
+### Changed — Employees topbar section
+
+Resumes slots into a new Employees dropdown owned by Payroll in the
+topbar (sidebar entry dropped), evening out the dropdowns. An AGENTS.md
+agent guide and refreshed module/ops docs landed alongside.
+
+## [Unreleased] — 2026-09-22
+
+### Fixed — supplier payments double-applied GST (with books repair)
+
+Line items were saved twice — once explicitly after `addVat()` and
+again by the transaction's `saveLineItems()` — and the package's
+second `applyVats()` firstOrCreate missed the stored (rounded) tax
+whenever the GST component carried more than four decimal places,
+inserting a duplicate applied-vat row and posting the GST legs twice.
+The redundant saves are gone from all four posting paths (client
+payments, supplier payments, reversal journals, bill reallocation),
+and the new `ifrs:repair-duplicated-gst` command removes the duplicate
+rows and posts one correcting journal per affected transaction — dated
+in the original period, or the current one when that period is closed.
+
+### Added — admins can correct a posted payment's method
+
+Bank-side relabels are metadata-only (they all credit the same bank
+account); anything involving the employee-reimbursement method — or a
+different employee — unwinds the posted entry (mirrored reversal
+beside the original, prepayments voided and recreated) and re-posts on
+the corrected leg. Non-admins keep the lock; amount and date cannot
+change in the same request.
+
+### Added — the reconciliation screen's book side
+
+Every IFRS ledger movement on a bank account that no matched bank line
+has reconciled, traced to the payment that posted it (client, supplier
+or reimbursement payment) or labelled by transaction type, with the
+PAY/SPAY reference linked to its ERP record. Reversal pairs sharing a
+reference net to zero and drop off (a fully reversed payment never
+waits for a bank line); listings and match candidates scope to the open
+financial year (honouring the open-year pin), so closed-year history
+never queues for reconciliation.
+
 ## [Unreleased] — 2026-09-21
 
 ### Added — employee expense reimbursements (paid-by-employee supplier payments)
@@ -27,6 +130,270 @@ capture cannot be voided (void the reimbursement first). The
 `ifrs:post-payments` backfill now retries reimbursement payments too
 and skips anything still pending approval. Account 2280 is seeded on
 fresh installs and created lazily on existing ones.
+
+## [Unreleased] — 2026-09-18
+
+### Added — BAS report leads with the prior-year unsettled line
+
+The report table opens with the prior year's unsettled BAS position
+(every column shown) and recording a settlement surfaces the roll-in,
+so cross-year netting is visible where the decision is made.
+
+### Fixed — bank lines match payments, not documents
+
+Auto-matching paired bank lines with invoices/bills directly,
+bypassing the payment layer (and missing supplier payments entirely);
+it now matches on the payment records that actually moved the bank,
+including supplier payments.
+
+### Fixed — CRM pipeline widget renders in the standard dashboard card
+style; bill-payment edit page restores its document uploads.
+
+## [Unreleased] — 2026-09-17
+
+### Changed — modularisation (nwidart/laravel-modules)
+
+The shell now exposes akaunting-style registration contracts — a nav
+registry replaced the 58 hardcoded sidebar/topbar links and the
+dashboard grid renders a widget registry — so modules contribute UI
+without touching core views. Payroll+PSI, Reconciliation and
+Shares/franking/dividends were extracted with history preserved
+(core:true, only disableable), with cross-module seams degrading via
+`class_exists`. The admin Modules screen enables/disables, updates
+git-installed modules, uninstalls (migrations rolled back, directory
+deleted — refused for core) and installs from a GitHub URL via
+clone→validate→move→migrate→enable with nothing left behind on
+failure. `modules_statuses.json` ships committed. Authoring doc:
+docs/modules.md; plan: .zcode/plans/modularisation.md.
+
+### Added — CRM module (sales funnel)
+
+Leads with a guarded funnel (new → contacted → qualified → proposal →
+won/lost; loss reasons, re-open), estimated value + win probability,
+source, owner and the plan; the index shows stage counts, open
+pipeline value, probability-weighted forecast and overdue follow-ups.
+Activities (call/email/meeting/note/task) log per lead. Winning
+converts a proposal lead to a Client (details carried, lead stays
+linked) — the ERP seam — and a proposal-stage lead has an
+estimate shortcut. Targets: monthly sales goals (admin/accountant)
+measured against won-lead value. First module authored in place with
+its migrations shipping inside the module.
+
+### Added — estimates: sections, optional extras, services linkage
+
+Estimate lines carry a Section label (consecutive same-label lines
+group under a heading) and can be flagged Optional extras — excluded
+from the committed subtotal/tax/total, quoted alongside, and only
+invoiced when Convert to Invoice ticks "include optional items". Lines
+reference the catalogue Service (service_id kept through
+description/price tailoring, untied if the catalogue entry is deleted)
+and the forms offer a per-line Service select. Drive-by fix: the
+estimates edit view never existed — edit and duplicate 500'd.
+
+### Fixed — cancelling an invoice releases its time entries
+
+Invoiced state is derived, never stored: `TimeEntry::invoiceItem()`
+only sees items on non-cancelled invoices, so cancelling releases the
+entries automatically; every consumer reads that relation (unbilled-time
+widget, dashboard, the create-from-time-entries picker, the unapprove
+guard).
+
+## [Unreleased] — 2026-09-16
+
+### Added — manual bank reconciliation with a learning automatcher
+
+Pending bank lines gained a Match screen (candidates ±14 days across
+payments/invoices/bills/ledger entries, a reference/counterparty
+search that ignores the amount, match-by-id) plus Unmatch. Matching
+learns: the counterparty is remembered with the client/supplier it
+resolved to (`reconciliation_counterparty_rules`); when the strict
+±$0.01/±3-day ledger pass misses, the auto-matcher pairs later lines
+from the same counterparty with a fresh unconsumed payment or bill of
+theirs, and the auto-create receipt/bill flows resolve the counterparty
+from the rule before name matching.
+
+### Added — PAYG instalments; income-tax settlements drive the franking account
+
+BAS settlements gained a `payg_instalment` type alongside
+gst/payg_withholding/income_tax (instalments prepay income tax so both
+settle 2240; the balance-based netting catches any mixture). Settling
+the income-tax types now drives the franking account in the same
+transaction — paying credits it (TC), a refund debits it (RF), reversal
+mirrors back out — while GST and PAYG withholding stay gated out. The
+BAS report shows W1/W2 from processed pay runs attributed by pay day
+(draft runs don't count) and freezing snapshots them.
+
+### Added — company bank details
+
+Company Details gained bank account name, BSB and account number;
+invoices print them as a Payment Details block (PDF in the notes
+styling, screen as the matching card; blank details omit the block).
+
+### Changed — time entries go against a project only
+
+The Client and PO selects left the entry form (read-only displays
+filled from the chosen project), ad-hoc client and internal time are
+refused, and the saving hook derives client_id and purchase_order_id
+from the project. Projects must link one of their client's POs
+(enforced server-side), the link mirrors onto
+purchase_orders.project_id, and manual "allocate time to PO" is gone —
+an entry's PO comes solely from its project. Historical project-less
+entries stay as history.
+
+### Changed — navigation: a Setup dropdown in the topbar; BAS
+Settlements moved from Reports to Accounting.
+
+## [Unreleased] — 2026-09-10
+
+### Added — ABN/ACN/TFN formatting and normalisation
+
+`App\Support\AuNumbers` displays ABN 2-3-3-3, ACN 3-3-3, TFN 3-3-3
+(3-5 for 8 digits); validation accepts the usual spaced entry; Client,
+Supplier, CompanyProfile, CompanyShareholder and payroll Employee
+models normalise to bare digits on save and expose formatted
+accessors. Displays updated across contacts, the shareholder
+register, the invoice PDF and company tax report (CSV exports keep
+bare digits).
+
+### Added — negative adjustment lines and separate GST override
+
+Item unit prices may be negative on bills and invoices (a negative
+price, 0%-rate line adjusts the ex-GST subtotal); a `gst_override`
+column sets a line's GST explicitly — negative for downward
+adjustments — so a zero-priced override line moves only the GST.
+
+### Added — ledger retention pruning
+
+`ledger:prune` (scheduled yearly, or by hand; --dry-run, --years)
+removes the double-entry trail of CLOSED financial years that ended
+before today−N years, after writing an opening-balance snapshot at the
+prune boundary so `OpeningBalances::balanceAt()` returns identical
+figures for every later date. Open years are never pruned; business
+documents (invoices/bills/payments) are kept as the GST/audit record.
+N = entity_settings.retention_years, managed on the Administration
+page (default 7).
+
+### Fixed — credit notes clear overdue; cancelled invoices owe nothing
+
+Issuing a credit note against an invoice un-marks it (overdue →
+sent/partially_paid) and keeps the overdue marker off while the note
+stands; voiding the note returns the invoice to normal dunning.
+Cancelled invoices return amount_due 0 regardless of total/allocations.
+
+### Changed — every user is created linked with an entity
+
+The admin user form requires an Entity (enforced on store+update), the
+users index shows the entity column, and self-registration links the
+new user to the instance's entity.
+
+### Changed — navigation: financial statements linked into the IFRS
+Reports section (Balance Sheet was implemented but unreachable); the
+topbar gained Reports, Shares and Accounting dropdowns; an Admin
+section in the profile dropdown carries Administration, Backups,
+Users and the rarely-executed Setup & maintenance links that left the
+sidebar.
+
+## [Unreleased] — 2026-09-09
+
+### Added — Australian payroll and personal services income
+
+Employees/directors/contractors master data; pay runs with payslips —
+PAYG withheld from the ATO NAT 1004 Schedule 1 weekly coefficient
+tables, SG 12% on OTE from 1 Jul 2026 (11.5% before; payday super),
+director fees withhold and earn super, labour-only individual
+contractors earn super; closely-linked and PSI flags snapshot onto
+payslips. Processing posts three journals (Dr Wages+Super expense /
+Cr PAYG 2210 + Cr Wages Payable 2235 + Cr Super Payable 2220 + Cr
+Bank) with reversal and locked-period guards. The PSI screen runs the
+80% rule over time-entry-backed invoice income by client, the PSB
+Results Test checklist gates PSI mode, attribution nets PSI received
+against wages paid to PSI workers, and PSI-mode deduction guidance
+follows. Not yet: STP lodgement (data is STP-shaped), hard-blocking
+PSI-disallowed bill categories, the fortnightly-specific coefficient
+table. Extracted into Modules/Payroll with the modularisation below.
+
+### Added — shares show the value holdings are carried at
+
+holdingsByClass() aggregates each holding's book value (amount_paid,
+falling back to quantity × unit_price) with the average unit price;
+shown on the shareholder register, the shareholder screen's current
+holdings and a per-transaction Value column.
+
+### Added — services catalogue; project timesheet report
+
+Services CRUD (name, description, standard hourly rate — nullable for
+fixed-fee, 4dp) at /services, admin/accountant only. The Project
+Timesheet report filters by client/project/date and sums hours and
+amounts by week (Monday starts) and by calendar month side by side;
+approved entries only.
+
+### Added — unlodged GST on the dashboard and GST report
+
+The dashboard widget reads the ledger via
+BasSettlementService::position() — the same balances the BAS
+settlement screen nets — showing the net to pay/refund plus both
+sides; the GST/BAS report gained an "Unlodged GST position" card.
+
+### Changed — bank reconciliation works from CSV; Wise API removed
+
+processImport really imports (the bank's current
+transaction-history.csv format handled: IN/OUT directions, multi-
+currency card spend, REFUNDED/zero rows skipped, NOTPROVIDED
+references cleared; re-uploads skip already-imported rows), and the
+reconciliation screen is real (pending/matched/ignored counts,
+Auto-match and Ignore actions). The Wise API integration is gone
+entirely (WiseService, reconcile:wise command + schedule, config, env
+keys, tests) — CSV import is the only feed.
+
+### Changed — time-entry uniqueness and unapproval
+
+One entry per staff member per client per day (internal time exempt),
+and approved entries gained an Unapprove action returning them to
+draft for editing — refused while allocated to a non-cancelled
+invoice; cancelling the invoice releases it.
+
+### Fixed — backup and BAS settlement hardening
+
+Backups: runAndPrune() serialises on a cross-process atomic lock
+(overlapping runs report "already running"), BackupSetting became a
+database-enforced singleton (fixed key + unique index; the loser of the
+create race re-reads the winner's row), the SQLite fallback dumps
+through the live connection (WAL contents captured; the torn-page raw
+file copy is gone) and archive stamps carry milliseconds plus a random
+suffix. BAS: the settlement screen derives one as-at date across
+positions/filter/form, unfreezing aborts 404 for another entity's
+statement, and reversals validate the period guard and post inside a
+transaction. The backup runbook documents restores for both SQLite
+archive formats.
+
+## [Unreleased] — 2026-09-04
+
+### Added — BAS settlements and frozen quarters
+
+Settlements gained a type (gst / payg_withholding / income_tax): the
+single liability accounts play both netting roles, so a debit balance
+(an overpayment) settles as an ATO refund; account codes configurable
+via env. The settlement screen shows all three unsettled positions
+with a type selector. Freezing a quarter from the BAS report snapshots
+its figures (G1/G10/G11/1A/1B/net) into a bas_statements row — the
+report, PDF and FY totals prefer the frozen figures, so backdated
+postings can never rewrite a lodged BAS; refreeze recaptures live
+figures, unfreeze returns the quarter to recomputation.
+
+### Added — backups
+
+`backup:create` command (MySQL via mysqldump, SQLite via VACUUM INTO
+snapshot, both gzipped) plus a tar.gz of the public storage disk land
+in {BACKUP_PATH}/db and /files, pruned per type. Frequency
+(daily/weekly/monthly) and backups-kept live in backup_settings,
+managed on the Backups admin page, which lists archives and runs the
+command on demand; scheduled daily 04:00 with the command's internal
+due-check honouring the frequency. Runbook documents restore.
+
+### Fixed — company logo on documents
+
+The uploaded logo renders on PDF invoices and on the bill record, the
+invoice header became profile-driven, and invoices say "Tax Invoice".
 
 ## [Unreleased] — 2026-09-03
 
@@ -119,6 +486,15 @@ phantom year in the selector; the estimated flag never applies to it.
   on the working year. Clock-derived statutory logic (BAS/report year pickers,
   period locks, package mechanics) is unchanged.
 
+### Fixed — invoicing and time-entry guards
+
+The time-entry consumption race on invoice creation closed (a concurrent
+request could invoice the same entries), the create-from-time-entries flows
+screen for single-client entries and refuse client mismatches, a purchase
+order's effective client always wins the client_id sync, and only open or
+partially-used POs can be invoiced. The time-entries picker gained
+"select all".
+
 ## [Unreleased] — 2026-08-27
 
 ### Added — prepaid subscriptions, domain names and licence fees (AASB/IFRS)
@@ -145,6 +521,44 @@ phantom year in the selector; the estimated flag never applies to it.
 - New seeded Vat `I "GST Input 10%"` → account 430; `BillPayment::postToIFRS()`
   prefers it for supplier-payment GST legs and falls back to `G`/2200 when not
   seeded. **Closes the long-standing follow-up from #22.**
+
+## [Unreleased] — 2026-08-26 to 2026-08-29
+
+Late-August features that predate the dated entries above.
+
+### Added — staged year-end close
+
+Trial close (checklist + proposed closing entries, `fiscal-year:trial` /
+Financial Years page) → approval (accountant/admin ≠ requester) → execute
+(`fiscal-year:close`) posts two JEs (reference FY-CLOSE-{year}) transferring
+every P&L balance to Retained Earnings, marks the IFRS ReportingPeriod
+CLOSED, locks the year's app periods and ensures next-FY exists OPEN.
+Reopen mirrors the entries back out. Closed FYs block payment/bill-payment
+dates, voids and unapplies with friendly errors; reports exclude FY-CLOSE
+references from P&L movement so historical statements survive the close,
+and the balance sheet stops adding on-the-fly profit once the FY is closed.
+CLI `--force` bypasses the approval workflow.
+
+### Added — bill editing and deletion
+
+Unpaid bills (draft/open/overdue with $0 paid) are fully editable; any bill
+can be deleted from any status — payments are voided and their ledger shares
+reversed via BillLifecycleService; paid bills are corrected by unapplying
+the payment first. Supplier payments got a Void action and posted payments
+can no longer be hard-deleted (which orphaned their journal entries).
+
+### Added — shares, franking account and dividends
+
+Shareholder registry with holdings per class, share classes on the Setup
+screen, franking account with AASB 1054 disclosure, and dividend
+declarations distributing per share class with franking — later extended
+by opening balances, carried values and the statement workflows documented
+above.
+
+### Fixed — cash-basis GST
+
+Cash-basis GST reporting now recognises settlements correctly across the
+purchase and sales cycles (the Fix/ifrs-gst-cash-basis PR).
 
 ## [Unreleased] — 2026-08-16
 
