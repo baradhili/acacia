@@ -7,17 +7,18 @@ use App\Models\WidgetPreference;
 use App\Support\Widgets;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 /**
  * Persists a user's dashboard layout over the widget registry. The
  * full save (POST) writes the complete sequence edit mode captured —
  * grid widgets in drag order, then removed ones — as position_y
- * indices, plus width and visibility per widget, and drops rows for
- * widgets that left the registry (a disabled module's). The
- * single-widget patch (PUT) covers add/remove/resize without a full
- * save. Widget names are validated against the registry so junk ids
- * never become preference rows.
+ * indices, plus width and visibility per widget, in one transaction,
+ * and drops rows for widgets that left the registry (a disabled
+ * module's). The single-widget patch (PUT) covers add/remove/resize
+ * without a full save. Widget names are validated against the
+ * registry so junk ids never become preference rows.
  */
 class WidgetPreferenceController extends Controller
 {
@@ -66,25 +67,30 @@ class WidgetPreferenceController extends Controller
             'widgets.*.width' => ['nullable', 'integer', 'min:0', 'max:4'],
         ]);
 
-        $userId = $request->user()->id;
-        $names = [];
+        // One transaction: a half-written sequence (some rows moved,
+        // the stale-widget delete not yet run) is worse than the save
+        // failing atomically and leaving the previous layout intact.
+        DB::transaction(function () use ($validated, $request): void {
+            $userId = $request->user()->id;
+            $names = [];
 
-        foreach ($validated['widgets'] as $index => $widget) {
-            $names[] = $widget['widget_name'];
-            WidgetPreference::updateOrCreate(
-                ['user_id' => $userId, 'widget_name' => $widget['widget_name']],
-                [
-                    'position_x' => 0,
-                    'position_y' => $index,
-                    'width' => $widget['width'] ?? 0,
-                    'visible' => $widget['visible'],
-                ],
-            );
-        }
+            foreach ($validated['widgets'] as $index => $widget) {
+                $names[] = $widget['widget_name'];
+                WidgetPreference::updateOrCreate(
+                    ['user_id' => $userId, 'widget_name' => $widget['widget_name']],
+                    [
+                        'position_x' => 0,
+                        'position_y' => $index,
+                        'width' => $widget['width'] ?? 0,
+                        'visible' => $widget['visible'],
+                    ],
+                );
+            }
 
-        WidgetPreference::where('user_id', $userId)
-            ->whereNotIn('widget_name', $names)
-            ->delete();
+            WidgetPreference::where('user_id', $userId)
+                ->whereNotIn('widget_name', $names)
+                ->delete();
+        });
 
         return response()->json([
             'success' => true,
