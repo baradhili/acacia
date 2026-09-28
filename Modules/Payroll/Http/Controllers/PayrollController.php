@@ -75,6 +75,13 @@ class PayrollController extends Controller
         ]);
     }
 
+    /**
+     * Add one employee's payslip to a draft run. hours and gross are
+     * optional and mutually exclusive input (hourly vs override
+     * basis); an absent optional field never reaches the validated
+     * array, so the isset guards — not the nullable rule — are what
+     * keep the hours-only path from reading a missing key.
+     */
     public function addPayslip(Request $request, PayRun $run)
     {
         $validated = $request->validate([
@@ -87,8 +94,6 @@ class PayrollController extends Controller
         $employee = Employee::findOrFail($validated['employee_id']);
 
         try {
-            // hours/gross are nullable: an absent field never reaches
-            // $validated, so the null-coalescing guards the reads.
             $this->payroll->addPayslip(
                 $run,
                 $employee,

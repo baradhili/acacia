@@ -38,6 +38,15 @@ class RouteSmokeTest extends TestCase
         'logout',
     ];
 
+    /**
+     * Screens that deliberately abort(404) on a bare database because
+     * their prerequisites are missing — the only routes allowed to
+     * answer 404. Anything else 404ing is a broken route.
+     */
+    private const GUARDED_404_URIS = [
+        'dividends/create',
+    ];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -79,13 +88,17 @@ class RouteSmokeTest extends TestCase
             $response = $this->actingAs($this->admin())->get('/'.ltrim($uri, '/'));
             $hits++;
 
-            // 404 is allowed for deliberately guarded screens that
-            // abort on a bare database (dividends requires a company
-            // profile and share classes first). What must never happen
-            // is a 500 — the CRM lead-create screen shipped one.
+            // Only the deliberately guarded screens may 404 (dividends
+            // aborts without a company profile and share classes) — a
+            // 404 anywhere else is a broken route, and a 500 is always
+            // a regression (the CRM lead-create screen shipped one).
+            $allowed = in_array($uri, self::GUARDED_404_URIS, true)
+                ? [200, 302, 303, 307, 404]
+                : [200, 302, 303, 307];
+
             $this->assertContains(
                 $response->getStatusCode(),
-                [200, 302, 303, 307, 404],
+                $allowed,
                 sprintf('GET %s (%s) returned %d', $uri, $route->getName(), $response->getStatusCode())
             );
         }

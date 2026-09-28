@@ -52,11 +52,14 @@ class LeadController extends Controller
         ]);
     }
 
+    /**
+     * The lead create form: the create/edit variants share one form
+     * that reads $lead attributes throughout, so the create side must
+     * pass an empty model — a null lead crashes the first attribute
+     * read.
+     */
     public function create()
     {
-        // An empty model: the create/edit form is shared and reads
-        // $lead attributes throughout — null attributes are fine, a
-        // missing model 500s the screen.
         return view('crm.leads.create', [
             'lead' => new Lead,
             'owners' => User::orderBy('name')->pluck('name', 'id'),

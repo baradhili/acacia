@@ -223,6 +223,21 @@ class PayrollRunHttpTest extends TestCase
             'payment_date' => '2026-09-15',
         ])->assertForbidden();
 
+        $second = Employee::create([
+            'entity_id' => $this->entity->id,
+            'name' => 'Joe Blocked',
+            'employment_type' => Employee::TYPE_EMPLOYEE,
+            'payment_basis' => Employee::BASIS_HOURLY,
+            'hourly_rate' => 40,
+            'tax_free_threshold' => true,
+        ]);
+        $this->actingAs($this->staff())
+            ->post("/payroll/runs/{$run->id}/payslips", [
+                'employee_id' => $second->id,
+                'hours' => 38,
+            ])->assertForbidden();
+        $this->assertDatabaseMissing('payslips', ['employee_id' => $second->id]);
+
         $this->actingAs($this->staff())->post("/payroll/runs/{$run->id}/process")->assertForbidden();
         $this->actingAs($this->staff())->post("/payroll/runs/{$run->id}/reverse")->assertForbidden();
         $this->actingAs($this->staff())->delete("/payroll/runs/{$run->id}")->assertForbidden();
