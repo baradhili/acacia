@@ -35,7 +35,9 @@ class TaxationServiceProvider extends ServiceProvider
         $nav->addTopbarChild('Reports', $this->reportsCompanyTaxItem());
         $nav->addTopbarChild('Accounting', $this->accountingSettlementsItem());
 
-        $this->app->make(Widgets::class)->add(GstPayableWidget::class);
+        // Position 40 slots the widget into its shipped place in the
+        // default grid (CoreNav::widgets() leaves the gap).
+        $this->app->make(Widgets::class)->add(GstPayableWidget::class, '', 40);
     }
 
     protected function reportsBasItem(): array

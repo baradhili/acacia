@@ -31,8 +31,8 @@ class CoreNav
 
     public static function registerWidgets(Widgets $widgets): void
     {
-        foreach (static::widgets() as [$class, $span]) {
-            $widgets->add($class, $span);
+        foreach (static::widgets() as [$class, $span, $position]) {
+            $widgets->add($class, $span, $position);
         }
     }
 
@@ -133,24 +133,28 @@ class CoreNav
     }
 
     /**
-     * The dashboard grid as shipped: class => span class ('' = one
-     * cell). Order matches the previous hardcoded grid so stored
-     * drag-order preferences keep resolving.
+     * The dashboard grid as shipped: class, span class ('' = one cell)
+     * and registry position. Positions match the previous hardcoded
+     * grid so stored drag-order preferences keep resolving AND the
+     * default order stays the shipped one — module widgets slot into
+     * the gaps (Practice's HoursThisMonthWidget 30 and
+     * UnbilledTimeWidget 110, Taxation's GstPayableWidget 40), which
+     * matters because module providers register before the core does.
      *
-     * @return list<array{0: class-string, 1: string}>
+     * @return list<array{0: class-string, 1: string, 2: int}>
      */
     public static function widgets(): array
     {
         return [
-            [TotalClientsWidget::class, ''],
-            [OutstandingInvoicesWidget::class, ''],
-            [CashFlowWidget::class, 'md:col-span-2 lg:col-span-4'],
-            [ARAgingWidget::class, 'md:col-span-1 lg:col-span-2'],
-            [BankBalanceWidget::class, 'md:col-span-1 lg:col-span-2'],
-            [RecentInvoicesWidget::class, 'md:col-span-1 lg:col-span-1'],
-            [RecentPaymentsWidget::class, 'md:col-span-1 lg:col-span-1'],
-            [OutstandingPOBudgetsWidget::class, 'md:col-span-1 lg:col-span-2'],
-            [PnLTrendWidget::class, 'md:col-span-1 lg:col-span-2'],
+            [TotalClientsWidget::class, '', 10],
+            [OutstandingInvoicesWidget::class, '', 20],
+            [CashFlowWidget::class, 'md:col-span-2 lg:col-span-4', 50],
+            [ARAgingWidget::class, 'md:col-span-1 lg:col-span-2', 60],
+            [BankBalanceWidget::class, 'md:col-span-1 lg:col-span-2', 70],
+            [RecentInvoicesWidget::class, 'md:col-span-1 lg:col-span-1', 80],
+            [RecentPaymentsWidget::class, 'md:col-span-1 lg:col-span-1', 90],
+            [OutstandingPOBudgetsWidget::class, 'md:col-span-1 lg:col-span-2', 100],
+            [PnLTrendWidget::class, 'md:col-span-1 lg:col-span-2', 120],
         ];
     }
 }

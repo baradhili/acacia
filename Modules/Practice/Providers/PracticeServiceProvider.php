@@ -36,9 +36,11 @@ class PracticeServiceProvider extends ServiceProvider
         $nav->addTopbarChild('Reports', $this->reportsLink('Project Timesheet', 'reports.project-timesheet', 14));
         $nav->addTopbarChild('Reports', $this->reportsLink('Project Profitability', 'projects.profitability', 15));
 
+        // Positions 30/110 slot the widgets into their shipped places in
+        // the default grid (CoreNav::widgets() leaves the gaps).
         $widgets = $this->app->make(Widgets::class);
-        $widgets->add(HoursThisMonthWidget::class);
-        $widgets->add(UnbilledTimeWidget::class, 'md:col-span-1 lg:col-span-2');
+        $widgets->add(HoursThisMonthWidget::class, '', 30);
+        $widgets->add(UnbilledTimeWidget::class, 'md:col-span-1 lg:col-span-2', 110);
     }
 
     protected function reportsLink(string $label, string $route, int $position): array

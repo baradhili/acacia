@@ -346,5 +346,19 @@ class NavigationTest extends TestCase
 
         $this->assertNotEmpty($widgets->all());
         $this->assertContains('CashFlowWidget', array_column($widgets->all(), 'id'));
+
+        // The default order (no saved drag order) is the shipped grid:
+        // core positions plus the module widgets in their slots, even
+        // though module providers register before the core does.
+        $shipped = [
+            'TotalClientsWidget', 'OutstandingInvoicesWidget', 'HoursThisMonthWidget',
+            'GstPayableWidget', 'CashFlowWidget', 'ARAgingWidget', 'BankBalanceWidget',
+            'RecentInvoicesWidget', 'RecentPaymentsWidget', 'OutstandingPOBudgetsWidget',
+            'UnbilledTimeWidget', 'PnLTrendWidget',
+        ];
+        $this->assertEquals(
+            $shipped,
+            array_values(array_intersect(array_column($widgets->all(), 'id'), $shipped))
+        );
     }
 }
