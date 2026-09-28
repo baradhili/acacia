@@ -77,10 +77,11 @@ class PayrollController extends Controller
 
     /**
      * Add one employee's payslip to a draft run. hours and gross are
-     * optional and mutually exclusive input (hourly vs override
-     * basis); an absent optional field never reaches the validated
-     * array, so the isset guards — not the nullable rule — are what
-     * keep the hours-only path from reading a missing key.
+     * both optional; when both arrive, gross overrides the hours-based
+     * calculation while hours remain recorded. An absent optional
+     * field never reaches the validated array, so the isset guards —
+     * not the nullable rule — keep the hours-only path from reading a
+     * missing key.
      */
     public function addPayslip(Request $request, PayRun $run)
     {
