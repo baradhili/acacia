@@ -36,10 +36,14 @@ the module owns both pivots (the ProjectStaff pattern).
 Shares-owned views (the dividend-statement PDF and email, the
 franking-disclosure PDF) now ship inside Modules/Shares under its
 feature dirs instead of core's `reports/pdf/` and `emails/`; and
-`ResolvesReportingContext::ifrsEntity()` delegates to
-`IfrsPosting::resolveEntity()` instead of re-implementing the rule —
-which also lends entity-less users the fallback entity in memory,
-keeping the IFRS EntityScope from fatalling on their report queries.
+`ResolvesReportingContext::ifrsEntity()` requires the authenticated
+user's own entity — a report 404s rather than borrowing
+`IfrsPosting::resolveEntity()`'s posting fallback (first entity, for
+unauthenticated jobs), which used to silently serve an entity-less
+user that entity's balances (review finding). Enforced before any
+controller runs by a new `entity` middleware on the core and Taxation
+report/settlement routes — the IFRS EntityScope would otherwise fatal
+on their queries — and regression-tested.
 
 ## [Unreleased] — 2026-09-26
 
