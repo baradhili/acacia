@@ -15,7 +15,7 @@ here once their changelog entry lands. Ordered by priority.
 
 - [ ] Backfill class docblocks on the ~83 pre-convention core classes (app/Models, app/Http/Controllers, widgets, console commands, remaining services — found by the Sep 2026 docblock audit). Write them as code is touched per AGENTS.md, or as one dedicated documentation pass; state invariants, not narrations.
 
-- [ ] Decide whether the reconciliation auto-create service methods (`autoCreateCashReceipts`/`autoCreatePurchases`/their single-line variants) should regain UI routes or be retired — currently nothing in the app calls them (their dead matcher cousins `calculateMatchScore`/`getMatchingCandidates` were deleted Sep 2026 once the legacy tests went).
+- [ ] Retire the reconciliation auto-create service methods (`autoCreateCashReceipts`/`autoCreatePurchases` and their single-line variants) — decided Sep 2026 (maintainer): no auto-create, the Match screen's create flows own this now. Nothing in the app calls them; delete them and the coverage that only they justify (their dead matcher cousins `calculateMatchScore`/`getMatchingCandidates` went the same way).
 
 - [ ] Flesh out dashboard layout management - allow user to move widgets, add and remove. Resize as an option (or add as a future todo).
 
