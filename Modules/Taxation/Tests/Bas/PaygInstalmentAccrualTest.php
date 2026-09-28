@@ -330,6 +330,60 @@ class PaygInstalmentAccrualTest extends TestCase
         $this->assertEqualsWithDelta(8000.0, $estimate['income'], 0.001);
     }
 
+    public function test_an_accrual_covered_by_a_settlement_cannot_be_reversed(): void
+    {
+        config(['australian.bas.installment_rate' => 25]);
+
+        $end = $this->quarterEnd();
+        $this->receive(8000, $end->copy()->subDays(10));
+
+        $accrual = $this->accrue();
+        $settlement = $this->settlements->settle([
+            'type' => BasSettlement::TYPE_PAYG_INSTALMENT,
+            'as_at' => $end->toDateString(),
+            'settled_at' => now()->toDateString(),
+        ]);
+
+        // Reversing only the accrual would strand the ATO payment and
+        // leave 2240 debited — a fictitious refundable overpayment.
+        try {
+            $this->service->reverse($accrual);
+            $this->fail('The reversal should have been refused while a settlement covers the accrual.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('reverse that settlement first', $e->getMessage());
+        }
+
+        $accrual->refresh();
+        $this->assertFalse($accrual->isReversed());
+        $this->assertEqualsWithDelta(0.0, $this->balance($this->incomeTaxPayable), 0.001);
+
+        // With the settlement reversed out of the way, the accrual
+        // reverses normally.
+        $this->settlements->reverse($settlement);
+        $this->service->reverse($accrual);
+
+        $this->assertTrue($accrual->refresh()->isReversed());
+        $this->assertEqualsWithDelta(0.0, $this->balance($this->incomeTaxExpense), 0.001);
+        $this->assertEqualsWithDelta(0.0, $this->balance($this->incomeTaxPayable), 0.001);
+    }
+
+    public function test_the_rate_is_normalized_to_the_snapshots_precision(): void
+    {
+        config(['australian.bas.installment_rate' => 12.34567]);
+
+        $end = $this->quarterEnd();
+        $this->receive(100000, $end->copy()->subDays(10));
+
+        $accrual = $this->accrue();
+
+        // The stored 4-decimal rate must explain the posted amount
+        // exactly: 100,000 × 12.3457% = 12,345.70, not the 12,345.67
+        // full-precision arithmetic would journal.
+        $this->assertEqualsWithDelta(12.3457, $accrual->rate, 0.00001);
+        $this->assertEqualsWithDelta(12345.7, $accrual->amount, 0.001);
+        $this->assertEqualsWithDelta(-12345.7, $this->balance($this->incomeTaxPayable), 0.001);
+    }
+
     public function test_staff_cannot_record_an_accrual(): void
     {
         config(['australian.bas.installment_rate' => 25]);

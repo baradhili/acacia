@@ -11,9 +11,11 @@ use IFRS\Models\Balance;
 use IFRS\Models\Entity;
 use IFRS\Models\LineItem;
 use IFRS\Models\ReportingPeriod;
+use IFRS\Scopes\EntityScope;
 use IFRS\Transactions\JournalEntry;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Modules\Taxation\Models\BasSettlement;
 use Modules\Taxation\Models\PaygInstalmentAccrual;
 
 /**
@@ -28,9 +30,10 @@ use Modules\Taxation\Models\PaygInstalmentAccrual;
  * Instalment income is the quarter's assessable income on the cash
  * basis the ledger keeps — the same basis the ATO company tax report
  * uses for its Item 6 income: revenue-account ledger legs whose parent
- * transaction settled through a bank account, already GST-exclusive
- * because the GST back-out legs post to the Vat accounts, never
- * revenue. The accrual itself never feeds back into the base (8400 is
+ * transaction settled through a bank account, summed credits-minus-
+ * debits per account, so the GST back-out legs — which debit revenue
+ * for the GST portion of a GST-inclusive receipt — net back out. The
+ * accrual itself never feeds back into the base (8400 is
  * an expense account, 2240 a liability, and the journal's main account
  * is not a bank), so quarters compound cleanly.
  *
@@ -46,12 +49,20 @@ class PaygInstalmentService
     /**
      * The configured instalment rate as a percent (e.g. 25), or null
      * while BAS_INSTALLMENT_RATE is unset — the accrual's off switch.
+     * Rounded to the snapshot column's four decimals so the stored rate
+     * always explains the posted amount (a 12.34567% rate would
+     * otherwise journal at full precision while the row remembers only
+     * 12.3457%).
      */
     public function rate(): ?float
     {
         $rate = config('australian.bas.installment_rate');
 
-        return $rate === null || $rate === '' ? null : (float) $rate;
+        if ($rate === null || $rate === '') {
+            return null;
+        }
+
+        return round((float) $rate, 4);
     }
 
     /**
@@ -175,27 +186,39 @@ class PaygInstalmentService
             throw new \InvalidArgumentException("{$label} has not ended yet — nothing to accrue.");
         }
 
-        if ($this->existingAccrual($entity, $quarter['end']) !== null) {
-            throw new \InvalidArgumentException("{$label} is already accrued — reverse the accrual first.");
-        }
-
-        $income = $this->instalmentIncome($entity, $quarter['start'], $quarter['end']);
-        if ($income <= 0.005) {
-            throw new \InvalidArgumentException("There is no instalment income for {$label} — nothing to accrue.");
-        }
-
-        $amount = round($income * $rate / 100, 2);
-        if ($amount < 0.005) {
-            throw new \InvalidArgumentException(
-                "A {$rate}% rate on \${$income} of instalment income accrues nothing for {$label}."
-            );
-        }
-
         $this->assertDatePostable($quarter['end'], $entity, 'accrual date');
 
         [$expense, $payable] = $this->accounts($entity);
 
-        return DB::transaction(function () use ($entity, $quarter, $income, $rate, $amount, $expense, $payable, $data) {
+        return DB::transaction(function () use ($entity, $quarter, $label, $rate, $expense, $payable, $data) {
+            // Serialize accrues per entity: the row lock is held until
+            // commit, so two requests for the same quarter cannot both
+            // pass the duplicate check and post (the check and the
+            // posting are one transaction). A reversed accrual frees
+            // the quarter — nothing here blocks re-accrual. (SQLite,
+            // the test driver, ignores lock hints; single-connection
+            // tests never race anyway.)
+            Entity::withoutGlobalScope(EntityScope::class)
+                ->whereKey($entity->id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($this->existingAccrual($entity, $quarter['end']) !== null) {
+                throw new \InvalidArgumentException("{$label} is already accrued — reverse the accrual first.");
+            }
+
+            $income = $this->instalmentIncome($entity, $quarter['start'], $quarter['end']);
+            if ($income <= 0.005) {
+                throw new \InvalidArgumentException("There is no instalment income for {$label} — nothing to accrue.");
+            }
+
+            $amount = round($income * $rate / 100, 2);
+            if ($amount < 0.005) {
+                throw new \InvalidArgumentException(
+                    "A {$rate}% rate on \${$income} of instalment income accrues nothing for {$label}."
+                );
+            }
+
             IfrsPosting::ensureReportingPeriod($quarter['end'], $entity);
 
             $journal = new JournalEntry([
@@ -267,6 +290,25 @@ class PaygInstalmentService
 
         if (! $accrual->ifrs_transaction_id) {
             throw new \InvalidArgumentException('This accrual has no posted journal to reverse.');
+        }
+
+        // A settlement whose as-at date covers the accrual already
+        // netted its balance to the ATO — reversing only the accrual
+        // would leave that bank payment standing and 2240 debited: a
+        // fictitious overpayment the next settlement would "refund".
+        // The settlement must be reversed first (both income-tax types
+        // settle 2240, so either can be the covering one).
+        $covered = BasSettlement::query()
+            ->where('entity_id', $accrual->entity_id)
+            ->whereIn('type', BasSettlement::INCOME_TAX_TYPES)
+            ->whereNull('reversed_at')
+            ->whereDate('as_at', '>=', $accrual->period_end->toDateString())
+            ->exists();
+
+        if ($covered) {
+            throw new \InvalidArgumentException(
+                'A settlement has already covered this accrual — reverse that settlement first, then the accrual.'
+            );
         }
 
         $this->assertDatePostable($accrual->period_end, $accrual->entity, 'accrual date');

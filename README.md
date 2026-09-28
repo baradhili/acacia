@@ -219,6 +219,7 @@ Built on IFRS reports, extended with project/PO reports. The IFRS statements and
 - Account Statement · Account Schedule · Aging Schedule (AR/AP)
 - Trial Balance · Income Statement (P&L) · Balance Sheet · Cash Flow Statement
 - **GST/BAS Report** (Australian Taxation Office format-ready) — *Taxation module*
+- **BAS settlements & PAYG-I accruals** — quarterly income tax instalment accruals (instalment income × the ATO-notified `BAS_INSTALLMENT_RATE`) and ATO payment/refund journals netting GST, PAYG withholding, instalments and assessed tax — *Taxation module*
 - **ATO Company Tax Report** (NAT 0656 label mapping, cash-basis/GST-exclusive, V01–V13 validation checks — see `docs/ATO_tax_report_spec.md`) — *Taxation module*
 - Company Details (ABN/TFN/ACN, registered address, directors and shareholder registry)
 - Prepayment Amortisation Schedule
@@ -371,6 +372,9 @@ WISE_API_TOKEN=
 WISE_PROFILE_ID=
 WISE_ACCOUNT_ID=
 WISE_WEBHOOK_SECRET=
+
+# Australian tax (optional — PAYG instalment accrual rate as a percent, e.g. 25; unset disables accruals)
+BAS_INSTALLMENT_RATE=
 
 # Mail (for invoice/statement emails)
 MAIL_MAILER=smtp
