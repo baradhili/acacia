@@ -70,19 +70,24 @@ class DashboardWidgetLayoutTest extends TestCase
 
     public function test_full_save_reorders_hides_and_resizes(): void
     {
+        // A full save names every registered widget — the rest of the
+        // registry's ids ride along after the ones under test, in
+        // registry order.
+        $rest = array_diff(app(Widgets::class)->ids(), ['PnLTrendWidget', 'TotalClientsWidget', 'CashFlowWidget']);
+        $payload = [
+            ['widget_name' => 'PnLTrendWidget', 'visible' => true, 'width' => 4],
+            ['widget_name' => 'TotalClientsWidget', 'visible' => true],
+            ['widget_name' => 'CashFlowWidget', 'visible' => false],
+            ...array_map(fn (string $id) => ['widget_name' => $id, 'visible' => true], array_values($rest)),
+        ];
+
         $this->actingAs($this->user)
-            ->postJson('/api/widget-preferences', [
-                'widgets' => [
-                    ['widget_name' => 'PnLTrendWidget', 'visible' => true, 'width' => 4],
-                    ['widget_name' => 'TotalClientsWidget', 'visible' => true],
-                    ['widget_name' => 'CashFlowWidget', 'visible' => false],
-                ],
-            ])
+            ->postJson('/api/widget-preferences', ['widgets' => $payload])
             ->assertOk()
             ->assertJsonPath('success', true);
 
         $rows = WidgetPreference::where('user_id', $this->user->id)->get();
-        $this->assertSame(3, $rows->count());
+        $this->assertSame(count($payload), $rows->count());
         $this->assertSame(0, (int) $rows->firstWhere('widget_name', 'PnLTrendWidget')->position_y);
         $this->assertSame(2, (int) $rows->firstWhere('widget_name', 'CashFlowWidget')->position_y);
 
@@ -174,8 +179,8 @@ class DashboardWidgetLayoutTest extends TestCase
         $this->actingAs($this->user)
             ->postJson('/api/widget-preferences', [
                 'widgets' => [
-                    ['widget_name' => 'PnLTrendWidget', 'visible' => true, 'width' => 2, 'position' => 0],
-                    ['widget_name' => 'CashFlowWidget', 'visible' => false, 'position' => 1],
+                    ['widget_name' => 'PnLTrendWidget', 'visible' => true, 'width' => 2],
+                    ['widget_name' => 'CashFlowWidget', 'visible' => false],
                 ],
             ])
             ->assertOk();
@@ -192,6 +197,40 @@ class DashboardWidgetLayoutTest extends TestCase
         $this->assertNotNull($pnL);
         $this->assertSame(2, (int) $pnL->width);
         $this->assertFalse((bool) WidgetPreference::where('widget_name', 'CashFlowWidget')->value('visible'));
+    }
+
+    /**
+     * Ordering comes from full saves only: a partial payload's
+     * 0-based indices must never be written — they would collide
+     * with existing positions (a saved position 0 claimed by another
+     * widget) and ties would silently fall back to registry order,
+     * reporting success for an order that never applied.
+     */
+    public function test_partial_save_never_writes_positions(): void
+    {
+        $rest = array_diff(app(Widgets::class)->ids(), ['TotalClientsWidget']);
+        $payload = [
+            ['widget_name' => 'TotalClientsWidget', 'visible' => true],
+            ...array_map(fn (string $id) => ['widget_name' => $id, 'visible' => true], array_values($rest)),
+        ];
+        $this->actingAs($this->user)
+            ->postJson('/api/widget-preferences', ['widgets' => $payload])
+            ->assertOk();
+        $this->assertSame(0, (int) WidgetPreference::where('widget_name', 'TotalClientsWidget')->value('position_y'));
+
+        // Claims position 0 for a widget the full save placed
+        // elsewhere — a patch, so nothing moves.
+        $placed = (int) WidgetPreference::where('widget_name', 'PnLTrendWidget')->value('position_y');
+        $this->actingAs($this->user)
+            ->postJson('/api/widget-preferences', [
+                'widgets' => [
+                    ['widget_name' => 'PnLTrendWidget', 'visible' => true],
+                ],
+            ])
+            ->assertOk();
+
+        $this->assertSame($placed, (int) WidgetPreference::where('widget_name', 'PnLTrendWidget')->value('position_y'));
+        $this->assertSame(0, (int) WidgetPreference::where('widget_name', 'TotalClientsWidget')->value('position_y'));
     }
 
     public function test_full_save_rejects_keyed_and_duplicated_widgets(): void

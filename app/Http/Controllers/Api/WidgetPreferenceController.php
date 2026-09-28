@@ -15,11 +15,15 @@ use Illuminate\Validation\Rule;
  * Persists a user's dashboard layout over the widget registry. The
  * full save (POST) writes the complete sequence edit mode captured —
  * grid widgets in drag order, then removed ones — as position_y
- * indices, plus width and visibility per widget, in one transaction,
- * and drops rows for widgets that left the registry (a disabled
- * module's). The single-widget patch (PUT) covers add/remove/resize
- * without a full save. Widget names are validated against the
- * registry so junk ids never become preference rows.
+ * indices, plus width and visibility per widget, in one transaction.
+ * A payload naming only some registered widgets is a patch: it
+ * updates those widgets' width/visibility and leaves ordering alone
+ * (ordering claims from a partial payload would collide with rows it
+ * never mentioned). Either way, rows for widgets that left the
+ * registry (a disabled module's) are dropped. The single-widget patch
+ * (PUT) covers add/remove/resize without a full save. Widget names
+ * are validated against the registry so junk ids never become
+ * preference rows.
  */
 class WidgetPreferenceController extends Controller
 {
@@ -92,15 +96,28 @@ class WidgetPreferenceController extends Controller
         DB::transaction(function () use ($validated, $request): void {
             $userId = $request->user()->id;
 
+            // A payload naming every registered widget rewrites the
+            // whole sequence with 0-based indices. A partial payload
+            // patches only the widgets it names — position_y stays
+            // untouched, because its 0-based indices would collide
+            // with positions of rows it never mentioned (ties fall
+            // back to registry order, so the requested order would
+            // silently not apply).
+            $names = array_column($validated['widgets'], 'widget_name');
+            $reorder = count($names) === count($this->registry->ids());
+
             foreach ($validated['widgets'] as $index => $widget) {
+                $data = [
+                    'position_x' => 0,
+                    'width' => $widget['width'] ?? 0,
+                    'visible' => $widget['visible'],
+                ];
+                if ($reorder) {
+                    $data['position_y'] = $index;
+                }
                 WidgetPreference::updateOrCreate(
                     ['user_id' => $userId, 'widget_name' => $widget['widget_name']],
-                    [
-                        'position_x' => 0,
-                        'position_y' => $index,
-                        'width' => $widget['width'] ?? 0,
-                        'visible' => $widget['visible'],
-                    ],
+                    $data,
                 );
             }
 
