@@ -4,7 +4,7 @@
 
 - [x] When an invoice is cancelled, then if it has time entries associated with it - these should be freed up for re-assingment. - (Sep 2026) Verified fixed. Invoiced state is derived, never stored: TimeEntry::invoiceItem() only sees items on non-cancelled invoices, so cancelling an invoice automatically releases its entries — no cleanup step to forget. Every consumer reads that relation (the unbilled-time widget, dashboard, the create-from-time-entries picker and store screening, and the unapprove guard — an entry on a cancelled invoice can be unapproved back to draft and re-invoiced). Covered by InvoiceTest::test_cancelling_invoice_releases_its_time_entries and TimeEntryLifecycleTest's unapprove-after-cancel case, both passing.
 
-- [ ] Review - https://github.com/baradhili/resource_mgr and look to bring services, skills allocations concepts into acacia
+- [ ] Review - https://github.com/baradhili/resource_mgr and look to bring services, skills, and allocations concepts into acacia
 
 - [ ] active security testing harness
 
@@ -14,9 +14,11 @@
 
 - [ ] property rental management module
 
+- [ ] cucumber tests via behat
+
 - [x] Sales funnel/crm - targets, leads, plans - (Sep 2026, branch feat/crm-module) Done as Modules/Crm — the first module authored in place (migrations ship inside the module). Leads: guarded funnel (new → contacted → qualified → proposal → won/lost; loss reasons, re-open), estimated value + win probability, source, owner and the plan; index shows stage counts, open pipeline value, probability-weighted forecast and overdue follow-ups. Activities (call/email/meeting/note/task) log per lead. Winning = converting a proposal lead to a Client (details carried, lead stays linked) — the ERP seam. Targets: monthly sales goals (admin/accountant only) measured against won-lead value with progress bars. Sidebar Sales section + Sales pipeline dashboard widget via the module registries. Covered by Modules/Crm/Tests/CrmTest; suite 865. Not yet: email/calendar integrations, per-owner targets. The proposal-stage lead → estimate shortcut landed (pre-filled estimate linked back on the lead).
 
-- [ ] https://docs.markwhen.com/ might be good to integrate into projects section 
+- [ ] https://docs.markwhen.com/ might be good to integrate into projects section - but only once we have a client module and a real project module
 
 - [x] move setup section under profile to own dropdown alongside Reports, Accounting, Shares
 
