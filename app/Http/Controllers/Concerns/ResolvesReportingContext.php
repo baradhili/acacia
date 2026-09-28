@@ -27,10 +27,6 @@ trait ResolvesReportingContext
     {
         $date = Carbon::parse($date ?? now());
         $entity = $this->ifrsEntity();
-        // No entity means there is nothing to report on — ReportingPeriod::
-        // year()/firstOrCreate below need one. 404 (not 500) via the
-        // framework's abort path.
-        abort_unless((bool) $entity, 404, 'No IFRS entity configured.');
         $year = ReportingPeriod::year($date, $entity);
 
         $period = ReportingPeriod::firstOrCreate(
@@ -49,12 +45,19 @@ trait ResolvesReportingContext
     }
 
     /**
-     * The IFRS entity of the authenticated user (falling back to the first
-     * entity) — most package helpers need it explicitly in background
-     * contexts where no user is logged in.
+     * The IFRS entity of the authenticated user. Report consumers must
+     * own their entity: IfrsPosting::resolveEntity()'s posting fallback
+     * (first entity, lent to the user in memory) exists for unauthenticated
+     * jobs — borrowing it here would silently serve an entity-less user
+     * someone else's books, so refuse with 404 instead (also covers a
+     * fresh install with no entities at all).
      */
-    protected function ifrsEntity(): ?Entity
+    protected function ifrsEntity(): Entity
     {
-        return Auth::user()?->entity ?? Entity::first();
+        $entity = Auth::user()?->entity;
+
+        abort_unless((bool) $entity, 404, 'No IFRS entity assigned to your account.');
+
+        return $entity;
     }
 }

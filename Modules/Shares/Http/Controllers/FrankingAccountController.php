@@ -108,7 +108,7 @@ class FrankingAccountController extends Controller
         $years = FrankingService::years();
         $year = (int) ($request->query('year', $years[0] ?? now()->year));
 
-        $pdf = Pdf::loadView('reports.pdf.franking-disclosure', [
+        $pdf = Pdf::loadView('franking-account.disclosure-pdf', [
             'data' => FrankingService::disclosureData($year),
         ]);
 

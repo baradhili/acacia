@@ -68,14 +68,16 @@ class BasSettlementTest extends TestCase
         return Account::where('entity_id', $this->entity->id)->where('code', $code)->firstOrFail();
     }
 
+    // Entity-bound, like real users — the report/settlement routes'
+    // 'entity' middleware refuses entity-less accounts.
     protected function admin(): User
     {
-        return tap(User::factory()->create())->assignRole('admin');
+        return tap(User::factory()->create(['entity_id' => $this->entity->id]))->assignRole('admin');
     }
 
     protected function staff(): User
     {
-        return tap(User::factory()->create())->assignRole('staff');
+        return tap(User::factory()->create(['entity_id' => $this->entity->id]))->assignRole('staff');
     }
 
     /**
@@ -136,7 +138,7 @@ class BasSettlementTest extends TestCase
     {
         $this->actingAs($this->staff())->get('/bas-settlements')->assertForbidden();
 
-        $this->actingAs(tap(User::factory()->create())->assignRole('accountant'))
+        $this->actingAs(tap(User::factory()->create(['entity_id' => $this->entity->id]))->assignRole('accountant'))
             ->get('/bas-settlements')
             ->assertOk();
 

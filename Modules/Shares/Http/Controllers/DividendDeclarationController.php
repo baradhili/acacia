@@ -258,7 +258,7 @@ class DividendDeclarationController extends Controller
      */
     public function statementPdf(Request $request, DividendDistribution $distribution)
     {
-        $pdf = Pdf::loadView('reports.pdf.dividend-statement', [
+        $pdf = Pdf::loadView('dividends.statement-pdf', [
             'distribution' => $distribution->load('declaration.shareClass', 'shareholder'),
             'companyName' => Entity::find($distribution->declaration->entity_id)?->name ?? config('app.name'),
             'companyAbn' => CompanyProfile::effectiveAbn($distribution->declaration->entity_id),

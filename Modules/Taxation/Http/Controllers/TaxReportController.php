@@ -282,7 +282,7 @@ class TaxReportController extends Controller
      */
     public function unfreezeBasQuarter(BasStatement $statement)
     {
-        abort_unless($statement->entity_id === $this->ifrsEntity()?->id, 404, 'Unknown BAS statement.');
+        abort_unless($statement->entity_id === $this->ifrsEntity()->id, 404, 'Unknown BAS statement.');
 
         $fyEnd = $statement->fy_end;
         $label = $statement->label();

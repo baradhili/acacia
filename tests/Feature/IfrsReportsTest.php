@@ -75,6 +75,25 @@ class IfrsReportsTest extends TestCase
     }
 
     // ============================================================
+    // Entity assignment
+    // ============================================================
+    public function test_entity_less_user_cannot_read_reports(): void
+    {
+        // No entity_id — the self-registration edge. Reports must refuse
+        // (404) rather than lend the posting fallback's first entity.
+        $user = User::factory()->create();
+        $user->assignRole('admin');
+
+        $this->actingAs($user)
+            ->get(route('reports.trial-balance'))
+            ->assertStatus(404);
+
+        $this->actingAs($user)
+            ->get(route('reports.account-statement'))
+            ->assertStatus(404);
+    }
+
+    // ============================================================
     // Account Statement Export Tests
     // ============================================================
     public function test_account_statement_page_loads(): void
