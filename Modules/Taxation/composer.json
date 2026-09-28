@@ -1,0 +1,10 @@
+{
+    "name": "acacia/taxation",
+    "description": "Acacia ERP GST/BAS/company-tax reporting module",
+    "type": "acacia-module",
+    "autoload": {
+        "psr-4": {
+            "Modules\\Taxation\\": ""
+        }
+    }
+}

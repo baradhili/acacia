@@ -214,17 +214,17 @@ Running Acacia in a production environment and need guaranteed response times, c
 
 ### Reporting
 
-Built on IFRS reports, extended with project/PO reports:
+Built on IFRS reports, extended with project/PO reports. The IFRS statements and subledger reports are core; AU statutory reporting lives in the Taxation module and time/project analytics in the Practice module:
 
 - Account Statement · Account Schedule · Aging Schedule (AR/AP)
 - Trial Balance · Income Statement (P&L) · Balance Sheet · Cash Flow Statement
-- **GST/BAS Report** (Australian Tax Office format-ready)
-- **ATO Company Tax Report** (NAT 0656 label mapping, cash-basis/GST-exclusive, V01–V13 validation checks — see `docs/ATO_tax_report_spec.md`)
+- **GST/BAS Report** (Australian Taxation Office format-ready) — *Taxation module*
+- **ATO Company Tax Report** (NAT 0656 label mapping, cash-basis/GST-exclusive, V01–V13 validation checks — see `docs/ATO_tax_report_spec.md`) — *Taxation module*
 - Company Details (ABN/TFN/ACN, registered address, directors and shareholder registry)
 - Prepayment Amortisation Schedule
 - Income by Customer · Expenses by Category
-- Project Profitability · PO Budget vs Actual
-- Time by Client / Staff / Project · Tax Summary by period
+- Project Profitability · PO Budget vs Actual — *Practice module*
+- Time by Client / Staff / Project · Tax Summary by period — *Practice module*
 - Export to PDF / Excel / CSV
 
 ### Document Management

@@ -25,6 +25,9 @@ class Nav
 
     protected array $topbar = [];
 
+    /** Children that arrived before their dropdown did (see addTopbarChild). */
+    protected array $pendingTopbarChildren = [];
+
     public function addSidebar(array $items): void
     {
         $this->sidebar = array_merge($this->sidebar, $items);
@@ -33,6 +36,12 @@ class Nav
     public function addTopbar(array $items): void
     {
         $this->topbar = array_merge($this->topbar, $items);
+
+        foreach ($items as $item) {
+            if (($item['type'] ?? null) === 'dropdown' && ($item['label'] ?? null) !== null) {
+                $this->flushPendingChildren($item['label']);
+            }
+        }
     }
 
     /**
@@ -40,6 +49,10 @@ class Nav
      * module adds one item to a core dropdown (PSI Assessment under
      * Setup) without owning the dropdown. The child's active-route
      * patterns join the dropdown's, keeping the button highlight.
+     *
+     * Module providers boot before the core registers its dropdowns,
+     * so a child can arrive before its dropdown exists — it is held
+     * and attaches when the dropdown is registered.
      */
     public function addTopbarChild(string $dropdownLabel, array $child): void
     {
@@ -55,6 +68,17 @@ class Nav
             }
         }
         unset($item);
+
+        $this->pendingTopbarChildren[$dropdownLabel][] = $child;
+    }
+
+    protected function flushPendingChildren(string $dropdownLabel): void
+    {
+        foreach ($this->pendingTopbarChildren[$dropdownLabel] ?? [] as $child) {
+            $this->addTopbarChild($dropdownLabel, $child);
+        }
+
+        unset($this->pendingTopbarChildren[$dropdownLabel]);
     }
 
     /** Role-filtered, position-ordered sidebar items. */
@@ -66,6 +90,10 @@ class Nav
     /** Role-filtered, position-ordered topbar items. */
     public function topbar(): array
     {
+        foreach (array_keys($this->pendingTopbarChildren) as $label) {
+            $this->flushPendingChildren($label);
+        }
+
         return $this->visible($this->sorted($this->topbar));
     }
 

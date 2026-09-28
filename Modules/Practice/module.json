@@ -1,0 +1,18 @@
+{
+    "name": "Practice",
+    "alias": "practice",
+    "description": "Practice-management reporting over the core time tracking: time by client, staff and project, the client-facing project timesheet, project profitability, and the hours/unbilled-time dashboard widgets.",
+    "keywords": [
+        "time",
+        "timesheets",
+        "utilisation",
+        "profitability"
+    ],
+    "priority": 0,
+    "version": "1.0.0",
+    "providers": [
+        "Modules\\Practice\\Providers\\PracticeServiceProvider"
+    ],
+    "files": [],
+    "core": true
+}

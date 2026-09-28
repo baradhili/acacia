@@ -3,9 +3,9 @@
 use App\Http\Controllers\AdministrationController;
 use App\Http\Controllers\Api\WidgetPreferenceController;
 use App\Http\Controllers\BackupController;
-use App\Http\Controllers\BasSettlementController;
 use App\Http\Controllers\BillController;
 use App\Http\Controllers\BillPaymentController;
+use App\Http\Controllers\BusinessReportController;
 use App\Http\Controllers\ChartOfAccountsController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\CompanyProfileController;
@@ -14,8 +14,10 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DomainController;
 use App\Http\Controllers\EstimateController;
+use App\Http\Controllers\FinancialStatementController;
 use App\Http\Controllers\FinancialYearController;
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\LedgerReportController;
 use App\Http\Controllers\LogoController;
 use App\Http\Controllers\ModulesController;
 use App\Http\Controllers\OpeningBalanceController;
@@ -25,7 +27,6 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\ReimbursementPaymentController;
-use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\ShareClassController;
 use App\Http\Controllers\SupplierController;
@@ -123,15 +124,8 @@ Route::middleware('auth')->group(function () {
         // Services catalogue — rate-card master data behind time billing
         Route::resource('services', ServiceController::class);
 
-        // BAS settlements — ATO payment/refund that nets GST Payable/Receivable
-        Route::get('/bas-settlements', [BasSettlementController::class, 'index'])->name('bas-settlements.index');
-        Route::post('/bas-settlements', [BasSettlementController::class, 'store'])->name('bas-settlements.store');
-        Route::post('/bas-settlements/{settlement}/reverse', [BasSettlementController::class, 'reverse'])->name('bas-settlements.reverse');
-
-        // BAS lodgement — freeze a quarter's figures so a lodged BAS
-        // never recomputes from live ledger data
-        Route::post('/bas-statements/freeze', [ReportController::class, 'freezeBasQuarter'])->name('bas-statements.freeze');
-        Route::delete('/bas-statements/{statement}/unfreeze', [ReportController::class, 'unfreezeBasQuarter'])->name('bas-statements.unfreeze');
+        // BAS settlements, lodgement freezing and the GST/BAS/company-tax
+        // reports moved to Modules/Taxation (its routes/web.php).
 
     });
 
@@ -159,7 +153,6 @@ Route::middleware('auth')->group(function () {
     Route::resource('projects', ProjectController::class);
     Route::post('/projects/{project}/staff/assign', [ProjectController::class, 'assignStaff'])->name('projects.staff.assign');
     Route::delete('/projects/{project}/staff/{user}', [ProjectController::class, 'removeStaff'])->name('projects.staff.remove');
-    Route::get('/projects/{project}/profitability', [ProjectController::class, 'profitability'])->name('projects.profitability.show');
 
     // Time Entries
     Route::resource('time-entries', TimeEntryController::class);
@@ -241,39 +234,28 @@ Route::middleware('auth')->group(function () {
     Route::post('/estimates/{estimate}/convert-to-invoice', [EstimateController::class, 'convertToInvoice'])->name('estimates.convertToInvoice');
     Route::post('/estimates/{estimate}/duplicate', [EstimateController::class, 'duplicate'])->name('estimates.duplicate');
 
-    // Reports
-    Route::get('/reports/time-by-client', [ReportController::class, 'timeByClient'])->name('reports.time-by-client');
-    Route::get('/reports/time-by-staff', [ReportController::class, 'timeByStaff'])->name('reports.time-by-staff');
-    Route::get('/reports/time-by-project', [ReportController::class, 'timeByProject'])->name('reports.time-by-project');
-    Route::get('/reports/project-timesheet', [ReportController::class, 'projectTimesheet'])->name('reports.project-timesheet');
-    Route::get('/reports/project-profitability', [ProjectController::class, 'profitabilityIndex'])
-        ->middleware('role:admin|accountant')
-        ->name('projects.profitability');
+    // Reports — the time/project reporting moved to Modules/Practice
+    // (its routes/web.php) under the same URLs and route names.
 
     // Financial Reports
-    Route::get('/reports/trial-balance', [ReportController::class, 'trialBalance'])->name('reports.trial-balance');
-    Route::get('/reports/income-statement', [ReportController::class, 'incomeStatement'])->name('reports.income-statement');
-    Route::get('/reports/balance-sheet', [ReportController::class, 'balanceSheet'])->name('reports.balance-sheet');
-    Route::get('/reports/cash-flow', [ReportController::class, 'cashFlowStatement'])->name('reports.cash-flow');
+    Route::get('/reports/trial-balance', [FinancialStatementController::class, 'trialBalance'])->name('reports.trial-balance');
+    Route::get('/reports/income-statement', [FinancialStatementController::class, 'incomeStatement'])->name('reports.income-statement');
+    Route::get('/reports/balance-sheet', [FinancialStatementController::class, 'balanceSheet'])->name('reports.balance-sheet');
+    Route::get('/reports/cash-flow', [FinancialStatementController::class, 'cashFlowStatement'])->name('reports.cash-flow');
 
     // Business Reports
-    Route::get('/reports/income-by-customer', [ReportController::class, 'incomeByCustomer'])->name('reports.income-by-customer');
-    Route::get('/reports/expenses-by-category', [ReportController::class, 'expensesByCategory'])->name('reports.expenses-by-category');
-    Route::get('/reports/aging', [ReportController::class, 'agingReport'])->name('reports.aging');
-    Route::get('/reports/gst', [ReportController::class, 'gstReport'])->name('reports.gst');
-    Route::get('/reports/account-statement', [ReportController::class, 'accountStatement'])->name('reports.account-statement');
-    Route::get('/reports/account-schedule', [ReportController::class, 'accountSchedule'])->name('reports.account-schedule');
-    Route::get('/reports/bas', [ReportController::class, 'bas'])->name('reports.bas');
-    Route::get('/reports/company-tax', [ReportController::class, 'companyTax'])->name('reports.company-tax');
-    Route::get('/reports/export/account-statement/pdf', [ReportController::class, 'exportAccountStatementPdf'])->name('reports.export.account-statement.pdf');
-    Route::get('/reports/export/bas/pdf', [ReportController::class, 'exportBasPdf'])->name('reports.export.bas.pdf');
-    Route::get('/reports/export/company-tax/pdf', [ReportController::class, 'exportCompanyTaxPdf'])->name('reports.export.company-tax.pdf');
-    Route::get('/reports/export/account-statement/excel', [ReportController::class, 'exportAccountStatementExcel'])->name('reports.export.account-statement.excel');
-    Route::get('/reports/export/bas/excel', [ReportController::class, 'exportBasExcel'])->name('reports.export.bas.excel');
-    Route::get('/reports/export/company-tax/excel', [ReportController::class, 'exportCompanyTaxExcel'])->name('reports.export.company-tax.excel');
-    Route::get('/reports/export/company-tax/csv', [ReportController::class, 'exportCompanyTaxCsv'])->name('reports.export.company-tax.csv');
-    Route::get('/reports/prepayment-schedule', [ReportController::class, 'prepaymentSchedule'])->name('reports.prepayment-schedule');
-    Route::get('/reports/export/prepayment-schedule/pdf', [ReportController::class, 'exportPrepaymentSchedulePdf'])->name('reports.export.prepayment-schedule.pdf');
+    Route::get('/reports/income-by-customer', [BusinessReportController::class, 'incomeByCustomer'])->name('reports.income-by-customer');
+    Route::get('/reports/expenses-by-category', [BusinessReportController::class, 'expensesByCategory'])->name('reports.expenses-by-category');
+    Route::get('/reports/aging', [BusinessReportController::class, 'agingReport'])->name('reports.aging');
+    Route::get('/reports/account-statement', [LedgerReportController::class, 'accountStatement'])->name('reports.account-statement');
+    Route::get('/reports/account-schedule', [LedgerReportController::class, 'accountSchedule'])->name('reports.account-schedule');
+    Route::get('/reports/export/account-statement/pdf', [LedgerReportController::class, 'exportAccountStatementPdf'])->name('reports.export.account-statement.pdf');
+    Route::get('/reports/export/account-statement/excel', [LedgerReportController::class, 'exportAccountStatementExcel'])->name('reports.export.account-statement.excel');
+    Route::get('/reports/prepayment-schedule', [BusinessReportController::class, 'prepaymentSchedule'])->name('reports.prepayment-schedule');
+    Route::get('/reports/export/prepayment-schedule/pdf', [BusinessReportController::class, 'exportPrepaymentSchedulePdf'])->name('reports.export.prepayment-schedule.pdf');
+
+    // The GST/BAS/company-tax reports moved to Modules/Taxation (its
+    // routes/web.php) under the same URLs and route names.
 
     // Reconciliation moved to Modules/Reconciliation (its routes/web.php).
 

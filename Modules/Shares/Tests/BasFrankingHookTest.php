@@ -2,8 +2,6 @@
 
 namespace Modules\Shares\Tests;
 
-use App\Models\BasSettlement;
-use App\Services\BasSettlementService;
 use App\Services\IfrsPosting;
 use App\Services\OpeningBalances;
 use Carbon\Carbon;
@@ -15,6 +13,8 @@ use IFRS\Transactions\JournalEntry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Modules\Shares\Models\FrankingAccountEntry;
 use Modules\Shares\Services\FrankingService;
+use Modules\Taxation\Models\BasSettlement;
+use Modules\Taxation\Services\BasSettlementService;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 

@@ -95,11 +95,16 @@ class NavigationTest extends TestCase
         // Reports dropdown items
         $response->assertSee('Time by Client');
         $response->assertSee('Balance Sheet');
+        // ... including the Taxation module's children (which register
+        // before the core dropdown exists — the deferred attach)
+        $response->assertSee('BAS (GST)');
         $response->assertSee('Company Tax Return');
         $response->assertSee('BAS Settlements');
         // Accounting dropdown items
         $response->assertSee('Prepayments');
         $response->assertSee('Domain Names');
+        // Setup dropdown: the Payroll module's PSI child attaches too
+        $response->assertSee('PSI Assessment');
         // Shares dropdown items
         $response->assertSee('Shareholders');
         $response->assertSee('Franking Account');
@@ -341,5 +346,19 @@ class NavigationTest extends TestCase
 
         $this->assertNotEmpty($widgets->all());
         $this->assertContains('CashFlowWidget', array_column($widgets->all(), 'id'));
+
+        // The default order (no saved drag order) is the shipped grid:
+        // core positions plus the module widgets in their slots, even
+        // though module providers register before the core does.
+        $shipped = [
+            'TotalClientsWidget', 'OutstandingInvoicesWidget', 'HoursThisMonthWidget',
+            'GstPayableWidget', 'CashFlowWidget', 'ARAgingWidget', 'BankBalanceWidget',
+            'RecentInvoicesWidget', 'RecentPaymentsWidget', 'OutstandingPOBudgetsWidget',
+            'UnbilledTimeWidget', 'PnLTrendWidget',
+        ];
+        $this->assertEquals(
+            $shipped,
+            array_values(array_intersect(array_column($widgets->all(), 'id'), $shipped))
+        );
     }
 }

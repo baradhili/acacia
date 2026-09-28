@@ -1,0 +1,18 @@
+{
+    "name": "Taxation",
+    "alias": "taxation",
+    "description": "Australian statutory reporting on the cash basis the ledger keeps: the GST report, the quarterly BAS with lodgement freezing and settlements, and the ATO Company Tax Return.",
+    "keywords": [
+        "gst",
+        "bas",
+        "ato",
+        "tax"
+    ],
+    "priority": 0,
+    "version": "1.0.0",
+    "providers": [
+        "Modules\\Taxation\\Providers\\TaxationServiceProvider"
+    ],
+    "files": [],
+    "core": true
+}

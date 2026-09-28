@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Bill;
 use App\Models\Client;
 use App\Models\Invoice;
+use App\Models\Payment;
 use App\Models\Supplier;
 use App\Models\User;
 use Carbon\Carbon;
@@ -29,9 +30,13 @@ class IfrsReportsFinancialTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected Entity $entity;
+
     protected Currency $currency;
+
     protected Account $bank;
+
     protected Account $travel;
 
     protected function setUp(): void
@@ -247,7 +252,7 @@ class IfrsReportsFinancialTest extends TestCase
         $invoice->refresh();
         $invoice->recalculateTotals();
 
-        $payment = \App\Models\Payment::create([
+        $payment = Payment::create([
             'client_id' => $client->id,
             'amount' => 50,
             'payment_date' => now()->toDateString(),
@@ -260,6 +265,34 @@ class IfrsReportsFinancialTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee('Aging Client Co');
         $response->assertSee('60.00'); // 110 total less 50 allocated
+    }
+
+    public function test_aging_report_keeps_a_same_day_due_invoice_current(): void
+    {
+        $client = Client::factory()->create(['name' => 'Same Day Client Co']);
+        $invoice = Invoice::create([
+            'client_id' => $client->id,
+            'issue_date' => now()->subDay()->toDateString(),
+            'due_date' => now()->toDateString(), // due earlier on the as-of day
+            'status' => Invoice::STATUS_SENT,
+        ]);
+        $invoice->items()->create([
+            'description' => 'Service',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+        $invoice->refresh();
+        $invoice->recalculateTotals();
+
+        $response = $this->get(route('reports.aging', ['type' => 'ar']));
+
+        $response->assertStatus(200);
+        // Whole calendar days late: 0 — the row's Current column carries
+        // the $110 and the 1-30 column is nil (the as-of date is
+        // end-of-day, so a fractional day difference used to tip this
+        // invoice into 1-30).
+        $response->assertSeeInOrder(['Same Day Client Co', '$110.00', '$0.00']);
     }
 
     public function test_aging_report_ap_variant_uses_bills(): void
@@ -302,7 +335,7 @@ class IfrsReportsFinancialTest extends TestCase
         $invoice->refresh();
         $invoice->recalculateTotals();
 
-        $payment = \App\Models\Payment::create([
+        $payment = Payment::create([
             'client_id' => $client->id,
             'amount' => 50,
             'payment_date' => now()->toDateString(),
@@ -317,93 +350,7 @@ class IfrsReportsFinancialTest extends TestCase
         $response->assertSee('60.00'); // outstanding: 110 total less 50 paid
     }
 
-    public function test_bas_uses_posted_payment_amounts(): void
-    {
-        // Posting prerequisites beyond setUp's bank/travel accounts:
-        // revenue + GST Payable for receipts, the default expense
-        // fallback + GST Receivable for supplier payments.
-        $byCode = [];
-        foreach ([
-            ['Consulting Revenue', Account::OPERATING_REVENUE, 4100],
-            ['GST Payable', Account::CONTROL, 2200],
-            ['GST Receivable', Account::CONTROL, 430],
-            ['Other Expenses', Account::OTHER_EXPENSE, 8900],
-        ] as [$name, $type, $code]) {
-            $byCode[$code] = Account::create([
-                'name' => $name,
-                'account_type' => $type,
-                'code' => $code,
-                'currency_id' => $this->currency->id,
-                'entity_id' => $this->entity->id,
-            ]);
-        }
-        \IFRS\Models\Vat::create([
-            'name' => 'GST 10%', 'code' => 'G', 'rate' => 10,
-            'account_id' => $byCode[2200]->id, 'entity_id' => $this->entity->id,
-        ]);
-        \IFRS\Models\Vat::create([
-            'name' => 'GST Input 10%', 'code' => 'I', 'rate' => 10,
-            'account_id' => $byCode[430]->id, 'entity_id' => $this->entity->id,
-        ]);
-
-        $client = Client::factory()->create();
-        $invoice = Invoice::create([
-            'client_id' => $client->id,
-            'issue_date' => now()->toDateString(),
-            'due_date' => now()->addDays(30)->toDateString(),
-            'status' => Invoice::STATUS_SENT,
-        ]);
-        $invoice->items()->create([
-            'description' => 'Service',
-            'quantity' => 1,
-            'unit_price' => 100, // +10 GST = 110 tax-inclusive item total
-            'tax_rate' => 10,
-        ]);
-        $invoice->refresh();
-        $invoice->recalculateTotals();
-
-        $payment = \App\Models\Payment::createWithUniqueNumber([
-            'client_id' => $client->id,
-            'amount' => 110,
-            'payment_date' => now()->toDateString(),
-            'payment_method' => 'bank_transfer',
-        ]);
-        $payment->allocateToInvoice($invoice, 110);
-        $this->assertNotNull($payment->postToIFRS(), $payment->lastPostingError ?? 'posting failed');
-
-        $supplier = Supplier::create(['name' => 'Tax Supplier Co']);
-        $bill = Bill::create([
-            'supplier_id' => $supplier->id,
-            'bill_date' => now()->toDateString(),
-            'due_date' => now()->addDays(30)->toDateString(),
-            'status' => Bill::STATUS_OPEN,
-        ]);
-        $bill->items()->create([
-            'description' => 'Supplies',
-            'quantity' => 1,
-            'unit_price' => 110, // GST-inclusive: 100 net + 10 GST
-            'tax_rate' => 10,
-        ]);
-        $bill->recalculateTotals();
-
-        $billPayment = \App\Models\BillPayment::createWithUniqueNumber([
-            'supplier_id' => $supplier->id,
-            'amount' => 110,
-            'payment_date' => now()->toDateString(),
-            'payment_method' => 'bank_transfer',
-        ]);
-        $billPayment->allocateToBill($bill, 110);
-        $this->assertNotNull($billPayment->postToIFRS(), $billPayment->lastPostingError ?? 'posting failed');
-
-        $response = $this->get(route('reports.bas'));
-
-        $response->assertStatus(200);
-        // GST collected and GST paid both 10.00; net payable zero
-        $response->assertSee('10.00');
-        $response->assertSee('0.00');
-    }
-
-    public function test_expenses_by_category_and_gst_reports_still_render(): void
+    public function test_expenses_by_category_report_renders(): void
     {
         $supplier = Supplier::create(['name' => 'Category Supplier Co']);
         $bill = Bill::create([
@@ -421,6 +368,5 @@ class IfrsReportsFinancialTest extends TestCase
         $bill->recalculateTotals();
 
         $this->get(route('reports.expenses-by-category'))->assertStatus(200);
-        $this->get(route('reports.gst'))->assertStatus(200);
     }
 }

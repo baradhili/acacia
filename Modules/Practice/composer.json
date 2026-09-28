@@ -1,0 +1,10 @@
+{
+    "name": "acacia/practice",
+    "description": "Acacia ERP time and project reporting module",
+    "type": "acacia-module",
+    "autoload": {
+        "psr-4": {
+            "Modules\\Practice\\": ""
+        }
+    }
+}

@@ -17,8 +17,10 @@ hook into.
 | `Crm` | Leads through the sales funnel, activity history, client conversion, monthly sales targets | first module authored in place (its migrations ship in the module) |
 | `Resumes` | Employee resumes on the modified JSON Resume schema: upload against a payroll payee, keyword tailoring, PDF (LuaLaTeX) / DOCX (PHPWord) / JSON / LaTeX exports | depends on Payroll (employees FK); schema vendored in the module; view/export open to all signed-in staff, upload/delete limited to admins and the payee's linked user (`employees.user_id`); ships the partial the payroll payee view lists |
 | `Skills` | The skill register: a library of skills linked to payroll payees at a proficiency level (beginner → expert) and to the core service catalogue as required skills | depends on Payroll (employee_skill FK); the core `Service` model stays untouched — both link tables are owned by the module; browsing open to all signed-in staff, editing (library CRUD + both matrices) limited to admins/accountants; the payroll payee view lists a payee's skills via a `Route::has`-guarded include (the Resumes pattern); bulk import from Rich Skills Descriptor (RSD) JSON files — idempotent on the RSD id, full descriptor kept in `skills.rsd` |
+| `Taxation` | AU statutory reporting on the cash basis the ledger keeps: the GST report, the quarterly BAS (with lodgement freezing and ATO settlements) and the ATO Company Tax Return | extracted from the core `ReportController`; every URL and route name unchanged; config stays under the `ato_tax_report` key; the bas_* table migrations remain in the core schema (the Reconciliation bank-tables precedent); W1/W2 (Payroll) and franking/dividend labels (Shares) are `class_exists` soft deps, now module-to-module; report screens open to all signed-in staff, freezing/settling admin/accountant |
+| `Practice` | Time and project analytics over the core time tracking: time by client/staff/project, the client-facing project timesheet, both project-profitability screens, and the hours-this-month/unbilled-time dashboard widgets | extracted from the core `ReportController` and `ProjectController`; every URL and route name unchanged; reads only core models — the time-tracking master data (projects, time entries, the timesheet grid) stays core; the profitability summary keeps its admin/accountant gate |
 
-All six carry `"core": true` in their manifest — they ship with the app and
+All eight carry `"core": true` in their manifest — they ship with the app and
 cannot be uninstalled from the GUI (only disabled). `modules_statuses.json`
 is committed so fresh clones boot with them enabled; disabling from the GUI
 rewrites it locally, which is per-deployment state.
@@ -47,13 +49,16 @@ Modules never edit shell views. From the service provider's `boot()`:
 
 - **Nav** — `App\Support\Nav`: `addSidebar(items)`, `addTopbar(items)` and
   `addTopbarChild('DropdownLabel', $item)` to slot one item into another
-  module's dropdown (the child's active-route patterns join the
-  dropdown's) — e.g. PSI Assessment under Setup, or Resumes under the
-  Employees section Payroll owns. Items carry `type`
-  (link/heading/divider/dropdown), `position`, `roles`, `active` route
-  patterns, `icon` (inner SVG) and optional `add` shortcut routes. A
-  dropdown with no `roles` of its own can mix gated and open children
-  (Employees: the admin/accountant payee master data plus the
+  module's — or the core's — dropdown (the child's active-route patterns
+  join the dropdown's) — e.g. PSI Assessment under Setup, the Taxation
+  BAS item under Reports, or Resumes under the Employees section Payroll
+  owns. Module providers boot before the core registers its dropdowns,
+  so `addTopbarChild` children may arrive before their dropdown exists —
+  the registry holds them and attaches them when the dropdown registers.
+  Items carry `type` (link/heading/divider/dropdown), `position`, `roles`,
+  `active` route patterns, `icon` (inner SVG) and optional `add` shortcut
+  routes. A dropdown with no `roles` of its own can mix gated and open
+  children (Employees: the admin/accountant payee master data plus the
   staff-visible Resumes item) — children filter individually and an
   emptied dropdown drops out.
 - **Dashboard widgets** — `App\Support\Widgets::add(class, span)`; the
@@ -78,7 +83,9 @@ Modules never edit shell views. From the service provider's `boot()`:
    non-existent module factory namespace.
 5. **Core → module seams degrade via `class_exists`** (the BAS W1/W2 labels
    on Payroll; the franking hook, tax-report balances and opening-share
-   backfill on Shares). Keep this pattern for new soft dependencies.
+   backfill on Shares — both now invoked from the Taxation module's
+   reports, module-to-module). Keep this pattern for new soft
+   dependencies.
 6. **Resource route parameters must match the controller's variable.**
    `Route::resource('payroll-employees', ...)` generates `{payroll_employee}`;
    a controller typing `Employee $employee` silently receives an *empty*

@@ -117,7 +117,12 @@ class DashboardService
      */
     public function getARAgingWidget(): array
     {
-        $today = Carbon::now();
+        // Whole calendar days, matching the aging report's bucketing:
+        // both dates start-of-day so an invoice due earlier today stays
+        // Current (comparing the midnight due date against the current
+        // time-of-day used to tip it into 1-30 here while the report
+        // kept it Current).
+        $today = Carbon::now()->startOfDay();
 
         $outstandingInvoices = Invoice::whereIn('status', [
             Invoice::STATUS_SENT,
@@ -132,7 +137,7 @@ class DashboardService
         $over90 = 0;
 
         foreach ($outstandingInvoices as $invoice) {
-            $daysPastDue = $invoice->due_date->diffInDays($today, false);
+            $daysPastDue = (int) $invoice->due_date->copy()->startOfDay()->diffInDays($today);
             $balance = $invoice->amount_due;
 
             if ($daysPastDue <= 0) {

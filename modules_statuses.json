@@ -1,9 +1,11 @@
 {
     "Crm": true,
     "Payroll": true,
+    "Practice": true,
     "Probe": false,
     "Reconciliation": true,
     "Resumes": true,
     "Shares": true,
-    "Skills": true
+    "Skills": true,
+    "Taxation": true
 }

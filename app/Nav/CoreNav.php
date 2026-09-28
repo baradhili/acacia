@@ -7,15 +7,12 @@ use App\Support\Widgets;
 use App\Widgets\ARAgingWidget;
 use App\Widgets\BankBalanceWidget;
 use App\Widgets\CashFlowWidget;
-use App\Widgets\GstPayableWidget;
-use App\Widgets\HoursThisMonthWidget;
 use App\Widgets\OutstandingInvoicesWidget;
 use App\Widgets\OutstandingPOBudgetsWidget;
 use App\Widgets\PnLTrendWidget;
 use App\Widgets\RecentInvoicesWidget;
 use App\Widgets\RecentPaymentsWidget;
 use App\Widgets\TotalClientsWidget;
-use App\Widgets\UnbilledTimeWidget;
 
 /**
  * The core's own navigation and dashboard registrations — every link
@@ -34,8 +31,8 @@ class CoreNav
 
     public static function registerWidgets(Widgets $widgets): void
     {
-        foreach (static::widgets() as [$class, $span]) {
-            $widgets->add($class, $span);
+        foreach (static::widgets() as [$class, $span, $position]) {
+            $widgets->add($class, $span, $position);
         }
     }
 
@@ -97,34 +94,30 @@ class CoreNav
     public static function topbar(): array
     {
         $gated = ['admin', 'accountant'];
-        $link = fn (string $label, string $route, array $active) => ['type' => 'link', 'label' => $label, 'route' => $route, 'active' => $active];
+        // Positions leave slots for module children: Practice owns the
+        // Time & Projects group (10-15) and Taxation slots BAS (28) and
+        // Company Tax Return (29) between Account Schedule and Prepayment
+        // Schedule. Children sort by position (stable for equals), so
+        // dropdown order stays as shipped.
+        $link = fn (string $label, string $route, array $active, int $position = 0) => ['type' => 'link', 'label' => $label, 'route' => $route, 'active' => $active, 'position' => $position];
 
         return [
-            ['type' => 'dropdown', 'label' => 'Reports', 'position' => 10, 'active' => ['reports.*', 'bas-settlements.*', 'projects.profitability'], 'children' => [
-                ['type' => 'heading', 'label' => 'Time & Projects'],
-                $link('Time by Client', 'reports.time-by-client', ['reports.time-by-client']),
-                $link('Time by Staff', 'reports.time-by-staff', ['reports.time-by-staff']),
-                $link('Time by Project', 'reports.time-by-project', ['reports.time-by-project']),
-                $link('Project Timesheet', 'reports.project-timesheet', ['reports.project-timesheet']),
-                $link('Project Profitability', 'projects.profitability', ['projects.profitability']),
-                ['type' => 'divider'],
-                ['type' => 'heading', 'label' => 'IFRS Reports'],
-                $link('Balance Sheet', 'reports.balance-sheet', ['reports.balance-sheet']),
-                $link('Trial Balance', 'reports.trial-balance', ['reports.trial-balance']),
-                $link('Income Statement', 'reports.income-statement', ['reports.income-statement']),
-                $link('Cash Flow', 'reports.cash-flow', ['reports.cash-flow']),
-                $link('Account Statement', 'reports.account-statement', ['reports.account-statement']),
-                $link('Account Schedule', 'reports.account-schedule', ['reports.account-schedule']),
-                $link('BAS (GST)', 'reports.bas', ['reports.bas']),
-                $link('Company Tax Return', 'reports.company-tax', ['reports.company-tax']),
-                $link('Prepayment Schedule', 'reports.prepayment-schedule', ['reports.prepayment-schedule']),
+            ['type' => 'dropdown', 'label' => 'Reports', 'position' => 10, 'active' => ['reports.*'], 'children' => [
+                ['type' => 'divider', 'position' => 20],
+                ['type' => 'heading', 'label' => 'IFRS Reports', 'position' => 21],
+                $link('Balance Sheet', 'reports.balance-sheet', ['reports.balance-sheet'], 22),
+                $link('Trial Balance', 'reports.trial-balance', ['reports.trial-balance'], 23),
+                $link('Income Statement', 'reports.income-statement', ['reports.income-statement'], 24),
+                $link('Cash Flow', 'reports.cash-flow', ['reports.cash-flow'], 25),
+                $link('Account Statement', 'reports.account-statement', ['reports.account-statement'], 26),
+                $link('Account Schedule', 'reports.account-schedule', ['reports.account-schedule'], 27),
+                $link('Prepayment Schedule', 'reports.prepayment-schedule', ['reports.prepayment-schedule'], 30),
             ]],
 
             ['type' => 'dropdown', 'label' => 'Accounting', 'position' => 20, 'roles' => $gated,
-                'active' => ['prepayments.*', 'domains.*', 'bas-settlements.*'], 'children' => [
+                'active' => ['prepayments.*', 'domains.*'], 'children' => [
                     $link('Prepayments', 'prepayments.index', ['prepayments.*']),
                     $link('Domain Names', 'domains.index', ['domains.*']),
-                    $link('BAS Settlements', 'bas-settlements.index', ['bas-settlements.*']),
                 ]],
 
             ['type' => 'dropdown', 'label' => 'Setup', 'position' => 40, 'roles' => $gated,
@@ -140,27 +133,28 @@ class CoreNav
     }
 
     /**
-     * The dashboard grid as shipped: class => span class ('' = one
-     * cell). Order matches the previous hardcoded grid so stored
-     * drag-order preferences keep resolving.
+     * The dashboard grid as shipped: class, span class ('' = one cell)
+     * and registry position. Positions match the previous hardcoded
+     * grid so stored drag-order preferences keep resolving AND the
+     * default order stays the shipped one — module widgets slot into
+     * the gaps (Practice's HoursThisMonthWidget 30 and
+     * UnbilledTimeWidget 110, Taxation's GstPayableWidget 40), which
+     * matters because module providers register before the core does.
      *
-     * @return list<array{0: class-string, 1: string}>
+     * @return list<array{0: class-string, 1: string, 2: int}>
      */
     public static function widgets(): array
     {
         return [
-            [TotalClientsWidget::class, ''],
-            [OutstandingInvoicesWidget::class, ''],
-            [HoursThisMonthWidget::class, ''],
-            [GstPayableWidget::class, ''],
-            [CashFlowWidget::class, 'md:col-span-2 lg:col-span-4'],
-            [ARAgingWidget::class, 'md:col-span-1 lg:col-span-2'],
-            [BankBalanceWidget::class, 'md:col-span-1 lg:col-span-2'],
-            [RecentInvoicesWidget::class, 'md:col-span-1 lg:col-span-1'],
-            [RecentPaymentsWidget::class, 'md:col-span-1 lg:col-span-1'],
-            [OutstandingPOBudgetsWidget::class, 'md:col-span-1 lg:col-span-2'],
-            [UnbilledTimeWidget::class, 'md:col-span-1 lg:col-span-2'],
-            [PnLTrendWidget::class, 'md:col-span-1 lg:col-span-2'],
+            [TotalClientsWidget::class, '', 10],
+            [OutstandingInvoicesWidget::class, '', 20],
+            [CashFlowWidget::class, 'md:col-span-2 lg:col-span-4', 50],
+            [ARAgingWidget::class, 'md:col-span-1 lg:col-span-2', 60],
+            [BankBalanceWidget::class, 'md:col-span-1 lg:col-span-2', 70],
+            [RecentInvoicesWidget::class, 'md:col-span-1 lg:col-span-1', 80],
+            [RecentPaymentsWidget::class, 'md:col-span-1 lg:col-span-1', 90],
+            [OutstandingPOBudgetsWidget::class, 'md:col-span-1 lg:col-span-2', 100],
+            [PnLTrendWidget::class, 'md:col-span-1 lg:col-span-2', 120],
         ];
     }
 }
