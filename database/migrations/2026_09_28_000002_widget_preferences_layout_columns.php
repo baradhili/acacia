@@ -33,6 +33,14 @@ return new class extends Migration
 
     public function down(): void
     {
+        // Rows this feature left unplaced (NULL) must be back-filled
+        // before the column loses NULL — sqlite rebuilds the table
+        // and refuses NULLs in a NOT NULL column, so the rollback
+        // would die on the first such row. Width data is left as-is:
+        // the pre-feature code never read it, so 0s are harmless
+        // under the restored schema.
+        DB::table('widget_preferences')->whereNull('position_y')->update(['position_y' => 0]);
+
         Schema::table('widget_preferences', function (Blueprint $table) {
             $table->integer('position_y')->default(0)->change();
             $table->integer('width')->default(1)->change();
