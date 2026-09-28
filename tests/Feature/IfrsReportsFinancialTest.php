@@ -43,6 +43,11 @@ class IfrsReportsFinancialTest extends TestCase
     {
         parent::setUp();
 
+        // The fixtures below post into FY2026 and the reports read
+        // year(now())-derived periods — pin the clock inside that year
+        // so the tests survive the real clock rolling past 30 Jun 2027.
+        $this->travelTo(Carbon::parse('2026-09-15 09:00'));
+
         Role::firstOrCreate(['name' => 'admin']);
 
         // Australian entity: financial year runs 1 July – 30 June
@@ -89,6 +94,13 @@ class IfrsReportsFinancialTest extends TestCase
             ],
             ['period_count' => 1, 'status' => ReportingPeriod::OPEN],
         );
+    }
+
+    protected function tearDown(): void
+    {
+        $this->travelBack();
+
+        parent::tearDown();
     }
 
     /**

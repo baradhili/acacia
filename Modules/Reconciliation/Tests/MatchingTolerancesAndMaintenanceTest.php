@@ -42,8 +42,20 @@ class MatchingTolerancesAndMaintenanceTest extends TestCase
     {
         parent::setUp();
 
+        // Fixtures post into FY2026 and the strict pass reads the
+        // open-FY-bounded movements panel — pin the clock inside that
+        // year so the tests survive the real clock closing FY2026.
+        $this->travelTo(Carbon::parse('2026-09-15 09:00'));
+
         $this->entity = $this->seedIfrs();
         $this->service = app(ReconciliationService::class);
+    }
+
+    protected function tearDown(): void
+    {
+        $this->travelBack();
+
+        parent::tearDown();
     }
 
     /**

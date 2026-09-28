@@ -50,9 +50,21 @@ class UnreconciledBankMovementsTest extends TestCase
     {
         parent::setUp();
 
+        // Fixtures post into FY2026 and the panel this class tests is
+        // bounded to the open financial year — pin the clock inside
+        // that year so the tests survive the real clock closing FY2026.
+        $this->travelTo(Carbon::parse('2026-09-15 09:00'));
+
         $this->entity = $this->seedIfrs();
         $this->service = app(ReconciliationService::class);
         $this->user = User::factory()->create(['entity_id' => $this->entity->id]);
+    }
+
+    protected function tearDown(): void
+    {
+        $this->travelBack();
+
+        parent::tearDown();
     }
 
     /**
