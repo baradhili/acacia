@@ -6,7 +6,7 @@
 
 - [ ] Review - https://github.com/baradhili/resource_mgr and look to bring services, skills, and allocations concepts into acacia
 
-- [ ] active security testing harness
+- [ ] active security testing harness - salvatorecervone/laravel-pentest if they upgrade to 13
 
 - [ ] Ability to have multiple un-related company entities with separate everything against same user - aka same user can be admin of more than one org.
 
