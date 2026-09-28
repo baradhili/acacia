@@ -88,6 +88,15 @@ php artisan module:migrate Resumes                # run one module's migrations
 
 ## Docs to keep updated
 
+- `CHANGELOG.md` in the same branch that lands a user-visible change
+  (feature, behavior change, notable fix, new module) — not batched for
+  later; the September 2026 catch-up had to reconstruct three weeks of
+  history from git. Entry format: `## [Unreleased] — YYYY-MM-DD`,
+  newest first, prose sections `### Added/Changed/Fixed — theme`
+  explaining what and why, not a commit dump.
+- `todo-list.md` is the open-work queue (priority-ordered). When an
+  item is done, its summary goes into the changelog entry and the item
+  is deleted from the list — done items never accumulate there.
 - `docs/modules.md` when modules are added or their registration patterns
   change.
 - `README.md` features/stack when user-visible capabilities land.
