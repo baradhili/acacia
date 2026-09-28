@@ -210,7 +210,34 @@ class DashboardWidgetLayoutTest extends TestCase
         // The api/* prefix renders exceptions as JSON (bootstrap/app.php),
         // so unauthenticated requests get 401s rather than login redirects.
         $this->get('/api/widget-preferences')->assertStatus(401);
+        $this->get('/api/widget-preferences/hidden-widgets')->assertStatus(401);
         $this->postJson('/api/widget-preferences', [])->assertStatus(401);
+    }
+
+    /**
+     * The store is lazy: the dashboard page never renders removed
+     * cards (their queries must not run on dashboard loads) — they
+     * come from the hidden-widgets endpoint when edit mode opens.
+     */
+    public function test_hidden_cards_render_only_via_the_lazy_endpoint(): void
+    {
+        $storeSegment = function (string $html): string {
+            $start = strpos($html, 'id="widget-store"');
+
+            return substr($html, $start, strpos($html, 'id="widget-catalog"') - $start);
+        };
+
+        $this->actingAs($this->user)
+            ->putJson('/api/widget-preferences', ['widget_name' => 'CashFlowWidget', 'visible' => false])
+            ->assertOk();
+
+        $page = $this->actingAs($this->user)->get('/dashboard')->getContent();
+        $this->assertStringNotContainsString('data-widget=', $storeSegment($page));
+
+        $this->actingAs($this->user)
+            ->get('/api/widget-preferences/hidden-widgets')
+            ->assertOk()
+            ->assertSee('data-widget="CashFlowWidget"', false);
     }
 
     /**

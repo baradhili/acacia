@@ -31,9 +31,11 @@ class WidgetLayout
     }
 
     /**
-     * Removed widgets for the edit-mode catalog, in registry order —
-     * their cards render into the hidden store so adding one back is
-     * a DOM move, not a server round trip.
+     * Removed widgets for the edit-mode catalog (registry order).
+     * The dashboard page renders only their catalog rows; their cards
+     * come from the hidden-widgets endpoint when edit mode first
+     * opens, so a hidden widget's queries never run on dashboard
+     * loads — adding one back is a DOM move, not a re-render.
      */
     public function hidden(User $user): array
     {

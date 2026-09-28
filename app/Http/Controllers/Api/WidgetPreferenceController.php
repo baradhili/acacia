@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\WidgetPreference;
+use App\Support\WidgetLayout;
 use App\Support\Widgets;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,12 +23,27 @@ use Illuminate\Validation\Rule;
  */
 class WidgetPreferenceController extends Controller
 {
-    public function __construct(protected Widgets $registry) {}
+    public function __construct(protected Widgets $registry, protected WidgetLayout $layout) {}
 
     public function index(Request $request): JsonResponse
     {
         return response()->json([
             'preferences' => WidgetPreference::getForUser($request->user()->id),
+        ]);
+    }
+
+    /**
+     * The removed widgets' cards, rendered for edit mode. The
+     * dashboard page ships only the catalog rows (labels are cheap);
+     * the cards themselves — with each widget's queries — are
+     * fetched here on first entering edit mode, so hiding an
+     * expensive widget actually removes its cost from dashboard
+     * loads.
+     */
+    public function hidden(Request $request)
+    {
+        return view('dashboard.widget-store', [
+            'hiddenWidgets' => $this->layout->hidden($request->user()),
         ]);
     }
 

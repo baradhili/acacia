@@ -13,6 +13,7 @@ document.addEventListener('alpine:init', () => {
         isEditing: false,
         saving: false,
         saveError: false,
+        storeLoaded: false,
 
         // Leaving edit mode persists first; when the save fails, edit
         // mode stays open so the toolbar error stays visible and the
@@ -34,9 +35,33 @@ document.addEventListener('alpine:init', () => {
                 return;
             }
 
-            this.isEditing = true;
             this.saveError = false;
+            await this.loadStore();
+            this.isEditing = true;
             this.enableDragDrop();
+        },
+
+        // Fetches the removed widgets' cards into #widget-store the
+        // first time edit mode opens (the dashboard page ships only
+        // the catalog rows, keeping hidden widgets' query cost off
+        // regular loads). Once loaded, the session's own add/remove
+        // moves keep the store current.
+        async loadStore() {
+            if (this.storeLoaded) {
+                return;
+            }
+            try {
+                const response = await fetch('/api/widget-preferences/hidden-widgets', {
+                    headers: { Accept: 'text/html' },
+                });
+                if (!response.ok) {
+                    throw new Error(`Store load failed: ${response.status}`);
+                }
+                document.getElementById('widget-store').innerHTML = await response.text();
+                this.storeLoaded = true;
+            } catch (e) {
+                console.error('Failed to load removed widgets:', e);
+            }
         },
 
         enableDragDrop() {
@@ -92,9 +117,12 @@ document.addEventListener('alpine:init', () => {
 
         addWidget(row) {
             const card = document.querySelector(`#widget-store [data-widget="${row.dataset.widget}"]`);
-            if (card) {
-                document.getElementById('widget-grid').appendChild(card);
+            // No card yet (store still loading) — leave the row so
+            // the user can retry once it lands.
+            if (!card) {
+                return;
             }
+            document.getElementById('widget-grid').appendChild(card);
             row.remove();
             if (!document.querySelector('#widget-catalog-rows .catalog-entry')) {
                 document.getElementById('catalog-empty').classList.remove('hidden');

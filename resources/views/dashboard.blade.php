@@ -47,15 +47,11 @@
         @endforeach
     </div>
 
-    <!-- Removed widgets: cards park in the hidden store, the catalog
-         lists them; edit mode's Add moves the card back onto the
-         grid. Server-rendered rows cover the saved layout, the
-         template covers widgets removed during this session. -->
-    <div id="widget-store" class="hidden" aria-hidden="true">
-        @foreach ($hiddenWidgets as $widget)
-            @include('dashboard.widget-card', ['widget' => $widget])
-        @endforeach
-    </div>
+    <!-- Removed widgets: the page ships only their catalog rows; the
+         cards (and their queries) are fetched from the hidden-widgets
+         endpoint when edit mode first opens, so a hidden widget
+         costs nothing on dashboard loads. -->
+    <div id="widget-store" class="hidden" aria-hidden="true"></div>
 
     <div id="widget-catalog" x-show="isEditing" x-cloak class="mt-6">
         <h3 class="text-sm font-semibold text-gray-700 mb-2">{{ __('widgets.available') }}</h3>
