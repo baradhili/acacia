@@ -267,6 +267,34 @@ class IfrsReportsFinancialTest extends TestCase
         $response->assertSee('60.00'); // 110 total less 50 allocated
     }
 
+    public function test_aging_report_keeps_a_same_day_due_invoice_current(): void
+    {
+        $client = Client::factory()->create(['name' => 'Same Day Client Co']);
+        $invoice = Invoice::create([
+            'client_id' => $client->id,
+            'issue_date' => now()->subDay()->toDateString(),
+            'due_date' => now()->toDateString(), // due earlier on the as-of day
+            'status' => Invoice::STATUS_SENT,
+        ]);
+        $invoice->items()->create([
+            'description' => 'Service',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'tax_rate' => 10,
+        ]);
+        $invoice->refresh();
+        $invoice->recalculateTotals();
+
+        $response = $this->get(route('reports.aging', ['type' => 'ar']));
+
+        $response->assertStatus(200);
+        // Whole calendar days late: 0 — the row's Current column carries
+        // the $110 and the 1-30 column is nil (the as-of date is
+        // end-of-day, so a fractional day difference used to tip this
+        // invoice into 1-30).
+        $response->assertSeeInOrder(['Same Day Client Co', '$110.00', '$0.00']);
+    }
+
     public function test_aging_report_ap_variant_uses_bills(): void
     {
         $supplier = Supplier::create(['name' => 'Aging Supplier Co']);

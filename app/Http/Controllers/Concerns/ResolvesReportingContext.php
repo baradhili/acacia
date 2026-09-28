@@ -27,6 +27,10 @@ trait ResolvesReportingContext
     {
         $date = Carbon::parse($date ?? now());
         $entity = $this->ifrsEntity();
+        // No entity means there is nothing to report on — ReportingPeriod::
+        // year()/firstOrCreate below need one. 404 (not 500) via the
+        // framework's abort path.
+        abort_unless((bool) $entity, 404, 'No IFRS entity configured.');
         $year = ReportingPeriod::year($date, $entity);
 
         $period = ReportingPeriod::firstOrCreate(

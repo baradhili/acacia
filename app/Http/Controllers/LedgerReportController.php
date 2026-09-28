@@ -114,7 +114,7 @@ class LedgerReportController extends Controller
 
         if ($accountId) {
             $this->getReportingPeriod($endDate);
-            $statementData = $this->buildAccountStatement(Account::find($accountId), $startDate, $endDate);
+            $statementData = $this->buildAccountStatement(Account::findOrFail($accountId), $startDate, $endDate);
         }
 
         return view('reports.account-statement', compact(
@@ -143,7 +143,7 @@ class LedgerReportController extends Controller
         $scheduleData = null;
 
         if ($accountId) {
-            $account = Account::find($accountId);
+            $account = Account::findOrFail($accountId);
 
             // Get all journal entries with line items for this account in date range.
             // NOTE: the IFRS Transaction date column is `transaction_date`
@@ -226,7 +226,7 @@ class LedgerReportController extends Controller
             return back()->with('error', 'Please select an account');
         }
 
-        $account = Account::find($accountId);
+        $account = Account::findOrFail($accountId);
         $this->getReportingPeriod($endDate);
         $statement = $this->buildAccountStatement($account, $startDate, $endDate);
 
@@ -265,7 +265,7 @@ class LedgerReportController extends Controller
             return back()->with('error', 'Please select an account');
         }
 
-        $account = Account::find($accountId);
+        $account = Account::findOrFail($accountId);
         $this->getReportingPeriod($endDate);
         $statement = $this->buildAccountStatement($account, $startDate, $endDate);
 

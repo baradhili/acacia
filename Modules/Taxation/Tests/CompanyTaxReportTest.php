@@ -298,7 +298,7 @@ class CompanyTaxReportTest extends TestCase
             ->get(route('reports.company-tax', ['fy' => 2026]));
 
         $response->assertStatus(200);
-        $response->assertSee('not mapped in config/ato_tax_report.php');
+        $response->assertSee("not mapped in the Taxation module's ato_tax_report config");
         $response->assertSee('reported at Item 6 label C');
         // The amount still lands in the 6-C fallback bucket.
         $response->assertSee('$21');

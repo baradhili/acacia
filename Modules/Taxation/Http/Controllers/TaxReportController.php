@@ -556,7 +556,7 @@ class TaxReportController extends Controller
     /**
      * Company tax report figures for the ATO Company Tax Return (income
      * year 1 July – 30 June), per ATO_tax_report_spec.md. Label letters
-     * and names come from config/ato_tax_report.php and follow the
+     * and names come from the Taxation module's ato_tax_report config and follow the
      * Company tax return 2026 (NAT 0656).
      *
      * Item 6/7 amounts are cash-basis and GST-exclusive by construction:
@@ -744,7 +744,7 @@ class TaxReportController extends Controller
                 $mapped = $incomeAccountMap[(int) $m->code] ?? null;
                 $label = $mapped ?? ($config['fallback'][$m->account_type] ?? 'R');
                 if ($mapped === null) {
-                    $warnings[] = "Income account {$m->code} {$m->name} is not mapped in config/ato_tax_report.php — reported at Item 6 label {$label}.";
+                    $warnings[] = "Income account {$m->code} {$m->name} is not mapped in the Taxation module's ato_tax_report config — reported at Item 6 label {$label}.";
                 }
                 $assignAccount($incomeRows, $label, $m, $net, $audit);
                 if ($flag === 'non_assessable_exempt') {
@@ -756,7 +756,7 @@ class TaxReportController extends Controller
                 $mapped = $expenseAccountMap[(int) $m->code] ?? null;
                 $label = $mapped ?? $config['fallback']['expense'];
                 if ($mapped === null) {
-                    $warnings[] = "Expense account {$m->code} {$m->name} is not mapped in config/ato_tax_report.php — reported at Item 6 label {$label}.";
+                    $warnings[] = "Expense account {$m->code} {$m->name} is not mapped in the Taxation module's ato_tax_report config — reported at Item 6 label {$label}.";
                 }
                 $assignAccount($expenseRows, $label, $m, $net, $audit);
                 if ($flag === 'non_deductible') {

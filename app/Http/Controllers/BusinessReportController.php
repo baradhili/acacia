@@ -162,7 +162,12 @@ class BusinessReportController extends Controller
         ];
 
         foreach ($documents as $document) {
-            $daysPastDue = Carbon::parse($document->due_date)->diffInDays($asOfDate);
+            // Whole calendar days late: both dates start-of-day, so a
+            // document due earlier on the as-of day (the as-of date is
+            // end-of-day) stays in the Current bucket instead of the
+            // fractional day difference tipping it into 1-30.
+            $daysPastDue = (int) Carbon::parse($document->due_date)->startOfDay()
+                ->diffInDays($asOfDate->copy()->startOfDay());
 
             if ($daysPastDue <= 0) {
                 $bucket = &$buckets['current'];
