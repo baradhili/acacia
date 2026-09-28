@@ -85,6 +85,14 @@ php artisan module:migrate Resumes                # run one module's migrations
 9. **PDF export (Resumes)** compiles LaTeX with LuaLaTeX via Symfony
    Process — needs `lualatex` on the host, gated by `config('resumes.latex.*')`;
    tests skip when absent. DOCX uses PHPWord (pure PHP).
+10. **User-facing strings added or edited go through the translator**
+    (`__('...')` / `trans_choice`), never a new hard-coded string. Keys
+    live in `lang/`: `en` is the base every key must exist in; `en_AU`
+    (underscore form) overrides only differing keys — per-key fallback
+    resolves the rest from `en`, so never copy whole files into an
+    override. Legacy strings are deliberately not bulk-converted, but a
+    screen you touch must not leave new hard-coded strings behind, and
+    a key change updates every locale overriding it in the same commit.
 
 ## Docs to keep updated
 
