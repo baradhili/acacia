@@ -237,22 +237,26 @@ Route::middleware('auth')->group(function () {
     // Reports — the time/project reporting moved to Modules/Practice
     // (its routes/web.php) under the same URLs and route names.
 
-    // Financial Reports
-    Route::get('/reports/trial-balance', [FinancialStatementController::class, 'trialBalance'])->name('reports.trial-balance');
-    Route::get('/reports/income-statement', [FinancialStatementController::class, 'incomeStatement'])->name('reports.income-statement');
-    Route::get('/reports/balance-sheet', [FinancialStatementController::class, 'balanceSheet'])->name('reports.balance-sheet');
-    Route::get('/reports/cash-flow', [FinancialStatementController::class, 'cashFlowStatement'])->name('reports.cash-flow');
+    // Ledger-backed reports — the 'entity' middleware refuses users
+    // without an assigned entity before any IFRS query can run.
+    Route::middleware('entity')->group(function () {
+        // Financial Reports
+        Route::get('/reports/trial-balance', [FinancialStatementController::class, 'trialBalance'])->name('reports.trial-balance');
+        Route::get('/reports/income-statement', [FinancialStatementController::class, 'incomeStatement'])->name('reports.income-statement');
+        Route::get('/reports/balance-sheet', [FinancialStatementController::class, 'balanceSheet'])->name('reports.balance-sheet');
+        Route::get('/reports/cash-flow', [FinancialStatementController::class, 'cashFlowStatement'])->name('reports.cash-flow');
 
-    // Business Reports
-    Route::get('/reports/income-by-customer', [BusinessReportController::class, 'incomeByCustomer'])->name('reports.income-by-customer');
-    Route::get('/reports/expenses-by-category', [BusinessReportController::class, 'expensesByCategory'])->name('reports.expenses-by-category');
-    Route::get('/reports/aging', [BusinessReportController::class, 'agingReport'])->name('reports.aging');
-    Route::get('/reports/account-statement', [LedgerReportController::class, 'accountStatement'])->name('reports.account-statement');
-    Route::get('/reports/account-schedule', [LedgerReportController::class, 'accountSchedule'])->name('reports.account-schedule');
-    Route::get('/reports/export/account-statement/pdf', [LedgerReportController::class, 'exportAccountStatementPdf'])->name('reports.export.account-statement.pdf');
-    Route::get('/reports/export/account-statement/excel', [LedgerReportController::class, 'exportAccountStatementExcel'])->name('reports.export.account-statement.excel');
-    Route::get('/reports/prepayment-schedule', [BusinessReportController::class, 'prepaymentSchedule'])->name('reports.prepayment-schedule');
-    Route::get('/reports/export/prepayment-schedule/pdf', [BusinessReportController::class, 'exportPrepaymentSchedulePdf'])->name('reports.export.prepayment-schedule.pdf');
+        // Business Reports
+        Route::get('/reports/income-by-customer', [BusinessReportController::class, 'incomeByCustomer'])->name('reports.income-by-customer');
+        Route::get('/reports/expenses-by-category', [BusinessReportController::class, 'expensesByCategory'])->name('reports.expenses-by-category');
+        Route::get('/reports/aging', [BusinessReportController::class, 'agingReport'])->name('reports.aging');
+        Route::get('/reports/account-statement', [LedgerReportController::class, 'accountStatement'])->name('reports.account-statement');
+        Route::get('/reports/account-schedule', [LedgerReportController::class, 'accountSchedule'])->name('reports.account-schedule');
+        Route::get('/reports/export/account-statement/pdf', [LedgerReportController::class, 'exportAccountStatementPdf'])->name('reports.export.account-statement.pdf');
+        Route::get('/reports/export/account-statement/excel', [LedgerReportController::class, 'exportAccountStatementExcel'])->name('reports.export.account-statement.excel');
+        Route::get('/reports/prepayment-schedule', [BusinessReportController::class, 'prepaymentSchedule'])->name('reports.prepayment-schedule');
+        Route::get('/reports/export/prepayment-schedule/pdf', [BusinessReportController::class, 'exportPrepaymentSchedulePdf'])->name('reports.export.prepayment-schedule.pdf');
+    });
 
     // The GST/BAS/company-tax reports moved to Modules/Taxation (its
     // routes/web.php) under the same URLs and route names.

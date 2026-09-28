@@ -7,18 +7,25 @@ here once their changelog entry lands. Ordered by priority.
 
 - [ ] Bring the remaining resource_mgr concepts into acacia — services (Sep 2026) and the skills library (Sep 2026, Modules/Skills) are across; the allocations/resourcing concepts are what's left. Review https://github.com/baradhili/resource_mgr for those.
 
+- [ ] Quarterly PAYG-I accrual journal — Dr tax expense / Cr 2240 computed from the bas.installment_rate config stub (dead config until this lands; left open by the Sep 2026 PAYG settlement work).
+
 - [ ] Ability to have multiple un-related company entities with separate everything against same user - aka same user can be admin of more than one org.
 
 - [ ] Modules per company (builds on the multi-entity item above).
 
 - [ ] cucumber tests via behat — plan reviewed and refreshed 2026-09-28: .zcode/plans/behat-migration-plan.md (scope renewal with maintainer is the first step; suite has grown to 55 feature files + the Modules suite since the original approval).
 
+- [ ] Repair or delete the three legacy reconciliation test files excluded per-file in phpunit.xml (ReconciliationMatching, ReconciliationService, AutoCreateCashReceipt — they drifted while the whole directory was excluded).
+
 - [ ] Flesh out dashboard layout management - allow user to move widgets, add and remove. Resize as an option.
 
 - [ ] property rental management module
 
-- [ ] https://docs.markwhen.com/ might be good to integrate into projects section - but only once we have a client module and a real project module
+- [ ] CRM follow-ups from the Sep 2026 module: email/calendar integrations, per-owner targets.
 
 - [ ] Static security testing: look at `laravel-security/pentest-scanner` or `baspa/larascan`
+- [ ] Finish the modularisation arc: extract Estimates into a module (BAS/tax landed since as Modules/Taxation), and push the verified payroll subtree split (split/erp-payroll branch) to its own repo.
+
+- [ ] https://docs.markwhen.com/ might be good to integrate into projects section - but only once we have a client module and a real project module
 
 - [ ] active security testing harness - salvatorecervone/laravel-pentest if they upgrade to 13

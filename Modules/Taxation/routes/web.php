@@ -12,7 +12,8 @@ use Modules\Taxation\Http\Controllers\TaxReportController;
 
 // Report screens — visible to every signed-in user, exactly as they were
 // as core routes (freeze/settle below carry the admin/accountant gate).
-Route::middleware(['web', 'auth'])->group(function () {
+// 'entity' refuses entity-less users before the IFRS queries run.
+Route::middleware(['web', 'auth', 'entity'])->group(function () {
     Route::get('/reports/gst', [TaxReportController::class, 'gstReport'])->name('reports.gst');
     Route::get('/reports/bas', [TaxReportController::class, 'bas'])->name('reports.bas');
     Route::get('/reports/company-tax', [TaxReportController::class, 'companyTax'])->name('reports.company-tax');
@@ -24,7 +25,7 @@ Route::middleware(['web', 'auth'])->group(function () {
 });
 
 // Lodgement freezing and ATO settlements write to the ledger.
-Route::middleware(['web', 'auth', 'role:admin|accountant'])->group(function () {
+Route::middleware(['web', 'auth', 'entity', 'role:admin|accountant'])->group(function () {
     Route::post('/bas-statements/freeze', [TaxReportController::class, 'freezeBasQuarter'])->name('bas-statements.freeze');
     Route::delete('/bas-statements/{statement}/unfreeze', [TaxReportController::class, 'unfreezeBasQuarter'])->name('bas-statements.unfreeze');
 
