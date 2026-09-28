@@ -77,8 +77,11 @@ class WidgetPreferenceController extends Controller
     public function saveAll(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'widgets' => ['required', 'array'],
-            'widgets.*.widget_name' => ['required', 'string', Rule::in($this->registry->ids())],
+            // list: keyed objects would smuggle string keys in as
+            // positions; distinct: a duplicated name would write the
+            // same row twice with different indices (last wins).
+            'widgets' => ['required', 'array', 'list'],
+            'widgets.*.widget_name' => ['required', 'string', 'distinct', Rule::in($this->registry->ids())],
             'widgets.*.visible' => ['required', 'boolean'],
             'widgets.*.width' => ['nullable', 'integer', 'min:0', 'max:4'],
         ]);
@@ -88,10 +91,8 @@ class WidgetPreferenceController extends Controller
         // failing atomically and leaving the previous layout intact.
         DB::transaction(function () use ($validated, $request): void {
             $userId = $request->user()->id;
-            $names = [];
 
             foreach ($validated['widgets'] as $index => $widget) {
-                $names[] = $widget['widget_name'];
                 WidgetPreference::updateOrCreate(
                     ['user_id' => $userId, 'widget_name' => $widget['widget_name']],
                     [
@@ -103,8 +104,11 @@ class WidgetPreferenceController extends Controller
                 );
             }
 
+            // Cleanup targets rows whose widget left the registry —
+            // not rows the payload happened not to mention, so a
+            // partial save can't revert the rest of the layout.
             WidgetPreference::where('user_id', $userId)
-                ->whereNotIn('widget_name', $names)
+                ->whereNotIn('widget_name', $this->registry->ids())
                 ->delete();
         });
 

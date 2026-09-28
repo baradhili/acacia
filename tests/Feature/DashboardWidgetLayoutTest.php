@@ -164,6 +164,54 @@ class DashboardWidgetLayoutTest extends TestCase
         $this->assertNull(WidgetPreference::where('widget_name', 'DisabledModuleWidget')->first());
     }
 
+    /**
+     * The stale-row cleanup targets widgets that left the registry,
+     * not widgets the payload omitted — a partial save rewrites only
+     * what it mentions.
+     */
+    public function test_partial_save_leaves_unmentioned_widgets_untouched(): void
+    {
+        $this->actingAs($this->user)
+            ->postJson('/api/widget-preferences', [
+                'widgets' => [
+                    ['widget_name' => 'PnLTrendWidget', 'visible' => true, 'width' => 2, 'position' => 0],
+                    ['widget_name' => 'CashFlowWidget', 'visible' => false, 'position' => 1],
+                ],
+            ])
+            ->assertOk();
+
+        $this->actingAs($this->user)
+            ->postJson('/api/widget-preferences', [
+                'widgets' => [
+                    ['widget_name' => 'TotalClientsWidget', 'visible' => true],
+                ],
+            ])
+            ->assertOk();
+
+        $pnL = WidgetPreference::where('widget_name', 'PnLTrendWidget')->first();
+        $this->assertNotNull($pnL);
+        $this->assertSame(2, (int) $pnL->width);
+        $this->assertFalse((bool) WidgetPreference::where('widget_name', 'CashFlowWidget')->value('visible'));
+    }
+
+    public function test_full_save_rejects_keyed_and_duplicated_widgets(): void
+    {
+        $this->actingAs($this->user)
+            ->postJson('/api/widget-preferences', ['widgets' => ['foo' => ['widget_name' => 'TotalClientsWidget', 'visible' => true]]])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('widgets');
+
+        $this->actingAs($this->user)
+            ->postJson('/api/widget-preferences', [
+                'widgets' => [
+                    ['widget_name' => 'TotalClientsWidget', 'visible' => true],
+                    ['widget_name' => 'TotalClientsWidget', 'visible' => false],
+                ],
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('widgets.1.widget_name');
+    }
+
     public function test_layouts_are_per_user(): void
     {
         $other = User::factory()->create();
