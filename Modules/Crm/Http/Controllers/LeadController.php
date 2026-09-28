@@ -216,7 +216,7 @@ class LeadController extends Controller
         }
 
         if (! Route::has('estimates.create')) {
-            return back()->with('error', 'The estimates module is not available.');
+            return back()->with('error', __('crm.estimates_unavailable'));
         }
 
         return redirect()->route('estimates.create', ['lead_id' => $lead->id]);
