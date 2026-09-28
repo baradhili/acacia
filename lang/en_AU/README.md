@@ -7,5 +7,7 @@ attribute names), and inside it only the keys whose wording changes.
 Missing keys and files fall back to `lang/en/` per key, so a partial
 override is complete by construction.
 
-The directory takes effect when `APP_LOCALE=en_AU` (underscore form);
-with the default `APP_LOCALE=en` it simply sits ready.
+The directory takes effect via `APP_LOCALE=en_AU` (underscore form —
+the `.env.example` default; a dash form like `en-AU` would never
+resolve here) with `APP_FALLBACK_LOCALE=en` catching every key this
+directory does not override.
