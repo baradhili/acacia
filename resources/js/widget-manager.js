@@ -185,7 +185,11 @@ document.addEventListener('alpine:init', () => {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json',
                     },
-                    body: JSON.stringify({ widgets }),
+                    // complete: this is the whole dashboard at save
+                    // time (grid plus removed) — the server writes
+                    // the order over what we send even when the
+                    // registry grew a widget since page load.
+                    body: JSON.stringify({ widgets, complete: true }),
                 });
                 if (!response.ok) {
                     throw new Error(`Save failed: ${response.status}`);

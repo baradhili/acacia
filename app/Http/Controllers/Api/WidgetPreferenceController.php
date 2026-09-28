@@ -13,16 +13,17 @@ use Illuminate\Validation\Rule;
 
 /**
  * Persists a user's dashboard layout over the widget registry. The
- * full save (POST) writes the complete sequence edit mode captured —
- * grid widgets in drag order, then removed ones — as position_y
- * indices, plus width and visibility per widget, in one transaction.
- * A payload naming only some registered widgets is a patch: it
- * updates those widgets' width/visibility and leaves ordering alone
- * (ordering claims from a partial payload would collide with rows it
- * never mentioned). Either way, rows for widgets that left the
- * registry (a disabled module's) are dropped. The single-widget patch
- * (PUT) covers add/remove/resize without a full save. Widget names
- * are validated against the registry so junk ids never become
+ * full save (POST) writes the sequence edit mode captured — grid
+ * widgets in drag order, then removed ones — as position_y indices,
+ * plus width and visibility per widget, in one transaction; it is
+ * flagged complete=true by the browser client, whose payload is its
+ * whole dashboard at save time (a widget registering between page
+ * load and save simply rides at the tail rather than demoting the
+ * save). Without the flag the payload is a patch: visibility/width
+ * only, ordering untouched. Either way, rows for widgets that left
+ * the registry (a disabled module's) are dropped. The single-widget
+ * patch (PUT) covers add/remove/resize without a full save. Widget
+ * names are validated against the registry so junk ids never become
  * preference rows.
  */
 class WidgetPreferenceController extends Controller
@@ -88,6 +89,7 @@ class WidgetPreferenceController extends Controller
             'widgets.*.widget_name' => ['required', 'string', 'distinct', Rule::in($this->registry->ids())],
             'widgets.*.visible' => ['required', 'boolean'],
             'widgets.*.width' => ['nullable', 'integer', 'min:0', 'max:4'],
+            'complete' => ['nullable', 'boolean'],
         ]);
 
         // One transaction: a half-written sequence (some rows moved,
@@ -96,15 +98,19 @@ class WidgetPreferenceController extends Controller
         DB::transaction(function () use ($validated, $request): void {
             $userId = $request->user()->id;
 
-            // A payload naming every registered widget rewrites the
-            // whole sequence with 0-based indices. A partial payload
-            // patches only the widgets it names — position_y stays
-            // untouched, because its 0-based indices would collide
+            // complete=true declares the payload to be the client's
+            // whole dashboard (grid plus removed widgets) and writes
+            // the order over what it names — the browser client sends
+            // it, so a widget registering between page load and save
+            // (payload shorter than the registry) appends at the tail
+            // instead of demoting the save to a patch that silently
+            // drops the user's drag order. Without the flag the
+            // payload is a patch: visibility/width only, positions
+            // untouched — a patch's 0-based indices would collide
             // with positions of rows it never mentioned (ties fall
-            // back to registry order, so the requested order would
-            // silently not apply).
-            $names = array_column($validated['widgets'], 'widget_name');
-            $reorder = count($names) === count($this->registry->ids());
+            // back to registry order, so its order would silently
+            // not apply).
+            $reorder = ($validated['complete'] ?? false) === true;
 
             foreach ($validated['widgets'] as $index => $widget) {
                 $data = [

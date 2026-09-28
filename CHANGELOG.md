@@ -5,6 +5,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-09-28
 
+### Fixed — registry growth no longer eats the drag order
+
+The count-based full-save check from the second review pass had its
+own hole: when a widget registers between a dashboard page load and
+Done (a module enabled mid-session), the browser submits every card
+it loaded — fewer than the registry now holds — and the check demoted
+that save to a patch, dropping the user's drag order while still
+reporting success. Completeness is now declared by the client rather
+than inferred from counts: the browser sends `complete: true` (its
+payload is always its whole dashboard at save time), order is written
+when the flag is set, and the widget the page never saw rides at the
+tail. Flag-less payloads keep the patch contract — visibility/width
+only, positions untouched.
+
+## [Unreleased] — 2026-09-28
+
 ### Fixed — dashboard layout review round, second pass
 
 Three more findings, all valid. **Partial saves claimed ordering they

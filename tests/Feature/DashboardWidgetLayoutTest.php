@@ -82,7 +82,7 @@ class DashboardWidgetLayoutTest extends TestCase
         ];
 
         $this->actingAs($this->user)
-            ->postJson('/api/widget-preferences', ['widgets' => $payload])
+            ->postJson('/api/widget-preferences', ['widgets' => $payload, 'complete' => true])
             ->assertOk()
             ->assertJsonPath('success', true);
 
@@ -214,7 +214,7 @@ class DashboardWidgetLayoutTest extends TestCase
             ...array_map(fn (string $id) => ['widget_name' => $id, 'visible' => true], array_values($rest)),
         ];
         $this->actingAs($this->user)
-            ->postJson('/api/widget-preferences', ['widgets' => $payload])
+            ->postJson('/api/widget-preferences', ['widgets' => $payload, 'complete' => true])
             ->assertOk();
         $this->assertSame(0, (int) WidgetPreference::where('widget_name', 'TotalClientsWidget')->value('position_y'));
 
@@ -231,6 +231,37 @@ class DashboardWidgetLayoutTest extends TestCase
 
         $this->assertSame($placed, (int) WidgetPreference::where('widget_name', 'PnLTrendWidget')->value('position_y'));
         $this->assertSame(0, (int) WidgetPreference::where('widget_name', 'TotalClientsWidget')->value('position_y'));
+    }
+
+    /**
+     * The registry can grow between page load and Done (a module
+     * enabled mid-session): the browser still submits every card it
+     * loaded — fewer than the registry now holds — and declares the
+     * payload complete. The drag order must survive that save; the
+     * widget the page never saw rides at the tail.
+     */
+    public function test_complete_save_keeps_order_when_the_registry_grew(): void
+    {
+        // Three of the registry's widgets — what a page rendered
+        // before the rest registered would submit.
+        $this->actingAs($this->user)
+            ->postJson('/api/widget-preferences', [
+                'complete' => true,
+                'widgets' => [
+                    ['widget_name' => 'PnLTrendWidget', 'visible' => true],
+                    ['widget_name' => 'TotalClientsWidget', 'visible' => true],
+                    ['widget_name' => 'CashFlowWidget', 'visible' => false],
+                ],
+            ])
+            ->assertOk();
+
+        $this->assertSame(0, (int) WidgetPreference::where('widget_name', 'PnLTrendWidget')->value('position_y'));
+        $this->assertSame(1, (int) WidgetPreference::where('widget_name', 'TotalClientsWidget')->value('position_y'));
+
+        // The saved order renders; widgets the page never loaded
+        // (every one the payload omitted) follow in registry order.
+        $html = $this->actingAs($this->user)->get('/dashboard')->getContent();
+        $this->assertGridOrder($html, ['PnLTrendWidget', 'TotalClientsWidget', 'OutstandingInvoicesWidget', 'PipelineWidget']);
     }
 
     public function test_full_save_rejects_keyed_and_duplicated_widgets(): void
