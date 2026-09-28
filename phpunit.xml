@@ -20,7 +20,13 @@
     <source>
         <include>
             <directory>app</directory>
+            <directory>Modules</directory>
         </include>
+        <!-- Tests are not application source — keep them out of the
+             coverage denominator. -->
+        <exclude>
+            <directory>Modules/*/Tests</directory>
+        </exclude>
     </source>
     <php>
         <env name="APP_ENV" value="testing"/>

@@ -3,7 +3,7 @@
 Done items are archived in [CHANGELOG.md](CHANGELOG.md) — cleared from
 here once their changelog entry lands. Ordered by priority.
 
-- [ ] Remove the "client" role concept from the app — audit RoleSeeder's roles list, any `client` role checks/assignments and portal-client user handling; user accounts should be staff-side only (admin/accountant/staff). (Sep 2026, requested while making all users show as payroll payees — the payroll UserObserver currently skips client-role users defensively, so this unpays that workaround.)
+- [ ] WAIT! - Lets think about client portal need for future - Remove the "client" role concept from the app — audit RoleSeeder's roles list, any `client` role checks/assignments and portal-client user handling; user accounts should be staff-side only (admin/accountant/staff). (Sep 2026, requested while making all users show as payroll payees — the payroll UserObserver currently skips client-role users defensively, so this unpays that workaround.)
 
 - [ ] Bring the remaining resource_mgr concepts into acacia — services (Sep 2026) and the skills library (Sep 2026, Modules/Skills) are across; the allocations/resourcing concepts are what's left. Review https://github.com/baradhili/resource_mgr for those.
 
@@ -13,11 +13,11 @@ here once their changelog entry lands. Ordered by priority.
 
 - [ ] cucumber tests via behat — plan reviewed and refreshed 2026-09-28: .zcode/plans/behat-migration-plan.md (scope renewal with maintainer is the first step; suite has grown to 55 feature files + the Modules suite since the original approval).
 
-- [ ] Remove ReconciliationService dead code: `calculateMatchScore` and `getMatchingCandidates` lost their last callers when the legacy reconciliation tests were deleted (Sep 2026) — the new matcher replaced them with the candidates screen and movement-based matching. Also decide whether the auto-create receipt/purchase service methods (`autoCreateCashReceipts`/`autoCreatePurchases`/their single-line variants) should regain UI routes or be retired — currently nothing in the app calls them.
+- [ ] Backfill class docblocks on the ~83 pre-convention core classes (app/Models, app/Http/Controllers, widgets, console commands, remaining services — found by the Sep 2026 docblock audit). Write them as code is touched per AGENTS.md, or as one dedicated documentation pass; state invariants, not narrations.
 
-- [ ] Flesh out dashboard layout management - allow user to move widgets, add and remove. Resize as an option.
+- [ ] Flesh out dashboard layout management - allow user to move widgets, add and remove. Resize as an option (or add as a future todo).
 
-- [ ] property rental management module
+- [ ] property rental management module - the company is a landlord
 
 - [ ] CRM follow-ups from the Sep 2026 module: email/calendar integrations, per-owner targets.
 

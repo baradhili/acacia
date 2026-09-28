@@ -3,24 +3,43 @@
 namespace Tests\Feature;
 
 use App\Models\Client;
+use App\Models\CreditNote;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\User;
+use IFRS\Models\Account;
+use IFRS\Models\Balance;
+use IFRS\Models\Currency;
+use IFRS\Models\Entity;
+use IFRS\Models\Ledger;
+use IFRS\Models\ReportingPeriod;
+use IFRS\Models\Vat;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
+/**
+ * Client payments: creation and numbering, allocations across
+ * invoices (partial, over-payment, manual override, removal,
+ * reallocation and their invoice-status effects), voiding, refunds
+ * from credit notes, and the IFRS posting rules — per-item GST
+ * treatment for allocated shares, the GST-inclusive default for the
+ * unallocated remainder, and refunds netting the ledger back to
+ * zero.
+ */
 class PaymentTest extends TestCase
 {
     use RefreshDatabase;
 
     protected User $user;
+
     protected Client $client;
+
     protected Invoice $invoice;
 
     protected function setUp(): void
     {
         parent::setUp();
-        
+
         $this->user = User::factory()->create();
         $this->client = Client::factory()->create([
             'name' => 'Test Client',
@@ -77,7 +96,7 @@ class PaymentTest extends TestCase
             'payment_method' => 'bank_transfer',
         ]);
 
-        $this->assertMatchesRegularExpression('/^PAY-' . date('Y') . '-\d{4}$/', $payment->payment_number);
+        $this->assertMatchesRegularExpression('/^PAY-'.date('Y').'-\d{4}$/', $payment->payment_number);
     }
 
     public function test_partial_payment_allocates_correctly(): void
@@ -348,8 +367,6 @@ class PaymentTest extends TestCase
             'status' => Payment::STATUS_COMPLETED,
         ]);
 
-        $this->assertTrue(method_exists($payment, 'void'));
-
         // Void the payment
         $payment->void();
 
@@ -360,11 +377,11 @@ class PaymentTest extends TestCase
     {
         $entity = $this->seedIfrs();
 
-        $creditNote = \App\Models\CreditNote::create([
+        $creditNote = CreditNote::create([
             'client_id' => $this->client->id,
             'total' => -60,
             'remaining_amount' => 60,
-            'status' => \App\Models\CreditNote::STATUS_ISSUED,
+            'status' => CreditNote::STATUS_ISSUED,
         ]);
 
         $this->assertTrue($creditNote->applyToInvoice($this->invoice, 55));
@@ -376,21 +393,21 @@ class PaymentTest extends TestCase
         $this->assertNotNull($refund->ifrs_receipt_id);
         $this->assertEquals(-55, (float) $refund->amount);
 
-        $bank = \IFRS\Models\Account::where('code', 320)->first();
-        $revenue = \IFRS\Models\Account::where('code', 4100)->first();
-        $gst = \IFRS\Models\Account::where('code', 2200)->first();
+        $bank = Account::where('code', 320)->first();
+        $revenue = Account::where('code', 4100)->first();
+        $gst = Account::where('code', 2200)->first();
 
         // Cr Bank 55, Dr Revenue 50 net, Dr GST 5.
-        $this->assertEquals(55, (float) \IFRS\Models\Ledger::where('post_account', $bank->id)
-            ->where('entry_type', \IFRS\Models\Balance::CREDIT)->sum('amount'));
-        $this->assertEquals(50, (float) \IFRS\Models\Ledger::where('post_account', $revenue->id)
-            ->where('entry_type', \IFRS\Models\Balance::DEBIT)->sum('amount')
-            - \IFRS\Models\Ledger::where('post_account', $revenue->id)
-            ->where('entry_type', \IFRS\Models\Balance::CREDIT)->sum('amount'));
-        $this->assertEquals(5, (float) \IFRS\Models\Ledger::where('post_account', $gst->id)
-            ->where('entry_type', \IFRS\Models\Balance::DEBIT)->sum('amount')
-            - \IFRS\Models\Ledger::where('post_account', $gst->id)
-            ->where('entry_type', \IFRS\Models\Balance::CREDIT)->sum('amount'));
+        $this->assertEquals(55, (float) Ledger::where('post_account', $bank->id)
+            ->where('entry_type', Balance::CREDIT)->sum('amount'));
+        $this->assertEquals(50, (float) Ledger::where('post_account', $revenue->id)
+            ->where('entry_type', Balance::DEBIT)->sum('amount')
+            - Ledger::where('post_account', $revenue->id)
+                ->where('entry_type', Balance::CREDIT)->sum('amount'));
+        $this->assertEquals(5, (float) Ledger::where('post_account', $gst->id)
+            ->where('entry_type', Balance::DEBIT)->sum('amount')
+            - Ledger::where('post_account', $gst->id)
+                ->where('entry_type', Balance::CREDIT)->sum('amount'));
     }
 
     public function test_allocation_groups_split_taxable_and_free_shares(): void
@@ -444,11 +461,11 @@ class PaymentTest extends TestCase
         // Dr Bank 160; Cr Revenue 160 gross with the GST leg debiting 10
         // back out (net 150 = 100 net taxable + the full 50 GST-free
         // share); Cr GST Payable 10 — the GST-free share accrues no GST.
-        $this->assertEquals(160, $this->ledgerSum(320, \IFRS\Models\Balance::DEBIT));
-        $this->assertEquals(160, $this->ledgerSum(4100, \IFRS\Models\Balance::CREDIT));
-        $this->assertEquals(10, $this->ledgerSum(4100, \IFRS\Models\Balance::DEBIT));
-        $this->assertEquals(10, $this->ledgerSum(2200, \IFRS\Models\Balance::CREDIT));
-        $this->assertEquals(0, $this->ledgerSum(2200, \IFRS\Models\Balance::DEBIT));
+        $this->assertEquals(160, $this->ledgerSum(320, Balance::DEBIT));
+        $this->assertEquals(160, $this->ledgerSum(4100, Balance::CREDIT));
+        $this->assertEquals(10, $this->ledgerSum(4100, Balance::DEBIT));
+        $this->assertEquals(10, $this->ledgerSum(2200, Balance::CREDIT));
+        $this->assertEquals(0, $this->ledgerSum(2200, Balance::DEBIT));
     }
 
     public function test_partially_allocated_payment_posts_remainder_gst_inclusive(): void
@@ -468,10 +485,10 @@ class PaymentTest extends TestCase
 
         $this->assertNotNull($payment->postToIFRS());
 
-        $this->assertEquals(220, $this->ledgerSum(320, \IFRS\Models\Balance::DEBIT));
-        $this->assertEquals(220, $this->ledgerSum(4100, \IFRS\Models\Balance::CREDIT)); // gross; net 200 after the GST leg
-        $this->assertEquals(20, $this->ledgerSum(4100, \IFRS\Models\Balance::DEBIT));
-        $this->assertEquals(20, $this->ledgerSum(2200, \IFRS\Models\Balance::CREDIT)); // 10 + 10
+        $this->assertEquals(220, $this->ledgerSum(320, Balance::DEBIT));
+        $this->assertEquals(220, $this->ledgerSum(4100, Balance::CREDIT)); // gross; net 200 after the GST leg
+        $this->assertEquals(20, $this->ledgerSum(4100, Balance::DEBIT));
+        $this->assertEquals(20, $this->ledgerSum(2200, Balance::CREDIT)); // 10 + 10
     }
 
     public function test_credit_note_refund_of_mixed_invoice_nets_ledger_to_zero(): void
@@ -500,11 +517,11 @@ class PaymentTest extends TestCase
         $payment->allocateToInvoice($invoice, 160);
         $this->assertNotNull($payment->postToIFRS());
 
-        $creditNote = \App\Models\CreditNote::create([
+        $creditNote = CreditNote::create([
             'client_id' => $this->client->id,
             'total' => -160,
             'remaining_amount' => 160,
-            'status' => \App\Models\CreditNote::STATUS_ISSUED,
+            'status' => CreditNote::STATUS_ISSUED,
         ]);
 
         // The refund allocates to the same mixed invoice, so it must
@@ -512,8 +529,8 @@ class PaymentTest extends TestCase
         $this->assertTrue($creditNote->applyToInvoice($invoice, 160));
 
         foreach ([320, 4100, 2200] as $code) {
-            $net = $this->ledgerSum($code, \IFRS\Models\Balance::DEBIT)
-                - $this->ledgerSum($code, \IFRS\Models\Balance::CREDIT);
+            $net = $this->ledgerSum($code, Balance::DEBIT)
+                - $this->ledgerSum($code, Balance::CREDIT);
             $this->assertEquals(0, $net, "Account {$code} should net to zero after the refund.");
         }
     }
@@ -523,9 +540,9 @@ class PaymentTest extends TestCase
      */
     protected function ledgerSum(int $code, string $entryType): float
     {
-        $account = \IFRS\Models\Account::where('code', $code)->first();
+        $account = Account::where('code', $code)->first();
 
-        return (float) \IFRS\Models\Ledger::where('post_account', $account->id)
+        return (float) Ledger::where('post_account', $account->id)
             ->where('entry_type', $entryType)
             ->sum('amount');
     }
@@ -535,16 +552,16 @@ class PaymentTest extends TestCase
      * entity + reporting period, bank (320), revenue (4100), GST Payable
      * (2200) and the GST 10% Vat. Mirrors BillPaymentModelTest::seedIfrs().
      */
-    protected function seedIfrs(): \IFRS\Models\Entity
+    protected function seedIfrs(): Entity
     {
-        $entity = \IFRS\Models\Entity::create([
+        $entity = Entity::create([
             'name' => 'Test Entity',
             'locale' => 'en_AU',
             'multi_currency' => false,
             'year_start' => 1,
         ]);
 
-        $currency = \IFRS\Models\Currency::create([
+        $currency = Currency::create([
             'name' => 'Australian Dollar',
             'currency_code' => 'AUD',
             'entity_id' => $entity->id,
@@ -552,19 +569,19 @@ class PaymentTest extends TestCase
         $entity->update(['currency_id' => $currency->id]);
         $entity->refresh();
 
-        \IFRS\Models\ReportingPeriod::create([
+        ReportingPeriod::create([
             'period_count' => 1,
             'calendar_year' => (int) date('Y'),
-            'status' => \IFRS\Models\ReportingPeriod::OPEN,
+            'status' => ReportingPeriod::OPEN,
             'entity_id' => $entity->id,
         ]);
 
         foreach ([
-            ['Operating Account', \IFRS\Models\Account::BANK, 320],
-            ['Consulting Revenue', \IFRS\Models\Account::OPERATING_REVENUE, 4100],
-            ['GST Payable', \IFRS\Models\Account::CONTROL, 2200],
+            ['Operating Account', Account::BANK, 320],
+            ['Consulting Revenue', Account::OPERATING_REVENUE, 4100],
+            ['GST Payable', Account::CONTROL, 2200],
         ] as [$name, $type, $code]) {
-            \IFRS\Models\Account::create([
+            Account::create([
                 'name' => $name,
                 'account_type' => $type,
                 'code' => $code,
@@ -573,8 +590,8 @@ class PaymentTest extends TestCase
             ]);
         }
 
-        $gstPayable = \IFRS\Models\Account::where('code', 2200)->first();
-        \IFRS\Models\Vat::create([
+        $gstPayable = Account::where('code', 2200)->first();
+        Vat::create([
             'name' => 'GST 10%',
             'code' => 'G',
             'rate' => 10,

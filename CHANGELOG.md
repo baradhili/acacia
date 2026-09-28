@@ -5,6 +5,58 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-09-28
 
+### Removed — the reconciliation auto-create service methods
+
+`autoCreateCashReceipts`/`autoCreatePurchases` and their single-line
+variants (`createCashReceiptFromBankTransaction`,
+`createPurchaseFromBankTransaction`), with the helpers only they used
+(`findClientForTransaction`, `findSupplierForTransaction`,
+`suggestExpenseAccount`, `postPaymentToIFRS`) — retired per
+maintainer decision: no auto-create. They had no callers since the
+Match screen took over creating what a line pays for, and they were
+broken against real imported debits until the magnitude fix bought
+them one last stay (see the entry below). The matching capability is
+untouched — every method the match screen, auto-matcher and learning
+loop call survives, and the module suite exercises them end to end.
+The one test that depended on auto-create was rewritten to prove the
+learned rule resolves payers no name matching could, against the
+match pass instead.
+
+### Changed — test suite hardening: CI, clock-proof fixtures, payroll HTTP coverage, route smoke
+
+The general testing review's fixes, three of which caught live bugs.
+**CI exists now** (`.github/workflows/ci.yml`): one sqlite job running
+`php artisan test` on every push and PR — the suite previously ran
+only on the dev server. The job builds the frontend assets first
+(`public/build` is gitignored, so a fresh runner would have thrown
+missing-manifest on every layout render) and pins its actions to tag
+SHAs so a moved upstream tag cannot change what executes. **Time-bomb
+fixtures defused**: the reconciliation strict-matcher tests and the
+IFRS financial-report tests posted into FY2026 while reading
+`now()`-derived fiscal years, so they would have died the day the
+clock closed FY2026 — they pin the clock with `travelTo` like the
+payroll BAS-labels tests already did (which the review had wrongly
+flagged; the audit cleared every other hardcoded-2026 file as pinned,
+pure-function or FY-independent). **Payroll's money-moving routes are
+tested over HTTP** (create, payslip add/remove — including the staff
+gate — process, reverse, delete, the create form's validation) — and
+immediately caught a live bug: `addPayslip` read its nullable
+`hours`/`gross` keys unguarded, so an hours-based payslip 500ed the
+route. **A route smoke test** walks every parameterless GET route as
+an admin asserting nothing 500s — its first run caught the CRM
+lead-create screen, which forced `lead` null into the shared form and
+crashed on the first attribute read; only the deliberately guarded
+screens (dividends aborts without a company profile) may answer 404.
+Cleanup: the dead matcher methods
+`calculateMatchScore`/`getMatchingCandidates` are deleted with the
+`method_exists` assertions that kept them nominally alive,
+`PaymentTest`'s `void()` tautology went the same way, and phpunit's
+coverage source now includes `Modules/` while excluding the module
+test directories from the denominator. Every class this arc touched
+carries a class docblock (seven gained one, written from verified
+behaviour); the ~83 pre-convention core classes still without are
+queued on todo-list. Full suite: 994 tests.
+
 ### Fixed — legacy reconciliation tests resolved; auto-create purchases take the debit magnitude
 
 The three reconciliation test files excluded per-file in phpunit.xml

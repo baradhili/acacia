@@ -13,6 +13,13 @@ use Modules\Reconciliation\Services\ReconciliationService;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
+/**
+ * Residual coverage from the phase 4/5 build: project staff
+ * assignment rates (custom override, project-default fallback,
+ * deactivation) and the reconciliation service's manual-match
+ * plumbing, tolerances, report totals and auto-match summary — the
+ * pieces that predate the module suite's deeper test classes.
+ */
 class Phase45RemainingTest extends TestCase
 {
     use RefreshDatabase;
@@ -145,17 +152,6 @@ class Phase45RemainingTest extends TestCase
         $result = $service->matchTransaction($bankTransaction);
 
         $this->assertNull($result);
-    }
-
-    public function test_reconciliation_service_has_required_methods(): void
-    {
-        $service = new ReconciliationService;
-
-        $this->assertTrue(method_exists($service, 'calculateMatchScore'));
-        $this->assertTrue(method_exists($service, 'getMatchingCandidates'));
-        $this->assertTrue(method_exists($service, 'autoMatchAll'));
-        $this->assertTrue(method_exists($service, 'manualMatch'));
-        $this->assertTrue(method_exists($service, 'matchTransaction'));
     }
 
     public function test_reconciliation_service_tolerances_are_accessible(): void

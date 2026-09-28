@@ -8,6 +8,15 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * One imported bank statement line (Wise by default). Amounts are
+ * signed by the import: credits positive, debits negative — callers
+ * comparing or categorising them work in magnitudes. A pending line
+ * awaits reconciliation; matching links it to the ledger-side record
+ * it accounts for (a payment, bill payment, reimbursement or ledger
+ * row) via matched_transaction_type/id, and ignored lines are parked
+ * as non-business until restored.
+ */
 class BankTransaction extends Model
 {
     use HasFactory;

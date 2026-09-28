@@ -2,11 +2,8 @@
 
 namespace Modules\Reconciliation\Tests;
 
-use App\Models\Bill;
-use App\Models\BillPayment;
 use App\Models\Client;
 use App\Models\Payment;
-use App\Models\Supplier;
 use Carbon\Carbon;
 use IFRS\Models\Account;
 use IFRS\Models\Currency;
@@ -14,7 +11,6 @@ use IFRS\Models\Entity;
 use IFRS\Models\ReportingPeriod;
 use IFRS\Models\Vat;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Modules\Reconciliation\Models\BankTransaction;
 use Modules\Reconciliation\Models\ReconciliationHistory;
 use Modules\Reconciliation\Services\ReconciliationService;
@@ -23,12 +19,11 @@ use Tests\TestCase;
 /**
  * The reconciliation behaviours the drifted legacy files guarded,
  * recut against the current service: the strict auto-match pass's
- * reference/amount/date evidence and its tolerance boundaries, the
- * ignore/restore lifecycle with its history trail, auto-created
- * receipts and purchases (guards, filters, paid-at-entry posting),
- * and the expense-account suggestions purchases are categorised to.
- * The learned-pass matching and the unreconciled-movements view are
- * covered by the sibling test classes.
+ * reference/amount/date evidence and its tolerance boundaries, and
+ * the ignore/restore lifecycle with its history trail. The
+ * learned-pass matching and the unreconciled-movements view are
+ * covered by the sibling test classes; the auto-create flows were
+ * retired with their service methods (Sep 2026).
  */
 class MatchingTolerancesAndMaintenanceTest extends TestCase
 {
@@ -42,16 +37,26 @@ class MatchingTolerancesAndMaintenanceTest extends TestCase
     {
         parent::setUp();
 
+        // Fixtures post into FY2026 and the strict pass reads the
+        // open-FY-bounded movements panel — pin the clock inside that
+        // year so the tests survive the real clock closing FY2026.
+        $this->travelTo(Carbon::parse('2026-09-15 09:00'));
+
         $this->entity = $this->seedIfrs();
         $this->service = app(ReconciliationService::class);
     }
 
+    protected function tearDown(): void
+    {
+        $this->travelBack();
+
+        parent::tearDown();
+    }
+
     /**
-     * The chart the posting and suggestion paths need: bank (320),
-     * revenue (4100), GST Payable (2200 + the GST 10% Vat) and the
-     * expense accounts bill payments post to and suggestExpenseAccount
-     * maps merchants onto (5300 travel, 5500 meals, 7400 office, 7500
-     * subscriptions, 8900 the fallback). Mirrors
+     * The chart the posting paths need: bank (320), revenue (4100)
+     * and GST Payable (2200 with the GST 10% Vat), plus the expense
+     * accounts the sibling class posts supplier payments to. Mirrors
      * UnreconciledBankMovementsTest::seedIfrs().
      */
     protected function seedIfrs(): Entity
@@ -114,14 +119,6 @@ class MatchingTolerancesAndMaintenanceTest extends TestCase
         return Client::create(array_merge([
             'name' => 'Acme Corp',
             'email' => 'accounts@acme.example',
-        ], $attributes));
-    }
-
-    protected function supplier(array $attributes = []): Supplier
-    {
-        return Supplier::create(array_merge([
-            'name' => 'AWS',
-            'email' => 'billing@aws.example',
         ], $attributes));
     }
 
@@ -345,161 +342,4 @@ class MatchingTolerancesAndMaintenanceTest extends TestCase
     // Auto-created receipts and purchases
     // =====================================================
 
-    public function test_a_receipt_is_refused_for_debits_and_unknown_clients(): void
-    {
-        $debit = $this->bankLine([
-            'type' => BankTransaction::TYPE_DEBIT,
-            'amount' => -100.00,
-        ]);
-        $this->assertNull($this->service->createCashReceiptFromBankTransaction($debit, $this->client()->id));
-        $this->assertSame(BankTransaction::STATUS_PENDING, $debit->fresh()->status);
-
-        $credit = $this->bankLine();
-        $this->assertNull($this->service->createCashReceiptFromBankTransaction($credit, 99999));
-        $this->assertSame(BankTransaction::STATUS_PENDING, $credit->fresh()->status);
-    }
-
-    public function test_a_created_receipt_keeps_the_bank_date_reference_and_posts_to_ifrs(): void
-    {
-        $acme = $this->client();
-
-        $line = $this->bankLine([
-            'source_id' => 'WISE-RECEIPT-1',
-            'reference' => 'INV-2026-0042',
-            'amount' => 1500.00,
-            'transaction_date' => Carbon::parse('2026-09-10'),
-        ]);
-
-        $payment = $this->service->createCashReceiptFromBankTransaction($line, $acme->id);
-
-        $this->assertNotNull($payment);
-        $this->assertSame(Payment::STATUS_COMPLETED, $payment->status);
-        $this->assertSame(Payment::METHOD_BANK_TRANSFER, $payment->payment_method);
-        $this->assertEqualsWithDelta(1500.00, (float) $payment->amount, 0.001);
-        // The bank line's own facts carry over: its value date and the
-        // payer's reference, plus the source id in the notes trail.
-        $this->assertSame('2026-09-10', $payment->payment_date->toDateString());
-        $this->assertSame('INV-2026-0042', $payment->reference);
-        $this->assertStringContainsString('WISE-RECEIPT-1', $payment->notes);
-
-        // Posted to IFRS: Dr Bank the full tax-inclusive amount, Cr
-        // Revenue the net and Cr GST Payable the component — the
-        // unallocated receipt's default GST-inclusive treatment.
-        $this->assertNotNull($payment->ifrs_receipt_id);
-
-        $ledger = DB::table('ifrs_ledgers')
-            ->where('transaction_id', $payment->ifrs_receipt_id)
-            ->whereNull('deleted_at')
-            ->get();
-
-        $bank = Account::where('code', 320)->value('id');
-        $gst = Account::where('code', 2200)->value('id');
-
-        $this->assertEqualsWithDelta(
-            1500.00,
-            (float) $ledger->where('post_account', $bank)->where('entry_type', 'D')->sum('amount'),
-            0.001
-        );
-        $gstComponent = (float) $ledger->where('post_account', $gst)->where('entry_type', 'C')->sum('amount');
-        $this->assertEqualsWithDelta(136.36, $gstComponent, 0.01);
-
-        // The Vat line posts gross to revenue and back-outs the GST as a
-        // debit on revenue (its credit leg being the 2200 row above), so
-        // revenue keeps the net: 1500 credited less 136.36 debited.
-        $revenue = Account::where('code', 4100)->value('id');
-        $this->assertEqualsWithDelta(
-            1500.00 - $gstComponent,
-            (float) $ledger->where('post_account', $revenue)->where('entry_type', 'C')->sum('amount')
-                - (float) $ledger->where('post_account', $revenue)->where('entry_type', 'D')->sum('amount'),
-            0.001
-        );
-
-        // And the bank line itself is matched to the receipt.
-        $line->refresh();
-        $this->assertSame(BankTransaction::STATUS_MATCHED, $line->status);
-        $this->assertSame('payment', $line->matched_transaction_type);
-        $this->assertEquals($payment->id, $line->matched_transaction_id);
-    }
-
-    public function test_auto_created_receipts_can_be_scoped_to_one_clients_lines(): void
-    {
-        $acme = $this->client(['name' => 'Acme Corp']);
-        $other = $this->client(['name' => 'Other Corp']);
-
-        // The client filter follows the bank line's own client tag —
-        // untagged lines (whatever their payer) stay for the unscoped run.
-        $this->bankLine(['client_id' => $acme->id, 'payer_name' => 'Acme Corp']);
-        $this->bankLine(['client_id' => $other->id, 'payer_name' => 'Other Corp']);
-        $untagged = $this->bankLine(['payer_name' => 'Acme Corp', 'source_id' => 'WISE-UNTAGGED']);
-
-        $scoped = $this->service->autoCreateCashReceipts($acme->id);
-
-        $this->assertSame(1, $scoped['count']);
-        $this->assertSame($acme->id, $scoped['created'][0]->client_id);
-        $this->assertSame(BankTransaction::STATUS_PENDING, $untagged->fresh()->status);
-
-        $all = $this->service->autoCreateCashReceipts();
-        $this->assertSame(2, $all['count']); // the other client's + the untagged Acme line
-    }
-
-    public function test_a_purchase_is_created_matched_and_paid_from_a_debit(): void
-    {
-        $aws = $this->supplier();
-
-        $line = $this->bankLine([
-            'type' => BankTransaction::TYPE_DEBIT,
-            'amount' => -250.00,
-            'payee_name' => 'AWS',
-            'merchant_name' => 'AWS',
-            'reference' => 'SUB-2026-09',
-        ]);
-
-        $bill = $this->service->createPurchaseFromBankTransaction($line, $aws->id);
-
-        $this->assertNotNull($bill);
-        $this->assertEqualsWithDelta(250.00, (float) $bill->fresh()->total, 0.001);
-        $line->refresh();
-        $this->assertSame(BankTransaction::STATUS_MATCHED, $line->status);
-        $this->assertSame('bill', $line->matched_transaction_type);
-        $this->assertEquals($bill->id, $line->matched_transaction_id);
-
-        // Paid at entry: the supplier payment exists and, with the IFRS
-        // chart seeded, actually posted to the ledger.
-        $payment = BillPayment::where('supplier_id', $aws->id)->firstOrFail();
-        $this->assertEqualsWithDelta(250.00, (float) $payment->amount, 0.001);
-        $this->assertNotNull($payment->ifrs_payment_id);
-        $this->assertSame(Bill::STATUS_PAID, $bill->fresh()->status);
-    }
-
-    public function test_a_purchase_can_be_left_unpaid_and_refuses_credits(): void
-    {
-        $aws = $this->supplier();
-
-        $line = $this->bankLine([
-            'type' => BankTransaction::TYPE_DEBIT,
-            'amount' => -250.00,
-            'merchant_name' => 'AWS',
-        ]);
-
-        $bill = $this->service->createPurchaseFromBankTransaction($line, $aws->id, null, null, false);
-
-        $this->assertSame(Bill::STATUS_DRAFT, $bill->fresh()->status);
-        $this->assertSame(0, BillPayment::count());
-
-        $credit = $this->bankLine();
-        $this->assertNull($this->service->createPurchaseFromBankTransaction($credit, $aws->id));
-        $this->assertSame(BankTransaction::STATUS_PENDING, $credit->fresh()->status);
-    }
-
-    public function test_merchants_are_suggested_to_seeded_expense_accounts(): void
-    {
-        $accountId = fn (int $code) => (int) Account::where('code', $code)->value('id');
-
-        $this->assertSame($accountId(7500), $this->service->suggestExpenseAccount('Amazon AWS'));
-        $this->assertSame($accountId(7500), $this->service->suggestExpenseAccount('Google Workspace'));
-        $this->assertSame($accountId(5300), $this->service->suggestExpenseAccount('Uber Trip'));
-        $this->assertSame($accountId(5500), $this->service->suggestExpenseAccount('Aroma Cafe'));
-        $this->assertSame($accountId(7400), $this->service->suggestExpenseAccount('Officeworks'));
-        $this->assertSame($accountId(8900), $this->service->suggestExpenseAccount('Completely Unknown Merchant'));
-    }
 }

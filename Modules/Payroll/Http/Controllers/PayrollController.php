@@ -75,6 +75,14 @@ class PayrollController extends Controller
         ]);
     }
 
+    /**
+     * Add one employee's payslip to a draft run. hours and gross are
+     * both optional; when both arrive, gross overrides the hours-based
+     * calculation while hours remain recorded. An absent optional
+     * field never reaches the validated array, so the isset guards —
+     * not the nullable rule — keep the hours-only path from reading a
+     * missing key.
+     */
     public function addPayslip(Request $request, PayRun $run)
     {
         $validated = $request->validate([
@@ -90,8 +98,8 @@ class PayrollController extends Controller
             $this->payroll->addPayslip(
                 $run,
                 $employee,
-                $validated['hours'] !== null ? (float) $validated['hours'] : null,
-                $validated['gross'] !== null ? (float) $validated['gross'] : null,
+                isset($validated['hours']) ? (float) $validated['hours'] : null,
+                isset($validated['gross']) ? (float) $validated['gross'] : null,
                 $validated['notes'] ?? null,
             );
         } catch (\Throwable $e) {
