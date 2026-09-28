@@ -5,6 +5,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-09-28
 
+### Fixed — dashboard layout review round, second pass
+
+Three more findings, all valid. **Partial saves claimed ordering they
+never applied**: numbering the submitted widgets 0..n-1 collided with
+the saved positions of widgets the payload omitted, ties silently
+fell back to registry order, and the request still reported success.
+Ordering now comes from full saves only — a payload naming every
+registered widget rewrites the sequence; a partial payload patches
+visibility/width and leaves positions alone (graceful, rather than a
+422 that would break a client mid-deploy when a widget registers).
+**A double Customize click raced the store fetch**: the second
+response replaced the store after the first had opened edit mode,
+discarding a card the user had already removed while leaving its
+catalog row, and stacked a second Sortable instance only the last of
+which was cleaned up — the entering path is guarded by a loading
+flag and drag-drop destroys stale instances first. **Reset raced
+Done's save**: the DELETE could land before a pending POST, which
+then recreated the rows the reset had just cleared, reloading with
+the saved layout instead of the defaults — the two operations now
+disable each other's buttons and bail while the other owns the wire.
+
+## [Unreleased] — 2026-09-28
+
 ### Fixed — dashboard layout review round
 
 Six findings from the layout-management review, all valid, each
