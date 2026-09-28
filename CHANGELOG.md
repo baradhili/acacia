@@ -5,6 +5,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-09-28
 
+### Fixed — dashboard layout review round
+
+Six findings from the layout-management review, all valid, each
+landing as its own commit. **The span classes never reached the
+stylesheet** — Tailwind's scan covers only Blade views, so the card
+spans (interpolated from the PHP registry, swapped by the width
+cycler in JS) were invisible to it; the built CSS had no
+`md/lg:col-span-1/3/4` rules at all, which had also been degrading
+the *shipped* grid (Cash Flow's full-width span never existed) — the
+six override classes are now safelisted. **A failed save silently
+discarded the layout**: Done closed edit mode before the POST
+resolved, hiding the only error message; the save now resolves a
+boolean and edit mode stays open with the error visible and the
+staged layout intact. **Migration edges**: legacy `width = 1` rows
+(written by the old schema default, never user choices — the old
+save endpoint rejected every payload) are zeroed to "shipped span" on
+the way up, and rollback back-fills NULL `position_y` rows before the
+column loses NULL instead of dying on them. **The full save** now
+writes its row updates and the stale-widget cleanup in one
+transaction, so a failure can't commit a half-moved layout. **Hidden
+widgets kept their query cost**: the store rendered every removed
+card via `@widget` on each dashboard load; the page now ships only
+the cheap catalog rows and a `hidden-widgets` endpoint serves the
+rendered cards the first time edit mode opens.
+
+## [Unreleased] — 2026-09-28
+
 ### Changed — every widget string through the translator
 
 All 15 widget views (11 core — including the unregistered Quick
