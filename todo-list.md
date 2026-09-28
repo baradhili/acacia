@@ -13,7 +13,7 @@ here once their changelog entry lands. Ordered by priority.
 
 - [ ] cucumber tests via behat — plan reviewed and refreshed 2026-09-28: .zcode/plans/behat-migration-plan.md (scope renewal with maintainer is the first step; suite has grown to 55 feature files + the Modules suite since the original approval).
 
-- [ ] Repair or delete the three legacy reconciliation test files excluded per-file in phpunit.xml (ReconciliationMatching, ReconciliationService, AutoCreateCashReceipt — they drifted while the whole directory was excluded).
+- [ ] Remove ReconciliationService dead code: `calculateMatchScore` and `getMatchingCandidates` lost their last callers when the legacy reconciliation tests were deleted (Sep 2026) — the new matcher replaced them with the candidates screen and movement-based matching. Also decide whether the auto-create receipt/purchase service methods (`autoCreateCashReceipts`/`autoCreatePurchases`/their single-line variants) should regain UI routes or be retired — currently nothing in the app calls them.
 
 - [ ] Flesh out dashboard layout management - allow user to move widgets, add and remove. Resize as an option.
 
@@ -28,5 +28,3 @@ here once their changelog entry lands. Ordered by priority.
 - [ ] https://docs.markwhen.com/ might be good to integrate into projects section - but only once we have a client module and a real project module
 
 - [ ] active security testing harness - salvatorecervone/laravel-pentest if they upgrade to 13
-
-- [ ] Add locales and update Agents for manadatory translation use
