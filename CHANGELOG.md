@@ -5,6 +5,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-09-28
 
+### Changed — every widget string through the translator
+
+All 15 widget views (11 core — including the unregistered Quick
+Actions/Welcome orphans — plus Practice's two, Taxation's GST widget
+and Crm's pipeline) now render via `lang/en/widgets.php` keys instead
+of hard-coded text; the widget PHP classes' own emitted strings went
+too (AR aging bucket labels, "No Project"/"Unknown" name fallbacks).
+Registered cards' headers reuse the registry's `labels.*` keys, so a
+card's title and its edit-mode catalog entry can never drift apart.
+`en` is the complete base per the translation policy; `en_AU`
+overrides only the keys that genuinely differ — "Customise Dashboard"
+(owed from the layout-management batch), "AR Ageing Summary" and
+"Ageing Bucket" — everything else falls back per key. A rendered-
+dashboard test pins that behaviour both ways. No visible change under
+`en`; under the app's `en_AU` locale the aging widget now spells
+correctly.
+
+## [Unreleased] — 2026-09-28
+
 ### Added — per-user dashboard layout management
 
 The dashboard's edit mode (profile menu → Customize Dashboard) now

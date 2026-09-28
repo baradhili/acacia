@@ -4,8 +4,8 @@ namespace App\Widgets;
 
 use App\Models\BillPayment;
 use App\Models\Payment;
-use Carbon\Carbon;
 use Arrilot\Widgets\AbstractWidget;
+use Carbon\Carbon;
 
 class CashFlowWidget extends AbstractWidget
 {

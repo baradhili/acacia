@@ -229,4 +229,25 @@ class DashboardWidgetLayoutTest extends TestCase
             );
         }
     }
+
+    /**
+     * The locale contract from lang/README.md, proven on the rendered
+     * dashboard: en is the complete base, en_AU overrides only the
+     * differing keys (Aging → Ageing) and falls back per key.
+     */
+    public function test_widget_strings_render_the_en_au_override_and_fall_back_per_key(): void
+    {
+        app()->setLocale('en_AU');
+        $au = $this->actingAs($this->user)->get('/dashboard')->getContent();
+        $this->assertStringContainsString('AR Ageing Summary', $au);
+        // No en_AU override — resolves from en.
+        $this->assertStringContainsString('Cash Flow (30 Days)', $au);
+        $this->assertStringContainsString('Ageing Bucket', $au);
+        $this->assertStringNotContainsString('AR Aging Summary', $au);
+
+        app()->setLocale('en');
+        $en = $this->actingAs($this->user)->get('/dashboard')->getContent();
+        $this->assertStringContainsString('AR Aging Summary', $en);
+        $this->assertStringContainsString('Aging Bucket', $en);
+    }
 }

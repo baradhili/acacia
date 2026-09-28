@@ -23,8 +23,8 @@ class OutstandingPOBudgetsWidget extends AbstractWidget
                 return [
                     'id' => $po->id,
                     'po_number' => $po->po_number,
-                    'project_name' => $po->project?->name ?? 'No Project',
-                    'client_name' => $po->project?->client?->name ?? 'Unknown',
+                    'project_name' => $po->project?->name ?? __('widgets.no_project'),
+                    'client_name' => $po->project?->client?->name ?? __('widgets.unknown'),
                     'total' => $total,
                     'total_formatted' => number_format($total, 2),
                     'spent' => $spent,

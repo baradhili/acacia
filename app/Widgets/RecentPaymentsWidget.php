@@ -20,7 +20,7 @@ class RecentPaymentsWidget extends AbstractWidget
                 return [
                     'id' => $payment->id,
                     'payment_number' => $payment->payment_number,
-                    'client_name' => $payment->client?->name ?? 'Unknown',
+                    'client_name' => $payment->client?->name ?? __('widgets.unknown'),
                     'amount' => $payment->amount,
                     'amount_formatted' => number_format($payment->amount, 2),
                     'payment_date' => $payment->payment_date?->format('Y-m-d'),

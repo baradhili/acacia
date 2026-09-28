@@ -1,6 +1,6 @@
 <div class="bg-white rounded-lg shadow h-full">
     <div class="widget-handle p-4 border-b border-gray-200 bg-gray-50 cursor-grab flex items-center justify-between rounded-t-lg">
-        <p class="text-sm font-medium text-gray-600">Hours This Month</p>
+        <p class="text-sm font-medium text-gray-600">{{ __('widgets.labels.hours_this_month') }}</p>
         <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
         </svg>

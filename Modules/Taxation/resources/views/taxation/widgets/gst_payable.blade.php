@@ -1,6 +1,6 @@
 <div class="bg-white rounded-lg shadow h-full">
     <div class="widget-handle p-4 border-b border-gray-200 bg-gray-50 cursor-grab flex items-center justify-between rounded-t-lg">
-        <p class="text-sm font-medium text-gray-600">Unlodged GST</p>
+        <p class="text-sm font-medium text-gray-600">{{ __('widgets.labels.gst_payable') }}</p>
         <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"></path>
         </svg>
@@ -9,10 +9,10 @@
         <div>
             <p class="text-2xl font-bold {{ $net >= 0 ? 'text-gray-800' : 'text-green-700' }}">
                 ${{ number_format(abs($net), 2) }}
-                <span class="text-sm font-medium text-gray-500">{{ $net >= 0 ? 'to pay' : 'refund' }}</span>
+                <span class="text-sm font-medium text-gray-500">{{ $net >= 0 ? __('widgets.gst_payable.to_pay') : __('widgets.gst_payable.refund') }}</span>
             </p>
             <p class="text-xs text-gray-500 mt-1">
-                Payable ${{ number_format($payable, 2) }} &middot; Receivable ${{ number_format($receivable, 2) }}
+                {{ __('widgets.gst_payable.payable') }} ${{ number_format($payable, 2) }} &middot; {{ __('widgets.gst_payable.receivable') }} ${{ number_format($receivable, 2) }}
             </p>
         </div>
         <div class="p-3 {{ $net >= 0 ? 'bg-red-100' : 'bg-green-100' }} rounded-full">

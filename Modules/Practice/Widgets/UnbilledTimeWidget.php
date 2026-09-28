@@ -19,10 +19,10 @@ class UnbilledTimeWidget extends AbstractWidget
             ->map(function ($entry) {
                 return [
                     'id' => $entry->id,
-                    'project_name' => $entry->project?->name ?? 'No Project',
+                    'project_name' => $entry->project?->name ?? __('widgets.no_project'),
                     'client_name' => $entry->client?->name
                         ?? $entry->project?->client?->name
-                        ?? 'Unknown',
+                        ?? __('widgets.unknown'),
                     'description' => $entry->description,
                     'hours' => $entry->hours,
                     'rate' => $entry->rate ?? $entry->project?->hourly_rate ?? 0,

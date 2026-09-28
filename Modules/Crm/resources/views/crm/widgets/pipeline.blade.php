@@ -1,25 +1,25 @@
 <div class="bg-white rounded-lg shadow h-full flex flex-col">
     <div class="widget-handle px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 cursor-grab">
-        <h2 class="text-lg font-semibold text-gray-800">Sales Pipeline</h2>
-        <a href="{{ route('crm.leads.index') }}" class="text-sm text-blue-600 hover:text-blue-800">Leads</a>
+        <h2 class="text-lg font-semibold text-gray-800">{{ __('widgets.labels.pipeline') }}</h2>
+        <a href="{{ route('crm.leads.index') }}" class="text-sm text-blue-600 hover:text-blue-800">{{ __('widgets.pipeline.leads') }}</a>
     </div>
     <div class="p-6 flex-1">
         <div class="grid grid-cols-3 gap-2 mb-3 text-center">
             <div>
                 <p class="text-lg font-bold text-indigo-700">${{ number_format($pipelineValue, 2) }}</p>
-                <p class="text-xs text-gray-500">open</p>
+                <p class="text-xs text-gray-500">{{ __('widgets.pipeline.open') }}</p>
             </div>
             <div>
                 <p class="text-lg font-bold text-green-700">${{ number_format($forecast, 2) }}</p>
-                <p class="text-xs text-gray-500">forecast</p>
+                <p class="text-xs text-gray-500">{{ __('widgets.pipeline.forecast') }}</p>
             </div>
             <div>
                 <p class="text-lg font-bold {{ $overdue > 0 ? 'text-red-600' : 'text-gray-700' }}">{{ $overdue }}</p>
-                <p class="text-xs text-gray-500">overdue</p>
+                <p class="text-xs text-gray-500">{{ __('widgets.pipeline.overdue') }}</p>
             </div>
         </div>
         @if ($leads->isEmpty())
-            <p class="text-xs text-gray-400 text-center py-2">No open leads.</p>
+            <p class="text-xs text-gray-400 text-center py-2">{{ __('widgets.pipeline.empty') }}</p>
         @else
             <ul class="divide-y divide-gray-100 text-xs">
                 @foreach ($leads as $lead)
