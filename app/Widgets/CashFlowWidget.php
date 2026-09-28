@@ -4,9 +4,17 @@ namespace App\Widgets;
 
 use App\Models\BillPayment;
 use App\Models\Payment;
-use Carbon\Carbon;
 use Arrilot\Widgets\AbstractWidget;
+use Carbon\Carbon;
 
+/**
+ * Cash in and out over the trailing 30 days, read from completed
+ * payment events (client payments in, supplier bill payments out) —
+ * the cash basis the app reports on, not invoice accruals — with the
+ * net flow's percentage change against the prior 30 days. A
+ * zero-net prior period reports a 0% change rather than a divide-by-
+ * zero.
+ */
 class CashFlowWidget extends AbstractWidget
 {
     protected $config = [];

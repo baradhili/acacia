@@ -61,9 +61,12 @@ Modules never edit shell views. From the service provider's `boot()`:
   children (Employees: the admin/accountant payee master data plus the
   staff-visible Resumes item) — children filter individually and an
   emptied dropdown drops out.
-- **Dashboard widgets** — `App\Support\Widgets::add(class, span)`; the
-  dashboard grid renders the registry (ids = class basenames, which the
-  drag-order preferences persist).
+- **Dashboard widgets** — `App\Support\Widgets::add(class, span, position, label)`;
+  the dashboard grid renders each user's saved layout over the registry
+  (ids = class basenames, which the `widget_preferences` rows persist);
+  the label is a translation key (e.g. `widgets.labels.pipeline` — keys
+  live in `lang/en/widgets.php`) shown by the edit-mode catalog, and
+  position slots the widget into the shipped default grid.
 
 ## Hard-won rules for new modules
 

@@ -6,6 +6,13 @@ use App\Models\Invoice;
 use Arrilot\Widgets\AbstractWidget;
 use Carbon\Carbon;
 
+/**
+ * Outstanding invoice receivables bucketed by whole calendar days
+ * past due, over sent, partially paid and overdue invoices. The
+ * bucketing matches the aging report exactly: both dates compare
+ * start-of-day, so an invoice due earlier today stays Current
+ * instead of tipping into 1-30 on the current time-of-day.
+ */
 class ARAgingWidget extends AbstractWidget
 {
     protected $config = [];
@@ -64,11 +71,11 @@ class ARAgingWidget extends AbstractWidget
             'over_90_formatted' => number_format($over90, 2),
             'total_formatted' => number_format($total, 2),
             'aging_buckets' => [
-                ['label' => 'Current', 'amount' => $current, 'percent' => $total > 0 ? round($current / $total * 100, 1) : 0],
-                ['label' => '1-30 Days', 'amount' => $days30, 'percent' => $total > 0 ? round($days30 / $total * 100, 1) : 0],
-                ['label' => '31-60 Days', 'amount' => $days60, 'percent' => $total > 0 ? round($days60 / $total * 100, 1) : 0],
-                ['label' => '61-90 Days', 'amount' => $days90, 'percent' => $total > 0 ? round($days90 / $total * 100, 1) : 0],
-                ['label' => '90+ Days', 'amount' => $over90, 'percent' => $total > 0 ? round($over90 / $total * 100, 1) : 0],
+                ['label' => __('widgets.ar_aging.buckets.current'), 'amount' => $current, 'percent' => $total > 0 ? round($current / $total * 100, 1) : 0],
+                ['label' => __('widgets.ar_aging.buckets.days_30'), 'amount' => $days30, 'percent' => $total > 0 ? round($days30 / $total * 100, 1) : 0],
+                ['label' => __('widgets.ar_aging.buckets.days_60'), 'amount' => $days60, 'percent' => $total > 0 ? round($days60 / $total * 100, 1) : 0],
+                ['label' => __('widgets.ar_aging.buckets.days_90'), 'amount' => $days90, 'percent' => $total > 0 ? round($days90 / $total * 100, 1) : 0],
+                ['label' => __('widgets.ar_aging.buckets.over_90'), 'amount' => $over90, 'percent' => $total > 0 ? round($over90 / $total * 100, 1) : 0],
             ],
         ]);
     }

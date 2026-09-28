@@ -1,19 +1,19 @@
 <div class="bg-white rounded-lg shadow">
     <div class="widget-handle px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 cursor-grab">
-        <h2 class="text-lg font-semibold text-gray-800">Outstanding PO Budgets</h2>
-        <a href="{{ route('purchase-orders.index') }}" class="text-sm text-blue-600 hover:text-blue-800">View All</a>
+        <h2 class="text-lg font-semibold text-gray-800">{{ __('widgets.labels.outstanding_po_budgets') }}</h2>
+        <a href="{{ route('purchase-orders.index') }}" class="text-sm text-blue-600 hover:text-blue-800">{{ __('widgets.view_all') }}</a>
     </div>
     <div class="p-6">
         @if($purchase_orders->isEmpty())
-            <p class="text-gray-500 text-center py-4">No outstanding PO budgets</p>
+            <p class="text-gray-500 text-center py-4">{{ __('widgets.po_budgets.empty') }}</p>
         @else
             <table class="w-full text-sm">
                 <thead>
                     <tr class="text-left text-gray-500">
-                        <th class="pb-2">PO #</th>
-                        <th class="pb-2">Project</th>
-                        <th class="pb-2 text-right">Remaining</th>
-                        <th class="pb-2 text-right">% Used</th>
+                        <th class="pb-2">{{ __('widgets.po_budgets.po_number') }}</th>
+                        <th class="pb-2">{{ __('widgets.project') }}</th>
+                        <th class="pb-2 text-right">{{ __('widgets.po_budgets.remaining') }}</th>
+                        <th class="pb-2 text-right">{{ __('widgets.po_budgets.used') }}</th>
                     </tr>
                 </thead>
                 <tbody>

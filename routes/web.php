@@ -272,6 +272,8 @@ require __DIR__.'/auth.php';
 // Widget Preferences
 Route::middleware(['auth'])->prefix('api/widget-preferences')->group(function () {
     Route::get('/', [WidgetPreferenceController::class, 'index']);
+    // Lazy half of edit mode: the removed widgets' rendered cards.
+    Route::get('/hidden-widgets', [WidgetPreferenceController::class, 'hidden']);
     Route::post('/', [WidgetPreferenceController::class, 'saveAll']);
     Route::put('/', [WidgetPreferenceController::class, 'update']);
     Route::delete('/reset', [WidgetPreferenceController::class, 'reset']);

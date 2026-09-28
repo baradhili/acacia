@@ -5,6 +5,13 @@ namespace App\Widgets;
 use App\Models\PurchaseOrder;
 use Arrilot\Widgets\AbstractWidget;
 
+/**
+ * Open and partially-used purchase orders that still have budget
+ * remaining, largest remaining first; the card renders the top five
+ * of the ten gathered. Spent, remaining and utilization come from
+ * the PO model's own computation so the widget can never disagree
+ * with the purchase-order screens.
+ */
 class OutstandingPOBudgetsWidget extends AbstractWidget
 {
     protected $config = [];
@@ -23,8 +30,8 @@ class OutstandingPOBudgetsWidget extends AbstractWidget
                 return [
                     'id' => $po->id,
                     'po_number' => $po->po_number,
-                    'project_name' => $po->project?->name ?? 'No Project',
-                    'client_name' => $po->project?->client?->name ?? 'Unknown',
+                    'project_name' => $po->project?->name ?? __('widgets.no_project'),
+                    'client_name' => $po->project?->client?->name ?? __('widgets.unknown'),
                     'total' => $total,
                     'total_formatted' => number_format($total, 2),
                     'spent' => $spent,

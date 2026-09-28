@@ -5,6 +5,13 @@ namespace Modules\Practice\Widgets;
 use App\Models\TimeEntry;
 use Arrilot\Widgets\AbstractWidget;
 
+/**
+ * The billable work-in-progress queue: approved, billable time
+ * entries no invoice item links yet. Each entry values at its own
+ * rate falling back to the project's hourly rate, so the totals are
+ * what invoicing everything would raise today; the card renders the
+ * newest five of the twenty gathered.
+ */
 class UnbilledTimeWidget extends AbstractWidget
 {
     protected $config = [];
@@ -19,10 +26,10 @@ class UnbilledTimeWidget extends AbstractWidget
             ->map(function ($entry) {
                 return [
                     'id' => $entry->id,
-                    'project_name' => $entry->project?->name ?? 'No Project',
+                    'project_name' => $entry->project?->name ?? __('widgets.no_project'),
                     'client_name' => $entry->client?->name
                         ?? $entry->project?->client?->name
-                        ?? 'Unknown',
+                        ?? __('widgets.unknown'),
                     'description' => $entry->description,
                     'hours' => $entry->hours,
                     'rate' => $entry->rate ?? $entry->project?->hourly_rate ?? 0,

@@ -1,19 +1,19 @@
 <div class="bg-white rounded-lg shadow">
     <div class="widget-handle px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 cursor-grab">
-        <h2 class="text-lg font-semibold text-gray-800">Recent Payments</h2>
-        <a href="{{ route('payments.index') }}" class="text-sm text-blue-600 hover:text-blue-800">View All</a>
+        <h2 class="text-lg font-semibold text-gray-800">{{ __('widgets.labels.recent_payments') }}</h2>
+        <a href="{{ route('payments.index') }}" class="text-sm text-blue-600 hover:text-blue-800">{{ __('widgets.view_all') }}</a>
     </div>
     <div class="p-6">
         @if($payments->isEmpty())
-            <p class="text-gray-500 text-center py-4">No recent payments</p>
+            <p class="text-gray-500 text-center py-4">{{ __('widgets.recent_payments.empty') }}</p>
         @else
             <table class="w-full text-sm">
                 <thead>
                     <tr class="text-left text-gray-500">
-                        <th class="pb-2">Payment</th>
-                        <th class="pb-2">Client</th>
-                        <th class="pb-2 text-right">Amount</th>
-                        <th class="pb-2 text-right">Date</th>
+                        <th class="pb-2">{{ __('widgets.recent_payments.payment') }}</th>
+                        <th class="pb-2">{{ __('widgets.client') }}</th>
+                        <th class="pb-2 text-right">{{ __('widgets.amount') }}</th>
+                        <th class="pb-2 text-right">{{ __('widgets.date') }}</th>
                     </tr>
                 </thead>
                 <tbody>

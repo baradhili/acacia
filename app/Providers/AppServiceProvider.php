@@ -15,6 +15,7 @@ use App\Observers\AuditObserver;
 use App\Observers\InvoiceObserver;
 use App\Observers\TimeEntryObserver;
 use App\Support\Nav;
+use App\Support\WidgetLayout;
 use App\Support\Widgets;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -44,7 +45,14 @@ class AppServiceProvider extends ServiceProvider
 
         View::composer('layouts.navigation', fn ($view) => $view->with('sidebarNav', $this->app->make(Nav::class)->sidebar()));
         View::composer('layouts.topbar', fn ($view) => $view->with('topbarNav', $this->app->make(Nav::class)->topbar()));
-        View::composer('dashboard', fn ($view) => $view->with('dashboardWidgets', $this->app->make(Widgets::class)->all()));
+        // The dashboard renders the viewer's saved layout (order,
+        // visibility, width overrides) over the widget registry; the
+        // removed widgets ride along for the edit-mode catalog.
+        View::composer('dashboard', function ($view) {
+            $layout = $this->app->make(WidgetLayout::class);
+            $view->with('dashboardWidgets', $layout->visible(auth()->user()))
+                ->with('hiddenWidgets', $layout->hidden(auth()->user()));
+        });
 
         TimeEntry::observe(TimeEntryObserver::class);
         Invoice::observe(InvoiceObserver::class);

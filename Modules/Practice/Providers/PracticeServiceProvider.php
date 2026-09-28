@@ -39,8 +39,8 @@ class PracticeServiceProvider extends ServiceProvider
         // Positions 30/110 slot the widgets into their shipped places in
         // the default grid (CoreNav::widgets() leaves the gaps).
         $widgets = $this->app->make(Widgets::class);
-        $widgets->add(HoursThisMonthWidget::class, '', 30);
-        $widgets->add(UnbilledTimeWidget::class, 'md:col-span-1 lg:col-span-2', 110);
+        $widgets->add(HoursThisMonthWidget::class, '', 30, 'widgets.labels.hours_this_month');
+        $widgets->add(UnbilledTimeWidget::class, 'md:col-span-1 lg:col-span-2', 110, 'widgets.labels.unbilled_time');
     }
 
     protected function reportsLink(string $label, string $route, int $position): array

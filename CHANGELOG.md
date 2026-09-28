@@ -5,6 +5,153 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-09-28
 
+### Fixed — registry swaps no longer collide positions
+
+The sibling of the registry-growth hole: a widget unregistered while
+a dashboard page rendered (no card in the DOM) but back in the
+registry by the time the user clicked Done kept its old preference
+row — the cleanup only drops rows for widgets still outside the
+registry — with a position index from an earlier sequence. The
+complete save renumbered the submitted cards 0..n-1 and left that
+stale index alone, so it could collide with a freshly written one
+and the dashboard rendered an order the user never saved, with a
+success response. A complete save now unplaces registered-but-absent
+widgets (`position_y = NULL`): they ride at the tail in registry
+order, exactly like a widget the page never placed, and every
+non-NULL position after a complete save is unique. Widget identity
+was never the issue — ids (class basenames) are stable across
+registration changes; the failure was a stale sequence index, so no
+id-tracking redesign is needed.
+
+## [Unreleased] — 2026-09-28
+
+### Fixed — registry growth no longer eats the drag order
+
+The count-based full-save check from the second review pass had its
+own hole: when a widget registers between a dashboard page load and
+Done (a module enabled mid-session), the browser submits every card
+it loaded — fewer than the registry now holds — and the check demoted
+that save to a patch, dropping the user's drag order while still
+reporting success. Completeness is now declared by the client rather
+than inferred from counts: the browser sends `complete: true` (its
+payload is always its whole dashboard at save time), order is written
+when the flag is set, and the widget the page never saw rides at the
+tail. Flag-less payloads keep the patch contract — visibility/width
+only, positions untouched.
+
+## [Unreleased] — 2026-09-28
+
+### Fixed — dashboard layout review round, second pass
+
+Three more findings, all valid. **Partial saves claimed ordering they
+never applied**: numbering the submitted widgets 0..n-1 collided with
+the saved positions of widgets the payload omitted, ties silently
+fell back to registry order, and the request still reported success.
+Ordering now comes from full saves only — a payload naming every
+registered widget rewrites the sequence; a partial payload patches
+visibility/width and leaves positions alone (graceful, rather than a
+422 that would break a client mid-deploy when a widget registers).
+**A double Customize click raced the store fetch**: the second
+response replaced the store after the first had opened edit mode,
+discarding a card the user had already removed while leaving its
+catalog row, and stacked a second Sortable instance only the last of
+which was cleaned up — the entering path is guarded by a loading
+flag and drag-drop destroys stale instances first. **Reset raced
+Done's save**: the DELETE could land before a pending POST, which
+then recreated the rows the reset had just cleared, reloading with
+the saved layout instead of the defaults — the two operations now
+disable each other's buttons and bail while the other owns the wire.
+
+## [Unreleased] — 2026-09-28
+
+### Fixed — dashboard layout review round
+
+Six findings from the layout-management review, all valid, each
+landing as its own commit. **The span classes never reached the
+stylesheet** — Tailwind's scan covers only Blade views, so the card
+spans (interpolated from the PHP registry, swapped by the width
+cycler in JS) were invisible to it; the built CSS had no
+`md/lg:col-span-1/3/4` rules at all, which had also been degrading
+the *shipped* grid (Cash Flow's full-width span never existed) — the
+six override classes are now safelisted. **A failed save silently
+discarded the layout**: Done closed edit mode before the POST
+resolved, hiding the only error message; the save now resolves a
+boolean and edit mode stays open with the error visible and the
+staged layout intact. **Migration edges**: legacy `width = 1` rows
+(written by the old schema default, never user choices — the old
+save endpoint rejected every payload) are zeroed to "shipped span" on
+the way up, and rollback back-fills NULL `position_y` rows before the
+column loses NULL instead of dying on them. **The full save** now
+writes its row updates and the stale-widget cleanup in one
+transaction, so a failure can't commit a half-moved layout; its
+payload must be a list of distinct registry widgets, and its cleanup
+targets widgets that left the registry — a partial save rewrites only
+what it mentions. **Hidden
+widgets kept their query cost**: the store rendered every removed
+card via `@widget` on each dashboard load; the page now ships only
+the cheap catalog rows and a `hidden-widgets` endpoint serves the
+rendered cards the first time edit mode opens (a failed fetch aborts
+entering edit mode with a visible error rather than opening it with
+inert Add buttons).
+
+## [Unreleased] — 2026-09-28
+
+### Changed — every widget string through the translator
+
+All 15 widget views (11 core — including the unregistered Quick
+Actions/Welcome orphans — plus Practice's two, Taxation's GST widget
+and Crm's pipeline) now render via `lang/en/widgets.php` keys instead
+of hard-coded text; the widget PHP classes' own emitted strings went
+too (AR aging bucket labels, "No Project"/"Unknown" name fallbacks).
+Registered cards' headers reuse the registry's `labels.*` keys, so a
+card's title and its edit-mode catalog entry can never drift apart.
+`en` is the complete base per the translation policy; `en_AU`
+overrides only the keys that genuinely differ — "Customise Dashboard"
+(owed from the layout-management batch), "AR Ageing Summary" and
+"Ageing Bucket" — everything else falls back per key. A rendered-
+dashboard test pins that behaviour both ways. No visible change under
+`en`; under the app's `en_AU` locale the aging widget now spells
+correctly.
+
+## [Unreleased] — 2026-09-28
+
+### Added — per-user dashboard layout management
+
+The dashboard's edit mode (profile menu → Customize Dashboard) now
+manages a full per-user layout, not just drag order: widgets can be
+**reordered** by dragging (SortableJS, as before), **removed** (a ✕
+on each card in edit mode) and **added back** from a "Removed widgets"
+catalog under the grid — removed cards park in a hidden store
+server-side, so adding one back is a DOM move, not a fetch. **Resize**
+ships at the column-span level: a width button on each card cycles
+the shipped span → half → full width, persisted per user
+(`widget_preferences.width`, 0 = the registry's shipped span; the
+freeform drag-resize idea stays a future todo). A **Reset to default**
+button clears the saved layout. Layouts are per user and render
+server-side (`App\Support\WidgetLayout` merges the widget registry
+with the preference rows), so the order no longer flashes from
+localStorage on load.
+
+Fixing persistence also fixed the old save path, which POSTed an
+`{order}` payload the validation rejected — layouts never reached the
+database and lived only per browser. `position_y` became nullable
+(NULL = never placed by a full save → registry order) and the `width`
+default dropped to 0, so single-widget patches can't jump a widget to
+the grid front or silently read as a width override; full saves drop
+rows for widgets that left the registry (a disabled module's), and
+widget names are validated against the registry so junk ids never
+persist. The registry (`App\Support\Widgets::add`) gained a label
+translation key rendered in the catalog, and Crm's pipeline widget
+got a deliberate registry position (130, the tail) instead of the
+default 0 that jumped it ahead of the shipped grid. New UI strings go
+through the translator (`lang/en/widgets.php`, first real `en_AU`
+override file: "AR Ageing"). On whether widgets belong in modules:
+module-owned widgets already live in their modules and register from
+their providers — the boundary is right; the core widgets are
+core-domain (AR, cash flow, P&L, invoicing) and stay in `app/Widgets`.
+
+## [Unreleased] — 2026-09-28
+
 ### Removed — the reconciliation auto-create service methods
 
 `autoCreateCashReceipts`/`autoCreatePurchases` and their single-line
