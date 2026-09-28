@@ -28,3 +28,5 @@ here once their changelog entry lands. Ordered by priority.
 - [ ] https://docs.markwhen.com/ might be good to integrate into projects section - but only once we have a client module and a real project module
 
 - [ ] active security testing harness - salvatorecervone/laravel-pentest if they upgrade to 13
+
+- [ ] Add locales and update Agents for manadatory translation use
