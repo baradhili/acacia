@@ -44,3 +44,11 @@ jobs:
 
       - name: Run the test suite
         run: php artisan test
+
+      # Static security scan (baspa/larascan). Baseline absorbs the
+      # triaged findings, so this fails only on new issues at or above
+      # high severity — see AGENTS.md for the triage rules. Must run
+      # after the env prep (scan reads .env/config) and the npm build
+      # (dependency checks wrap npm audit).
+      - name: Security scan (larascan)
+        run: php artisan larascan
