@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Modules\Payroll\Models\Employee;
 
@@ -286,30 +287,40 @@ class BillPayment extends Model
             throw new \InvalidArgumentException('Allocation amount must be greater than zero.');
         }
 
-        $unallocated = $this->unallocated_amount;
-        if ($amount > $unallocated) {
-            throw new \InvalidArgumentException(
-                "Cannot allocate {$amount} to bill {$bill->id}: "
-                ."only {$unallocated} unallocated on payment {$this->id}."
-            );
-        }
+        // The unallocated check and the allocation write run inside one
+        // locking transaction: two concurrent allocations of the same
+        // payment/bill pair would otherwise both miss the lookup and
+        // insert duplicate rows. The unique (payment, bill) index is
+        // the backstop; the lock keeps check-then-write atomic.
+        $allocation = DB::transaction(function () use ($bill, $amount) {
+            $unallocated = $this->unallocated_amount;
+            if ($amount > $unallocated) {
+                throw new \InvalidArgumentException(
+                    "Cannot allocate {$amount} to bill {$bill->id}: "
+                    ."only {$unallocated} unallocated on payment {$this->id}."
+                );
+            }
 
-        // Foreign keys are outside BillPaymentAllocation::$fillable, so the
-        // allocation is looked up and created with explicit ownership
-        // assignment rather than firstOrCreate (which would drop them).
-        $allocation = BillPaymentAllocation::where('bill_payment_id', $this->id)
-            ->where('bill_id', $bill->id)
-            ->first();
-        if (! $allocation) {
-            $allocation = new BillPaymentAllocation;
-            $allocation->fill(['amount' => $amount]);
-            $allocation->bill_payment_id = $this->id;
-            $allocation->bill_id = $bill->id;
-            $allocation->save();
-        } else {
-            // Update allocation amount if it already exists
-            $allocation->increment('amount', $amount);
-        }
+            // Foreign keys are outside BillPaymentAllocation::$fillable, so the
+            // allocation is looked up and created with explicit ownership
+            // assignment rather than firstOrCreate (which would drop them).
+            $allocation = BillPaymentAllocation::where('bill_payment_id', $this->id)
+                ->where('bill_id', $bill->id)
+                ->lockForUpdate()
+                ->first();
+            if (! $allocation) {
+                $allocation = new BillPaymentAllocation;
+                $allocation->fill(['amount' => $amount]);
+                $allocation->bill_payment_id = $this->id;
+                $allocation->bill_id = $bill->id;
+                $allocation->save();
+            } else {
+                // Update allocation amount if it already exists
+                $allocation->increment('amount', $amount);
+            }
+
+            return $allocation;
+        });
 
         // Update bill status
         $bill->updateStatusFromPayments();
