@@ -12,7 +12,6 @@ class BillItem extends Model
     use HasFactory;
 
     protected $fillable = [
-        'bill_id',
         'description',
         'quantity',
         'unit_price',
@@ -23,11 +22,9 @@ class BillItem extends Model
         'discount_percent',
         'discount_amount',
         'total',
-        'expense_account_id',
         'is_prepaid',
         'service_start',
         'service_end',
-        'amortise_to_account_id',
         'sort_order',
     ];
 

@@ -16,9 +16,6 @@ class Invoice extends Model
 
     protected $fillable = [
         'invoice_number',
-        'client_id',
-        'project_id',
-        'purchase_order_id',
         'created_by',
         'status',
         'issue_date',
@@ -30,11 +27,9 @@ class Invoice extends Model
         'total',
         'notes',
         'terms',
-        'ifrs_invoice_id',
         'is_recurring',
         'recurring_frequency',
         'next_recurring_date',
-        'parent_invoice_id',
         'sent_at',
         'viewed_at',
     ];
@@ -142,13 +137,25 @@ class Invoice extends Model
      * the loser of a race gets a QueryException (SQLSTATE 23000). Each retry
      * re-enters the creating hook, which regenerates from the now-higher max,
      * so the next attempt picks the following number.
+     *
+     * The ownership foreign keys are outside Invoice::$fillable (explicit
+     * ownership assignment), so they are pulled out of the fill payload and
+     * assigned as attributes.
      */
     public static function createWithUniqueNumber(array $attributes): self
     {
         $attempts = 5;
         for ($i = 1; $i <= $attempts; $i++) {
             try {
-                return self::create($attributes);
+                $invoice = new self;
+                $invoice->fill(collect($attributes)->except(['client_id', 'project_id', 'purchase_order_id', 'ifrs_invoice_id', 'parent_invoice_id'])->all());
+                $invoice->client_id = $attributes['client_id'] ?? null;
+                $invoice->project_id = $attributes['project_id'] ?? null;
+                $invoice->purchase_order_id = $attributes['purchase_order_id'] ?? null;
+                $invoice->parent_invoice_id = $attributes['parent_invoice_id'] ?? null;
+                $invoice->save();
+
+                return $invoice;
             } catch (QueryException $e) {
                 if (! self::isUniqueViolation($e) || $i === $attempts) {
                     throw $e;

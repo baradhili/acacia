@@ -30,12 +30,16 @@ class ProjectPurchaseOrderLinkTest extends TestCase
 
     protected function makePo(?Client $client = null, string $status = PurchaseOrder::STATUS_OPEN): PurchaseOrder
     {
-        return PurchaseOrder::create([
-            'client_id' => ($client ?? $this->client)->id,
+        $po = new PurchaseOrder;
+        $po->fill([
             'title' => 'PO '.uniqid(),
             'budgeted_amount' => 5000,
             'status' => $status,
         ]);
+        $po->client_id = ($client ?? $this->client)->id;
+        $po->save();
+
+        return $po;
     }
 
     public function test_a_project_requires_a_purchase_order(): void
@@ -107,7 +111,8 @@ class ProjectPurchaseOrderLinkTest extends TestCase
 
         // Changing the project's PO moves the backlink.
         $replacement = $this->makePo();
-        $project->update(['purchase_order_id' => $replacement->id]);
+        $project->purchase_order_id = $replacement->id;
+        $project->save();
 
         $this->assertEquals($project->id, $replacement->fresh()->project_id);
         $this->assertNull($po->fresh()->project_id);
@@ -218,19 +223,22 @@ class ProjectPurchaseOrderLinkTest extends TestCase
             'purchase_order_id' => $poA->id,
         ]);
 
-        $entry = TimeEntry::create([
-            'user_id' => $this->user->id,
-            'project_id' => $project->id,
+        $entry = new TimeEntry;
+        $entry->fill([
             'entry_date' => '2026-09-10',
             'hours' => 2,
             'status' => TimeEntry::STATUS_DRAFT,
         ]);
+        $entry->user_id = $this->user->id;
+        $entry->project_id = $project->id;
+        $entry->save();
         $this->assertEquals($this->client->id, $entry->client_id);
         $this->assertEquals($poA->id, $entry->purchase_order_id);
 
         // Moving the project's PO moves its entries.
         $poB = $this->makePo();
-        $project->update(['purchase_order_id' => $poB->id]);
+        $project->purchase_order_id = $poB->id;
+        $project->save();
 
         $entry = $entry->fresh();
         $this->assertEquals($poB->id, $entry->purchase_order_id);
@@ -241,10 +249,9 @@ class ProjectPurchaseOrderLinkTest extends TestCase
         // the entries.
         $otherClient = Client::factory()->create();
         $otherPo = $this->makePo($otherClient);
-        $project->update([
-            'client_id' => $otherClient->id,
-            'purchase_order_id' => $otherPo->id,
-        ]);
+        $project->client_id = $otherClient->id;
+        $project->purchase_order_id = $otherPo->id;
+        $project->save();
 
         $entry = $entry->fresh();
         $this->assertEquals($otherClient->id, $entry->client_id);
@@ -261,15 +268,17 @@ class ProjectPurchaseOrderLinkTest extends TestCase
             'name' => 'Index Screen Project',
             'hourly_rate' => 50,
         ]);
-        TimeEntry::create([
-            'user_id' => $this->user->id,
-            'project_id' => $project->id,
+        $entry = new TimeEntry;
+        $entry->fill([
             'entry_date' => '2026-09-10',
             'hours' => 4,
             'rate' => 100,
             'billable' => true,
             'status' => TimeEntry::STATUS_APPROVED,
         ]);
+        $entry->user_id = $this->user->id;
+        $entry->project_id = $project->id;
+        $entry->save();
 
         // Revenue charges at the entry's $100 rate; the staff cost
         // falls back to the project's $50 rate with no assignment.

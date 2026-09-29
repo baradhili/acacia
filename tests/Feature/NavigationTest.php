@@ -40,6 +40,25 @@ class NavigationTest extends TestCase
         $this->client = Client::factory()->create();
     }
 
+    /**
+     * Invoice owned by the test client via direct attribute assignment —
+     * client_id left the core model's $fillable in the mass-assignment
+     * hardening, so ::create() would silently drop it.
+     */
+    protected function createClientInvoice(array $attributes = []): Invoice
+    {
+        $invoice = new Invoice;
+        $invoice->fill(array_merge([
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'status' => Invoice::STATUS_SENT,
+        ], $attributes));
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
+
+        return $invoice;
+    }
+
     public function test_dashboard_requires_authentication(): void
     {
         $response = $this->get('/dashboard');
@@ -162,17 +181,11 @@ class NavigationTest extends TestCase
         $this->actingAs($this->admin);
 
         // Create invoices with different statuses
-        Invoice::create([
-            'client_id' => $this->client->id,
-            'issue_date' => now()->toDateString(),
-            'due_date' => now()->addDays(30)->toDateString(),
+        $this->createClientInvoice([
             'status' => Invoice::STATUS_SENT,
         ]);
 
-        Invoice::create([
-            'client_id' => $this->client->id,
-            'issue_date' => now()->toDateString(),
-            'due_date' => now()->addDays(30)->toDateString(),
+        $this->createClientInvoice([
             'status' => Invoice::STATUS_PAID,
         ]);
 
@@ -185,12 +198,7 @@ class NavigationTest extends TestCase
     {
         $this->actingAs($this->admin);
 
-        Invoice::create([
-            'client_id' => $this->client->id,
-            'issue_date' => now()->toDateString(),
-            'due_date' => now()->addDays(30)->toDateString(),
-            'status' => Invoice::STATUS_SENT,
-        ]);
+        $this->createClientInvoice();
 
         $response = $this->get('/dashboard');
 
@@ -201,11 +209,9 @@ class NavigationTest extends TestCase
     {
         $this->actingAs($this->admin);
 
-        Invoice::create([
-            'client_id' => $this->client->id,
+        $this->createClientInvoice([
             'issue_date' => now()->subDays(60)->toDateString(),
             'due_date' => now()->subDays(30)->toDateString(),
-            'status' => Invoice::STATUS_SENT,
         ]);
 
         $response = $this->get('/dashboard');
@@ -256,11 +262,7 @@ class NavigationTest extends TestCase
     {
         $this->actingAs($this->admin);
 
-        Invoice::create([
-            'client_id' => $this->client->id,
-            'issue_date' => now()->toDateString(),
-            'due_date' => now()->addDays(30)->toDateString(),
-        ]);
+        $this->createClientInvoice();
 
         $response = $this->get('/dashboard');
 

@@ -3,9 +3,9 @@
 namespace Tests\Unit;
 
 use App\Models\Bill;
-use App\Models\BillItem;
+use App\Models\BillPayment;
+use App\Models\BillPaymentAllocation;
 use App\Models\Supplier;
-use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -19,6 +19,21 @@ class BillModelTest extends TestCase
     {
         parent::setUp();
         $this->supplier = Supplier::create(['name' => 'Test Supplier']);
+    }
+
+    /**
+     * Bill with its supplier assigned directly — supplier_id left the
+     * core model's $fillable in the mass-assignment hardening, so a
+     * plain ::create() would drop it and violate the NOT NULL column.
+     */
+    protected function createBill(array $attributes = []): Bill
+    {
+        $bill = new Bill;
+        $bill->fill($attributes);
+        $bill->supplier_id = $this->supplier->id;
+        $bill->save();
+
+        return $bill;
     }
 
     public function test_bill_has_expected_columns(): void
@@ -56,14 +71,14 @@ class BillModelTest extends TestCase
 
     public function test_supplier_relationship(): void
     {
-        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
+        $bill = $this->createBill();
         $this->assertInstanceOf(Supplier::class, $bill->supplier);
         $this->assertEquals($this->supplier->id, $bill->supplier->id);
     }
 
     public function test_creating_hook_defaults(): void
     {
-        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
+        $bill = $this->createBill();
 
         $this->assertEquals(Bill::STATUS_DRAFT, $bill->status);
         $this->assertNotEmpty($bill->bill_number);
@@ -74,7 +89,7 @@ class BillModelTest extends TestCase
 
     public function test_item_saving_hook_calculates_totals(): void
     {
-        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
+        $bill = $this->createBill();
         $item = $bill->items()->create([
             'description' => 'Item',
             'quantity' => 3,
@@ -92,7 +107,7 @@ class BillModelTest extends TestCase
 
     public function test_item_saved_hook_rolls_up_to_bill(): void
     {
-        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
+        $bill = $this->createBill();
         $bill->items()->create([
             'description' => 'A',
             'quantity' => 1,
@@ -108,7 +123,7 @@ class BillModelTest extends TestCase
 
     public function test_amount_paid_and_amount_due_accessors(): void
     {
-        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
+        $bill = $this->createBill();
         $bill->items()->create([
             'description' => 'A',
             'quantity' => 1,
@@ -123,24 +138,17 @@ class BillModelTest extends TestCase
 
     public function test_is_overdue_accessor(): void
     {
-        $overdue = Bill::create([
-            'supplier_id' => $this->supplier->id,
-            'due_date' => now()->subDay()->toDateString(),
-        ]);
+        $overdue = $this->createBill(['due_date' => now()->subDay()->toDateString()]);
         $this->assertTrue($overdue->is_overdue);
 
-        $paid = Bill::create([
-            'supplier_id' => $this->supplier->id,
-            'due_date' => now()->subDay()->toDateString(),
-        ]);
+        $paid = $this->createBill(['due_date' => now()->subDay()->toDateString()]);
         $paid->update(['status' => Bill::STATUS_PAID]);
         $this->assertFalse($paid->is_overdue);
     }
 
     public function test_scope_overdue_requires_outstanding_balance(): void
     {
-        $pastDue = Bill::create([
-            'supplier_id' => $this->supplier->id,
+        $pastDue = $this->createBill([
             'bill_date' => now()->subDays(60)->toDateString(),
             'due_date' => now()->subDays(30)->toDateString(),
         ]);
@@ -154,8 +162,7 @@ class BillModelTest extends TestCase
         $pastDue->markAsOpen();
 
         // Effectively paid (allocation covers total) but status not yet flipped.
-        $paid = Bill::create([
-            'supplier_id' => $this->supplier->id,
+        $paid = $this->createBill([
             'bill_date' => now()->subDays(60)->toDateString(),
             'due_date' => now()->subDays(30)->toDateString(),
         ]);
@@ -167,15 +174,22 @@ class BillModelTest extends TestCase
         ]);
         $paid->recalculateTotals();
         $paid->markAsOpen();
-        $paid->allocations()->create([
-            'bill_payment_id' => \App\Models\BillPayment::create([
-                'supplier_id' => $this->supplier->id,
-                'amount' => 100,
-                'payment_date' => now()->toDateString(),
-                'payment_method' => 'bank_transfer',
-            ])->id,
+        $billPayment = new BillPayment;
+        $billPayment->fill([
             'amount' => 100,
+            'payment_date' => now()->toDateString(),
+            'payment_method' => 'bank_transfer',
         ]);
+        $billPayment->supplier_id = $this->supplier->id;
+        $billPayment->save();
+
+        // Both allocation links are FKs outside $fillable, so ownership
+        // is assigned directly instead of mass-assigned.
+        $allocation = new BillPaymentAllocation;
+        $allocation->fill(['amount' => 100]);
+        $allocation->bill_id = $paid->id;
+        $allocation->bill_payment_id = $billPayment->id;
+        $allocation->save();
 
         $ids = Bill::overdue()->pluck('id');
         $this->assertContains($pastDue->id, $ids);
@@ -184,7 +198,7 @@ class BillModelTest extends TestCase
 
     public function test_update_status_from_payments_never_clobbers_draft(): void
     {
-        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
+        $bill = $this->createBill();
         $bill->items()->create([
             'description' => 'A',
             'quantity' => 1,

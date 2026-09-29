@@ -148,9 +148,13 @@ class InvoiceController extends Controller
             // Checked unbilled time entries become linked invoice lines
             foreach ($timeEntries as $timeEntry) {
                 $entryItem = InvoiceItem::createFromTimeEntry($timeEntry);
-                $invoice->items()->create(array_merge($entryItem->getAttributes(), [
+                // invoice_id comes from the relation; time_entry_id is
+                // unfillable and assigned explicitly.
+                $item = $invoice->items()->make(array_merge($entryItem->getAttributes(), [
                     'sort_order' => $sortOrder++,
                 ]));
+                $item->time_entry_id = $timeEntry->id;
+                $item->save();
             }
 
             $invoice->recalculateTotals();
@@ -221,14 +225,16 @@ class InvoiceController extends Controller
 
         DB::beginTransaction();
         try {
-            $invoice->update([
-                'client_id' => $validated['client_id'],
-                'project_id' => $validated['project_id'] ?? null,
+            // client_id/project_id are unfillable — assign explicitly.
+            $invoice->fill([
                 'issue_date' => $validated['issue_date'],
                 'due_date' => $validated['due_date'],
                 'notes' => $validated['notes'] ?? null,
                 'terms' => $validated['terms'] ?? null,
             ]);
+            $invoice->client_id = $validated['client_id'];
+            $invoice->project_id = $validated['project_id'] ?? null;
+            $invoice->save();
 
             // Upsert items: keep existing item ids stable (preserving
             // time_entry_id and any TimeEntry.invoice_item_id links) rather
@@ -262,15 +268,20 @@ class InvoiceController extends Controller
                 ];
 
                 if ($itemId && $existingItems->has($itemId)) {
-                    // Preserve time_entry_id unless explicitly changed.
+                    $existingItem = $existingItems->get($itemId);
+                    // time_entry_id is unfillable: preserve it unless
+                    // explicitly changed, via direct assignment.
                     if (array_key_exists('time_entry_id', $item)) {
-                        $payload['time_entry_id'] = $item['time_entry_id'];
+                        $existingItem->time_entry_id = $item['time_entry_id'];
                     }
-                    $existingItems->get($itemId)->update($payload);
+                    $existingItem->fill($payload);
+                    $existingItem->save();
                 } else {
-                    // New line: link time_entry_id only if provided.
-                    $payload['time_entry_id'] = $item['time_entry_id'] ?? null;
-                    $invoice->items()->create($payload);
+                    // New line: invoice_id comes from the relation;
+                    // time_entry_id is unfillable and assigned explicitly.
+                    $newItem = $invoice->items()->make($payload);
+                    $newItem->time_entry_id = $item['time_entry_id'] ?? null;
+                    $newItem->save();
                 }
             }
 
@@ -642,9 +653,13 @@ class InvoiceController extends Controller
         $sortOrder = 0;
         foreach ($timeEntries as $timeEntry) {
             $entryItem = InvoiceItem::createFromTimeEntry($timeEntry);
-            $invoice->items()->create(array_merge($entryItem->getAttributes(), [
+            // invoice_id comes from the relation; time_entry_id is
+            // unfillable and assigned explicitly.
+            $item = $invoice->items()->make(array_merge($entryItem->getAttributes(), [
                 'sort_order' => $sortOrder++,
             ]));
+            $item->time_entry_id = $timeEntry->id;
+            $item->save();
         }
 
         $invoice->recalculateTotals();

@@ -37,7 +37,11 @@ class PurchaseOrderController extends Controller
             'end_date' => 'nullable|date|after_or_equal:start_date',
         ]);
 
-        $purchaseOrder = PurchaseOrder::create($validated);
+        // client_id is an unfillable FK — assign it explicitly.
+        $purchaseOrder = new PurchaseOrder;
+        $purchaseOrder->fill(collect($validated)->except(['client_id'])->all());
+        $purchaseOrder->client_id = $validated['client_id'];
+        $purchaseOrder->save();
 
         return redirect()->route('purchase-orders.show', $purchaseOrder)
             ->with('success', 'Purchase order created successfully.');
@@ -82,7 +86,10 @@ class PurchaseOrderController extends Controller
             'end_date' => 'nullable|date|after_or_equal:start_date',
         ]);
 
-        $purchaseOrder->update($validated);
+        // client_id is an unfillable FK — assign it explicitly.
+        $purchaseOrder->fill(collect($validated)->except(['client_id'])->all());
+        $purchaseOrder->client_id = $validated['client_id'];
+        $purchaseOrder->save();
 
         return redirect()->route('purchase-orders.show', $purchaseOrder)
             ->with('success', 'Purchase order updated successfully.');

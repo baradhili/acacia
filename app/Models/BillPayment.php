@@ -31,16 +31,13 @@ class BillPayment extends Model
 
     protected $fillable = [
         'payment_number',
-        'supplier_id',
         'paid_by',
-        'employee_id',
         'amount',
         'payment_date',
         'payment_method',
         'reference',
         'notes',
         'status',
-        'ifrs_payment_id',
     ];
 
     protected $casts = [
@@ -157,13 +154,23 @@ class BillPayment extends Model
      * the loser of a race gets a QueryException (SQLSTATE 23000). Each retry
      * re-enters the creating hook, which regenerates from the now-higher max,
      * so the next attempt picks the following number.
+     *
+     * supplier_id/employee_id are foreign keys outside $fillable (explicit
+     * ownership assignment), so they are pulled out of the fill payload and
+     * assigned as attributes.
      */
     public static function createWithUniqueNumber(array $attributes): self
     {
         $attempts = 5;
         for ($i = 1; $i <= $attempts; $i++) {
             try {
-                return self::create($attributes);
+                $payment = new self;
+                $payment->fill(collect($attributes)->except(['supplier_id', 'employee_id', 'ifrs_payment_id'])->all());
+                $payment->supplier_id = $attributes['supplier_id'] ?? null;
+                $payment->employee_id = $attributes['employee_id'] ?? null;
+                $payment->save();
+
+                return $payment;
             } catch (QueryException $e) {
                 if (! self::isUniqueViolation($e) || $i === $attempts) {
                     throw $e;
@@ -287,18 +294,20 @@ class BillPayment extends Model
             );
         }
 
-        $allocation = BillPaymentAllocation::firstOrCreate(
-            [
-                'bill_payment_id' => $this->id,
-                'bill_id' => $bill->id,
-            ],
-            [
-                'amount' => $amount,
-            ]
-        );
-
-        // Update allocation amount if it already exists
-        if ($allocation->wasRecentlyCreated === false) {
+        // Foreign keys are outside BillPaymentAllocation::$fillable, so the
+        // allocation is looked up and created with explicit ownership
+        // assignment rather than firstOrCreate (which would drop them).
+        $allocation = BillPaymentAllocation::where('bill_payment_id', $this->id)
+            ->where('bill_id', $bill->id)
+            ->first();
+        if (! $allocation) {
+            $allocation = new BillPaymentAllocation;
+            $allocation->fill(['amount' => $amount]);
+            $allocation->bill_payment_id = $this->id;
+            $allocation->bill_id = $bill->id;
+            $allocation->save();
+        } else {
+            // Update allocation amount if it already exists
             $allocation->increment('amount', $amount);
         }
 
@@ -550,8 +559,10 @@ class BillPayment extends Model
             // (save() alone leaves it unposted and invisible to reports).
             $journalEntry->post();
 
-            // Store the IFRS transaction id.
-            $this->update(['ifrs_payment_id' => $journalEntry->id]);
+            // Store the IFRS transaction id (explicit assignment — the FK is
+            // not fillable).
+            $this->ifrs_payment_id = $journalEntry->id;
+            $this->save();
 
             // Prepaid bill lines funded by this payment spawn amortisation
             // schedules. Best-effort like the posting itself: a failure
@@ -647,10 +658,10 @@ class BillPayment extends Model
             $this->ifrs_payment_id = null;
             $this->save();
 
-            $this->update([
-                'payment_method' => $method,
-                'employee_id' => $method === self::METHOD_EMPLOYEE_REIMBURSEMENT ? $employeeId : null,
-            ]);
+            // employee_id is an unfillable FK — assign it explicitly.
+            $this->payment_method = $method;
+            $this->employee_id = $method === self::METHOD_EMPLOYEE_REIMBURSEMENT ? $employeeId : null;
+            $this->save();
             $this->refresh();
 
             if ($this->postToIFRS() === null) {

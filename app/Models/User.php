@@ -13,7 +13,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['name', 'email', 'password', 'salary', 'charge_out_rate', 'position', 'phone', 'profile_photo', 'entity_id'])]
+#[Fillable(['name', 'email', 'password', 'salary', 'charge_out_rate', 'position', 'phone', 'profile_photo'])]
 class User extends Authenticatable
 {
     // Classic property rather than the #[Hidden] attribute: static

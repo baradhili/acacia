@@ -152,11 +152,15 @@ class DashboardWidgetLayoutTest extends TestCase
 
     public function test_full_save_drops_rows_for_widgets_that_left_the_registry(): void
     {
-        WidgetPreference::create([
-            'user_id' => $this->user->id,
+        // user_id is an FK outside WidgetPreference's $fillable
+        // (mass-assignment hardening) — ownership is assigned directly.
+        $preference = new WidgetPreference;
+        $preference->fill([
             'widget_name' => 'DisabledModuleWidget',
             'visible' => true,
         ]);
+        $preference->user_id = $this->user->id;
+        $preference->save();
 
         $this->actingAs($this->user)
             ->postJson('/api/widget-preferences', [

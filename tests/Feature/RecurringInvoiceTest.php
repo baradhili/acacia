@@ -2,10 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Console\Commands\ProcessRecurringInvoices;
 use App\Models\Client;
 use App\Models\Invoice;
-use App\Models\InvoiceItem;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -17,6 +15,7 @@ class RecurringInvoiceTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected Client $client;
 
     protected function setUp(): void
@@ -32,8 +31,8 @@ class RecurringInvoiceTest extends TestCase
 
     protected function createRecurringInvoice(string $frequency, Carbon $nextDate): Invoice
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_DRAFT,
@@ -41,6 +40,8 @@ class RecurringInvoiceTest extends TestCase
             'recurring_frequency' => $frequency,
             'next_recurring_date' => $nextDate->toDateString(),
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         $invoice->items()->create([
             'description' => 'Monthly Service',
@@ -178,8 +179,8 @@ class RecurringInvoiceTest extends TestCase
 
     public function test_recurring_invoice_inherits_notes_and_terms(): void
     {
-        $originalInvoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $originalInvoice = new Invoice;
+        $originalInvoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_DRAFT,
@@ -189,6 +190,8 @@ class RecurringInvoiceTest extends TestCase
             'recurring_frequency' => 'monthly',
             'next_recurring_date' => Carbon::today()->toDateString(),
         ]);
+        $originalInvoice->client_id = $this->client->id;
+        $originalInvoice->save();
 
         $originalInvoice->items()->create([
             'description' => 'Service',

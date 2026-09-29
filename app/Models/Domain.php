@@ -2,7 +2,8 @@
 
 namespace App\Models;
 
-use Carbon\Carbon;
+use IFRS\Models\Account;
+use IFRS\Models\Entity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -16,16 +17,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Domain extends Model
 {
     public const STATUS_ACTIVE = 'active';
+
     public const STATUS_RETIRED = 'retired';
 
     protected $fillable = [
-        'entity_id',
         'name',
         'registrar',
         'purchased_at',
         'expiry_date',
         'cost',
-        'account_id',
         'indefinite_life',
         'useful_life_months',
         'notes',
@@ -42,12 +42,12 @@ class Domain extends Model
 
     public function entity(): BelongsTo
     {
-        return $this->belongsTo(\IFRS\Models\Entity::class);
+        return $this->belongsTo(Entity::class);
     }
 
     public function account(): BelongsTo
     {
-        return $this->belongsTo(\IFRS\Models\Account::class);
+        return $this->belongsTo(Account::class);
     }
 
     /**

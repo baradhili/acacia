@@ -3,6 +3,7 @@
 namespace Tests\Feature\Accounting;
 
 use App\Models\Client;
+use App\Models\FiscalPeriod;
 use App\Models\FiscalYearClose;
 use App\Models\Payment;
 use App\Services\FiscalYearService;
@@ -20,6 +21,7 @@ class FiscalYearServiceTest extends TestCase
     use RefreshDatabase;
 
     protected Entity $entity;
+
     protected FiscalYearService $service;
 
     protected function setUp(): void
@@ -28,7 +30,7 @@ class FiscalYearServiceTest extends TestCase
         $this->seed(RoleSeeder::class);
         $this->seed(IFRSSeeder::class);
         $this->entity = Entity::first();
-        $this->service = new FiscalYearService();
+        $this->service = new FiscalYearService;
     }
 
     public function test_bounds_follow_entity_year_start(): void
@@ -85,14 +87,16 @@ class FiscalYearServiceTest extends TestCase
         $year = $this->service->currentYear($this->entity) - 1;
         $bounds = $this->service->bounds($this->entity, $year);
 
-        Payment::create([
-            'client_id' => Client::factory()->create()->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 1000,
             'payment_date' => $bounds['start']->copy()->addMonths(2)->toDateString(),
             'payment_method' => Payment::METHOD_BANK_TRANSFER,
             'status' => Payment::STATUS_COMPLETED,
             // ifrs_receipt_id stays null — never posted.
         ]);
+        $payment->client_id = Client::factory()->create()->id;
+        $payment->save();
 
         $checklist = $this->service->checklist($this->entity, $year);
 
@@ -108,13 +112,15 @@ class FiscalYearServiceTest extends TestCase
         $year = $this->service->currentYear($this->entity) - 1;
         $bounds = $this->service->bounds($this->entity, $year);
 
-        Payment::create([
-            'client_id' => Client::factory()->create()->id,
+        $void = new Payment;
+        $void->fill([
             'amount' => 1000,
             'payment_date' => $bounds['start']->copy()->addMonths(2)->toDateString(),
             'payment_method' => Payment::METHOD_BANK_TRANSFER,
             'status' => Payment::STATUS_VOID,
         ]);
+        $void->client_id = Client::factory()->create()->id;
+        $void->save();
 
         $item = collect($this->service->checklist($this->entity, $year))->firstWhere('key', 'unposted_payments');
 
@@ -142,7 +148,7 @@ class FiscalYearServiceTest extends TestCase
         $this->assertEquals(FiscalYearClose::STATUS_TRIAL, $record->status);
         $this->assertEquals($record->id, $again->id);
         $this->assertEquals($year, $record->year);
-        $this->assertEquals('FY-CLOSE-' . $year, $record->closingReference());
+        $this->assertEquals('FY-CLOSE-'.$year, $record->closingReference());
     }
 
     public function test_unclosed_prior_year_ignores_years_without_periods(): void
@@ -165,7 +171,7 @@ class FiscalYearServiceTest extends TestCase
 
     public function test_is_date_blocked_by_closed_reporting_period(): void
     {
-        $locks = new PeriodLockService();
+        $locks = new PeriodLockService;
         $year = $this->service->currentYear($this->entity) - 1;
         $date = Carbon::create($year, 10, 15);
 
@@ -181,11 +187,11 @@ class FiscalYearServiceTest extends TestCase
 
     public function test_is_date_blocked_by_locked_app_period(): void
     {
-        $locks = new PeriodLockService();
+        $locks = new PeriodLockService;
         // 15 Nov 2030 falls in FY 2030 (Jul 2030 – Jun 2031).
         $date = Carbon::parse('2030-11-15');
 
-        collect(\App\Models\FiscalPeriod::createMonthlyPeriodsForYear(2030))->each(
+        collect(FiscalPeriod::createMonthlyPeriodsForYear(2030))->each(
             fn ($p) => $p->lock('Test lock')
         );
 

@@ -34,6 +34,24 @@ class DocumentIconIndexTest extends TestCase
         $this->supplier = Supplier::factory()->create();
     }
 
+    /**
+     * Create a row for $class with explicit FK ownership — the *_id keys
+     * in $attributes are unfillable after the mass-assignment hardening.
+     */
+    protected function make(string $class, array $attributes): object
+    {
+        $model = new $class;
+        $model->fill(collect($attributes)->except(['client_id', 'supplier_id', 'purchase_order_id'])->all());
+        foreach (['client_id', 'supplier_id', 'purchase_order_id'] as $key) {
+            if (array_key_exists($key, $attributes)) {
+                $model->{$key} = $attributes[$key];
+            }
+        }
+        $model->save();
+
+        return $model;
+    }
+
     protected function attach(object $model, int $times = 1): void
     {
         for ($i = 0; $i < $times; $i++) {
@@ -74,16 +92,16 @@ class DocumentIconIndexTest extends TestCase
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ];
-        $this->attach(Invoice::create($attributes));
-        Invoice::create($attributes);
+        $this->attach($this->make(Invoice::class, $attributes));
+        $this->make(Invoice::class, $attributes);
 
         $this->assertSingleIcon('/invoices');
     }
 
     public function test_bills_index_shows_document_icon(): void
     {
-        $this->attach(Bill::create(['supplier_id' => $this->supplier->id]));
-        Bill::create(['supplier_id' => $this->supplier->id]);
+        $this->attach(Bill::createWithUniqueNumber(['supplier_id' => $this->supplier->id]));
+        Bill::createWithUniqueNumber(['supplier_id' => $this->supplier->id]);
 
         $this->assertSingleIcon('/bills');
     }
@@ -96,8 +114,8 @@ class DocumentIconIndexTest extends TestCase
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ];
-        $this->attach(Payment::create($attributes));
-        Payment::create($attributes);
+        $this->attach($this->make(Payment::class, $attributes));
+        $this->make(Payment::class, $attributes);
 
         $this->assertSingleIcon('/payments');
     }
@@ -110,8 +128,8 @@ class DocumentIconIndexTest extends TestCase
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ];
-        $this->attach(BillPayment::create($attributes));
-        BillPayment::create($attributes);
+        $this->attach($this->make(BillPayment::class, $attributes));
+        $this->make(BillPayment::class, $attributes);
 
         $this->assertSingleIcon('/bill-payments');
     }
@@ -134,8 +152,8 @@ class DocumentIconIndexTest extends TestCase
 
     public function test_estimates_index_shows_document_icon(): void
     {
-        $this->attach(Estimate::create(['client_id' => $this->client->id]));
-        Estimate::create(['client_id' => $this->client->id]);
+        $this->attach($this->make(Estimate::class, ['client_id' => $this->client->id]));
+        $this->make(Estimate::class, ['client_id' => $this->client->id]);
 
         $this->assertSingleIcon('/estimates');
     }
@@ -148,8 +166,8 @@ class DocumentIconIndexTest extends TestCase
             'budgeted_amount' => 100,
             'start_date' => now()->toDateString(),
         ];
-        $this->attach(PurchaseOrder::create($attributes));
-        PurchaseOrder::create($attributes);
+        $this->attach($this->make(PurchaseOrder::class, $attributes));
+        $this->make(PurchaseOrder::class, $attributes);
 
         $this->assertSingleIcon('/purchase-orders');
     }
@@ -162,7 +180,7 @@ class DocumentIconIndexTest extends TestCase
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ];
-        $this->attach(Invoice::create($attributes), 2);
+        $this->attach($this->make(Invoice::class, $attributes), 2);
 
         $response = $this->actingAs($this->user)->get('/invoices');
 

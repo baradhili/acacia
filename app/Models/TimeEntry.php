@@ -14,10 +14,6 @@ class TimeEntry extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_id',
-        'project_id',
-        'purchase_order_id',
-        'client_id',
         'entry_date',
         'start_time',
         'end_time',

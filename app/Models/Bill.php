@@ -16,8 +16,6 @@ class Bill extends Model
 
     protected $fillable = [
         'bill_number',
-        'supplier_id',
-        'project_id',
         'created_by',
         'status',
         'bill_date',
@@ -116,13 +114,23 @@ class Bill extends Model
      * the loser of a race gets a QueryException (SQLSTATE 23000). Each retry
      * re-enters the creating hook, which regenerates from the now-higher max,
      * so the next attempt picks the following number.
+     *
+     * supplier_id/project_id are foreign keys outside $fillable (explicit
+     * ownership assignment), so they are pulled out of the fill payload and
+     * assigned as attributes.
      */
     public static function createWithUniqueNumber(array $attributes): self
     {
         $attempts = 5;
         for ($i = 1; $i <= $attempts; $i++) {
             try {
-                return self::create($attributes);
+                $bill = new self;
+                $bill->fill(collect($attributes)->except(['supplier_id', 'project_id'])->all());
+                $bill->supplier_id = $attributes['supplier_id'] ?? null;
+                $bill->project_id = $attributes['project_id'] ?? null;
+                $bill->save();
+
+                return $bill;
             } catch (QueryException $e) {
                 if (! self::isUniqueViolation($e) || $i === $attempts) {
                     throw $e;

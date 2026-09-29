@@ -35,7 +35,6 @@ class FiscalYearClose extends Model
     ];
 
     protected $fillable = [
-        'entity_id',
         'year',
         'status',
         'requested_by',

@@ -11,7 +11,6 @@ class CreditNoteItem extends Model
     use HasFactory;
 
     protected $fillable = [
-        'credit_note_id',
         'description',
         'quantity',
         'unit_price',
@@ -60,7 +59,7 @@ class CreditNoteItem extends Model
     public static function createFromInvoiceItem(InvoiceItem $item, ?string $reason = null): self
     {
         return new self([
-            'description' => $reason ?? ('Credit for: ' . $item->description),
+            'description' => $reason ?? ('Credit for: '.$item->description),
             'quantity' => $item->quantity,
             'unit_price' => $item->unit_price,
             'tax_rate' => $item->tax_rate,
@@ -72,7 +71,7 @@ class CreditNoteItem extends Model
      */
     public function getFormattedUnitPriceAttribute(): string
     {
-        return config('australian.currency.symbol', 'A$') . number_format($this->unit_price, 2);
+        return config('australian.currency.symbol', 'A$').number_format($this->unit_price, 2);
     }
 
     /**
@@ -80,6 +79,6 @@ class CreditNoteItem extends Model
      */
     public function getFormattedTotalAttribute(): string
     {
-        return config('australian.currency.symbol', 'A$') . number_format($this->total, 2);
+        return config('australian.currency.symbol', 'A$').number_format($this->total, 2);
     }
 }

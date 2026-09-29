@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Models\Invoice;
-use App\Models\InvoiceItem;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -12,6 +11,7 @@ use Illuminate\Support\Facades\Log;
 class ProcessRecurringInvoices extends Command
 {
     protected $signature = 'invoices:process-recurring';
+
     protected $description = 'Process recurring invoices and create new invoices based on their schedule';
 
     public function handle(): int
@@ -44,10 +44,10 @@ class ProcessRecurringInvoices extends Command
                     'parent_invoice_id' => $originalInvoice->id,
                 ]);
 
-                // Copy items from original invoice
+                // Copy items from original invoice. invoice_id comes from
+                // the relation (InvoiceItem::$fillable no longer carries it).
                 foreach ($originalInvoice->items as $item) {
-                    InvoiceItem::create([
-                        'invoice_id' => $newInvoice->id,
+                    $newInvoice->items()->create([
                         'description' => $item->description,
                         'quantity' => $item->quantity,
                         'unit_price' => $item->unit_price,
@@ -78,7 +78,7 @@ class ProcessRecurringInvoices extends Command
             } catch (\Exception $e) {
                 DB::rollBack();
                 $this->error("Failed to create recurring invoice: {$e->getMessage()}");
-                Log::error("Failed to create recurring invoice", [
+                Log::error('Failed to create recurring invoice', [
                     'original_invoice_id' => $originalInvoice->id,
                     'error' => $e->getMessage(),
                 ]);

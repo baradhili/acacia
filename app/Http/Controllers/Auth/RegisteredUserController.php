@@ -39,13 +39,16 @@ class RegisteredUserController extends Controller
 
         // Self-registration joins the instance's entity — users are
         // always linked to one (the ledger resolves through it). Fresh
-        // installs without an entity yet skip the link.
-        $user = User::create([
+        // installs without an entity yet skip the link. entity_id is an
+        // unfillable FK, assigned explicitly.
+        $user = new User;
+        $user->fill([
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
-            'entity_id' => Entity::orderBy('id')->value('id'),
         ]);
+        $user->entity_id = Entity::orderBy('id')->value('id');
+        $user->save();
 
         event(new Registered($user));
 

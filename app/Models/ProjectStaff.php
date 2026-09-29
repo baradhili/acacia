@@ -13,8 +13,6 @@ class ProjectStaff extends Model
     protected $table = 'project_staff';
 
     protected $fillable = [
-        'project_id',
-        'user_id',
         'hourly_rate',
         'is_active',
     ];
@@ -39,8 +37,8 @@ class ProjectStaff extends Model
      */
     public function getEffectiveRateAttribute(): float
     {
-        return $this->hourly_rate 
-            ? (float) $this->hourly_rate 
+        return $this->hourly_rate
+            ? (float) $this->hourly_rate
             : (float) $this->project->hourly_rate;
     }
 }

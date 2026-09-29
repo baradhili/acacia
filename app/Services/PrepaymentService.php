@@ -94,14 +94,11 @@ class PrepaymentService
                 $periods = self::periodCount($serviceStart, $serviceEnd);
                 $total = round($netCents / 100, 2);
 
-                $created[] = $payment->prepayments()->create([
-                    'entity_id' => $entity->id,
-                    'bill_item_id' => $item->id,
+                // bill_payment_id comes from the relation; the entity,
+                // bill-item and account FKs are unfillable and assigned
+                // explicitly.
+                $prepayment = $payment->prepayments()->make([
                     'description' => $item->description,
-                    'asset_account_id' => $item->expense_account_id,
-                    'expense_account_id' => $item->amortise_to_account_id
-                        ?? $defaultExpense?->id
-                        ?? $item->expense_account_id,
                     'service_start' => $serviceStart->toDateString(),
                     'service_end' => $serviceEnd->toDateString(),
                     'periods' => $periods,
@@ -110,6 +107,15 @@ class PrepaymentService
                     'next_period_date' => $serviceStart->copy()->endOfMonth()->toDateString(),
                     'status' => Prepayment::STATUS_ACTIVE,
                 ]);
+                $prepayment->entity_id = $entity->id;
+                $prepayment->bill_item_id = $item->id;
+                $prepayment->asset_account_id = $item->expense_account_id;
+                $prepayment->expense_account_id = $item->amortise_to_account_id
+                    ?? $defaultExpense?->id
+                    ?? $item->expense_account_id;
+                $prepayment->save();
+
+                $created[] = $prepayment;
             }
         }
 
@@ -235,11 +241,14 @@ class PrepaymentService
             $journalEntry->addLineItem($line);
             $journalEntry->post();
 
-            $prepayment->amortisations()->create([
+            // prepayment_id comes from the relation; the IFRS transaction
+            // FK is unfillable and assigned explicitly.
+            $amortisation = $prepayment->amortisations()->make([
                 'period_date' => $periodDate->toDateString(),
                 'amount' => $amount,
-                'ifrs_transaction_id' => $journalEntry->id,
             ]);
+            $amortisation->ifrs_transaction_id = $journalEntry->id;
+            $amortisation->save();
 
             $posted++;
             $prepayment->next_period_date = Carbon::parse(self::nextMonthEnd($periodDate));
@@ -292,10 +301,10 @@ class PrepaymentService
         }
 
         if ($reversalId) {
-            $entry->update([
-                'reversal_transaction_id' => $reversalId,
-                'reversed_at' => now(),
-            ]);
+            // reversal_transaction_id is an unfillable FK — assign explicitly.
+            $entry->reversal_transaction_id = $reversalId;
+            $entry->reversed_at = now();
+            $entry->save();
         }
 
         return $reversalId;

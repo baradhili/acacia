@@ -46,12 +46,14 @@ class PaymentTest extends TestCase
             'email' => 'client@test.com',
         ]);
 
-        $this->invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $this->invoice = new Invoice;
+        $this->invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $this->invoice->client_id = $this->client->id;
+        $this->invoice->save();
 
         $this->invoice->items()->create([
             'description' => 'Test Service',
@@ -89,24 +91,28 @@ class PaymentTest extends TestCase
 
     public function test_payment_generates_correct_payment_number(): void
     {
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 110,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
 
         $this->assertMatchesRegularExpression('/^PAY-'.date('Y').'-\d{4}$/', $payment->payment_number);
     }
 
     public function test_partial_payment_allocates_correctly(): void
     {
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 55,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
 
         // Allocate only $30 of the $55 payment
         $payment->allocateToInvoice($this->invoice, 30);
@@ -117,12 +123,14 @@ class PaymentTest extends TestCase
 
     public function test_full_payment_updates_invoice_status(): void
     {
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 110,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
 
         $payment->allocateToInvoice($this->invoice, 110);
 
@@ -133,12 +141,14 @@ class PaymentTest extends TestCase
 
     public function test_payment_allocation_cannot_exceed_payment_amount(): void
     {
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 50,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
 
         // Allocating more than the payment amount must throw rather than
         // silently clamping to the available balance.
@@ -149,12 +159,14 @@ class PaymentTest extends TestCase
     public function test_manual_allocation_override(): void
     {
         // Create another invoice
-        $invoice2 = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice2 = new Invoice;
+        $invoice2->fill([
             'issue_date' => now()->subDays(5)->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $invoice2->client_id = $this->client->id;
+        $invoice2->save();
 
         $invoice2->items()->create([
             'description' => 'Test Service 2',
@@ -164,12 +176,14 @@ class PaymentTest extends TestCase
         ]);
 
         // Create payment
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 55,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
 
         // Manually allocate to invoice2
         $payment->allocateToInvoice($invoice2, 55);
@@ -182,12 +196,14 @@ class PaymentTest extends TestCase
 
     public function test_remove_allocation(): void
     {
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 110,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
 
         $payment->allocateToInvoice($this->invoice, 110);
 
@@ -208,12 +224,14 @@ class PaymentTest extends TestCase
     {
         // Invoice total is $110
         // Payment is $200 (exceeds total outstanding)
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 200,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
 
         // Allocate only what's needed
         $payment->allocateToInvoice($this->invoice, $this->invoice->total);
@@ -225,12 +243,14 @@ class PaymentTest extends TestCase
     public function test_reallocating_payment_updates_invoice_statuses(): void
     {
         // Create two invoices
-        $invoice1 = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice1 = new Invoice;
+        $invoice1->fill([
             'issue_date' => now()->subDays(10)->toDateString(),
             'due_date' => now()->subDays(5)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $invoice1->client_id = $this->client->id;
+        $invoice1->save();
 
         $invoice1->items()->create([
             'description' => 'Service 1',
@@ -241,12 +261,14 @@ class PaymentTest extends TestCase
         $invoice1->refresh();
         $invoice1->recalculateTotals();
 
-        $invoice2 = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice2 = new Invoice;
+        $invoice2->fill([
             'issue_date' => now()->subDays(5)->toDateString(),
             'due_date' => now()->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $invoice2->client_id = $this->client->id;
+        $invoice2->save();
 
         $invoice2->items()->create([
             'description' => 'Service 2',
@@ -258,12 +280,14 @@ class PaymentTest extends TestCase
         $invoice2->recalculateTotals();
 
         // Create payment
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 110,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
 
         // Allocate to both
         $payment->allocateToInvoice($invoice1, 55);
@@ -285,12 +309,14 @@ class PaymentTest extends TestCase
     public function test_partial_payment_covers_multiple_invoices_correctly(): void
     {
         // Create three invoices of $100 each ($110 with GST)
-        $invoice1 = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice1 = new Invoice;
+        $invoice1->fill([
             'issue_date' => now()->subDays(30)->toDateString(),
             'due_date' => now()->subDays(20)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $invoice1->client_id = $this->client->id;
+        $invoice1->save();
         $invoice1->items()->create([
             'description' => 'Service 1',
             'quantity' => 1,
@@ -298,12 +324,14 @@ class PaymentTest extends TestCase
             'tax_rate' => 10,
         ]);
 
-        $invoice2 = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice2 = new Invoice;
+        $invoice2->fill([
             'issue_date' => now()->subDays(20)->toDateString(),
             'due_date' => now()->subDays(10)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $invoice2->client_id = $this->client->id;
+        $invoice2->save();
         $invoice2->items()->create([
             'description' => 'Service 2',
             'quantity' => 1,
@@ -311,12 +339,14 @@ class PaymentTest extends TestCase
             'tax_rate' => 10,
         ]);
 
-        $invoice3 = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice3 = new Invoice;
+        $invoice3->fill([
             'issue_date' => now()->subDays(10)->toDateString(),
             'due_date' => now()->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $invoice3->client_id = $this->client->id;
+        $invoice3->save();
         $invoice3->items()->create([
             'description' => 'Service 3',
             'quantity' => 1,
@@ -325,12 +355,14 @@ class PaymentTest extends TestCase
         ]);
 
         // Create payment of $220 (covers invoice1 $110 + invoice2 $110)
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 220,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
 
         $payment->allocateToInvoice($invoice1, 110);
         $payment->allocateToInvoice($invoice2, 110);
@@ -347,25 +379,29 @@ class PaymentTest extends TestCase
 
     public function test_payment_generates_payment_number_format(): void
     {
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 100,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
 
         $this->assertMatchesRegularExpression('/^PAY-\d{4}-\d{4}$/', $payment->payment_number);
     }
 
     public function test_payment_can_be_voided(): void
     {
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 110,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
             'status' => Payment::STATUS_COMPLETED,
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
 
         // Void the payment
         $payment->void();
@@ -377,12 +413,14 @@ class PaymentTest extends TestCase
     {
         $entity = $this->seedIfrs();
 
-        $creditNote = CreditNote::create([
-            'client_id' => $this->client->id,
+        $creditNote = new CreditNote;
+        $creditNote->fill([
             'total' => -60,
             'remaining_amount' => 60,
             'status' => CreditNote::STATUS_ISSUED,
         ]);
+        $creditNote->client_id = $this->client->id;
+        $creditNote->save();
 
         $this->assertTrue($creditNote->applyToInvoice($this->invoice, 55));
 
@@ -412,12 +450,14 @@ class PaymentTest extends TestCase
 
     public function test_allocation_groups_split_taxable_and_free_shares(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
         $invoice->items()->createMany([
             ['description' => 'Consulting', 'quantity' => 1, 'unit_price' => 100, 'tax_rate' => 10], // $110 incl GST
             ['description' => 'Export service', 'quantity' => 1, 'unit_price' => 50, 'tax_rate' => 0], // $50 GST-free
@@ -435,12 +475,14 @@ class PaymentTest extends TestCase
     {
         $this->seedIfrs();
 
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
         $invoice->items()->createMany([
             ['description' => 'Consulting', 'quantity' => 1, 'unit_price' => 100, 'tax_rate' => 10], // $110 incl GST
             ['description' => 'Export service', 'quantity' => 1, 'unit_price' => 50, 'tax_rate' => 0], // $50 GST-free
@@ -448,12 +490,14 @@ class PaymentTest extends TestCase
         $invoice->refresh();
         $invoice->recalculateTotals();
 
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 160,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
         $payment->allocateToInvoice($invoice, 160);
 
         $this->assertNotNull($payment->postToIFRS());
@@ -475,12 +519,14 @@ class PaymentTest extends TestCase
         // The setUp invoice is $110 taxable. The payment allocates only
         // half of its $220; the unallocated remainder keeps the default
         // GST-inclusive treatment so the bank leg equals the payment.
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 220,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
         $payment->allocateToInvoice($this->invoice, 110);
 
         $this->assertNotNull($payment->postToIFRS());
@@ -495,12 +541,14 @@ class PaymentTest extends TestCase
     {
         $this->seedIfrs();
 
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
         $invoice->items()->createMany([
             ['description' => 'Consulting', 'quantity' => 1, 'unit_price' => 100, 'tax_rate' => 10], // $110 incl GST
             ['description' => 'Export service', 'quantity' => 1, 'unit_price' => 50, 'tax_rate' => 0], // $50 GST-free
@@ -508,21 +556,25 @@ class PaymentTest extends TestCase
         $invoice->refresh();
         $invoice->recalculateTotals();
 
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 160,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
         $payment->allocateToInvoice($invoice, 160);
         $this->assertNotNull($payment->postToIFRS());
 
-        $creditNote = CreditNote::create([
-            'client_id' => $this->client->id,
+        $creditNote = new CreditNote;
+        $creditNote->fill([
             'total' => -160,
             'remaining_amount' => 160,
             'status' => CreditNote::STATUS_ISSUED,
         ]);
+        $creditNote->client_id = $this->client->id;
+        $creditNote->save();
 
         // The refund allocates to the same mixed invoice, so it must
         // reverse the exact apportioned legs the receipt accrued.
@@ -612,12 +664,14 @@ class PaymentTest extends TestCase
     public function test_get_client_invoices_returns_outstanding_with_amount_due(): void
     {
         // The setUp invoice: 110 total, fully outstanding.
-        $partial = Invoice::create([
-            'client_id' => $this->client->id,
+        $partial = new Invoice;
+        $partial->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $partial->client_id = $this->client->id;
+        $partial->save();
         $partial->items()->create([
             'description' => 'Partial Service',
             'quantity' => 1,
@@ -627,19 +681,23 @@ class PaymentTest extends TestCase
         $partial->refresh();
         $partial->recalculateTotals();
 
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 110,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
         $payment->allocateToInvoice($partial, 110); // 220 total → 110 still due
 
-        $draft = Invoice::create([
-            'client_id' => $this->client->id,
+        $draft = new Invoice;
+        $draft->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
         ]);
+        $draft->client_id = $this->client->id;
+        $draft->save();
         // Balance-carrying drafts are returned too — flagged allocatable =>
         // false so the form can show them greyed-out with a "mark as sent
         // first" hint instead of them silently missing from the list.
@@ -718,11 +776,13 @@ class PaymentTest extends TestCase
 
     public function test_store_rejects_allocation_to_draft_invoice(): void
     {
-        $draft = Invoice::create([
-            'client_id' => $this->client->id,
+        $draft = new Invoice;
+        $draft->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
         ]);
+        $draft->client_id = $this->client->id;
+        $draft->save();
         $draft->items()->create([
             'description' => 'Draft Service',
             'quantity' => 1,
@@ -751,12 +811,14 @@ class PaymentTest extends TestCase
     public function test_store_rejects_allocation_to_another_clients_invoice(): void
     {
         $otherClient = Client::factory()->create();
-        $otherInvoice = Invoice::create([
-            'client_id' => $otherClient->id,
+        $otherInvoice = new Invoice;
+        $otherInvoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $otherInvoice->client_id = $otherClient->id;
+        $otherInvoice->save();
         $otherInvoice->items()->create([
             'description' => 'Other Client Service',
             'quantity' => 1,
@@ -783,17 +845,21 @@ class PaymentTest extends TestCase
 
     public function test_allocate_rejects_draft_invoice(): void
     {
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 110,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
-        $draft = Invoice::create([
-            'client_id' => $this->client->id,
+        $payment->client_id = $this->client->id;
+        $payment->save();
+        $draft = new Invoice;
+        $draft->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
         ]);
+        $draft->client_id = $this->client->id;
+        $draft->save();
         $draft->items()->create([
             'description' => 'Draft Service',
             'quantity' => 1,
@@ -816,12 +882,14 @@ class PaymentTest extends TestCase
 
     public function test_allocate_rejects_amount_exceeding_invoice_balance(): void
     {
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 500,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
 
         // Invoice total is 110; allocating 200 must be rejected even though
         // the payment has plenty unallocated.
@@ -837,12 +905,14 @@ class PaymentTest extends TestCase
 
     public function test_remove_all_allocations_frees_payment_and_reverts_invoice_statuses(): void
     {
-        $second = Invoice::create([
-            'client_id' => $this->client->id,
+        $second = new Invoice;
+        $second->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $second->client_id = $this->client->id;
+        $second->save();
         $second->items()->create([
             'description' => 'Second Service',
             'quantity' => 1,
@@ -852,12 +922,14 @@ class PaymentTest extends TestCase
         $second->refresh();
         $second->recalculateTotals();
 
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 220,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
         $payment->allocateToInvoice($this->invoice, 110);
         $payment->allocateToInvoice($second, 110);
         $payment->refresh();
@@ -877,12 +949,14 @@ class PaymentTest extends TestCase
 
     public function test_payment_unallocated_amount_calculated_correctly(): void
     {
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 200,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
 
         $this->assertEquals(200, $payment->unallocated_amount);
 
@@ -895,12 +969,14 @@ class PaymentTest extends TestCase
 
     public function test_client_relationship_works(): void
     {
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 100,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
 
         $this->assertEquals($this->client->id, $payment->client->id);
         $this->assertEquals($this->client->name, $payment->client->name);
@@ -913,13 +989,15 @@ class PaymentTest extends TestCase
         // This mirrors the race where two concurrent requests compute the same
         // next number; the loser must regenerate and succeed.
         $collidingNumber = Payment::generatePaymentNumber();
-        Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'payment_number' => $collidingNumber,
             'amount' => 1,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
 
         $payment = Payment::createWithUniqueNumber([
             'client_id' => $this->client->id,
@@ -942,12 +1020,14 @@ class PaymentTest extends TestCase
 
     public function test_update_payment_rejects_amount_below_allocated(): void
     {
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 110,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
         $payment->allocateToInvoice($this->invoice, 110);
 
         // Try to shrink the amount below what's already allocated.
@@ -967,12 +1047,14 @@ class PaymentTest extends TestCase
     {
         $otherClient = Client::factory()->create(['name' => 'Other Client']);
 
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 110,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
         $payment->allocateToInvoice($this->invoice, 110);
 
         // Try to change the client while allocations to the original client's

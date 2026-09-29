@@ -4,9 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Client;
 use App\Models\CreditNote;
-use App\Models\CreditNoteItem;
 use App\Models\Invoice;
-use App\Models\InvoiceItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -36,7 +34,7 @@ class CreditNoteController extends Controller
     public function create(Request $request)
     {
         $clients = Client::orderBy('name')->pluck('name', 'id');
-        
+
         $selectedClient = $request->client_id ? Client::with('invoices')->find($request->client_id) : null;
         $selectedInvoice = $request->invoice_id ? Invoice::with('items')->find($request->invoice_id) : null;
 
@@ -72,9 +70,9 @@ class CreditNoteController extends Controller
                 $total += $subtotal + $tax;
             }
 
-            $creditNote = CreditNote::create([
-                'client_id' => $validated['client_id'],
-                'invoice_id' => $validated['invoice_id'] ?? null,
+            // client_id/invoice_id are unfillable — assign explicitly.
+            $creditNote = new CreditNote;
+            $creditNote->fill([
                 'created_by' => Auth::id(),
                 'issue_date' => $validated['issue_date'],
                 'reason' => $validated['reason'],
@@ -82,6 +80,9 @@ class CreditNoteController extends Controller
                 'total' => $total,
                 'remaining_amount' => $total,
             ]);
+            $creditNote->client_id = $validated['client_id'];
+            $creditNote->invoice_id = $validated['invoice_id'] ?? null;
+            $creditNote->save();
 
             // Create items
             foreach ($validated['items'] as $item) {
@@ -99,7 +100,8 @@ class CreditNoteController extends Controller
                 ->with('success', 'Credit note created successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->withInput()->with('error', 'Error creating credit note: ' . $e->getMessage());
+
+            return back()->withInput()->with('error', 'Error creating credit note: '.$e->getMessage());
         }
     }
 
@@ -151,14 +153,16 @@ class CreditNoteController extends Controller
                 $total += $subtotal + $tax;
             }
 
-            $creditNote->update([
-                'client_id' => $validated['client_id'],
+            // client_id is unfillable — assign explicitly.
+            $creditNote->fill([
                 'issue_date' => $validated['issue_date'],
                 'reason' => $validated['reason'],
                 'notes' => $validated['notes'] ?? null,
                 'total' => $total,
                 'remaining_amount' => $total,
             ]);
+            $creditNote->client_id = $validated['client_id'];
+            $creditNote->save();
 
             // Delete and recreate items
             $creditNote->items()->delete();
@@ -178,7 +182,8 @@ class CreditNoteController extends Controller
                 ->with('success', 'Credit note updated successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->withInput()->with('error', 'Error updating credit note: ' . $e->getMessage());
+
+            return back()->withInput()->with('error', 'Error updating credit note: '.$e->getMessage());
         }
     }
 
@@ -232,7 +237,7 @@ class CreditNoteController extends Controller
         ]);
 
         $items = $invoice->items()->whereIn('id', $request->item_ids)->get();
-        
+
         $creditNoteItems = [];
         foreach ($items as $item) {
             $creditNoteItems[] = [
@@ -267,7 +272,7 @@ class CreditNoteController extends Controller
         }
 
         // Verify credit note has balance
-        if (!$creditNote->hasRemainingBalance()) {
+        if (! $creditNote->hasRemainingBalance()) {
             return back()->with('error', 'Credit note has no remaining balance.');
         }
 
@@ -284,7 +289,7 @@ class CreditNoteController extends Controller
      */
     public function void(CreditNote $creditNote)
     {
-        if (!$creditNote->void()) {
+        if (! $creditNote->void()) {
             return back()->with('error', 'Cannot void this credit note.');
         }
 

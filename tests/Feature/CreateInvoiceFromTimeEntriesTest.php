@@ -36,7 +36,8 @@ class CreateInvoiceFromTimeEntriesTest extends TestCase
 
     private function makeEntry(array $overrides = []): TimeEntry
     {
-        return TimeEntry::create(array_merge([
+        // user_id/project_id are unfillable FKs — assigned explicitly.
+        $attributes = array_merge([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'entry_date' => '2026-08-15',
@@ -45,7 +46,17 @@ class CreateInvoiceFromTimeEntriesTest extends TestCase
             'billable' => true,
             'status' => TimeEntry::STATUS_APPROVED,
             'description' => 'Consulting work',
-        ], $overrides));
+        ], $overrides);
+        $entry = new TimeEntry;
+        $entry->fill(collect($attributes)->except(['user_id', 'project_id', 'client_id', 'purchase_order_id'])->all());
+        $entry->user_id = $attributes['user_id'];
+        $entry->project_id = $attributes['project_id'];
+        if (array_key_exists('client_id', $attributes)) {
+            $entry->client_id = $attributes['client_id'];
+        }
+        $entry->save();
+
+        return $entry;
     }
 
     public function test_picker_screen_lists_uninvoiced_entries(): void
@@ -174,18 +185,22 @@ class CreateInvoiceFromTimeEntriesTest extends TestCase
     {
         $entry = $this->makeEntry();
 
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
         ]);
-        $invoice->items()->create([
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
+        $item = $invoice->items()->make([
             'description' => 'Already billed',
             'quantity' => 8,
             'unit_price' => 100,
             'tax_rate' => 10,
-            'time_entry_id' => $entry->id,
         ]);
+        // time_entry_id is an unfillable FK — link it explicitly.
+        $item->time_entry_id = $entry->id;
+        $item->save();
 
         $response = $this->actingAs($this->user)
             ->post(route('invoices.create-from-time-entries.store'), [
@@ -246,12 +261,10 @@ class CreateInvoiceFromTimeEntriesTest extends TestCase
 
     public function test_po_picker_screen_guards_and_renders(): void
     {
-        $po = PurchaseOrder::create([
-            'client_id' => $this->client->id,
-            'title' => 'PO Work',
-            'budgeted_amount' => 10000,
-            'status' => 'open',
-        ]);
+        $po = new PurchaseOrder;
+        $po->fill(['title' => 'PO Work', 'budgeted_amount' => 10000, 'status' => 'open']);
+        $po->client_id = $this->client->id;
+        $po->save();
 
         // No invoiceable entries yet — bounced back with an error.
         $this->actingAs($this->user)
@@ -260,7 +273,8 @@ class CreateInvoiceFromTimeEntriesTest extends TestCase
             ->assertSessionHas('error');
 
         // Entries reach the PO through their project.
-        $this->project->update(['purchase_order_id' => $po->id]);
+        $this->project->purchase_order_id = $po->id;
+        $this->project->save();
         $this->makeEntry();
 
         $this->actingAs($this->user)
@@ -271,14 +285,13 @@ class CreateInvoiceFromTimeEntriesTest extends TestCase
 
     public function test_creates_invoice_from_po_and_consumes_budget_when_sent(): void
     {
-        $po = PurchaseOrder::create([
-            'client_id' => $this->client->id,
-            'title' => 'PO Work',
-            'budgeted_amount' => 10000,
-            'status' => 'open',
-        ]);
+        $po = new PurchaseOrder;
+        $po->fill(['title' => 'PO Work', 'budgeted_amount' => 10000, 'status' => 'open']);
+        $po->client_id = $this->client->id;
+        $po->save();
         // Entries reach the PO through their project.
-        $this->project->update(['purchase_order_id' => $po->id]);
+        $this->project->purchase_order_id = $po->id;
+        $this->project->save();
         $entry = $this->makeEntry();
 
         $response = $this->actingAs($this->user)
@@ -306,14 +319,13 @@ class CreateInvoiceFromTimeEntriesTest extends TestCase
 
     public function test_only_open_or_partially_used_pos_can_be_invoiced(): void
     {
-        $po = PurchaseOrder::create([
-            'client_id' => $this->client->id,
-            'title' => 'Not yet live',
-            'budgeted_amount' => 10000,
-            'status' => 'draft',
-        ]);
+        $po = new PurchaseOrder;
+        $po->fill(['title' => 'Not yet live', 'budgeted_amount' => 10000, 'status' => 'draft']);
+        $po->client_id = $this->client->id;
+        $po->save();
         // Entries reach the PO through their project.
-        $this->project->update(['purchase_order_id' => $po->id]);
+        $this->project->purchase_order_id = $po->id;
+        $this->project->save();
         $entry = $this->makeEntry();
 
         // The action never renders for non-invoiceable statuses, and the
@@ -349,20 +361,18 @@ class CreateInvoiceFromTimeEntriesTest extends TestCase
 
     public function test_po_flow_rejects_entries_from_another_po(): void
     {
-        $poA = PurchaseOrder::create([
-            'client_id' => $this->client->id,
-            'title' => 'PO A',
-            'budgeted_amount' => 10000,
-            'status' => 'open',
-        ]);
-        $poB = PurchaseOrder::create([
-            'client_id' => $this->client->id,
-            'title' => 'PO B',
-            'budgeted_amount' => 10000,
-            'status' => 'open',
-        ]);
-        // The entry rides poA through its project.
-        $this->project->update(['purchase_order_id' => $poA->id]);
+        $poA = new PurchaseOrder;
+        $poA->fill(['title' => 'PO A', 'budgeted_amount' => 10000, 'status' => 'open']);
+        $poA->client_id = $this->client->id;
+        $poA->save();
+        $poB = new PurchaseOrder;
+        $poB->fill(['title' => 'PO B', 'budgeted_amount' => 10000, 'status' => 'open']);
+        $poB->client_id = $this->client->id;
+        $poB->save();
+        // The entry rides poA through its project. purchase_order_id is an
+        // unfillable FK on Project — assign it explicitly.
+        $this->project->purchase_order_id = $poA->id;
+        $this->project->save();
         $entry = $this->makeEntry();
 
         $response = $this->actingAs($this->user)
@@ -387,18 +397,22 @@ class CreateInvoiceFromTimeEntriesTest extends TestCase
         $this->assertEquals(800, $widget['total_amount']);
 
         // Once invoiced, the entry drops off the widget.
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
         ]);
-        $invoice->items()->create([
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
+        $item = $invoice->items()->make([
             'description' => 'Billed',
             'quantity' => 8,
             'unit_price' => 100,
             'tax_rate' => 10,
-            'time_entry_id' => $entry->id,
         ]);
+        // time_entry_id is an unfillable FK — link it explicitly.
+        $item->time_entry_id = $entry->id;
+        $item->save();
 
         $widget = (new DashboardService)->getUnbilledTimeWidget();
         $this->assertSame(0, $widget['count']);
@@ -406,11 +420,13 @@ class CreateInvoiceFromTimeEntriesTest extends TestCase
 
     public function test_credit_note_create_from_invoice_view_renders(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
         $invoice->items()->create([
             'description' => 'Line to credit',
             'quantity' => 1,

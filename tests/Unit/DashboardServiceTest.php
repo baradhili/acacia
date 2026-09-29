@@ -36,8 +36,10 @@ class DashboardServiceTest extends TestCase
         $client = $attributes['client'] ?? $this->createClient();
         unset($attributes['client']);
 
-        return Invoice::create(array_merge([
-            'client_id' => $client->id,
+        // client_id is an FK outside Invoice's $fillable (mass-assignment
+        // hardening) — ownership is assigned, never mass-assigned.
+        $invoice = new Invoice;
+        $invoice->fill(array_merge([
             'status' => Invoice::STATUS_SENT,
             'issue_date' => Carbon::now(),
             'due_date' => Carbon::now()->addDays(30),
@@ -45,6 +47,10 @@ class DashboardServiceTest extends TestCase
             'subtotal' => 1000.00,
             'tax_amount' => 0,
         ], $attributes));
+        $invoice->client_id = $client->id;
+        $invoice->save();
+
+        return $invoice;
     }
 
     protected function createPayment(array $attributes = []): Payment
@@ -52,13 +58,18 @@ class DashboardServiceTest extends TestCase
         $client = $attributes['client'] ?? $this->createClient();
         unset($attributes['client']);
 
-        return Payment::create(array_merge([
-            'client_id' => $client->id,
+        // Same FK hardening as createInvoice — assign, don't mass-assign.
+        $payment = new Payment;
+        $payment->fill(array_merge([
             'amount' => 500.00,
             'payment_date' => Carbon::now(),
             'payment_method' => Payment::METHOD_BANK_TRANSFER,
             'status' => Payment::STATUS_COMPLETED,
         ], $attributes));
+        $payment->client_id = $client->id;
+        $payment->save();
+
+        return $payment;
     }
 
     // ========================
@@ -79,11 +90,10 @@ class DashboardServiceTest extends TestCase
     {
         $client = $this->createClient();
 
-        Payment::create([
-            'client_id' => $client->id,
+        $this->createPayment([
+            'client' => $client,
             'amount' => 1000.00,
             'payment_date' => Carbon::now(),
-            'payment_method' => Payment::METHOD_BANK_TRANSFER,
             'status' => Payment::STATUS_COMPLETED,
         ]);
 
@@ -96,11 +106,10 @@ class DashboardServiceTest extends TestCase
     {
         $client = $this->createClient();
 
-        Payment::create([
-            'client_id' => $client->id,
+        $this->createPayment([
+            'client' => $client,
             'amount' => 1000.00,
             'payment_date' => Carbon::now(),
-            'payment_method' => Payment::METHOD_BANK_TRANSFER,
             'status' => Payment::STATUS_PENDING,
         ]);
 
@@ -151,8 +160,7 @@ class DashboardServiceTest extends TestCase
 
     public function test_ar_aging_current_invoice(): void
     {
-        Invoice::create([
-            'client_id' => $this->createClient()->id,
+        $this->createInvoice([
             'status' => Invoice::STATUS_SENT,
             'issue_date' => Carbon::now(),
             'due_date' => Carbon::now()->addDays(30), // Not yet due
@@ -172,8 +180,7 @@ class DashboardServiceTest extends TestCase
         // time of day. Whole-calendar-day bucketing (both dates
         // start-of-day, matching the aging report) keeps it Current —
         // the fractional day difference used to tip it into 1-30.
-        Invoice::create([
-            'client_id' => $this->createClient()->id,
+        $this->createInvoice([
             'status' => Invoice::STATUS_SENT,
             'issue_date' => Carbon::now()->subDay(),
             'due_date' => Carbon::now()->startOfDay(),

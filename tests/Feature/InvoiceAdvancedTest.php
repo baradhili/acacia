@@ -34,20 +34,24 @@ class InvoiceAdvancedTest extends TestCase
     public function test_automatic_overdue_marking_via_cron_for_invoices_past_due_date(): void
     {
         // Create a sent invoice past due date
-        $overdueInvoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $overdueInvoice = new Invoice;
+        $overdueInvoice->fill([
             'issue_date' => now()->subDays(60)->toDateString(),
             'due_date' => now()->subDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $overdueInvoice->client_id = $this->client->id;
+        $overdueInvoice->save();
 
         // Create a sent invoice not yet due
-        $currentInvoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $currentInvoice = new Invoice;
+        $currentInvoice->fill([
             'issue_date' => now()->subDays(10)->toDateString(),
             'due_date' => now()->addDays(20)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $currentInvoice->client_id = $this->client->id;
+        $currentInvoice->save();
 
         // Run the cron command
         Artisan::call('invoices:mark-overdue');
@@ -66,12 +70,14 @@ class InvoiceAdvancedTest extends TestCase
     {
         Mail::fake();
 
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_DRAFT,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         // Send the invoice via the controller
         $response = $this->actingAs($this->user)->post(route('invoices.send', $invoice));
@@ -86,12 +92,14 @@ class InvoiceAdvancedTest extends TestCase
 
     public function test_invoice_pdf_view_renders(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_DRAFT,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         $invoice->items()->create([
             'description' => 'Consulting Services',
@@ -109,23 +117,27 @@ class InvoiceAdvancedTest extends TestCase
     public function test_invoice_cancellation_allowed_in_sent_state(): void
     {
         // Sent invoice can be cancelled according to transitions
-        $sentInvoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $sentInvoice = new Invoice;
+        $sentInvoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $sentInvoice->client_id = $this->client->id;
+        $sentInvoice->save();
 
         // Can transition to cancelled
         $this->assertTrue($sentInvoice->canBeCancelled());
 
         // Paid invoice cannot be cancelled
-        $paidInvoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $paidInvoice = new Invoice;
+        $paidInvoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_PAID,
         ]);
+        $paidInvoice->client_id = $this->client->id;
+        $paidInvoice->save();
 
         $this->assertFalse($paidInvoice->canBeCancelled());
 
@@ -135,12 +147,14 @@ class InvoiceAdvancedTest extends TestCase
 
     public function test_complete_invoice_status_transitions_draft_to_overdue(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_DRAFT,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         // Draft -> Sent
         $invoice->markAsSent();
@@ -157,12 +171,14 @@ class InvoiceAdvancedTest extends TestCase
 
     public function test_invalid_invoice_status_transitions_are_prevented(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_DRAFT,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         // Cannot transition from draft directly to paid
         $this->assertFalse($invoice->canTransitionTo(Invoice::STATUS_PAID));
@@ -175,12 +191,14 @@ class InvoiceAdvancedTest extends TestCase
 
     public function test_invoice_overdue_status_transition(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->subDays(60)->toDateString(),
             'due_date' => now()->subDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         // Transition to overdue using transitionTo
         $invoice->transitionTo(Invoice::STATUS_OVERDUE);
@@ -193,27 +211,31 @@ class InvoiceAdvancedTest extends TestCase
 
     public function test_a_credit_note_takes_an_overdue_invoice_out_of_overdue(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->subDays(60)->toDateString(),
             'due_date' => now()->subDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
             'subtotal' => 1000,
             'total' => 1000,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         Artisan::call('invoices:mark-overdue');
         $this->assertSame(Invoice::STATUS_OVERDUE, $invoice->refresh()->status);
 
         // A credit note is issued against the disputed invoice.
-        $creditNote = CreditNote::create([
-            'client_id' => $this->client->id,
-            'invoice_id' => $invoice->id,
+        $creditNote = new CreditNote;
+        $creditNote->fill([
             'issue_date' => now()->toDateString(),
             'reason' => 'Pricing dispute',
             'total' => 200,
             'remaining_amount' => 200,
         ]);
+        $creditNote->client_id = $this->client->id;
+        $creditNote->invoice_id = $invoice->id;
+        $creditNote->save();
 
         // The invoice stops being overdue immediately...
         $this->assertSame(Invoice::STATUS_SENT, $invoice->refresh()->status);
@@ -232,8 +254,8 @@ class InvoiceAdvancedTest extends TestCase
 
     public function test_a_cancelled_invoice_owes_nothing(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->subDays(10)->toDateString(),
             'due_date' => now()->addDays(20)->toDateString(),
             'status' => Invoice::STATUS_SENT,
@@ -241,6 +263,8 @@ class InvoiceAdvancedTest extends TestCase
             'total' => 1100,
             'tax_amount' => 100,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         $this->assertEquals(1100.0, $invoice->amount_due);
 

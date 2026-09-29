@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class CompanyDirector extends Model
 {
     protected $fillable = [
-        'company_profile_id',
         'name',
         'appointment_date',
         'resignation_date',

@@ -171,13 +171,15 @@ class UnreconciledBankMovementsTest extends TestCase
 
     protected function postedPayment(Client $client, float $amount, string $date): Payment
     {
-        $payment = Payment::create([
-            'client_id' => $client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => $amount,
             'payment_date' => $date,
             'payment_method' => Payment::METHOD_BANK_TRANSFER,
             'status' => Payment::STATUS_COMPLETED,
         ]);
+        $payment->client_id = $client->id;
+        $payment->save();
         $this->assertNotNull($payment->postToIFRS());
 
         return $payment;
@@ -190,12 +192,14 @@ class UnreconciledBankMovementsTest extends TestCase
      */
     protected function postedSupplierPayment(Supplier $supplier, float $amount, string $date): BillPayment
     {
-        $bill = Bill::create([
-            'supplier_id' => $supplier->id,
+        $bill = new Bill;
+        $bill->fill([
             'bill_date' => $date,
             'due_date' => $date,
             'status' => Bill::STATUS_OPEN,
         ]);
+        $bill->supplier_id = $supplier->id;
+        $bill->save();
         $bill->items()->create([
             'description' => 'Subscription',
             'quantity' => 1,
@@ -206,13 +210,15 @@ class UnreconciledBankMovementsTest extends TestCase
         ]);
         $bill->recalculateTotals();
 
-        $payment = BillPayment::create([
-            'supplier_id' => $supplier->id,
+        $payment = new BillPayment;
+        $payment->fill([
             'amount' => $amount,
             'payment_date' => $date,
             'payment_method' => BillPayment::METHOD_BANK_TRANSFER,
             'status' => BillPayment::STATUS_COMPLETED,
         ]);
+        $payment->supplier_id = $supplier->id;
+        $payment->save();
         $payment->allocateToBill($bill, $amount);
         $this->assertNotNull($payment->postToIFRS());
 
@@ -221,13 +227,15 @@ class UnreconciledBankMovementsTest extends TestCase
 
     protected function postedReimbursement(Employee $employee, float $amount, string $date): ReimbursementPayment
     {
-        $payment = ReimbursementPayment::create([
-            'employee_id' => $employee->id,
+        $payment = new ReimbursementPayment;
+        $payment->fill([
             'amount' => $amount,
             'payment_date' => $date,
             'payment_method' => 'bank_transfer',
             'status' => ReimbursementPayment::STATUS_COMPLETED,
         ]);
+        $payment->employee_id = $employee->id;
+        $payment->save();
         $this->assertNotNull($payment->postToIFRS());
 
         return $payment;
@@ -283,13 +291,15 @@ class UnreconciledBankMovementsTest extends TestCase
         $reimbursement = $this->postedReimbursement($this->employee(), 110.00, '2026-09-12');
 
         // Recorded but never posted — no ledger legs, so no bank movement.
-        Payment::create([
-            'client_id' => $acme->id,
+        $unposted = new Payment;
+        $unposted->fill([
             'amount' => 60.00,
             'payment_date' => '2026-09-14',
             'payment_method' => Payment::METHOD_BANK_TRANSFER,
             'status' => Payment::STATUS_COMPLETED,
         ]);
+        $unposted->client_id = $acme->id;
+        $unposted->save();
 
         $movements = $this->service->getUnreconciledBankMovements();
 

@@ -159,7 +159,7 @@ class IfrsReportsTest extends TestCase
             ->assertSee('Expenses');
 
         $supplier = Supplier::create(['name' => 'Test Supplier']);
-        $bill = Bill::create(['supplier_id' => $supplier->id]);
+        $bill = Bill::createWithUniqueNumber(['supplier_id' => $supplier->id]);
         $bill->items()->create([
             'description' => 'Drill',
             'quantity' => 1,
@@ -184,7 +184,7 @@ class IfrsReportsTest extends TestCase
     {
         $supplier = Supplier::create(['name' => 'Test Supplier']);
 
-        $bill = Bill::create(['supplier_id' => $supplier->id]);
+        $bill = Bill::createWithUniqueNumber(['supplier_id' => $supplier->id]);
         $bill->items()->create([
             'description' => 'Office supplies',
             'quantity' => 1,

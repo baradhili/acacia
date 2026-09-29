@@ -135,14 +135,17 @@ class CompanyProfileController extends Controller
         DB::transaction(function () use ($validated, $entity) {
             $entity->update(['name' => $validated['name']]);
 
-            $profile = CompanyProfile::updateOrCreate(
-                ['entity_id' => $entity->id],
+            // entity_id is an unfillable FK — resolved manually instead of
+            // updateOrCreate, which would drop it on the create path.
+            $profile = CompanyProfile::firstOrNew(['entity_id' => $entity->id]);
+            $profile->fill(
                 collect($validated)->only((new CompanyProfile)->getFillable())
-                    ->except('entity_id')
                     ->map(fn ($value) => $value === '' ? null : $value)
                     ->put('country', $validated['country'] ?? 'AU')
                     ->all()
             );
+            $profile->entity_id = $entity->id;
+            $profile->save();
 
             // Registry rows are small lists — replace them wholesale from
             // the submission rather than diffing ids row by row.
@@ -204,10 +207,21 @@ class CompanyProfileController extends Controller
                 $submittedIds[] = $created->id;
 
                 if ((int) ($row['shares_held'] ?? 0) > 0) {
-                    $class = ShareClass::firstOrCreate(
-                        ['company_profile_id' => $profile->id, 'code' => strtoupper($row['share_class'] ?: 'ORD')],
-                        ['description' => 'Shares', 'status' => ShareClass::STATUS_ACTIVE],
-                    );
+                    // company_profile_id is an unfillable FK — resolve the
+                    // class manually instead of firstOrCreate.
+                    $class = ShareClass::where('company_profile_id', $profile->id)
+                        ->where('code', strtoupper($row['share_class'] ?: 'ORD'))
+                        ->first();
+                    if (! $class) {
+                        $class = new ShareClass;
+                        $class->fill([
+                            'code' => strtoupper($row['share_class'] ?: 'ORD'),
+                            'description' => 'Shares',
+                            'status' => ShareClass::STATUS_ACTIVE,
+                        ]);
+                        $class->company_profile_id = $profile->id;
+                        $class->save();
+                    }
                     $created->update(['shares_held' => (int) $row['shares_held']]);
                     if (class_exists(ShareholdingService::class)) {
                         ShareholdingService::backfillOpenings($created, $class);

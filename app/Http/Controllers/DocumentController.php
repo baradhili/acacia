@@ -18,7 +18,7 @@ class DocumentController extends Controller
         $type = $request->get('type');
         $id = $request->get('id');
 
-        if (!$type || !$id) {
+        if (! $type || ! $id) {
             return response()->json(['error' => 'Type and ID are required'], 400);
         }
 
@@ -47,25 +47,28 @@ class DocumentController extends Controller
 
         // Convert short class name to full namespace if needed
         $documentableType = $request->documentable_type;
-        if (!str_contains($documentableType, '\\')) {
-            $documentableType = 'App\\Models\\' . $documentableType;
+        if (! str_contains($documentableType, '\\')) {
+            $documentableType = 'App\\Models\\'.$documentableType;
         }
 
         $file = $request->file('file');
         $path = $file->store(
-            'uploads/' . now()->format('Y/m'),
+            'uploads/'.now()->format('Y/m'),
             'public'
         );
 
-        $document = Document::create([
+        // documentable_id is an unfillable FK — assign it explicitly.
+        $document = new Document;
+        $document->fill([
             'documentable_type' => $documentableType,
-            'documentable_id' => $request->documentable_id,
             'name' => $file->getClientOriginalName(),
             'file_path' => $path,
             'mime_type' => $file->getMimeType(),
             'size' => $file->getSize(),
             'uploaded_by' => Auth::id(),
         ]);
+        $document->documentable_id = $request->documentable_id;
+        $document->save();
 
         return response()->json($document, 201);
     }
@@ -83,7 +86,7 @@ class DocumentController extends Controller
      */
     public function download(Document $document)
     {
-        if (!Storage::disk('public')->exists($document->file_path)) {
+        if (! Storage::disk('public')->exists($document->file_path)) {
             abort(404, 'File not found');
         }
 
@@ -114,8 +117,8 @@ class DocumentController extends Controller
     public function forModel(Request $request, string $type, int $id)
     {
         // Convert short class name to full namespace
-        $fullType = 'App\\Models\\' . $type;
-        
+        $fullType = 'App\\Models\\'.$type;
+
         $documents = Document::where('documentable_type', $fullType)
             ->where('documentable_id', $id)
             ->with('uploadedBy')

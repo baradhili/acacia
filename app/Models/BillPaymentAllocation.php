@@ -11,8 +11,6 @@ class BillPaymentAllocation extends Model
     use HasFactory;
 
     protected $fillable = [
-        'bill_payment_id',
-        'bill_id',
         'amount',
         'notes',
     ];
@@ -36,6 +34,6 @@ class BillPaymentAllocation extends Model
      */
     public function getFormattedAmountAttribute(): string
     {
-        return config('australian.currency.symbol', 'A$') . number_format($this->amount, 2);
+        return config('australian.currency.symbol', 'A$').number_format($this->amount, 2);
     }
 }

@@ -122,14 +122,15 @@ class EmployeeReimbursementTest extends TestCase
     /** Open bill totalling $110 (GST-inclusive $100 + $10 GST). */
     protected function createOpenBill(): Bill
     {
-        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
-        $bill->items()->create([
+        $bill = Bill::createWithUniqueNumber(['supplier_id' => $this->supplier->id]);
+        $item = $bill->items()->make([
             'description' => 'Stationery',
             'quantity' => 1,
             'unit_price' => 110,
             'tax_rate' => 10, // unit_price is GST-inclusive
-            'expense_account_id' => Account::where('code', 5300)->first()->id,
         ]);
+        $item->expense_account_id = Account::where('code', 5300)->first()->id;
+        $item->save();
         $bill->recalculateTotals();
         $bill->markAsOpen();
 
@@ -231,7 +232,7 @@ class EmployeeReimbursementTest extends TestCase
     public function test_approval_requires_pending_employee_payment(): void
     {
         $bill = $this->createOpenBill();
-        $payment = BillPayment::create([
+        $payment = BillPayment::createWithUniqueNumber([
             'supplier_id' => $this->supplier->id,
             'paid_by' => $this->user->id,
             'amount' => 110,
@@ -448,18 +449,19 @@ class EmployeeReimbursementTest extends TestCase
 
     public function test_pending_capture_does_not_mask_overdue(): void
     {
-        $bill = Bill::create([
+        $bill = Bill::createWithUniqueNumber([
             'supplier_id' => $this->supplier->id,
             'bill_date' => now()->subMonths(2)->toDateString(),
             'due_date' => now()->subMonth()->toDateString(),
         ]);
-        $bill->items()->create([
+        $item = $bill->items()->make([
             'description' => 'Stationery',
             'quantity' => 1,
             'unit_price' => 110,
             'tax_rate' => 10,
-            'expense_account_id' => Account::where('code', 5300)->first()->id,
         ]);
+        $item->expense_account_id = Account::where('code', 5300)->first()->id;
+        $item->save();
         $bill->recalculateTotals();
         $bill->markAsOpen();
 

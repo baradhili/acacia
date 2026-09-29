@@ -19,7 +19,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class WidgetPreference extends Model
 {
     protected $fillable = [
-        'user_id',
         'widget_name',
         'position_x',
         'position_y',
@@ -51,9 +50,14 @@ class WidgetPreference extends Model
 
     public static function updateForUser(int $userId, string $widgetName, array $data): void
     {
-        static::updateOrCreate(
-            ['user_id' => $userId, 'widget_name' => $widgetName],
-            $data
-        );
+        // user_id is an unfillable FK — resolve manually instead of
+        // updateOrCreate, which would drop it on the create path.
+        $preference = static::where('user_id', $userId)
+            ->where('widget_name', $widgetName)
+            ->firstOrNew();
+        $preference->fill($data);
+        $preference->widget_name = $widgetName;
+        $preference->user_id = $userId;
+        $preference->save();
     }
 }

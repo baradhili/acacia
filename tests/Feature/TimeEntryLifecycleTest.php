@@ -35,6 +35,35 @@ class TimeEntryLifecycleTest extends TestCase
         ]);
     }
 
+    /**
+     * Create an entry with explicit FK ownership — user_id/project_id/
+     * client_id are unfillable, so $this->makeEntry() would drop them.
+     */
+    protected function makeEntry(array $attributes = []): TimeEntry
+    {
+        $entry = new TimeEntry;
+        $entry->fill(collect($attributes)->except(['user_id', 'project_id', 'client_id', 'purchase_order_id'])->all());
+        $entry->user_id = $attributes['user_id'] ?? $this->user->id;
+        $entry->project_id = $attributes['project_id'] ?? null;
+        $entry->client_id = $attributes['client_id'] ?? null;
+        $entry->save();
+
+        return $entry;
+    }
+
+    /**
+     * Same for purchase orders — client_id is an unfillable FK.
+     */
+    protected function makePurchaseOrder(array $attributes): PurchaseOrder
+    {
+        $po = new PurchaseOrder;
+        $po->fill(collect($attributes)->except(['client_id'])->all());
+        $po->client_id = $attributes['client_id'] ?? $this->client->id;
+        $po->save();
+
+        return $po;
+    }
+
     public function test_can_create_time_entry_with_start_end_times(): void
     {
         $response = $this->actingAs($this->user)->post(route('time-entries.store'), [
@@ -67,7 +96,7 @@ class TimeEntryLifecycleTest extends TestCase
 
         // A project always wins: even a freshly supplied, non-null
         // client_id cannot desynchronise the denormalised column.
-        $entry = TimeEntry::create([
+        $entry = $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'client_id' => $other->id,
@@ -81,7 +110,8 @@ class TimeEntryLifecycleTest extends TestCase
 
         // Re-saving keeps the column in step even when project_id itself
         // is untouched (e.g. the project's client changed since).
-        $this->project->update(['client_id' => $other->id]);
+        $this->project->client_id = $other->id;
+        $this->project->save();
         $entry->save();
 
         $this->assertSame($other->id, $entry->fresh()->client_id);
@@ -89,18 +119,19 @@ class TimeEntryLifecycleTest extends TestCase
 
     public function test_client_and_purchase_order_derive_from_the_project(): void
     {
-        $po = PurchaseOrder::create([
+        $po = $this->makePurchaseOrder([
             'client_id' => $this->client->id,
             'title' => 'PO for the project',
             'budgeted_amount' => 10000,
             'status' => 'open',
         ]);
-        $this->project->update(['purchase_order_id' => $po->id]);
+        $this->project->purchase_order_id = $po->id;
+        $this->project->save();
 
         // Linking a project to a PO mirrors it onto the PO row.
         $this->assertEquals($this->project->id, $po->fresh()->project_id);
 
-        $decoy = PurchaseOrder::create([
+        $decoy = $this->makePurchaseOrder([
             'client_id' => $this->client->id,
             'title' => 'Another PO',
             'budgeted_amount' => 5000,
@@ -238,7 +269,7 @@ class TimeEntryLifecycleTest extends TestCase
 
     public function test_updating_times_recomputes_hours_with_breaks(): void
     {
-        $entry = TimeEntry::create([
+        $entry = $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'entry_date' => '2024-01-15',
@@ -270,7 +301,7 @@ class TimeEntryLifecycleTest extends TestCase
 
     public function test_can_calculate_hours_from_start_end_times(): void
     {
-        $entry = TimeEntry::create([
+        $entry = $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-15 09:00'),
@@ -283,7 +314,7 @@ class TimeEntryLifecycleTest extends TestCase
 
     public function test_can_submit_time_entry_for_approval(): void
     {
-        $entry = TimeEntry::create([
+        $entry = $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-15 09:00'),
@@ -301,7 +332,7 @@ class TimeEntryLifecycleTest extends TestCase
 
     public function test_only_draft_entries_can_be_submitted(): void
     {
-        $entry = TimeEntry::create([
+        $entry = $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-15 09:00'),
@@ -318,7 +349,7 @@ class TimeEntryLifecycleTest extends TestCase
     {
         $approver = User::factory()->create();
 
-        $entry = TimeEntry::create([
+        $entry = $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-15 09:00'),
@@ -340,7 +371,7 @@ class TimeEntryLifecycleTest extends TestCase
     {
         $approver = User::factory()->create();
 
-        $entry = TimeEntry::create([
+        $entry = $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-15 09:00'),
@@ -361,7 +392,7 @@ class TimeEntryLifecycleTest extends TestCase
 
     public function test_only_draft_entries_can_be_edited(): void
     {
-        $entry = TimeEntry::create([
+        $entry = $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-15 09:00'),
@@ -377,7 +408,7 @@ class TimeEntryLifecycleTest extends TestCase
 
     public function test_only_draft_entries_can_be_deleted(): void
     {
-        $entry = TimeEntry::create([
+        $entry = $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-15 09:00'),
@@ -394,7 +425,7 @@ class TimeEntryLifecycleTest extends TestCase
 
     public function test_total_calculated_correctly(): void
     {
-        $entry = TimeEntry::create([
+        $entry = $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-15 09:00'),
@@ -426,7 +457,7 @@ class TimeEntryLifecycleTest extends TestCase
         $this->actingAs($this->user);
 
         // Create time entry for current week
-        TimeEntry::create([
+        $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'start_time' => now()->startOfWeek()->addHours(9),
@@ -447,7 +478,7 @@ class TimeEntryLifecycleTest extends TestCase
         $this->actingAs($this->user);
 
         // Create time entry for current month
-        TimeEntry::create([
+        $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'start_time' => now()->startOfMonth()->addDays(5)->addHours(9),
@@ -468,7 +499,7 @@ class TimeEntryLifecycleTest extends TestCase
         $this->actingAs($this->user);
 
         // Create multiple entries for current week
-        TimeEntry::create([
+        $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'start_time' => now()->startOfWeek()->addHours(9),
@@ -477,7 +508,7 @@ class TimeEntryLifecycleTest extends TestCase
             'status' => 'approved',
         ]);
 
-        TimeEntry::create([
+        $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'start_time' => now()->startOfWeek()->addDays(1)->addHours(9),
@@ -499,7 +530,7 @@ class TimeEntryLifecycleTest extends TestCase
 
         // Create multiple entries for current month
         for ($i = 0; $i < 5; $i++) {
-            TimeEntry::create([
+            $this->makeEntry([
                 'user_id' => $this->user->id,
                 'project_id' => $this->project->id,
                 'start_time' => now()->startOfMonth()->addDays($i)->setHour(9),
@@ -523,7 +554,7 @@ class TimeEntryLifecycleTest extends TestCase
         $this->actingAs($this->user);
 
         // Create entry for other user
-        TimeEntry::create([
+        $this->makeEntry([
             'user_id' => $otherUser->id,
             'project_id' => $this->project->id,
             'start_time' => now()->startOfWeek()->addHours(9),
@@ -546,7 +577,7 @@ class TimeEntryLifecycleTest extends TestCase
         $this->actingAs($this->user);
 
         // Create entry for other user
-        TimeEntry::create([
+        $this->makeEntry([
             'user_id' => $otherUser->id,
             'project_id' => $this->project->id,
             'start_time' => now()->startOfMonth()->addDays(5)->addHours(9),
@@ -572,7 +603,7 @@ class TimeEntryLifecycleTest extends TestCase
 
     public function test_time_entry_billable_attribute(): void
     {
-        $entry = TimeEntry::create([
+        $entry = $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-15 09:00'),
@@ -583,7 +614,7 @@ class TimeEntryLifecycleTest extends TestCase
 
         $this->assertTrue($entry->billable);
 
-        $entry2 = TimeEntry::create([
+        $entry2 = $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-16 09:00'),
@@ -599,7 +630,7 @@ class TimeEntryLifecycleTest extends TestCase
     {
         $approver = User::factory()->create();
 
-        $entry = TimeEntry::create([
+        $entry = $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-15 09:00'),
@@ -620,7 +651,7 @@ class TimeEntryLifecycleTest extends TestCase
     {
         $approver = User::factory()->create();
 
-        $entry = TimeEntry::create([
+        $entry = $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-15 09:00'),
@@ -638,7 +669,7 @@ class TimeEntryLifecycleTest extends TestCase
 
     public function test_submitted_time_entry_cannot_be_edited(): void
     {
-        $entry = TimeEntry::create([
+        $entry = $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-15 09:00'),
@@ -655,7 +686,7 @@ class TimeEntryLifecycleTest extends TestCase
 
     public function test_submitted_time_entry_cannot_be_deleted(): void
     {
-        $entry = TimeEntry::create([
+        $entry = $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-15 09:00'),
@@ -672,7 +703,7 @@ class TimeEntryLifecycleTest extends TestCase
 
     public function test_approved_time_entry_cannot_be_edited(): void
     {
-        $entry = TimeEntry::create([
+        $entry = $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-15 09:00'),
@@ -689,7 +720,7 @@ class TimeEntryLifecycleTest extends TestCase
 
     public function test_time_entry_project_relationship(): void
     {
-        $entry = TimeEntry::create([
+        $entry = $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-15 09:00'),
@@ -702,7 +733,7 @@ class TimeEntryLifecycleTest extends TestCase
 
     public function test_time_entry_user_relationship(): void
     {
-        $entry = TimeEntry::create([
+        $entry = $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-15 09:00'),
@@ -757,15 +788,16 @@ class TimeEntryLifecycleTest extends TestCase
 
     public function test_changing_the_project_updates_the_derived_client_and_po(): void
     {
-        $po = PurchaseOrder::create([
+        $po = $this->makePurchaseOrder([
             'client_id' => $this->client->id,
             'title' => 'PO for the first project',
             'budgeted_amount' => 10000,
             'status' => 'open',
         ]);
-        $this->project->update(['purchase_order_id' => $po->id]);
+        $this->project->purchase_order_id = $po->id;
+        $this->project->save();
 
-        $entry = TimeEntry::create([
+        $entry = $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'entry_date' => '2024-01-15',
@@ -776,7 +808,7 @@ class TimeEntryLifecycleTest extends TestCase
         $this->assertEquals($po->id, $entry->purchase_order_id);
 
         $otherClient = Client::factory()->create();
-        $otherPo = PurchaseOrder::create([
+        $otherPo = $this->makePurchaseOrder([
             'client_id' => $otherClient->id,
             'title' => 'PO for the other project',
             'budgeted_amount' => 8000,
@@ -787,7 +819,8 @@ class TimeEntryLifecycleTest extends TestCase
             'purchase_order_id' => $otherPo->id,
         ]);
 
-        $entry->update(['project_id' => $otherProject->id]);
+        $entry->project_id = $otherProject->id;
+        $entry->save();
 
         $entry = $entry->refresh();
         $this->assertEquals($otherClient->id, $entry->client_id);
@@ -817,7 +850,7 @@ class TimeEntryLifecycleTest extends TestCase
 
     public function test_a_legacy_draft_without_a_project_needs_one_to_be_edited(): void
     {
-        $entry = TimeEntry::create([
+        $entry = $this->makeEntry([
             'user_id' => $this->user->id,
             'client_id' => $this->client->id,
             'entry_date' => '2024-03-05',
@@ -872,7 +905,7 @@ class TimeEntryLifecycleTest extends TestCase
     public function test_a_legacy_client_row_counts_as_the_duplicate(): void
     {
         // History from before the project requirement.
-        TimeEntry::create([
+        $this->makeEntry([
             'user_id' => $this->user->id,
             'client_id' => $this->client->id,
             'entry_date' => '2024-03-05',
@@ -953,13 +986,13 @@ class TimeEntryLifecycleTest extends TestCase
         $otherClient = Client::factory()->create();
         $otherProject = Project::factory()->create(['client_id' => $otherClient->id]);
 
-        $first = TimeEntry::create([
+        $first = $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'entry_date' => '2024-03-05',
             'hours' => 2,
         ]);
-        $second = TimeEntry::create([
+        $second = $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $otherProject->id,
             'entry_date' => '2024-03-05',
@@ -989,7 +1022,7 @@ class TimeEntryLifecycleTest extends TestCase
 
     public function test_an_inactive_project_still_carries_its_own_draft_entry(): void
     {
-        $entry = TimeEntry::create([
+        $entry = $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'entry_date' => '2024-03-05',
@@ -1026,7 +1059,7 @@ class TimeEntryLifecycleTest extends TestCase
         // An entry on an active project cannot move onto it either.
         $otherClient = Client::factory()->create();
         $active = Project::factory()->create(['client_id' => $otherClient->id]);
-        $entry = TimeEntry::create([
+        $entry = $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $active->id,
             'entry_date' => '2024-03-05',
@@ -1048,7 +1081,7 @@ class TimeEntryLifecycleTest extends TestCase
     public function test_approved_entry_can_be_unapproved_and_edited_again(): void
     {
         $approver = User::factory()->create();
-        $entry = TimeEntry::create([
+        $entry = $this->makeEntry([
             'user_id' => $this->user->id,
             'project_id' => $this->project->id,
             'entry_date' => '2024-03-05',
@@ -1076,7 +1109,7 @@ class TimeEntryLifecycleTest extends TestCase
 
     public function test_entry_allocated_to_an_invoice_cannot_be_unapproved(): void
     {
-        $entry = TimeEntry::create([
+        $entry = $this->makeEntry([
             'user_id' => $this->user->id,
             'client_id' => $this->client->id,
             'entry_date' => '2024-03-05',
@@ -1086,18 +1119,22 @@ class TimeEntryLifecycleTest extends TestCase
             'approved_at' => now(),
         ]);
 
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => '2024-03-31',
             'due_date' => '2024-04-30',
         ]);
-        InvoiceItem::create([
-            'invoice_id' => $invoice->id,
-            'time_entry_id' => $entry->id,
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
+        $invoiceItem = new InvoiceItem;
+        $invoiceItem->fill([
             'description' => 'March work',
             'quantity' => 2,
             'unit_price' => 100,
         ]);
+        $invoiceItem->invoice_id = $invoice->id;
+        $invoiceItem->time_entry_id = $entry->id;
+        $invoiceItem->save();
 
         $this->actingAs($this->user)->post(route('time-entries.unapprove', $entry))
             ->assertSessionHas('error');
@@ -1113,7 +1150,7 @@ class TimeEntryLifecycleTest extends TestCase
 
     public function test_only_approved_entries_can_be_unapproved(): void
     {
-        $draft = TimeEntry::create([
+        $draft = $this->makeEntry([
             'user_id' => $this->user->id,
             'client_id' => $this->client->id,
             'entry_date' => '2024-03-05',

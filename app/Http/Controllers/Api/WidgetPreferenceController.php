@@ -124,10 +124,15 @@ class WidgetPreferenceController extends Controller
                 if ($reorder) {
                     $data['position_y'] = $index;
                 }
-                WidgetPreference::updateOrCreate(
-                    ['user_id' => $userId, 'widget_name' => $widget['widget_name']],
-                    $data,
-                );
+                // user_id is an unfillable FK — resolve the row manually
+                // instead of updateOrCreate, which would drop it on create.
+                $preference = WidgetPreference::where('user_id', $userId)
+                    ->where('widget_name', $widget['widget_name'])
+                    ->firstOrNew();
+                $preference->fill($data);
+                $preference->widget_name = $widget['widget_name'];
+                $preference->user_id = $userId;
+                $preference->save();
             }
 
             // A widget that left the registry while the page was open

@@ -23,7 +23,9 @@ class PostPaymentsToIfrsTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected Client $client;
+
     protected Supplier $supplier;
 
     protected function setUp(): void
@@ -122,14 +124,15 @@ class PostPaymentsToIfrsTest extends TestCase
 
     protected function createOpenBill(float $unitPrice = 110, float $taxRate = 0, ?int $expenseAccountId = null): Bill
     {
-        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
-        $bill->items()->create([
+        $bill = Bill::createWithUniqueNumber(['supplier_id' => $this->supplier->id]);
+        $item = $bill->items()->make([
             'description' => 'Bill item',
             'quantity' => 1,
             'unit_price' => $unitPrice,
             'tax_rate' => $taxRate,
-            'expense_account_id' => $expenseAccountId,
         ]);
+        $item->expense_account_id = $expenseAccountId;
+        $item->save();
         $bill->recalculateTotals();
         $bill->markAsOpen();
 
@@ -171,12 +174,14 @@ class PostPaymentsToIfrsTest extends TestCase
         // five years back has no period row and previously failed forever.
         $oldYear = (int) now()->subYears(5)->format('Y');
 
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 110,
             'payment_date' => "{$oldYear}-06-15",
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
 
         $this->assertNotNull($payment->postToIFRS());
         $this->assertDatabaseHas('ifrs_reporting_periods', [
@@ -191,12 +196,14 @@ class PostPaymentsToIfrsTest extends TestCase
         // Jan 1 is the period start instant for this year_start=1 entity;
         // the package reserves that exact moment for Balance objects, so a
         // date-only payment date must be nudged past midnight.
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 110,
             'payment_date' => now()->startOfYear()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
 
         $this->assertNotNull($payment->postToIFRS());
 
@@ -209,12 +216,14 @@ class PostPaymentsToIfrsTest extends TestCase
         // Credit-note refunds are negative payments; they must post the
         // absolute amount with every leg flipped (Cr Bank / Dr Revenue /
         // Dr GST) since IFRS line items reject negative amounts.
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => -110,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'other',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
 
         $this->assertNotNull($payment->postToIFRS());
 
@@ -231,28 +240,34 @@ class PostPaymentsToIfrsTest extends TestCase
     {
         $expenseAccount = Account::where('code', 8900)->first();
 
-        $posted = Payment::create([
-            'client_id' => $this->client->id,
+        $posted = new Payment;
+        $posted->fill([
             'amount' => 110,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $posted->client_id = $this->client->id;
+        $posted->save();
         $posted->postToIFRS();
 
-        $void = Payment::create([
-            'client_id' => $this->client->id,
+        $void = new Payment;
+        $void->fill([
             'amount' => 110,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $void->client_id = $this->client->id;
+        $void->save();
         $void->void();
 
-        $unposted = Payment::create([
-            'client_id' => $this->client->id,
+        $unposted = new Payment;
+        $unposted->fill([
             'amount' => 55,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'cash',
         ]);
+        $unposted->client_id = $this->client->id;
+        $unposted->save();
 
         $bill = $this->createOpenBill(100, 0, $expenseAccount->id);
         $unpostedBillPayment = BillPayment::createWithUniqueNumber([
@@ -280,12 +295,14 @@ class PostPaymentsToIfrsTest extends TestCase
 
     public function test_post_payments_command_dry_run_posts_nothing(): void
     {
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 110,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
 
         $this->artisan('ifrs:post-payments', ['--dry-run' => true])->assertExitCode(0);
 
@@ -295,12 +312,14 @@ class PostPaymentsToIfrsTest extends TestCase
 
     public function test_post_payments_command_reports_failure_reason(): void
     {
-        Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 110,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
 
         Account::query()->delete(); // prerequisites gone → posting must fail
 
@@ -311,12 +330,14 @@ class PostPaymentsToIfrsTest extends TestCase
 
     public function test_voiding_posted_payment_posts_reversing_entry(): void
     {
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 110,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
         $payment->postToIFRS();
 
         $this->assertTrue($payment->void());
@@ -365,12 +386,14 @@ class PostPaymentsToIfrsTest extends TestCase
 
     public function test_voiding_unposted_payment_writes_no_ledger(): void
     {
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 110,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
 
         $this->assertTrue($payment->void());
 

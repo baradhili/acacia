@@ -43,7 +43,7 @@ class BillPaymentTest extends TestCase
 
     protected function createOpenBill(float $unitPrice = 110, int $count = 1): Bill
     {
-        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
+        $bill = Bill::createWithUniqueNumber(['supplier_id' => $this->supplier->id]);
         for ($i = 0; $i < $count; $i++) {
             $bill->items()->create([
                 'description' => 'Item '.($i + 1),
@@ -108,7 +108,7 @@ class BillPaymentTest extends TestCase
 
     public function test_allocate_rejects_other_suppliers_bill(): void
     {
-        $payment = BillPayment::create([
+        $payment = BillPayment::createWithUniqueNumber([
             'supplier_id' => $this->supplier->id,
             'amount' => 100,
             'payment_date' => now()->toDateString(),
@@ -116,7 +116,7 @@ class BillPaymentTest extends TestCase
         ]);
 
         $otherSupplier = Supplier::create(['name' => 'Other Supplier']);
-        $otherBill = Bill::create(['supplier_id' => $otherSupplier->id]);
+        $otherBill = Bill::createWithUniqueNumber(['supplier_id' => $otherSupplier->id]);
         $otherBill->items()->create([
             'description' => 'Item',
             'quantity' => 1,
@@ -138,7 +138,7 @@ class BillPaymentTest extends TestCase
 
     public function test_allocate_rejects_amount_over_unallocated_balance(): void
     {
-        $payment = BillPayment::create([
+        $payment = BillPayment::createWithUniqueNumber([
             'supplier_id' => $this->supplier->id,
             'amount' => 50,
             'payment_date' => now()->toDateString(),
@@ -157,7 +157,7 @@ class BillPaymentTest extends TestCase
 
     public function test_over_allocation_throws_from_model(): void
     {
-        $payment = BillPayment::create([
+        $payment = BillPayment::createWithUniqueNumber([
             'supplier_id' => $this->supplier->id,
             'amount' => 50,
             'payment_date' => now()->toDateString(),
@@ -279,7 +279,7 @@ class BillPaymentTest extends TestCase
         ]);
         $partialPayment->allocateToBill($partial, 110);
 
-        $draft = Bill::create(['supplier_id' => $this->supplier->id]);
+        $draft = Bill::createWithUniqueNumber(['supplier_id' => $this->supplier->id]);
 
         $response = $this->actingAs($this->user)
             ->get(route('bill-payments.supplier-bills', $this->supplier));
@@ -556,7 +556,7 @@ class BillPaymentTest extends TestCase
         $capture->allocateToBill($bill, 110);
         $this->assertNotNull($capture->postToIFRS());
 
-        $reimbursement = ReimbursementPayment::create([
+        $reimbursement = ReimbursementPayment::createWithUniqueNumber([
             'employee_id' => $employee->id,
             'amount' => 110,
             'payment_date' => now()->toDateString(),

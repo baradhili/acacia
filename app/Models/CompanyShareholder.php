@@ -25,7 +25,6 @@ class CompanyShareholder extends Model
     public const STATUS_INACTIVE = 'I';
 
     protected $fillable = [
-        'company_profile_id',
         'name',
         'abn',
         'tfn',

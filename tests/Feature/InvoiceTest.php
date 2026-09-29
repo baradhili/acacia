@@ -100,12 +100,14 @@ class InvoiceTest extends TestCase
             'entity_id' => $entity->id,
         ]);
         $entity->update(['currency_id' => $currency->id]);
-        CompanyProfile::create([
-            'entity_id' => $entity->id,
+        $companyProfile = new CompanyProfile;
+        $companyProfile->fill([
             'bank_bsb' => '123456',
             'bank_account_number' => '12345678',
             'bank_account_name' => 'Invoicee Co Operating',
         ]);
+        $companyProfile->entity_id = $entity->id;
+        $companyProfile->save();
 
         // With them: the payment block appears below the notes area.
         $this->actingAs($this->user)
@@ -119,22 +121,26 @@ class InvoiceTest extends TestCase
 
     public function test_invoice_generates_correct_invoice_number(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         $this->assertMatchesRegularExpression('/^INV-'.date('Y').'-\d{4}$/', $invoice->invoice_number);
     }
 
     public function test_invoice_calculates_totals_correctly(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         $invoice->items()->create([
             'description' => 'Service 1',
@@ -197,11 +203,13 @@ class InvoiceTest extends TestCase
 
     public function test_invoice_status_transitions(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         // Draft -> Sent
         $invoice->markAsSent();
@@ -210,11 +218,13 @@ class InvoiceTest extends TestCase
 
     public function test_invoice_cannot_transition_to_invalid_status(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         // Paid invoice cannot transition to cancelled
         $invoice->update(['status' => Invoice::STATUS_PAID]);
@@ -223,11 +233,13 @@ class InvoiceTest extends TestCase
 
     public function test_only_draft_invoices_can_be_edited(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         // Draft can be edited
         $this->assertTrue($invoice->canBeEdited());
@@ -239,30 +251,36 @@ class InvoiceTest extends TestCase
 
     public function test_invoice_due_date_detection(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->subDay()->toDateString(), // Yesterday
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         $this->assertTrue($invoice->is_overdue);
 
-        $invoice2 = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice2 = new Invoice;
+        $invoice2->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDay()->toDateString(), // Tomorrow
         ]);
+        $invoice2->client_id = $this->client->id;
+        $invoice2->save();
 
         $this->assertFalse($invoice2->is_overdue);
     }
 
     public function test_invoice_amount_paid_calculation(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         $invoice->items()->create([
             'description' => 'Service',
@@ -282,11 +300,13 @@ class InvoiceTest extends TestCase
 
     public function test_invoice_status_transitions_draft_to_sent_to_partially_paid_to_paid(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         $this->assertEquals(Invoice::STATUS_DRAFT, $invoice->status);
 
@@ -304,22 +324,26 @@ class InvoiceTest extends TestCase
         ]);
         $invoice->refresh();
 
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 55,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
         $payment->allocateToInvoice($invoice, 55);
         $invoice->refresh();
         $this->assertEquals(Invoice::STATUS_PARTIALLY_PAID, $invoice->status);
 
-        $payment2 = Payment::create([
-            'client_id' => $this->client->id,
+        $payment2 = new Payment;
+        $payment2->fill([
             'amount' => 55,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment2->client_id = $this->client->id;
+        $payment2->save();
         $payment2->allocateToInvoice($invoice, 55);
         $invoice->refresh();
         $this->assertEquals(Invoice::STATUS_PAID, $invoice->status);
@@ -327,12 +351,14 @@ class InvoiceTest extends TestCase
 
     public function test_invoice_status_transitions_to_overdue(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->subDays(60)->toDateString(),
             'due_date' => now()->subDays(30)->toDateString(), // Already past due
             'status' => Invoice::STATUS_SENT,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         // Must explicitly call markAsOverdue
         $invoice->markAsOverdue();
@@ -343,12 +369,14 @@ class InvoiceTest extends TestCase
 
     public function test_invoice_cannot_transition_from_paid_to_cancelled(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_PAID,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         $this->assertFalse($invoice->canTransitionTo(Invoice::STATUS_CANCELLED));
         $this->assertFalse($invoice->canBeCancelled());
@@ -357,45 +385,53 @@ class InvoiceTest extends TestCase
     public function test_invoice_cancellation_only_allowed_in_draft_state(): void
     {
         // Draft invoice can be cancelled
-        $draftInvoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $draftInvoice = new Invoice;
+        $draftInvoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_DRAFT,
         ]);
+        $draftInvoice->client_id = $this->client->id;
+        $draftInvoice->save();
         $this->assertTrue($draftInvoice->canBeCancelled());
         $draftInvoice->cancel();
         $this->assertEquals(Invoice::STATUS_CANCELLED, $draftInvoice->status);
 
         // Sent invoice can be cancelled (if not yet paid)
-        $sentInvoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $sentInvoice = new Invoice;
+        $sentInvoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $sentInvoice->client_id = $this->client->id;
+        $sentInvoice->save();
         $this->assertTrue($sentInvoice->canBeCancelled());
         $sentInvoice->cancel();
         $this->assertEquals(Invoice::STATUS_CANCELLED, $sentInvoice->status);
 
         // Paid invoice cannot be cancelled
-        $paidInvoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $paidInvoice = new Invoice;
+        $paidInvoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_PAID,
         ]);
+        $paidInvoice->client_id = $this->client->id;
+        $paidInvoice->save();
         $this->assertFalse($paidInvoice->canBeCancelled());
     }
 
     public function test_invoice_cancellation_route_requires_draft_or_sent_status(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_PAID,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         $response = $this->actingAs($this->user)->post(route('invoices.cancel', $invoice));
         $response->assertSessionHas('error');
@@ -404,20 +440,24 @@ class InvoiceTest extends TestCase
     public function test_automatic_overdue_marking_via_cron_command(): void
     {
         // Create invoices that should be marked overdue
-        $overdueInvoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $overdueInvoice = new Invoice;
+        $overdueInvoice->fill([
             'issue_date' => now()->subDays(60)->toDateString(),
             'due_date' => now()->subDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $overdueInvoice->client_id = $this->client->id;
+        $overdueInvoice->save();
 
         // Create invoice that should NOT be marked overdue
-        $notOverdueInvoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $notOverdueInvoice = new Invoice;
+        $notOverdueInvoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $notOverdueInvoice->client_id = $this->client->id;
+        $notOverdueInvoice->save();
 
         $this->assertEquals(Invoice::STATUS_SENT, $overdueInvoice->status);
         $this->assertEquals(Invoice::STATUS_SENT, $notOverdueInvoice->status);
@@ -437,20 +477,24 @@ class InvoiceTest extends TestCase
     public function test_overdue_invoices_scope_returns_correct_invoices(): void
     {
         // Create overdue invoice
-        Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->subDays(60)->toDateString(),
             'due_date' => now()->subDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         // Create not overdue invoice
-        Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         $overdueCount = Invoice::overdue()->count();
         $this->assertEquals(1, $overdueCount);
@@ -461,31 +505,37 @@ class InvoiceTest extends TestCase
         // A sent invoice past its due_date that has been fully paid via
         // allocations but whose status is still 'sent' (e.g. status recompute
         // hasn't run) must NOT appear as overdue — it has no outstanding balance.
-        $paidButSent = Invoice::create([
-            'client_id' => $this->client->id,
+        $paidButSent = new Invoice;
+        $paidButSent->fill([
             'issue_date' => now()->subDays(60)->toDateString(),
             'due_date' => now()->subDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
             'total' => 110,
         ]);
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $paidButSent->client_id = $this->client->id;
+        $paidButSent->save();
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 110,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
         $payment->allocateToInvoice($paidButSent, 110);
         // Force the status back to 'sent' to simulate the not-yet-flipped state.
         $paidButSent->update(['status' => Invoice::STATUS_SENT]);
 
         // A genuinely overdue (unpaid, past due) invoice for contrast.
-        Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->subDays(60)->toDateString(),
             'due_date' => now()->subDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
             'total' => 200,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         $overdueIds = Invoice::overdue()->pluck('id');
         $this->assertNotContains($paidButSent->id, $overdueIds, 'Paid-but-not-marked invoice must not be overdue.');
@@ -494,11 +544,13 @@ class InvoiceTest extends TestCase
 
     public function test_sent_invoice_updates_sent_at_timestamp(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         $this->assertNull($invoice->sent_at);
 
@@ -519,14 +571,16 @@ class InvoiceTest extends TestCase
 
     public function test_invoice_can_be_marked_as_recurring(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'is_recurring' => true,
             'recurring_frequency' => Invoice::RECURRING_MONTHLY,
             'next_recurring_date' => now()->addMonth()->toDateString(),
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         $this->assertTrue($invoice->is_recurring);
         $this->assertEquals(Invoice::RECURRING_MONTHLY, $invoice->recurring_frequency);
@@ -570,11 +624,13 @@ class InvoiceTest extends TestCase
 
     public function test_sent_invoice_can_be_reverted_to_draft(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
         $invoice->markAsSent();
         $this->assertNotNull($invoice->refresh()->sent_at);
 
@@ -587,12 +643,14 @@ class InvoiceTest extends TestCase
 
     public function test_invoice_with_payments_cannot_be_reverted_to_draft(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
         $invoice->items()->create([
             'description' => 'Service',
             'quantity' => 1,
@@ -602,12 +660,14 @@ class InvoiceTest extends TestCase
         $invoice->refresh();
         $invoice->recalculateTotals();
 
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 50,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
         $payment->allocateToInvoice($invoice, 50); // → partially_paid
 
         $this->assertFalse($invoice->revertToDraft());
@@ -616,11 +676,13 @@ class InvoiceTest extends TestCase
 
     public function test_unsend_route_returns_sent_invoice_to_draft(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
         $invoice->markAsSent();
 
         $response = $this->actingAs($this->user)
@@ -632,12 +694,14 @@ class InvoiceTest extends TestCase
 
     public function test_unsend_route_rejects_invoice_with_payments(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
         $invoice->items()->create([
             'description' => 'Service',
             'quantity' => 1,
@@ -647,12 +711,14 @@ class InvoiceTest extends TestCase
         $invoice->refresh();
         $invoice->recalculateTotals();
 
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 110,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
         $payment->allocateToInvoice($invoice, 110); // fully paid
 
         $response = $this->actingAs($this->user)
@@ -664,12 +730,14 @@ class InvoiceTest extends TestCase
 
     public function test_paid_invoice_cannot_be_edited(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_PAID,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         $this->assertFalse($invoice->canBeEdited());
         $this->assertFalse($invoice->canBeCancelled());
@@ -677,12 +745,14 @@ class InvoiceTest extends TestCase
 
     public function test_overdue_invoice_cannot_be_edited(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->subDays(60)->toDateString(),
             'due_date' => now()->subDays(30)->toDateString(),
             'status' => Invoice::STATUS_OVERDUE,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         $this->assertFalse($invoice->canBeEdited());
     }
@@ -699,12 +769,14 @@ class InvoiceTest extends TestCase
 
     public function test_get_valid_transitions_returns_correct_statuses(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_DRAFT,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         $validTransitions = $invoice->getValidTransitions();
         $this->assertContains('sent', $validTransitions);
@@ -723,26 +795,32 @@ class InvoiceTest extends TestCase
     public function test_invoice_scope_outstanding_returns_correct_invoices(): void
     {
         // Create various invoices
-        Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
-        Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_PAID,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
-        Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_DRAFT,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         $outstandingCount = Invoice::outstanding()->count();
         $this->assertEquals(1, $outstandingCount);
@@ -750,18 +828,22 @@ class InvoiceTest extends TestCase
 
     public function test_invoice_parent_child_relationship(): void
     {
-        $parentInvoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $parentInvoice = new Invoice;
+        $parentInvoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
         ]);
+        $parentInvoice->client_id = $this->client->id;
+        $parentInvoice->save();
 
-        $childInvoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $childInvoice = new Invoice;
+        $childInvoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
-            'parent_invoice_id' => $parentInvoice->id,
         ]);
+        $childInvoice->client_id = $this->client->id;
+        $childInvoice->parent_invoice_id = $parentInvoice->id;
+        $childInvoice->save();
 
         $this->assertEquals($parentInvoice->id, $childInvoice->parentInvoice->id);
         $this->assertCount(1, $parentInvoice->childInvoices);
@@ -770,11 +852,13 @@ class InvoiceTest extends TestCase
 
     public function test_invoice_due_date_cast_to_date(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => '2024-01-15',
             'due_date' => '2024-02-15',
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         $this->assertInstanceOf(Carbon::class, $invoice->due_date);
         $this->assertEquals('2024-02-15', $invoice->due_date->toDateString());
@@ -782,11 +866,13 @@ class InvoiceTest extends TestCase
 
     public function test_payment_percentage_calculated_correctly(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         $invoice->items()->create([
             'description' => 'Service',
@@ -804,12 +890,14 @@ class InvoiceTest extends TestCase
 
     public function test_is_paid_attribute(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_PAID,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         // Add items so total > 0
         $invoice->items()->create([
@@ -829,11 +917,13 @@ class InvoiceTest extends TestCase
 
     public function test_has_outstanding_balance_attribute(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         $invoice->items()->create([
             'description' => 'Service',
@@ -852,11 +942,13 @@ class InvoiceTest extends TestCase
     public function test_record_payment_requires_outstanding_invoice(): void
     {
         // Draft invoice — payment must be rejected.
-        $draft = Invoice::create([
-            'client_id' => $this->client->id,
+        $draft = new Invoice;
+        $draft->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
         ]);
+        $draft->client_id = $this->client->id;
+        $draft->save();
         $draft->items()->create([
             'description' => 'Draft Service',
             'quantity' => 1,
@@ -878,12 +970,14 @@ class InvoiceTest extends TestCase
 
     public function test_record_payment_rejects_cancelled_invoice(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
         $invoice->items()->create([
             'description' => 'Service',
             'quantity' => 1,
@@ -907,12 +1001,14 @@ class InvoiceTest extends TestCase
 
     public function test_record_payment_rejects_paid_invoice(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
         $invoice->items()->create([
             'description' => 'Service',
             'quantity' => 1,
@@ -921,12 +1017,14 @@ class InvoiceTest extends TestCase
         ]);
         $invoice->refresh();
         // Fully pay the invoice first.
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => $invoice->total,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
         $payment->allocateToInvoice($invoice, $invoice->total);
         $invoice->refresh();
         $this->assertEquals(Invoice::STATUS_PAID, $invoice->status);
@@ -944,12 +1042,14 @@ class InvoiceTest extends TestCase
 
     public function test_record_payment_accepts_sent_invoice(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
         $invoice->items()->create([
             'description' => 'Service',
             'quantity' => 1,
@@ -978,13 +1078,15 @@ class InvoiceTest extends TestCase
         // constraint and must retry. This is the race-condition scenario:
         // two requests compute the same next number; the loser must regenerate.
         $collidingNumber = Invoice::generateInvoiceNumber();
-        Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'invoice_number' => $collidingNumber,
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_DRAFT,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         // createWithUniqueNumber should swallow the unique violation and land
         // on the next available number rather than throwing.
@@ -1010,31 +1112,37 @@ class InvoiceTest extends TestCase
     {
         // Set up a project + time entry so the invoice item can link to it.
         $project = Project::factory()->create(['client_id' => $this->client->id]);
-        $timeEntry = TimeEntry::create([
-            'user_id' => $this->user->id,
-            'project_id' => $project->id,
+        $timeEntry = new TimeEntry;
+        $timeEntry->fill([
             'start_time' => now()->subHours(2),
             'end_time' => now(),
             'description' => 'Consulting work',
             'billable' => true,
             'status' => TimeEntry::STATUS_APPROVED,
         ]);
+        $timeEntry->user_id = $this->user->id;
+        $timeEntry->project_id = $project->id;
+        $timeEntry->save();
 
         // Create a draft invoice with one item linked to the time entry.
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
-            'project_id' => $project->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_DRAFT,
         ]);
-        $item = $invoice->items()->create([
+        $invoice->client_id = $this->client->id;
+        $invoice->project_id = $project->id;
+        $invoice->save();
+        $item = $invoice->items()->make([
             'description' => 'Consulting work',
             'quantity' => 2,
             'unit_price' => 100,
             'tax_rate' => 10,
-            'time_entry_id' => $timeEntry->id,
         ]);
+        // time_entry_id is an unfillable FK — link it explicitly.
+        $item->time_entry_id = $timeEntry->id;
+        $item->save();
         $originalItemId = $item->id;
 
         // Edit the invoice: change unit_price, pass the existing item id.
@@ -1073,12 +1181,14 @@ class InvoiceTest extends TestCase
     {
         // Build an invoice with two items directly (not via the form), so the
         // result does not depend on any controller or on a saved-hook firing.
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_DRAFT,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
         $invoice->items()->create([
             'description' => 'Service A',
             'quantity' => 2,
@@ -1115,12 +1225,14 @@ class InvoiceTest extends TestCase
 
     private function poLinkedInvoice(PurchaseOrder $po, string $status = 'draft'): Invoice
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
-            'purchase_order_id' => $po->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->purchase_order_id = $po->id;
+        $invoice->save();
         $invoice->items()->create([
             'description' => 'Test Service',
             'quantity' => 1,
@@ -1142,13 +1254,15 @@ class InvoiceTest extends TestCase
 
     public function test_po_remaining_after_subtracts_draft_invoice_total(): void
     {
-        $po = PurchaseOrder::create([
-            'client_id' => $this->client->id,
+        $po = new PurchaseOrder;
+        $po->fill([
             'title' => 'PO Work',
             'budgeted_amount' => 10000,
             'used_amount' => 0,
             'status' => 'open',
         ]);
+        $po->client_id = $this->client->id;
+        $po->save();
 
         // A previously sent invoice counts against the budget...
         $this->poLinkedInvoice($po, 'sent');
@@ -1163,13 +1277,15 @@ class InvoiceTest extends TestCase
 
     public function test_po_remaining_after_counts_sent_invoice_via_used_amount(): void
     {
-        $po = PurchaseOrder::create([
-            'client_id' => $this->client->id,
+        $po = new PurchaseOrder;
+        $po->fill([
             'title' => 'PO Work',
             'budgeted_amount' => 10000,
             'used_amount' => 0,
             'status' => 'open',
         ]);
+        $po->client_id = $this->client->id;
+        $po->save();
 
         $sent = $this->poLinkedInvoice($po, 'sent');
         $po->refresh();
@@ -1181,11 +1297,13 @@ class InvoiceTest extends TestCase
 
     public function test_po_remaining_after_is_null_without_linked_po(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
         $invoice->items()->create([
             'description' => 'Test Service',
             'quantity' => 1,
@@ -1203,15 +1321,17 @@ class InvoiceTest extends TestCase
         // TimeEntry — before the relation existed this threw
         // RelationNotFoundException for any ?client_id= preselect.
         $project = Project::factory()->create(['client_id' => $this->client->id]);
-        TimeEntry::create([
-            'user_id' => $this->user->id,
-            'project_id' => $project->id,
+        $timeEntry = new TimeEntry;
+        $timeEntry->fill([
             'start_time' => now()->subHours(2),
             'end_time' => now(),
             'description' => 'Consulting work',
             'billable' => true,
             'status' => TimeEntry::STATUS_APPROVED,
         ]);
+        $timeEntry->user_id = $this->user->id;
+        $timeEntry->project_id = $project->id;
+        $timeEntry->save();
 
         $response = $this->actingAs($this->user)
             ->get('/invoices/create?client_id='.$this->client->id);
@@ -1223,29 +1343,35 @@ class InvoiceTest extends TestCase
     public function test_deleting_invoice_releases_its_time_entries(): void
     {
         $project = Project::factory()->create(['client_id' => $this->client->id]);
-        $timeEntry = TimeEntry::create([
-            'user_id' => $this->user->id,
-            'project_id' => $project->id,
+        $timeEntry = new TimeEntry;
+        $timeEntry->fill([
             'start_time' => now()->subHours(2),
             'end_time' => now(),
             'description' => 'Consulting work',
             'billable' => true,
             'status' => TimeEntry::STATUS_APPROVED,
         ]);
+        $timeEntry->user_id = $this->user->id;
+        $timeEntry->project_id = $project->id;
+        $timeEntry->save();
 
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_DRAFT,
         ]);
-        $invoice->items()->create([
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
+        $item = $invoice->items()->make([
             'description' => 'Consulting work',
             'quantity' => 2,
             'unit_price' => 100,
             'tax_rate' => 10,
-            'time_entry_id' => $timeEntry->id,
         ]);
+        // time_entry_id is an unfillable FK — link it explicitly.
+        $item->time_entry_id = $timeEntry->id;
+        $item->save();
 
         $this->assertTrue($timeEntry->invoiceItem()->exists());
 
@@ -1261,29 +1387,35 @@ class InvoiceTest extends TestCase
     public function test_cancelling_invoice_releases_its_time_entries(): void
     {
         $project = Project::factory()->create(['client_id' => $this->client->id]);
-        $timeEntry = TimeEntry::create([
-            'user_id' => $this->user->id,
-            'project_id' => $project->id,
+        $timeEntry = new TimeEntry;
+        $timeEntry->fill([
             'start_time' => now()->subHours(2),
             'end_time' => now(),
             'description' => 'Consulting work',
             'billable' => true,
             'status' => TimeEntry::STATUS_APPROVED,
         ]);
+        $timeEntry->user_id = $this->user->id;
+        $timeEntry->project_id = $project->id;
+        $timeEntry->save();
 
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
-        $invoice->items()->create([
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
+        $item = $invoice->items()->make([
             'description' => 'Consulting work',
             'quantity' => 2,
             'unit_price' => 100,
             'tax_rate' => 10,
-            'time_entry_id' => $timeEntry->id,
         ]);
+        // time_entry_id is an unfillable FK — link it explicitly.
+        $item->time_entry_id = $timeEntry->id;
+        $item->save();
 
         $this->assertTrue($timeEntry->invoiceItem()->exists());
 
@@ -1303,15 +1435,17 @@ class InvoiceTest extends TestCase
             'client_id' => $this->client->id,
             'hourly_rate' => 100,
         ]);
-        $timeEntry = TimeEntry::create([
-            'user_id' => $this->user->id,
-            'project_id' => $project->id,
+        $timeEntry = new TimeEntry;
+        $timeEntry->fill([
             'start_time' => now()->subHours(2),
             'end_time' => now(),
             'description' => 'Consulting work',
             'billable' => true,
             'status' => TimeEntry::STATUS_APPROVED,
         ]);
+        $timeEntry->user_id = $this->user->id;
+        $timeEntry->project_id = $project->id;
+        $timeEntry->save();
 
         $response = $this->actingAs($this->user)->post('/invoices', [
             'client_id' => $this->client->id,
@@ -1353,15 +1487,17 @@ class InvoiceTest extends TestCase
             'client_id' => $this->client->id,
             'hourly_rate' => 150,
         ]);
-        $timeEntry = TimeEntry::create([
-            'user_id' => $this->user->id,
-            'project_id' => $project->id,
+        $timeEntry = new TimeEntry;
+        $timeEntry->fill([
             'start_time' => now()->subHours(3),
             'end_time' => now(),
             'description' => 'Design work',
             'billable' => true,
             'status' => TimeEntry::STATUS_APPROVED,
         ]);
+        $timeEntry->user_id = $this->user->id;
+        $timeEntry->project_id = $project->id;
+        $timeEntry->save();
 
         $response = $this->actingAs($this->user)->post('/invoices', [
             'client_id' => $this->client->id,
@@ -1381,45 +1517,55 @@ class InvoiceTest extends TestCase
     {
         $project = Project::factory()->create(['client_id' => $this->client->id]);
 
-        $draftEntry = TimeEntry::create([
-            'user_id' => $this->user->id,
-            'project_id' => $project->id,
+        $draftEntry = new TimeEntry;
+        $draftEntry->fill([
             'start_time' => now()->subHours(1),
             'end_time' => now(),
             'status' => TimeEntry::STATUS_DRAFT,
             'billable' => true,
         ]);
+        $draftEntry->user_id = $this->user->id;
+        $draftEntry->project_id = $project->id;
+        $draftEntry->save();
 
-        $unbillableEntry = TimeEntry::create([
-            'user_id' => $this->user->id,
-            'project_id' => $project->id,
+        $unbillableEntry = new TimeEntry;
+        $unbillableEntry->fill([
             'start_time' => now()->subHours(1),
             'end_time' => now(),
             'status' => TimeEntry::STATUS_APPROVED,
             'billable' => false,
         ]);
+        $unbillableEntry->user_id = $this->user->id;
+        $unbillableEntry->project_id = $project->id;
+        $unbillableEntry->save();
 
-        $invoicedEntry = TimeEntry::create([
-            'user_id' => $this->user->id,
-            'project_id' => $project->id,
+        $invoicedEntry = new TimeEntry;
+        $invoicedEntry->fill([
             'start_time' => now()->subHours(1),
             'end_time' => now(),
             'status' => TimeEntry::STATUS_APPROVED,
             'billable' => true,
         ]);
-        $otherInvoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoicedEntry->user_id = $this->user->id;
+        $invoicedEntry->project_id = $project->id;
+        $invoicedEntry->save();
+        $otherInvoice = new Invoice;
+        $otherInvoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_DRAFT,
         ]);
-        $otherInvoice->items()->create([
+        $otherInvoice->client_id = $this->client->id;
+        $otherInvoice->save();
+        $otherItem = $otherInvoice->items()->make([
             'description' => 'Already billed',
             'quantity' => 1,
             'unit_price' => 50,
             'tax_rate' => 10,
-            'time_entry_id' => $invoicedEntry->id,
         ]);
+        // time_entry_id is an unfillable FK — link it explicitly.
+        $otherItem->time_entry_id = $invoicedEntry->id;
+        $otherItem->save();
 
         $response = $this->actingAs($this->user)->post('/invoices', [
             'client_id' => $this->client->id,

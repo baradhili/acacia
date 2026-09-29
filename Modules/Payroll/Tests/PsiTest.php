@@ -5,7 +5,6 @@ namespace Modules\Payroll\Tests;
 use App\Models\Client;
 use App\Models\EntitySetting;
 use App\Models\Invoice;
-use App\Models\InvoiceItem;
 use App\Models\TimeEntry;
 use App\Models\User;
 use App\Services\IfrsPosting;
@@ -64,9 +63,8 @@ class PsiTest extends TestCase
     /** A time-entry-backed invoice: service work by construction. */
     protected function serviceInvoice(Client $client, float $subtotal, string $date = '2026-08-15'): Invoice
     {
-        $entry = TimeEntry::create([
-            'user_id' => User::factory()->create()->id,
-            'client_id' => $client->id,
+        $entry = new TimeEntry;
+        $entry->fill([
             'entry_date' => $date,
             'hours' => 10,
             'rate' => $subtotal / 10,
@@ -74,20 +72,23 @@ class PsiTest extends TestCase
             'description' => 'Consulting',
             'status' => 'approved',
         ]);
+        $entry->user_id = User::factory()->create()->id;
+        $entry->client_id = $client->id;
+        $entry->save();
 
-        $invoice = Invoice::create([
+        $invoice = new Invoice;
+        $invoice->fill([
             'invoice_number' => 'INV-'.uniqid(),
-            'client_id' => $client->id,
             'status' => Invoice::STATUS_SENT,
             'issue_date' => $date,
             'subtotal' => $subtotal,
             'tax_amount' => 0,
             'total' => $subtotal,
         ]);
+        $invoice->client_id = $client->id;
+        $invoice->save();
 
-        InvoiceItem::create([
-            'invoice_id' => $invoice->id,
-            'time_entry_id' => $entry->id,
+        $item = $invoice->items()->make([
             'description' => 'Consulting',
             'quantity' => 10,
             'unit_price' => $subtotal / 10,
@@ -95,6 +96,8 @@ class PsiTest extends TestCase
             'tax_amount' => 0,
             'total' => $subtotal,
         ]);
+        $item->time_entry_id = $entry->id;
+        $item->save();
 
         return $invoice;
     }
@@ -108,15 +111,17 @@ class PsiTest extends TestCase
         $this->serviceInvoice($other, 1500);
 
         // A product invoice (no time entries) never counts.
-        Invoice::create([
+        $product = new Invoice;
+        $product->fill([
             'invoice_number' => 'INV-PROD',
-            'client_id' => $main->id,
             'status' => Invoice::STATUS_PAID,
             'issue_date' => '2026-08-20',
             'subtotal' => 9000,
             'tax_amount' => 0,
             'total' => 9000,
         ]);
+        $product->client_id = $main->id;
+        $product->save();
 
         $income = $this->psi->incomeByClient($this->entity);
 

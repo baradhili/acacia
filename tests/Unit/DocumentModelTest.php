@@ -2,9 +2,9 @@
 
 namespace Tests\Unit;
 
+use App\Models\Bill;
 use App\Models\Client;
 use App\Models\Document;
-use App\Models\Bill;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PurchaseOrder;
@@ -21,7 +21,7 @@ class DocumentModelTest extends TestCase
     public function test_documents_table_has_morph_columns(): void
     {
         $columns = Schema::getColumnListing('documents');
-        
+
         $this->assertContains('documentable_type', $columns);
         $this->assertContains('documentable_id', $columns);
     }
@@ -29,7 +29,7 @@ class DocumentModelTest extends TestCase
     public function test_documents_table_has_required_columns(): void
     {
         $columns = Schema::getColumnListing('documents');
-        
+
         $this->assertContains('name', $columns);
         $this->assertContains('file_path', $columns);
         $this->assertContains('mime_type', $columns);
@@ -39,7 +39,7 @@ class DocumentModelTest extends TestCase
     public function test_documents_table_has_uploaded_by_column(): void
     {
         $columns = Schema::getColumnListing('documents');
-        
+
         $this->assertContains('uploaded_by', $columns);
     }
 
@@ -93,7 +93,11 @@ class DocumentModelTest extends TestCase
     public function test_document_morph_to_parent_model(): void
     {
         $supplier = Supplier::factory()->create();
-        $bill = Bill::create(['supplier_id' => $supplier->id]);
+        // Ownership FKs are assigned directly — they left the core
+        // models' $fillable in the mass-assignment hardening.
+        $bill = new Bill;
+        $bill->supplier_id = $supplier->id;
+        $bill->save();
         $document = Document::factory()->create([
             'documentable_type' => 'App\\Models\\Bill',
             'documentable_id' => $bill->id,
@@ -106,7 +110,11 @@ class DocumentModelTest extends TestCase
     public function test_bill_can_have_many_documents(): void
     {
         $supplier = Supplier::factory()->create();
-        $bill = Bill::create(['supplier_id' => $supplier->id]);
+        // Ownership FKs are assigned directly — they left the core
+        // models' $fillable in the mass-assignment hardening.
+        $bill = new Bill;
+        $bill->supplier_id = $supplier->id;
+        $bill->save();
 
         Document::factory()->count(3)->create([
             'documentable_type' => 'App\\Models\\Bill',
@@ -120,8 +128,10 @@ class DocumentModelTest extends TestCase
     public function test_invoice_can_have_many_documents(): void
     {
         $client = Client::factory()->create();
-        $invoice = Invoice::create([
-            'client_id' => $client->id,
+        // Ownership FKs are assigned directly — they left the core
+        // models' $fillable in the mass-assignment hardening.
+        $invoice = new Invoice;
+        $invoice->fill([
             'invoice_number' => 'INV-2024-TEST',
             'status' => 'draft',
             'issue_date' => now(),
@@ -130,6 +140,8 @@ class DocumentModelTest extends TestCase
             'tax_amount' => 10,
             'total' => 110,
         ]);
+        $invoice->client_id = $client->id;
+        $invoice->save();
 
         Document::factory()->count(2)->create([
             'documentable_type' => 'App\\Models\\Invoice',
@@ -143,14 +155,18 @@ class DocumentModelTest extends TestCase
     public function test_payment_can_have_many_documents(): void
     {
         $client = Client::factory()->create();
-        $payment = Payment::create([
-            'client_id' => $client->id,
+        // Ownership FKs are assigned directly — they left the core
+        // models' $fillable in the mass-assignment hardening.
+        $payment = new Payment;
+        $payment->fill([
             'payment_number' => 'PAY-2024-TEST',
             'amount' => 500,
             'payment_date' => now(),
             'payment_method' => 'bank_transfer',
             'status' => 'completed',
         ]);
+        $payment->client_id = $client->id;
+        $payment->save();
 
         Document::factory()->count(2)->create([
             'documentable_type' => 'App\\Models\\Payment',
@@ -164,14 +180,18 @@ class DocumentModelTest extends TestCase
     public function test_purchase_order_can_have_many_documents(): void
     {
         $client = Client::factory()->create();
-        $po = PurchaseOrder::create([
-            'client_id' => $client->id,
+        // Ownership FKs are assigned directly — they left the core
+        // models' $fillable in the mass-assignment hardening.
+        $po = new PurchaseOrder;
+        $po->fill([
             'po_number' => 'PO-2024-TEST',
             'title' => 'Test PO',
             'status' => 'draft',
             'budgeted_amount' => 5000,
             'used_amount' => 0,
         ]);
+        $po->client_id = $client->id;
+        $po->save();
 
         Document::factory()->count(2)->create([
             'documentable_type' => 'App\\Models\\PurchaseOrder',
@@ -186,9 +206,13 @@ class DocumentModelTest extends TestCase
     {
         $supplier = Supplier::factory()->create();
         $client = Client::factory()->create();
-        $bill = Bill::create(['supplier_id' => $supplier->id]);
-        $invoice = Invoice::create([
-            'client_id' => $client->id,
+        // Ownership FKs are assigned directly — they left the core
+        // models' $fillable in the mass-assignment hardening.
+        $bill = new Bill;
+        $bill->supplier_id = $supplier->id;
+        $bill->save();
+        $invoice = new Invoice;
+        $invoice->fill([
             'invoice_number' => 'INV-2024-DIFF',
             'status' => 'draft',
             'issue_date' => now(),
@@ -197,6 +221,8 @@ class DocumentModelTest extends TestCase
             'tax_amount' => 10,
             'total' => 110,
         ]);
+        $invoice->client_id = $client->id;
+        $invoice->save();
 
         Document::factory()->create([
             'documentable_type' => 'App\\Models\\Bill',
@@ -215,7 +241,7 @@ class DocumentModelTest extends TestCase
     public function test_document_factory_creates_valid_instance(): void
     {
         $document = Document::factory()->create();
-        
+
         $this->assertNotNull($document->name);
         $this->assertNotNull($document->file_path);
         $this->assertNotNull($document->mime_type);

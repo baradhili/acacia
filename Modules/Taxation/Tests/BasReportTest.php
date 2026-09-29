@@ -120,6 +120,35 @@ class BasReportTest extends TestCase
         ]);
     }
 
+    /**
+     * Invoice with its client assigned directly — client_id left the
+     * core model's $fillable in the mass-assignment hardening, so a
+     * plain ::create() would silently drop it and lose ownership.
+     */
+    protected function createInvoice(Client $client, array $attributes): Invoice
+    {
+        $invoice = new Invoice;
+        $invoice->fill($attributes);
+        $invoice->client_id = $client->id;
+        $invoice->save();
+
+        return $invoice;
+    }
+
+    /**
+     * Bill with its supplier assigned directly — supplier_id left the
+     * core model's $fillable, same ownership rationale as createInvoice.
+     */
+    protected function createBill(Supplier $supplier, array $attributes): Bill
+    {
+        $bill = new Bill;
+        $bill->fill($attributes);
+        $bill->supplier_id = $supplier->id;
+        $bill->save();
+
+        return $bill;
+    }
+
     public function test_bas_page_loads(): void
     {
         $response = $this->actingAs($this->user)
@@ -139,8 +168,7 @@ class BasReportTest extends TestCase
         $client = Client::factory()->create();
 
         // Q1 FY2026: $110 invoice (incl $10 GST), PAID 2025-08-15.
-        $q1 = Invoice::create([
-            'client_id' => $client->id,
+        $q1 = $this->createInvoice($client, [
             'invoice_number' => 'INV-2025-0001',
             'status' => 'sent',
             'issue_date' => '2025-08-01',
@@ -166,8 +194,7 @@ class BasReportTest extends TestCase
         // Q2 FY2026: $55 bill (incl $5 GST), entered ex-GST with GST
         // added, PAID 2025-11-01.
         $supplier = Supplier::create(['name' => 'Test Supplier']);
-        $bill = Bill::create([
-            'supplier_id' => $supplier->id,
+        $bill = $this->createBill($supplier, [
             'bill_date' => '2025-10-20',
             'due_date' => '2025-11-20',
         ]);
@@ -191,8 +218,7 @@ class BasReportTest extends TestCase
 
         // Q3 FY2026: sent but UNPAID invoice — on the cash basis it must
         // contribute nothing.
-        $unpaid = Invoice::create([
-            'client_id' => $client->id,
+        $unpaid = $this->createInvoice($client, [
             'invoice_number' => 'INV-2026-0003',
             'status' => 'sent',
             'issue_date' => '2026-02-10',
@@ -206,8 +232,7 @@ class BasReportTest extends TestCase
         ]);
 
         // Q4 FY2026: $220 invoice (incl $20 GST), PAID 2026-05-20.
-        $q4 = Invoice::create([
-            'client_id' => $client->id,
+        $q4 = $this->createInvoice($client, [
             'invoice_number' => 'INV-2026-0004',
             'status' => 'sent',
             'issue_date' => '2026-05-01',
@@ -271,28 +296,32 @@ class BasReportTest extends TestCase
             'entity_id' => $this->entity->id,
         ]);
 
-        $bill = Bill::create([
-            'supplier_id' => $supplier->id,
+        $bill = $this->createBill($supplier, [
             'bill_date' => '2025-10-20',
             'due_date' => '2025-11-20',
         ]);
         // Non-capital line: $55 incl GST; capital line: $1,100 incl GST.
-        $bill->items()->create([
+        // The expense account is an FK outside BillItem's $fillable, so
+        // it is assigned after the relation create sets the bill link.
+        $supplies = $bill->items()->create([
             'description' => 'Office supplies',
             'quantity' => 1,
             'unit_price' => 50,
             'tax_rate' => 10,
             'gst_added' => true,
-            'expense_account_id' => $office->id,
         ]);
-        $bill->items()->create([
+        $supplies->expense_account_id = $office->id;
+        $supplies->save();
+
+        $drill = $bill->items()->create([
             'description' => 'Cordless drill',
             'quantity' => 1,
             'unit_price' => 1000,
             'tax_rate' => 10,
             'gst_added' => true,
-            'expense_account_id' => $tools->id,
         ]);
+        $drill->expense_account_id = $tools->id;
+        $drill->save();
         $bill->recalculateTotals();
         $bill->markAsOpen();
 
@@ -325,8 +354,7 @@ class BasReportTest extends TestCase
 
         // Sent but unpaid invoice — on the cash basis it contributes
         // nothing until a payment posts.
-        $unpaid = Invoice::create([
-            'client_id' => $client->id,
+        $unpaid = $this->createInvoice($client, [
             'invoice_number' => 'INV-2025-0009',
             'status' => 'sent',
             'issue_date' => '2025-09-30',
@@ -350,8 +378,7 @@ class BasReportTest extends TestCase
 
         // Posted then voided payment — the reversal nets the ledger and
         // the void status excludes it from G1.
-        $invoice = Invoice::create([
-            'client_id' => $client->id,
+        $invoice = $this->createInvoice($client, [
             'invoice_number' => 'INV-2025-0010',
             'status' => 'sent',
             'issue_date' => '2026-03-01',
@@ -393,8 +420,7 @@ class BasReportTest extends TestCase
         $supplier = Supplier::create(['name' => 'Test Supplier']);
 
         // Paid $110 invoice (incl $10 GST), posted 2025-08-15.
-        $invoice = Invoice::create([
-            'client_id' => $client->id,
+        $invoice = $this->createInvoice($client, [
             'invoice_number' => 'INV-2025-0021',
             'status' => 'sent',
             'issue_date' => '2025-08-01',
@@ -418,8 +444,7 @@ class BasReportTest extends TestCase
         $this->assertNotNull($payment->postToIFRS(), $payment->lastPostingError ?? 'posting failed');
 
         // Paid $55 bill (incl $5 GST), posted 2025-11-01.
-        $bill = Bill::create([
-            'supplier_id' => $supplier->id,
+        $bill = $this->createBill($supplier, [
             'bill_date' => '2025-10-20',
             'due_date' => '2025-11-20',
         ]);
@@ -442,8 +467,7 @@ class BasReportTest extends TestCase
         $this->assertNotNull($billPayment->postToIFRS(), $billPayment->lastPostingError ?? 'posting failed');
 
         // Sent but unpaid invoice — must not appear on a cash basis.
-        $unpaid = Invoice::create([
-            'client_id' => $client->id,
+        $unpaid = $this->createInvoice($client, [
             'invoice_number' => 'INV-2026-0031',
             'status' => 'sent',
             'issue_date' => '2026-02-10',
@@ -480,8 +504,7 @@ class BasReportTest extends TestCase
         $supplier = Supplier::create(['name' => 'Test Supplier']);
 
         // Paid $110 invoice (incl $10 GST), posted 2025-08-15: Cr 10 on 2200.
-        $invoice = Invoice::create([
-            'client_id' => $client->id,
+        $invoice = $this->createInvoice($client, [
             'invoice_number' => 'INV-2025-0041',
             'status' => 'sent',
             'issue_date' => '2025-08-01',
@@ -506,19 +529,20 @@ class BasReportTest extends TestCase
 
         // Full credit-note refund (posts at now()): Dr 10 back on 2200 —
         // an output-GST reversal, not GST paid.
-        $creditNote = CreditNote::create([
-            'client_id' => $client->id,
+        $creditNote = new CreditNote;
+        $creditNote->fill([
             'total' => -110,
             'remaining_amount' => 110,
             'status' => CreditNote::STATUS_ISSUED,
         ]);
+        $creditNote->client_id = $client->id;
+        $creditNote->save();
         $this->assertTrue($creditNote->applyToInvoice($invoice, 110));
         $refund = $creditNote->refresh()->refund;
         $this->assertNotNull($refund->ifrs_receipt_id, 'credit note refund must be posted');
 
         // Paid $55 bill (incl $5 GST), posted 2025-11-01: Dr 5 on 430.
-        $bill = Bill::create([
-            'supplier_id' => $supplier->id,
+        $bill = $this->createBill($supplier, [
             'bill_date' => '2025-10-20',
             'due_date' => '2025-11-20',
         ]);

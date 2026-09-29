@@ -121,7 +121,10 @@ class SharesAndDividendsTest extends TestCase
         $this->admin->assignRole('admin');
         $this->actingAs($this->admin);
 
-        $profile = CompanyProfile::create(['entity_id' => $this->entity->id, 'country' => 'AU', 'abn' => '12345678901']);
+        $profile = new CompanyProfile;
+        $profile->fill(['country' => 'AU', 'abn' => '12345678901']);
+        $profile->entity_id = $this->entity->id;
+        $profile->save();
         $this->ord = $profile->shareClasses()->create([
             'code' => 'ORD',
             'description' => 'Ordinary Shares',

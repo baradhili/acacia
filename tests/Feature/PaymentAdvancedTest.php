@@ -16,6 +16,7 @@ class PaymentAdvancedTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected Client $client;
 
     protected function setUp(): void
@@ -31,12 +32,14 @@ class PaymentAdvancedTest extends TestCase
 
     protected function createInvoiceWithAmount(float $amount): Invoice
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         $invoice->items()->create([
             'description' => 'Test Service',
@@ -46,6 +49,7 @@ class PaymentAdvancedTest extends TestCase
         ]);
 
         $invoice->refresh();
+
         return $invoice;
     }
 
@@ -81,12 +85,14 @@ class PaymentAdvancedTest extends TestCase
         $invoice2 = $this->createInvoiceWithAmount(55);
 
         // Payment of $200 (exceeds total outstanding of $165)
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 200,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
 
         // Allocate manually to both invoices (FIFO allocation has been removed)
         $payment->allocateToInvoice($invoice1, 110);
@@ -108,12 +114,14 @@ class PaymentAdvancedTest extends TestCase
         $invoice = $this->createInvoiceWithAmount(110);
 
         // Create payment and allocate
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 110,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
 
         $payment->allocateToInvoice($invoice, 110);
 
@@ -131,32 +139,38 @@ class PaymentAdvancedTest extends TestCase
 
     public function test_payment_generates_unique_payment_number(): void
     {
-        $payment1 = Payment::create([
-            'client_id' => $this->client->id,
+        $payment1 = new Payment;
+        $payment1->fill([
             'amount' => 100,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment1->client_id = $this->client->id;
+        $payment1->save();
 
-        $payment2 = Payment::create([
-            'client_id' => $this->client->id,
+        $payment2 = new Payment;
+        $payment2->fill([
             'amount' => 200,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment2->client_id = $this->client->id;
+        $payment2->save();
 
         $this->assertNotEquals($payment1->payment_number, $payment2->payment_number);
-        $this->assertMatchesRegularExpression('/^PAY-' . date('Y') . '-\d{4}$/', $payment2->payment_number);
+        $this->assertMatchesRegularExpression('/^PAY-'.date('Y').'-\d{4}$/', $payment2->payment_number);
     }
 
     public function test_payment_unallocated_amount_calculation(): void
     {
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 100,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
 
         $this->assertEquals(100, $payment->unallocated_amount);
 

@@ -241,13 +241,17 @@ class BillPaymentController extends Controller
 
         DB::beginTransaction();
         try {
-            $billPayment->update([
-                'supplier_id' => $validated['supplier_id'],
+            // supplier_id is an unfillable FK — assign it explicitly. Saved
+            // before the repost branch: repostWithMethod() refreshes the
+            // instance, which would discard unsaved changes.
+            $billPayment->fill([
                 'amount' => $validated['amount'],
                 'payment_date' => $validated['payment_date'],
                 'reference' => $validated['reference'] ?? null,
                 'notes' => $validated['notes'] ?? null,
             ]);
+            $billPayment->supplier_id = $validated['supplier_id'];
+            $billPayment->save();
 
             if ($repostNeeded) {
                 if (! $billPayment->repostWithMethod($validated['payment_method'], $employeeId)) {
@@ -257,12 +261,12 @@ class BillPaymentController extends Controller
                         'Could not re-post the payment on the corrected method: '.$billPayment->lastPostingError.'.');
                 }
             } else {
-                $billPayment->update([
-                    'payment_method' => $validated['payment_method'],
-                    'employee_id' => $validated['payment_method'] === BillPayment::METHOD_EMPLOYEE_REIMBURSEMENT
-                        ? ($validated['employee_id'] ?? null)
-                        : null,
-                ]);
+                // employee_id is an unfillable FK — assign it explicitly.
+                $billPayment->payment_method = $validated['payment_method'];
+                $billPayment->employee_id = $validated['payment_method'] === BillPayment::METHOD_EMPLOYEE_REIMBURSEMENT
+                    ? ($validated['employee_id'] ?? null)
+                    : null;
+                $billPayment->save();
             }
 
             // Recompute allocated bill statuses against the new amount.
