@@ -14,7 +14,7 @@
                 <div>
                     <label for="account_id" class="block text-sm font-medium text-gray-700 mb-1">Account</label>
                     <select name="account_id" id="account_id" required
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                         <option value="">Select Account</option>
                         @foreach($accounts as $account)
                             <option value="{{ $account->id }}" {{ $accountId == $account->id ? 'selected' : '' }}>
@@ -27,13 +27,13 @@
                     <label for="start_date" class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
                     <input type="date" name="start_date" id="start_date" 
                         value="{{ $startDate->format('Y-m-d') }}"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
                 <div>
                     <label for="end_date" class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
                     <input type="date" name="end_date" id="end_date" 
                         value="{{ $endDate->format('Y-m-d') }}"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
                 <div class="flex items-end">
                     <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">

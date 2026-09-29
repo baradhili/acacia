@@ -23,13 +23,13 @@
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Month (first day)</label>
                 <input type="date" name="month" value="{{ old('month', now()->startOfMonth()->toDateString()) }}" required
-                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 @error('month') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Target amount</label>
                 <input type="number" name="amount" value="{{ old('amount') }}" step="0.01" min="0" required
-                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 @error('amount') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
             </div>
             <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-md shrink-0">Save</button>

@@ -14,7 +14,7 @@
         <form method="GET" class="flex gap-4 items-end">
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
-                <select name="supplier_id" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <select name="supplier_id" class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                     <option value="">All Suppliers</option>
                     @foreach($suppliers as $id => $name)
                         <option value="{{ $id }}" {{ request('supplier_id') == $id ? 'selected' : '' }}>{{ $name }}</option>
@@ -24,16 +24,16 @@
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">From</label>
                 <input type="date" name="start_date" value="{{ request('start_date') }}"
-                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">To</label>
                 <input type="date" name="end_date" value="{{ request('end_date') }}"
-                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <select name="status" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <select name="status" class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                     <option value="">All</option>
                     <option value="pending" {{ request('status') === 'pending' ? 'selected' : '' }}>Pending approval</option>
                     <option value="completed" {{ request('status') === 'completed' ? 'selected' : '' }}>Completed</option>

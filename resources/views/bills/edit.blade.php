@@ -18,7 +18,7 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1">Supplier *</label>
                     <div class="flex gap-2">
                         <select name="supplier_id" id="supplierSelect" required
-                            class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full flex-1">
+                            class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full flex-1">
                             <option value="">Select Supplier</option>
                             @foreach ($suppliers as $id => $name)
                                 <option value="{{ $id }}"
@@ -37,7 +37,7 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Project</label>
                     <select name="project_id"
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">
                         <option value="">Select Project (optional)</option>
                         @foreach ($projects as $project)
                             <option value="{{ $project->id }}"
@@ -60,7 +60,7 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Bill Date *</label>
                     <input type="date" name="bill_date" value="{{ old('bill_date', $bill->bill_date->format('Y-m-d')) }}" required
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">
                     @error('bill_date')
                         <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
                     @enderror
@@ -70,7 +70,7 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1">Due Date *</label>
                     <input type="date" name="due_date" value="{{ old('due_date', $bill->due_date?->format('Y-m-d')) }}"
                         required
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">
                     @error('due_date')
                         <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
                     @enderror
@@ -79,7 +79,7 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Reference</label>
                     <input type="text" name="reference" value="{{ old('reference', $bill->reference) }}"
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full"
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full"
                         placeholder="Supplier invoice no.">
                     @error('reference')
                         <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
@@ -90,7 +90,7 @@
             <div class="mt-4">
                 <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
                 <textarea name="notes" rows="2"
-                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">{{ old('notes', $bill->notes) }}</textarea>
+                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">{{ old('notes', $bill->notes) }}</textarea>
             </div>
         </div>
 
@@ -131,27 +131,27 @@
                             <label class="block text-xs font-medium text-gray-700 mb-1">Description</label>
                             <input type="text" name="items[{{ $index }}][description]"
                                 value="{{ $item['description'] ?? '' }}" required
-                                class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm"
+                                class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm"
                                 placeholder="Item description">
                         </div>
                         <div class="col-span-1">
                             <label class="block text-xs font-medium text-gray-700 mb-1">Qty</label>
                             <input type="number" name="items[{{ $index }}][quantity]"
                                 value="{{ $item['quantity'] ?? 1 }}" step="0.01" min="0" required
-                                class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm quantity-input">
+                                class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm quantity-input">
                         </div>
                         <div class="col-span-2">
                             <label class="block text-xs font-medium text-gray-700 mb-1">Unit Price</label>
                             <input type="number" name="items[{{ $index }}][unit_price]"
                                 value="{{ $item['unit_price'] ?? 0 }}" step="0.01" required
-                                class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm unit-price-input">
-                                <input type="number" name="items[{{ $index }}][gst_override]" value="{{ $item['gst_override'] ?? '' }}" step="0.01" placeholder="GST adj (optional)" title="Optional explicit GST for this line (overrides the calculated amount — negative for downward adjustments): a 0-priced line here adjusts only the GST, a negative price adjusts the subtotal" class="mt-1 rounded-md border-gray-300 shadow-sm text-xs w-full">
+                                class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm unit-price-input">
+                                <input type="number" name="items[{{ $index }}][gst_override]" value="{{ $item['gst_override'] ?? '' }}" step="0.01" placeholder="GST adj (optional)" title="Optional explicit GST for this line (overrides the calculated amount — negative for downward adjustments): a 0-priced line here adjusts only the GST, a negative price adjusts the subtotal" class="mt-1 rounded-md border-gray-300 shadow-xs text-xs w-full">
                         </div>
                         <div class="col-span-1">
                             <label class="block text-xs font-medium text-gray-700 mb-1">Disc %</label>
                             <input type="number" name="items[{{ $index }}][discount_percent]"
                                 value="{{ $item['discount_percent'] ?? 0 }}" step="0.01" min="0" max="100"
-                                class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm discount-input">
+                                class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm discount-input">
                         </div>
                         <div class="col-span-1 flex flex-col justify-center">
                             <label class="block text-xs font-medium text-gray-700 mb-1 text-center">GST</label>
@@ -177,7 +177,7 @@
                         <div class="col-span-2">
                             <label class="block text-xs font-medium text-gray-700 mb-1">Category</label>
                             <select name="items[{{ $index }}][expense_account_id]"
-                                class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
+                                class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
                                 <option value="">— Select —</option>
                                 @foreach ($purchaseAccounts as $groupLabel => $groupAccounts)
                                     <optgroup label="{{ $groupLabel }}">
@@ -199,18 +199,18 @@
                                 <label class="block text-xs font-medium text-gray-700 mb-1">Service period start *</label>
                                 <input type="date" name="items[{{ $index }}][service_start]"
                                     value="{{ $item['service_start'] ?? '' }}"
-                                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
+                                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-gray-700 mb-1">Service period end *</label>
                                 <input type="date" name="items[{{ $index }}][service_end]"
                                     value="{{ $item['service_end'] ?? '' }}"
-                                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
+                                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-gray-700 mb-1">Amortise to</label>
                                 <select name="items[{{ $index }}][amortise_to_account_id]"
-                                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
+                                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
                                     <option value="">— Default (Subscriptions &amp; Licenses) —</option>
                                     @foreach ($expenseAccounts as $accountId => $label)
                                         <option value="{{ $accountId }}"
@@ -265,27 +265,27 @@
             <div class="col-span-3">
                 <label class="block text-xs font-medium text-gray-700 mb-1">Description</label>
                 <input type="text" name="items[__INDEX__][description]" required
-                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm"
+                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm"
                     placeholder="Item description">
             </div>
             <div class="col-span-1">
                 <label class="block text-xs font-medium text-gray-700 mb-1">Qty</label>
                 <input type="number" name="items[__INDEX__][quantity]" value="1" step="0.01" min="0"
                     required
-                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm quantity-input">
+                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm quantity-input">
             </div>
             <div class="col-span-2">
                 <label class="block text-xs font-medium text-gray-700 mb-1">Unit Price</label>
                 <input type="number" name="items[__INDEX__][unit_price]" value="0" step="0.01"
                     required
-                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm unit-price-input">
-                                <input type="number" name="items[__INDEX__][gst_override]" value="" step="0.01" placeholder="GST adj (optional)" title="Optional explicit GST for this line (overrides the calculated amount — negative for downward adjustments): a 0-priced line here adjusts only the GST, a negative price adjusts the subtotal" class="mt-1 rounded-md border-gray-300 shadow-sm text-xs w-full">
+                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm unit-price-input">
+                                <input type="number" name="items[__INDEX__][gst_override]" value="" step="0.01" placeholder="GST adj (optional)" title="Optional explicit GST for this line (overrides the calculated amount — negative for downward adjustments): a 0-priced line here adjusts only the GST, a negative price adjusts the subtotal" class="mt-1 rounded-md border-gray-300 shadow-xs text-xs w-full">
             </div>
             <div class="col-span-1">
                 <label class="block text-xs font-medium text-gray-700 mb-1">Disc %</label>
                 <input type="number" name="items[__INDEX__][discount_percent]" value="0" step="0.01"
                     min="0" max="100"
-                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm discount-input">
+                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm discount-input">
             </div>
             <div class="col-span-1 flex flex-col justify-center">
                 <label class="block text-xs font-medium text-gray-700 mb-1 text-center">GST</label>
@@ -308,7 +308,7 @@
             <div class="col-span-2">
                 <label class="block text-xs font-medium text-gray-700 mb-1">Category</label>
                 <select name="items[__INDEX__][expense_account_id]"
-                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
+                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
                     <option value="">— Select —</option>
                     @foreach ($purchaseAccounts as $groupLabel => $groupAccounts)
                         <optgroup label="{{ $groupLabel }}">
@@ -328,17 +328,17 @@
                 <div>
                     <label class="block text-xs font-medium text-gray-700 mb-1">Service period start *</label>
                     <input type="date" name="items[__INDEX__][service_start]"
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
                 </div>
                 <div>
                     <label class="block text-xs font-medium text-gray-700 mb-1">Service period end *</label>
                     <input type="date" name="items[__INDEX__][service_end]"
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
                 </div>
                 <div>
                     <label class="block text-xs font-medium text-gray-700 mb-1">Amortise to</label>
                     <select name="items[__INDEX__][amortise_to_account_id]"
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
                         <option value="">— Default (Subscriptions &amp; Licenses) —</option>
                         @foreach ($expenseAccounts as $accountId => $label)
                             <option value="{{ $accountId }}">{{ $label }}</option>

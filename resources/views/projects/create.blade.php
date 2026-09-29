@@ -14,7 +14,7 @@
                 <div>
                     <label for="client_id" class="block text-sm font-medium text-gray-700">Client *</label>
                     <select name="client_id" id="client_id" required
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                         <option value="">Select Client</option>
                         @foreach($clients as $id => $name)
                             <option value="{{ $id }}" {{ old('client_id') == $id ? 'selected' : '' }}>{{ $name }}</option>
@@ -28,7 +28,7 @@
                 <div>
                     <label for="purchase_order_id" class="block text-sm font-medium text-gray-700">Purchase Order *</label>
                     <select name="purchase_order_id" id="purchase_order_id" required
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                         <option value="">-- Select Purchase Order --</option>
                         @foreach($purchaseOrders as $po)
                             <option value="{{ $po->id }}" {{ old('purchase_order_id') == $po->id ? 'selected' : '' }}>
@@ -48,7 +48,7 @@
                 <div>
                     <label for="name" class="block text-sm font-medium text-gray-700">Project Name *</label>
                     <input type="text" name="name" id="name" value="{{ old('name') }}" required
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                     @error('name')
                         <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                     @enderror
@@ -57,31 +57,31 @@
                 <div class="md:col-span-2">
                     <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
                     <textarea name="description" id="description" rows="3"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">{{ old('description') }}</textarea>
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">{{ old('description') }}</textarea>
                 </div>
 
                 <div>
                     <label for="budget_hours" class="block text-sm font-medium text-gray-700">Budget Hours</label>
                     <input type="number" name="budget_hours" id="budget_hours" value="{{ old('budget_hours') }}" step="0.01" min="0"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
 
                 <div>
                     <label for="budget_amount" class="block text-sm font-medium text-gray-700">Budget Amount ($)</label>
                     <input type="number" name="budget_amount" id="budget_amount" value="{{ old('budget_amount') }}" step="0.01" min="0"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
 
                 <div>
                     <label for="hourly_rate" class="block text-sm font-medium text-gray-700">Default Hourly Rate ($)</label>
                     <input type="number" name="hourly_rate" id="hourly_rate" value="{{ old('hourly_rate') }}" step="0.01" min="0"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
 
                 <div>
                     <label for="status" class="block text-sm font-medium text-gray-700">Status</label>
                     <select name="status" id="status"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                         <option value="active" {{ old('status', 'active') == 'active' ? 'selected' : '' }}>Active</option>
                         <option value="on_hold" {{ old('status') == 'on_hold' ? 'selected' : '' }}>On Hold</option>
                     </select>
@@ -90,13 +90,13 @@
                 <div>
                     <label for="start_date" class="block text-sm font-medium text-gray-700">Start Date</label>
                     <input type="date" name="start_date" id="start_date" value="{{ old('start_date') }}"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
 
                 <div>
                     <label for="end_date" class="block text-sm font-medium text-gray-700">End Date</label>
                     <input type="date" name="end_date" id="end_date" value="{{ old('end_date') }}"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
             </div>
 
@@ -130,14 +130,14 @@
     <template id="staff-row-template">
         <div class="staff-row flex gap-3 items-center">
             <select name="staff[@{{index}}][user_id]" required
-                class="staff-select flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                class="staff-select flex-1 rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 <option value="">Select Staff Member</option>
                 @foreach($staff as $s)
                     <option value="{{ $s->id }}" data-rate="{{ $s->charge_out_rate ?? '' }}">{{ $s->name }}</option>
                 @endforeach
             </select>
             <input type="number" name="staff[@{{index}}][hourly_rate]" placeholder="Hourly Rate" step="0.01" min="0"
-                class="hourly-rate-input w-32 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                class="hourly-rate-input w-32 rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
             <button type="button" class="remove-staff-btn text-red-600 hover:text-red-800">Remove</button>
         </div>
     </template>

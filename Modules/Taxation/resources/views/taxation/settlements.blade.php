@@ -37,7 +37,7 @@
             <div>
                 <label for="as_at" class="block text-sm font-medium text-gray-700 mb-1">Position as at</label>
                 <input type="date" name="as_at" id="as_at" value="{{ $positionAsAt }}"
-                    class="mt-1 block rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    class="mt-1 block rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
             </div>
             <button type="submit"
                 class="px-4 py-2 bg-slate-600 text-white text-sm font-medium rounded-md hover:bg-slate-700 shrink-0">
@@ -124,14 +124,14 @@
             <div>
                 <label for="settle_as_at" class="block text-sm font-medium text-gray-700 mb-1">Covers GST to</label>
                 <input type="date" name="as_at" id="settle_as_at" value="{{ old('as_at', $defaultAsAt) }}" required
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 @error('as_at') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
             </div>
 
             <div>
                 <label for="settled_at" class="block text-sm font-medium text-gray-700 mb-1">Bank date</label>
                 <input type="date" name="settled_at" id="settled_at" value="{{ old('settled_at', now()->toDateString()) }}" required
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 @error('settled_at') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
             </div>
 
@@ -139,7 +139,7 @@
                 <label for="reference" class="block text-sm font-medium text-gray-700 mb-1">Reference (optional)</label>
                 <input type="text" name="reference" id="reference" value="{{ old('reference') }}" maxlength="255"
                     placeholder="e.g. ATO receipt / bank statement ref"
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 @error('reference') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
             </div>
 
@@ -153,7 +153,7 @@
             <div class="md:col-span-5">
                 <label for="notes" class="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
                 <textarea name="notes" id="notes" rows="2"
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">{{ old('notes') }}</textarea>
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">{{ old('notes') }}</textarea>
                 @error('notes') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
             </div>
         </form>
@@ -185,7 +185,7 @@
                     <div>
                         <label for="paygi_quarter" class="block text-sm font-medium text-gray-700 mb-1">Quarter</label>
                         <select name="paygi_quarter" id="paygi_quarter"
-                            class="mt-1 block rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            class="mt-1 block rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                             @foreach (array_reverse($quarterEnds) as $quarter)
                                 <option value="{{ $quarter['end']->toDateString() }}"
                                     {{ $quarter['end']->toDateString() === $paygiEstimate['quarter']['end']->toDateString() ? 'selected' : '' }}>
@@ -233,7 +233,7 @@
                         <label for="paygi_notes" class="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
                         <input type="text" name="notes" id="paygi_notes" value="{{ old('notes') }}" maxlength="255"
                             placeholder="e.g. ATO activity statement T7 rate"
-                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                         @error('period_end') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                     </div>
 

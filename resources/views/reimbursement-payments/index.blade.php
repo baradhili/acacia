@@ -29,7 +29,7 @@
         <form method="GET" class="flex gap-4 items-end">
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Employee</label>
-                <select name="employee_id" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <select name="employee_id" class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                     <option value="">All Employees</option>
                     @foreach ($employees as $id => $name)
                         <option value="{{ $id }}" {{ request('employee_id') == $id ? 'selected' : '' }}>{{ $name }}</option>
@@ -38,7 +38,7 @@
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <select name="status" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <select name="status" class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                     <option value="">All</option>
                     <option value="completed" {{ request('status') === 'completed' ? 'selected' : '' }}>Completed</option>
                     <option value="void" {{ request('status') === 'void' ? 'selected' : '' }}>Void</option>

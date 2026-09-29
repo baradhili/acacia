@@ -253,7 +253,7 @@
     </div>
 
     <!-- Allocate Modal -->
-    <div id="allocateModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div id="allocateModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
         <div class="bg-white rounded-lg p-6 w-full max-w-md">
             <h3 class="text-lg font-semibold mb-4">Allocate to Bill</h3>
             <p class="text-gray-600 mb-4">Unallocated:
@@ -265,7 +265,7 @@
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Bill *</label>
                         <select name="bill_id" required
-                            class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                            class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">
                             <option value="">Select Bill</option>
                             @php
                                 $outstandingBills = App\Models\Bill::with('allocations')
@@ -289,7 +289,7 @@
                         <label class="block text-sm font-medium text-gray-700 mb-1">Amount *</label>
                         <input type="number" name="amount" step="0.01" min="0.01"
                             max="{{ $billPayment->unallocated_amount }}" required
-                            class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                            class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">
                         <p class="text-xs text-gray-500 mt-1">
                             Defaults to the bill's full outstanding balance when selected.
                         </p>

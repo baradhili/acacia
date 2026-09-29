@@ -48,7 +48,7 @@
         <form method="GET" class="px-4 py-3 border-b border-gray-200 flex flex-wrap items-end gap-3">
             <div>
                 <label class="block text-xs font-medium text-gray-500 mb-1">Status</label>
-                <select name="status" class="rounded-md border-gray-300 shadow-sm text-sm">
+                <select name="status" class="rounded-md border-gray-300 shadow-xs text-sm">
                     <option value="">All</option>
                     @foreach (\Modules\Crm\Models\Lead::STATUSES as $status)
                         <option value="{{ $status }}" {{ ($filters['status'] ?? '') === $status ? 'selected' : '' }}>
@@ -59,7 +59,7 @@
             </div>
             <div>
                 <label class="block text-xs font-medium text-gray-500 mb-1">Source</label>
-                <select name="source" class="rounded-md border-gray-300 shadow-sm text-sm">
+                <select name="source" class="rounded-md border-gray-300 shadow-xs text-sm">
                     <option value="">All</option>
                     @foreach (\Modules\Crm\Models\Lead::sources() as $source)
                         <option value="{{ $source }}" {{ ($filters['source'] ?? '') === $source ? 'selected' : '' }}>{{ str_replace('_', ' ', ucfirst($source)) }}</option>
@@ -68,7 +68,7 @@
             </div>
             <div>
                 <label class="block text-xs font-medium text-gray-500 mb-1">Owner</label>
-                <select name="owner_id" class="rounded-md border-gray-300 shadow-sm text-sm">
+                <select name="owner_id" class="rounded-md border-gray-300 shadow-xs text-sm">
                     <option value="">All</option>
                     @foreach ($owners as $id => $name)
                         <option value="{{ $id }}" {{ (string) ($filters['owner_id'] ?? '') === (string) $id ? 'selected' : '' }}>{{ $name }}</option>

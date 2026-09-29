@@ -14,7 +14,7 @@
         <form method="GET" class="flex gap-4 items-end">
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Client</label>
-                <select name="client_id" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <select name="client_id" class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                     <option value="">All Clients</option>
                     @foreach($clients as $id => $name)
                         <option value="{{ $id }}" {{ request('client_id') == $id ? 'selected' : '' }}>{{ $name }}</option>
@@ -24,12 +24,12 @@
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
                 <input type="date" name="start_date" value="{{ request('start_date') }}"
-                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
                 <input type="date" name="end_date" value="{{ request('end_date') }}"
-                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
             </div>
             <button type="submit" class="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-700">
                 Filter

@@ -135,7 +135,7 @@
                     @csrf
                     <div class="flex gap-2">
                         <input type="text" name="reason" placeholder="Rejection reason" required
-                            class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                         <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg">
                             Reject
                         </button>

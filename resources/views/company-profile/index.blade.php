@@ -85,14 +85,14 @@
                 <div class="md:col-span-2">
                     <label class="block text-sm font-medium text-gray-700 mb-1" for="name">Company name <span class="text-red-500">*</span></label>
                     <input id="name" name="name" type="text" maxlength="300" required value="{{ old('name', $entity->name) }}"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 @error('name') border-red-300 @enderror">
+                        class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 @error('name') border-red-300 @enderror">
                     @error('name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1" for="trading_name">Trading name <span class="text-gray-400 font-normal">(optional)</span></label>
                     <input id="trading_name" name="trading_name" type="text" maxlength="100" value="{{ old('trading_name', $profile->trading_name) }}"
                         placeholder="Business name, if different"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 @error('trading_name') border-red-300 @enderror">
+                        class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 @error('trading_name') border-red-300 @enderror">
                     @error('trading_name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                 </div>
             </div>
@@ -101,21 +101,21 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1" for="abn">ABN</label>
                     <input id="abn" name="abn" type="text" inputmode="numeric" maxlength="14" placeholder="12 345 678 901" value="{{ old('abn', $profile->formatted_abn) }}"
                         placeholder="11 digits"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 @error('abn') border-red-300 @enderror">
+                        class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 @error('abn') border-red-300 @enderror">
                     @error('abn') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1" for="tfn">TFN</label>
                     <input id="tfn" name="tfn" type="text" inputmode="numeric" maxlength="11" placeholder="123 456 789" value="{{ old('tfn', $profile->formatted_tfn) }}"
                         placeholder="9 digits"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 @error('tfn') border-red-300 @enderror">
+                        class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 @error('tfn') border-red-300 @enderror">
                     @error('tfn') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1" for="acn">ACN</label>
                     <input id="acn" name="acn" type="text" inputmode="numeric" maxlength="11" placeholder="123 456 789" value="{{ old('acn', $profile->formatted_acn) }}"
                         placeholder="9 digits"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 @error('acn') border-red-300 @enderror">
+                        class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 @error('acn') border-red-300 @enderror">
                     @error('acn') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                 </div>
             </div>
@@ -123,7 +123,7 @@
                 <div class="md:col-span-2">
                     <label class="block text-sm font-medium text-gray-700 mb-1" for="tax_rate_type">Company tax rate classification</label>
                     <select id="tax_rate_type" name="tax_rate_type"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                         @foreach (\App\Models\CompanyProfile::taxRateTypes() as $value => $label)
                             <option value="{{ $value }}" {{ old('tax_rate_type', $profile->tax_rate_type ?: 'small') === $value ? 'selected' : '' }}>
                                 {{ $label }} — {{ config('dividends.tax_rates')[$value] }}%
@@ -148,42 +148,42 @@
                 <div class="md:col-span-2">
                     <label class="block text-sm font-medium text-gray-700 mb-1" for="address_line1">Address line 1</label>
                     <input id="address_line1" name="address_line1" type="text" value="{{ old('address_line1', $profile->address_line1) }}"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1" for="address_line2">Address line 2</label>
                     <input id="address_line2" name="address_line2" type="text" value="{{ old('address_line2', $profile->address_line2) }}"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1" for="suburb">Suburb</label>
                     <input id="suburb" name="suburb" type="text" value="{{ old('suburb', $profile->suburb) }}"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1" for="state">State</label>
                     <input id="state" name="state" type="text" maxlength="3" value="{{ old('state', $profile->state) }}" placeholder="NSW"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1" for="postcode">Postcode</label>
                     <input id="postcode" name="postcode" type="text" maxlength="4" value="{{ old('postcode', $profile->postcode) }}"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1" for="country">Country</label>
                     <input id="country" name="country" type="text" maxlength="2" value="{{ old('country', $profile->country ?? 'AU') }}"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1" for="email">Email</label>
                     <input id="email" name="email" type="email" value="{{ old('email', $profile->email) }}"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1" for="phone">Phone</label>
                     <input id="phone" name="phone" type="text" value="{{ old('phone', $profile->phone) }}"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
@@ -191,19 +191,19 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1" for="bank_account_name">Bank account name</label>
                     <input id="bank_account_name" name="bank_account_name" type="text" maxlength="60" value="{{ old('bank_account_name', $profile->bank_account_name) }}"
                         placeholder="Exactly as the bank holds it"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1" for="bank_bsb">BSB</label>
                     <input id="bank_bsb" name="bank_bsb" type="text" inputmode="numeric" maxlength="7" value="{{ old('bank_bsb', $profile->formatted_bsb) }}"
                         placeholder="123-456"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1" for="bank_account_number">Bank account number</label>
                     <input id="bank_account_number" name="bank_account_number" type="text" inputmode="numeric" maxlength="9" value="{{ old('bank_account_number', $profile->bank_account_number) }}"
                         placeholder="12345678"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
             </div>
             <p class="text-xs text-gray-500 mt-3">
@@ -239,16 +239,16 @@
                                         <input type="hidden" name="directors[{{ $loop->index }}][id]" value="{{ $director['id'] }}">
                                     @endif
                                     <input name="directors[{{ $loop->index }}][name]" type="text" value="{{ $director['name'] ?? '' }}"
-                                        class="w-full rounded-md border-gray-300 shadow-sm">
+                                        class="w-full rounded-md border-gray-300 shadow-xs">
                                 </td>
                                 <td class="px-3 py-2"><input name="directors[{{ $loop->index }}][appointment_date]" type="date" value="{{ $director['appointment_date'] ?? '' }}"
-                                    class="rounded-md border-gray-300 shadow-sm"></td>
+                                    class="rounded-md border-gray-300 shadow-xs"></td>
                                 <td class="px-3 py-2"><input name="directors[{{ $loop->index }}][resignation_date]" type="date" value="{{ $director['resignation_date'] ?? '' }}"
-                                    class="rounded-md border-gray-300 shadow-sm"></td>
+                                    class="rounded-md border-gray-300 shadow-xs"></td>
                                 <td class="px-3 py-2"><input name="directors[{{ $loop->index }}][email]" type="email" value="{{ $director['email'] ?? '' }}"
-                                    class="w-full rounded-md border-gray-300 shadow-sm"></td>
+                                    class="w-full rounded-md border-gray-300 shadow-xs"></td>
                                 <td class="px-3 py-2"><input name="directors[{{ $loop->index }}][phone]" type="text" value="{{ $director['phone'] ?? '' }}"
-                                    class="rounded-md border-gray-300 shadow-sm"></td>
+                                    class="rounded-md border-gray-300 shadow-xs"></td>
                                 <td class="px-3 py-2 text-center">
                                     <button type="button" data-remove-row class="text-red-600 hover:text-red-800" title="Remove">&times;</button>
                                 </td>
@@ -259,11 +259,11 @@
             </div>
             <template id="director-template">
                 <tr>
-                    <td class="px-3 py-2"><input name="directors[__INDEX__][name]" type="text" class="w-full rounded-md border-gray-300 shadow-sm"></td>
-                    <td class="px-3 py-2"><input name="directors[__INDEX__][appointment_date]" type="date" class="rounded-md border-gray-300 shadow-sm"></td>
-                    <td class="px-3 py-2"><input name="directors[__INDEX__][resignation_date]" type="date" class="rounded-md border-gray-300 shadow-sm"></td>
-                    <td class="px-3 py-2"><input name="directors[__INDEX__][email]" type="email" class="w-full rounded-md border-gray-300 shadow-sm"></td>
-                    <td class="px-3 py-2"><input name="directors[__INDEX__][phone]" type="text" class="rounded-md border-gray-300 shadow-sm"></td>
+                    <td class="px-3 py-2"><input name="directors[__INDEX__][name]" type="text" class="w-full rounded-md border-gray-300 shadow-xs"></td>
+                    <td class="px-3 py-2"><input name="directors[__INDEX__][appointment_date]" type="date" class="rounded-md border-gray-300 shadow-xs"></td>
+                    <td class="px-3 py-2"><input name="directors[__INDEX__][resignation_date]" type="date" class="rounded-md border-gray-300 shadow-xs"></td>
+                    <td class="px-3 py-2"><input name="directors[__INDEX__][email]" type="email" class="w-full rounded-md border-gray-300 shadow-xs"></td>
+                    <td class="px-3 py-2"><input name="directors[__INDEX__][phone]" type="text" class="rounded-md border-gray-300 shadow-xs"></td>
                     <td class="px-3 py-2 text-center">
                         <button type="button" data-remove-row class="text-red-600 hover:text-red-800" title="Remove">&times;</button>
                     </td>
@@ -302,53 +302,53 @@
                                         <input type="hidden" name="shareholders[{{ $loop->index }}][id]" value="{{ $shareholder['id'] }}">
                                     @endif
                                     <input name="shareholders[{{ $loop->index }}][name]" type="text" value="{{ $shareholder['name'] ?? '' }}"
-                                        class="w-full rounded-md border-gray-300 shadow-sm">
+                                        class="w-full rounded-md border-gray-300 shadow-xs">
                                 </td>
                                 <td class="px-3 py-2"><input name="shareholders[{{ $loop->index }}][share_class]" type="text" maxlength="10" value="{{ $shareholder['share_class'] ?? '' }}"
-                                    class="w-20 rounded-md border-gray-300 shadow-sm"></td>
+                                    class="w-20 rounded-md border-gray-300 shadow-xs"></td>
                                 <td class="px-3 py-2"><input name="shareholders[{{ $loop->index }}][shares_held]" type="number" min="0" value="{{ $shareholder['shares_held'] ?? '' }}"
-                                    class="w-28 rounded-md border-gray-300 shadow-sm text-right"></td>
+                                    class="w-28 rounded-md border-gray-300 shadow-xs text-right"></td>
                                 <td class="px-3 py-2 text-center"><input name="shareholders[{{ $loop->index }}][resident_for_tax]" type="checkbox" value="1"
                                     {{ (bool) ($shareholder['resident_for_tax'] ?? false) ? 'checked' : '' }} class="rounded border-gray-300"></td>
                                 <td class="px-3 py-2">
-                                    <select name="shareholders[{{ $loop->index }}][status]" class="rounded-md border-gray-300 shadow-sm">
+                                    <select name="shareholders[{{ $loop->index }}][status]" class="rounded-md border-gray-300 shadow-xs">
                                         <option value="A" {{ ($shareholder['status'] ?? 'A') === 'A' ? 'selected' : '' }}>Active</option>
                                         <option value="I" {{ ($shareholder['status'] ?? 'A') === 'I' ? 'selected' : '' }}>Inactive</option>
                                     </select>
                                 </td>
                                 <td class="px-3 py-2">
                                     <input name="shareholders[{{ $loop->index }}][abn]" type="text" maxlength="11" value="{{ $shareholder['abn'] ?? '' }}" placeholder="ABN"
-                                        class="w-28 rounded-md border-gray-300 shadow-sm">
+                                        class="w-28 rounded-md border-gray-300 shadow-xs">
                                     <input name="shareholders[{{ $loop->index }}][tfn]" type="text" maxlength="9" value="{{ $shareholder['tfn'] ?? '' }}" placeholder="TFN"
-                                        class="w-20 rounded-md border-gray-300 shadow-sm">
+                                        class="w-20 rounded-md border-gray-300 shadow-xs">
                                 </td>
                                 <td class="px-3 py-2"><input name="shareholders[{{ $loop->index }}][email]" type="email" value="{{ $shareholder['email'] ?? '' }}"
-                                    class="w-40 rounded-md border-gray-300 shadow-sm"></td>
+                                    class="w-40 rounded-md border-gray-300 shadow-xs"></td>
                                 <td class="px-3 py-2">
                                     <input name="shareholders[{{ $loop->index }}][address_line1]" type="text" value="{{ $shareholder['address_line1'] ?? '' }}" placeholder="Street"
-                                        class="w-40 rounded-md border-gray-300 shadow-sm mb-1">
+                                        class="w-40 rounded-md border-gray-300 shadow-xs mb-1">
                                     <input name="shareholders[{{ $loop->index }}][address_line2]" type="text" value="{{ $shareholder['address_line2'] ?? '' }}" placeholder=""
-                                        class="w-40 rounded-md border-gray-300 shadow-sm mb-1">
+                                        class="w-40 rounded-md border-gray-300 shadow-xs mb-1">
                                     <input name="shareholders[{{ $loop->index }}][suburb]" type="text" value="{{ $shareholder['suburb'] ?? '' }}" placeholder="Suburb"
-                                        class="w-40 rounded-md border-gray-300 shadow-sm mb-1">
+                                        class="w-40 rounded-md border-gray-300 shadow-xs mb-1">
                                     <div class="flex gap-1">
                                         <input name="shareholders[{{ $loop->index }}][state]" type="text" maxlength="3" value="{{ $shareholder['state'] ?? '' }}" placeholder="State"
-                                            class="w-14 rounded-md border-gray-300 shadow-sm">
+                                            class="w-14 rounded-md border-gray-300 shadow-xs">
                                         <input name="shareholders[{{ $loop->index }}][postcode]" type="text" maxlength="4" value="{{ $shareholder['postcode'] ?? '' }}" placeholder="Postcode"
-                                            class="w-20 rounded-md border-gray-300 shadow-sm">
+                                            class="w-20 rounded-md border-gray-300 shadow-xs">
                                         <input name="shareholders[{{ $loop->index }}][country]" type="text" maxlength="2" value="{{ $shareholder['country'] ?? '' }}" placeholder="AU"
-                                            class="w-12 rounded-md border-gray-300 shadow-sm">
+                                            class="w-12 rounded-md border-gray-300 shadow-xs">
                                     </div>
                                 </td>
                                 <td class="px-3 py-2">
                                     <input name="shareholders[{{ $loop->index }}][contact_name]" type="text" maxlength="60" value="{{ $shareholder['contact_name'] ?? '' }}" placeholder="Contact"
-                                        class="w-32 rounded-md border-gray-300 shadow-sm mb-1">
+                                        class="w-32 rounded-md border-gray-300 shadow-xs mb-1">
                                     <input name="shareholders[{{ $loop->index }}][bank_bsb]" type="text" maxlength="7" value="{{ $shareholder['bank_bsb'] ?? '' }}" placeholder="BSB"
-                                        class="w-20 rounded-md border-gray-300 shadow-sm mb-1">
+                                        class="w-20 rounded-md border-gray-300 shadow-xs mb-1">
                                     <input name="shareholders[{{ $loop->index }}][bank_account_number]" type="text" maxlength="9" value="{{ $shareholder['bank_account_number'] ?? '' }}" placeholder="Account"
-                                        class="w-24 rounded-md border-gray-300 shadow-sm mb-1">
+                                        class="w-24 rounded-md border-gray-300 shadow-xs mb-1">
                                     <input name="shareholders[{{ $loop->index }}][bank_account_name]" type="text" maxlength="60" value="{{ $shareholder['bank_account_name'] ?? '' }}" placeholder="Account name"
-                                        class="w-40 rounded-md border-gray-300 shadow-sm">
+                                        class="w-40 rounded-md border-gray-300 shadow-xs">
                                 </td>
                                 <td class="px-3 py-2 text-center">
                                     <button type="button" data-remove-row class="text-red-600 hover:text-red-800" title="Remove">&times;</button>
@@ -365,36 +365,36 @@
             </p>
             <template id="shareholder-template">
                 <tr>
-                    <td class="px-3 py-2"><input name="shareholders[__INDEX__][name]" type="text" class="w-full rounded-md border-gray-300 shadow-sm"></td>
-                    <td class="px-3 py-2"><input name="shareholders[__INDEX__][share_class]" type="text" maxlength="10" value="ORD" class="w-20 rounded-md border-gray-300 shadow-sm"></td>
-                    <td class="px-3 py-2"><input name="shareholders[__INDEX__][shares_held]" type="number" min="0" value="0" class="w-28 rounded-md border-gray-300 shadow-sm text-right"></td>
+                    <td class="px-3 py-2"><input name="shareholders[__INDEX__][name]" type="text" class="w-full rounded-md border-gray-300 shadow-xs"></td>
+                    <td class="px-3 py-2"><input name="shareholders[__INDEX__][share_class]" type="text" maxlength="10" value="ORD" class="w-20 rounded-md border-gray-300 shadow-xs"></td>
+                    <td class="px-3 py-2"><input name="shareholders[__INDEX__][shares_held]" type="number" min="0" value="0" class="w-28 rounded-md border-gray-300 shadow-xs text-right"></td>
                     <td class="px-3 py-2 text-center"><input name="shareholders[__INDEX__][resident_for_tax]" type="checkbox" value="1" checked class="rounded border-gray-300"></td>
                     <td class="px-3 py-2">
-                        <select name="shareholders[__INDEX__][status]" class="rounded-md border-gray-300 shadow-sm">
+                        <select name="shareholders[__INDEX__][status]" class="rounded-md border-gray-300 shadow-xs">
                             <option value="A" selected>Active</option>
                             <option value="I">Inactive</option>
                         </select>
                     </td>
                     <td class="px-3 py-2">
-                        <input name="shareholders[__INDEX__][abn]" type="text" maxlength="11" placeholder="ABN" class="w-28 rounded-md border-gray-300 shadow-sm">
-                        <input name="shareholders[__INDEX__][tfn]" type="text" maxlength="9" placeholder="TFN" class="w-20 rounded-md border-gray-300 shadow-sm">
+                        <input name="shareholders[__INDEX__][abn]" type="text" maxlength="11" placeholder="ABN" class="w-28 rounded-md border-gray-300 shadow-xs">
+                        <input name="shareholders[__INDEX__][tfn]" type="text" maxlength="9" placeholder="TFN" class="w-20 rounded-md border-gray-300 shadow-xs">
                     </td>
-                    <td class="px-3 py-2"><input name="shareholders[__INDEX__][email]" type="email" class="w-40 rounded-md border-gray-300 shadow-sm"></td>
+                    <td class="px-3 py-2"><input name="shareholders[__INDEX__][email]" type="email" class="w-40 rounded-md border-gray-300 shadow-xs"></td>
                     <td class="px-3 py-2">
-                        <input name="shareholders[__INDEX__][address_line1]" type="text" placeholder="Street" class="w-40 rounded-md border-gray-300 shadow-sm mb-1">
-                        <input name="shareholders[__INDEX__][address_line2]" type="text" placeholder="" class="w-40 rounded-md border-gray-300 shadow-sm mb-1">
-                        <input name="shareholders[__INDEX__][suburb]" type="text" placeholder="Suburb" class="w-40 rounded-md border-gray-300 shadow-sm mb-1">
+                        <input name="shareholders[__INDEX__][address_line1]" type="text" placeholder="Street" class="w-40 rounded-md border-gray-300 shadow-xs mb-1">
+                        <input name="shareholders[__INDEX__][address_line2]" type="text" placeholder="" class="w-40 rounded-md border-gray-300 shadow-xs mb-1">
+                        <input name="shareholders[__INDEX__][suburb]" type="text" placeholder="Suburb" class="w-40 rounded-md border-gray-300 shadow-xs mb-1">
                         <div class="flex gap-1">
-                            <input name="shareholders[__INDEX__][state]" type="text" maxlength="3" placeholder="State" class="w-14 rounded-md border-gray-300 shadow-sm">
-                            <input name="shareholders[__INDEX__][postcode]" type="text" maxlength="4" placeholder="Postcode" class="w-20 rounded-md border-gray-300 shadow-sm">
-                            <input name="shareholders[__INDEX__][country]" type="text" maxlength="2" placeholder="AU" class="w-12 rounded-md border-gray-300 shadow-sm">
+                            <input name="shareholders[__INDEX__][state]" type="text" maxlength="3" placeholder="State" class="w-14 rounded-md border-gray-300 shadow-xs">
+                            <input name="shareholders[__INDEX__][postcode]" type="text" maxlength="4" placeholder="Postcode" class="w-20 rounded-md border-gray-300 shadow-xs">
+                            <input name="shareholders[__INDEX__][country]" type="text" maxlength="2" placeholder="AU" class="w-12 rounded-md border-gray-300 shadow-xs">
                         </div>
                     </td>
                     <td class="px-3 py-2">
-                        <input name="shareholders[__INDEX__][contact_name]" type="text" maxlength="60" placeholder="Contact" class="w-32 rounded-md border-gray-300 shadow-sm mb-1">
-                        <input name="shareholders[__INDEX__][bank_bsb]" type="text" maxlength="7" placeholder="BSB" class="w-20 rounded-md border-gray-300 shadow-sm mb-1">
-                        <input name="shareholders[__INDEX__][bank_account_number]" type="text" maxlength="9" placeholder="Account" class="w-24 rounded-md border-gray-300 shadow-sm mb-1">
-                        <input name="shareholders[__INDEX__][bank_account_name]" type="text" maxlength="60" placeholder="Account name" class="w-40 rounded-md border-gray-300 shadow-sm">
+                        <input name="shareholders[__INDEX__][contact_name]" type="text" maxlength="60" placeholder="Contact" class="w-32 rounded-md border-gray-300 shadow-xs mb-1">
+                        <input name="shareholders[__INDEX__][bank_bsb]" type="text" maxlength="7" placeholder="BSB" class="w-20 rounded-md border-gray-300 shadow-xs mb-1">
+                        <input name="shareholders[__INDEX__][bank_account_number]" type="text" maxlength="9" placeholder="Account" class="w-24 rounded-md border-gray-300 shadow-xs mb-1">
+                        <input name="shareholders[__INDEX__][bank_account_name]" type="text" maxlength="60" placeholder="Account name" class="w-40 rounded-md border-gray-300 shadow-xs">
                     </td>
                     <td class="px-3 py-2 text-center">
                         <button type="button" data-remove-row class="text-red-600 hover:text-red-800" title="Remove">&times;</button>

@@ -29,12 +29,12 @@
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1" for="name">Skill name *</label>
             <input id="name" name="name" type="text" required value="{{ old('name', $skill->name) }}" placeholder="BAS Preparation"
-                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1" for="category">Category</label>
             <input id="category" name="category" type="text" list="skill-categories" value="{{ old('category', $skill->category) }}" placeholder="Tax"
-                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
             <datalist id="skill-categories">
                 @foreach (\Modules\Skills\Models\Skill::whereNotNull('category')->distinct()->orderBy('category')->pluck('category') as $category)
                     <option value="{{ $category }}"></option>
@@ -45,7 +45,7 @@
         <div class="md:col-span-2">
             <label class="block text-sm font-medium text-gray-700 mb-1" for="description">Description</label>
             <textarea id="description" name="description" rows="4"
-                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">{{ old('description', $skill->description) }}</textarea>
+                class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">{{ old('description', $skill->description) }}</textarea>
         </div>
 
         <div class="md:col-span-2 flex justify-end gap-2">

@@ -68,7 +68,7 @@
         </p>
         <div id="widget-catalog-rows" class="flex flex-wrap gap-2">
             @foreach ($hiddenWidgets as $widget)
-                <div class="catalog-entry flex items-center gap-3 pl-3 pr-1 py-1 bg-white border border-gray-200 rounded shadow-sm"
+                <div class="catalog-entry flex items-center gap-3 pl-3 pr-1 py-1 bg-white border border-gray-200 rounded shadow-xs"
                     data-widget="{{ $widget['id'] }}">
                     <span class="text-sm text-gray-700">{{ __($widget['label']) }}</span>
                     <button type="button" @click="addWidget($el.closest('.catalog-entry'))"
@@ -79,7 +79,7 @@
     </div>
 
     <template id="catalog-row-template">
-        <div class="catalog-entry flex items-center gap-3 pl-3 pr-1 py-1 bg-white border border-gray-200 rounded shadow-sm">
+        <div class="catalog-entry flex items-center gap-3 pl-3 pr-1 py-1 bg-white border border-gray-200 rounded shadow-xs">
             <span class="text-sm text-gray-700"></span>
             <button type="button" @click="addWidget($el.closest('.catalog-entry'))"
                 class="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700">{{ __('widgets.add') }}</button>

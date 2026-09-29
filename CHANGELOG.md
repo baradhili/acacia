@@ -5,6 +5,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-09-29
 
+### Changed — tailwindcss 3.4 → 4.3: the CSS-first migration
+
+The deferred v4 migration (see the dependency round below) lands on
+Dependabot's bump branch. The build moves off the removed PostCSS
+plugin entirely: `@tailwindcss/vite` is wired into vite.config.js,
+`resources/css/app.css` becomes the single source of configuration
+(`@import "tailwindcss"`, `@plugin "@tailwindcss/forms"`, the Figtree
+`--font-sans` theme var, and the dashboard col-span safelist as
+`@source inline(...)` — the spans are composed at runtime by
+widget-manager.js, so no scanner ever sees them), and tailwind.config.js,
+postcss.config.js, autoprefixer and the bare postcss devDependency are
+gone. Two v4 behaviours required real decisions:
+
+- **Module and pagination view scanning.** v4's automatic detection
+  honours .gitignore even for explicit `@source` paths (verified
+  empirically), so vendor/ can't be pinned the way the v3 content
+  array did. The framework pagination views are published to
+  `resources/views/vendor/pagination` (published copies win at render
+  time too), and module templates get an explicit `@source` glob —
+  an upgrade over v3, which only caught modules through compiled
+  storage/framework/views that happened to exist at build time.
+- **Preflight and rename parity.** v4 switched the default border
+  color to currentColor and renamed the small-scale shadow/ring/
+  outline utilities. Templates were migrated to the new names
+  (shadow-sm→shadow-xs ~500 uses, outline-none→outline-hidden,
+  focus:ring→focus:ring-3, rounded-sm→rounded-xs, and the legacy
+  bg-opacity/ring-opacity forms to slash syntax), and the gray-200
+  default border color is restored in an `@layer base` shim until
+  every bare `border` carries an explicit color.
+
+Verified three ways: a class-coverage diff of a v3 baseline build
+(equivalent source set) against the v4 build — every real v3 class
+has a same-styling v4 counterpart; the full suite (1019 tests) plus
+larascan green; and headless-browser v3-vs-v4 screenshot pairs of
+the login, dashboard, invoices and payroll pages diffed
+pixel-by-pixel — element geometry matches to 1–2px and the remaining
+differences are v4's oklch palette shade shifts (borders, buttons,
+badges), the intended v4 look rather than a regression.
+
+## [Unreleased] — 2026-09-29
+
 ### Changed — dependency round: ten Dependabot PRs landed, tailwind v4 deferred
 
 The September Dependabot queue clears in one verified pass. The one

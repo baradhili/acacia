@@ -15,7 +15,7 @@
                 <div>
                     <label for="client_id" class="block text-sm font-medium text-gray-700">Client *</label>
                     <select name="client_id" id="client_id" required
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                         <option value="">Select Client</option>
                         @foreach($clients as $id => $name)
                             <option value="{{ $id }}" {{ $purchaseOrder->client_id == $id ? 'selected' : '' }}>{{ $name }}</option>
@@ -29,7 +29,7 @@
                 <div>
                     <label for="title" class="block text-sm font-medium text-gray-700">Title *</label>
                     <input type="text" name="title" id="title" value="{{ old('title', $purchaseOrder->title) }}" required
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                     @error('title')
                         <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                     @enderror
@@ -38,13 +38,13 @@
                 <div class="md:col-span-2">
                     <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
                     <textarea name="description" id="description" rows="2"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">{{ old('description', $purchaseOrder->description) }}</textarea>
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">{{ old('description', $purchaseOrder->description) }}</textarea>
                 </div>
 
                 <div>
                     <label for="budgeted_amount" class="block text-sm font-medium text-gray-700">Budgeted Amount ($) *</label>
                     <input type="number" name="budgeted_amount" id="budgeted_amount" value="{{ old('budgeted_amount', $purchaseOrder->budgeted_amount) }}" step="0.01" min="0" required
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                     @error('budgeted_amount')
                         <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                     @enderror
@@ -53,13 +53,13 @@
                 <div>
                     <label for="start_date" class="block text-sm font-medium text-gray-700">Start Date</label>
                     <input type="date" name="start_date" id="start_date" value="{{ old('start_date', $purchaseOrder->start_date?->format('Y-m-d')) }}"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
 
                 <div>
                     <label for="end_date" class="block text-sm font-medium text-gray-700">End Date</label>
                     <input type="date" name="end_date" id="end_date" value="{{ old('end_date', $purchaseOrder->end_date?->format('Y-m-d')) }}"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
             </div>
 

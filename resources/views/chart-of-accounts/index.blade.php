@@ -11,7 +11,7 @@
         <form method="GET" class="flex items-center gap-4">
             <label class="text-sm font-medium text-gray-700">Filter by Type:</label>
             <select name="type" onchange="this.form.submit()" 
-                    class="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    class="rounded-md border-gray-300 shadow-xs focus:border-blue-500 focus:ring-blue-500">
                 <option value="">All Account Types</option>
                 @foreach($accountTypes as $type => $label)
                     <option value="{{ $type }}" {{ $selectedType === $type ? 'selected' : '' }}>

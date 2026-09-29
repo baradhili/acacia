@@ -33,7 +33,7 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Client *</label>
                     <select name="client_id" id="clientSelect" required
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">
                         <option value="">Select Client</option>
                         @foreach($clients as $id => $name)
                             <option value="{{ $id }}" {{ old('client_id', $selectedClient?->id) == $id ? 'selected' : '' }}>{{ $name }}</option>
@@ -47,7 +47,7 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Project</label>
                     <select name="project_id" id="projectSelect"
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">
                         <option value="">Select Project (optional)</option>
                         @php
                             $allProjects = App\Models\Project::with('client')->orderBy('name')->get();
@@ -74,7 +74,7 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Issue Date *</label>
                     <input type="date" name="issue_date" value="{{ old('issue_date', now()->toDateString()) }}" required
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">
                     @error('issue_date')
                         <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
                     @enderror
@@ -83,7 +83,7 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Valid Until *</label>
                     <input type="date" name="valid_until" value="{{ old('valid_until', now()->addDays(30)->toDateString()) }}" required
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">
                     @error('valid_until')
                         <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
                     @enderror
@@ -93,13 +93,13 @@
             <div class="mt-4">
                 <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
                 <textarea name="notes" rows="2"
-                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">{{ old('notes', ($lead ?? null)?->notes) }}</textarea>
+                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">{{ old('notes', ($lead ?? null)?->notes) }}</textarea>
             </div>
 
             <div class="mt-4">
                 <label class="block text-sm font-medium text-gray-700 mb-1">Terms & Conditions</label>
                 <textarea name="terms" rows="2"
-                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">{{ old('terms', config('australian.estimate_terms', 'This estimate is valid for 30 days from the issue date.')) }}</textarea>
+                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">{{ old('terms', config('australian.estimate_terms', 'This estimate is valid for 30 days from the issue date.')) }}</textarea>
             </div>
         </div>
 
@@ -129,12 +129,12 @@
                                 <label class="block text-xs font-medium text-gray-700 mb-1">Section <span class="font-normal text-gray-400">(groups lines)</span></label>
                                 <input type="text" name="items[{{ $index }}][section]"
                                     value="{{ $item['section'] ?? '' }}" maxlength="100"
-                                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm"
+                                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm"
                                     placeholder="e.g. Discovery, Build">
                             </div>
                             <div class="col-span-5">
                                 <label class="block text-xs font-medium text-gray-700 mb-1">Catalogue service</label>
-                                <select name="items[{{ $index }}][service_id]" class="service-select rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
+                                <select name="items[{{ $index }}][service_id]" class="service-select rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
                                     <option value="">— free text —</option>
                                     @foreach($services as $service)
                                         <option value="{{ $service->id }}" data-name="{{ $service->name }}" data-rate="{{ $service->hourly_rate }}"
@@ -159,32 +159,32 @@
                                 <label class="block text-xs font-medium text-gray-700 mb-1">Description</label>
                                 <input type="text" name="items[{{ $index }}][description]"
                                     value="{{ $item['description'] ?? '' }}" required
-                                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm"
+                                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm"
                                     placeholder="Service description">
                             </div>
                             <div class="col-span-2">
                                 <label class="block text-xs font-medium text-gray-700 mb-1">Qty</label>
                                 <input type="number" name="items[{{ $index }}][quantity]"
                                     value="{{ $item['quantity'] ?? 1 }}" step="0.01" min="0" required
-                                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm quantity-input">
+                                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm quantity-input">
                             </div>
                             <div class="col-span-2">
                                 <label class="block text-xs font-medium text-gray-700 mb-1">Unit Price</label>
                                 <input type="number" name="items[{{ $index }}][unit_price]"
                                     value="{{ $item['unit_price'] ?? 0 }}" step="0.01" min="0" required
-                                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm unit-price-input">
+                                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm unit-price-input">
                             </div>
                             <div class="col-span-1">
                                 <label class="block text-xs font-medium text-gray-700 mb-1">Tax %</label>
                                 <input type="number" name="items[{{ $index }}][tax_rate]"
                                     value="{{ $item['tax_rate'] ?? 10 }}" step="0.01" min="0" max="100"
-                                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
+                                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
                             </div>
                             <div class="col-span-1">
                                 <label class="block text-xs font-medium text-gray-700 mb-1">Disc %</label>
                                 <input type="number" name="items[{{ $index }}][discount_percent]"
                                     value="{{ $item['discount_percent'] ?? 0 }}" step="0.01" min="0" max="100"
-                                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
+                                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
                             </div>
                             <div class="col-span-2">
                                 <label class="block text-xs font-medium text-gray-700 mb-1">Total</label>
@@ -217,12 +217,12 @@
                 <div class="col-span-4">
                     <label class="block text-xs font-medium text-gray-700 mb-1">Section <span class="font-normal text-gray-400">(groups lines)</span></label>
                     <input type="text" name="items[__INDEX__][section]" maxlength="100"
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm"
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm"
                         placeholder="e.g. Discovery, Build">
                 </div>
                 <div class="col-span-5">
                     <label class="block text-xs font-medium text-gray-700 mb-1">Catalogue service</label>
-                    <select name="items[__INDEX__][service_id]" class="service-select rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
+                    <select name="items[__INDEX__][service_id]" class="service-select rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
                         <option value="">— free text —</option>
                         @foreach($services as $service)
                             <option value="{{ $service->id }}" data-name="{{ $service->name }}" data-rate="{{ $service->hourly_rate }}">
@@ -244,28 +244,28 @@
                 <div class="col-span-4">
                     <label class="block text-xs font-medium text-gray-700 mb-1">Description</label>
                     <input type="text" name="items[__INDEX__][description]" required
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm"
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm"
                         placeholder="Service description">
                 </div>
                 <div class="col-span-2">
                     <label class="block text-xs font-medium text-gray-700 mb-1">Qty</label>
                     <input type="number" name="items[__INDEX__][quantity]" value="1" step="0.01" min="0" required
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm quantity-input">
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm quantity-input">
                 </div>
                 <div class="col-span-2">
                     <label class="block text-xs font-medium text-gray-700 mb-1">Unit Price</label>
                     <input type="number" name="items[__INDEX__][unit_price]" value="0" step="0.01" min="0" required
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm unit-price-input">
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm unit-price-input">
                 </div>
                 <div class="col-span-1">
                     <label class="block text-xs font-medium text-gray-700 mb-1">Tax %</label>
                     <input type="number" name="items[__INDEX__][tax_rate]" value="10" step="0.01" min="0" max="100"
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
                 </div>
                 <div class="col-span-1">
                     <label class="block text-xs font-medium text-gray-700 mb-1">Disc %</label>
                     <input type="number" name="items[__INDEX__][discount_percent]" value="0" step="0.01" min="0" max="100"
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
                 </div>
                 <div class="col-span-2">
                     <label class="block text-xs font-medium text-gray-700 mb-1">Total</label>

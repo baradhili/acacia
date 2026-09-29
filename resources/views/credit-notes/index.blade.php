@@ -14,7 +14,7 @@
         <form method="GET" class="flex gap-4 items-end">
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Client</label>
-                <select name="client_id" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <select name="client_id" class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                     <option value="">All Clients</option>
                     @foreach($clients as $id => $name)
                         <option value="{{ $id }}" {{ request('client_id') == $id ? 'selected' : '' }}>{{ $name }}</option>
@@ -23,7 +23,7 @@
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <select name="status" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <select name="status" class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                     <option value="">All</option>
                     <option value="issued" {{ request('status') == 'issued' ? 'selected' : '' }}>Issued</option>
                     <option value="applied" {{ request('status') == 'applied' ? 'selected' : '' }}>Applied</option>

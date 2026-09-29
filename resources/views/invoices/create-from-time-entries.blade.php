@@ -15,7 +15,7 @@
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Client</label>
                 <select name="client_id"
-                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                     <option value="">All Clients</option>
                     @foreach ($clients as $id => $name)
                         <option value="{{ $id }}" {{ request('client_id') == $id ? 'selected' : '' }}>{{ $name }}</option>

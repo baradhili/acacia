@@ -319,7 +319,7 @@
     </div>
 
     <!-- Payment Modal -->
-    <div id="paymentModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div id="paymentModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
         <div class="bg-white rounded-lg p-6 w-full max-w-md">
             <h3 class="text-lg font-semibold mb-4">Record Payment for Bill #{{ $bill->bill_number }}</h3>
             <p class="text-gray-600 mb-4">
@@ -340,17 +340,17 @@
                         <label class="block text-sm font-medium text-gray-700 mb-1">Amount *</label>
                         <input type="number" name="amount" value="{{ $available }}"
                             step="0.01" min="0.01" max="{{ $available }}" required
-                            class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                            class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Payment Date *</label>
                         <input type="date" name="payment_date" value="{{ now()->toDateString() }}" required
-                            class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                            class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Payment Method *</label>
                         <select name="payment_method" id="paymentMethodSelect" required
-                            class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                            class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">
                             @foreach ($paymentMethods as $value => $label)
                                 <option value="{{ $value }}">{{ $label }}</option>
                             @endforeach
@@ -359,7 +359,7 @@
                     <div id="employeeField" class="hidden">
                         <label class="block text-sm font-medium text-gray-700 mb-1">Paid by employee *</label>
                         <select name="employee_id"
-                            class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                            class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">
                             <option value="">Select Employee</option>
                             @foreach ($employees as $id => $name)
                                 <option value="{{ $id }}">{{ $name }}</option>
@@ -369,7 +369,7 @@
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Reference</label>
                         <input type="text" name="reference"
-                            class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full"
+                            class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full"
                             placeholder="Transaction ID, Cheque #, etc.">
                     </div>
                 </div>

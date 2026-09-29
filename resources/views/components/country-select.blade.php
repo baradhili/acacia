@@ -14,7 +14,7 @@
 <div>
     <label for="{{ $name }}" class="block text-sm font-medium text-gray-700 mb-1">{{ $label }}</label>
     <select name="{{ $name }}" id="{{ $name }}"
-            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+            class="w-full rounded-md border-gray-300 shadow-xs focus:border-blue-500 focus:ring-blue-500">
         <option value="" @selected((string) $selected === '')>Select Country</option>
         @foreach ($pinnedCountries as $country)
             <option value="{{ $country }}" @selected((string) $selected === $country)>{{ $country }}</option>

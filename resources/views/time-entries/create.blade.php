@@ -16,7 +16,7 @@
                 <div>
                     <label for="entry_date" class="block text-sm font-medium text-gray-700">Date *</label>
                     <input type="date" name="entry_date" id="entry_date" value="{{ old('entry_date', now()->toDateString()) }}" required
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                     @error('entry_date')
                         <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                     @enderror
@@ -25,7 +25,7 @@
                 <div>
                     <label for="hours" class="block text-sm font-medium text-gray-700">Hours *</label>
                     <input type="number" name="hours" id="hours" value="{{ old('hours') }}" step="0.01" min="0" max="24" required
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                     <p class="mt-1 text-sm text-gray-500">Entered manually — filled in automatically when start/end times are set</p>
                     @error('hours')
                         <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
@@ -35,7 +35,7 @@
                 <div>
                     <label for="start_time" class="block text-sm font-medium text-gray-700">Start Time</label>
                     <input type="time" name="start_time" id="start_time" value="{{ old('start_time') }}"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                     <p class="mt-1 text-sm text-gray-500">Optional</p>
                     @error('start_time')
                         <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
@@ -45,7 +45,7 @@
                 <div>
                     <label for="end_time" class="block text-sm font-medium text-gray-700">End Time</label>
                     <input type="time" name="end_time" id="end_time" value="{{ old('end_time') }}"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                     <p class="mt-1 text-sm text-gray-500">Optional — hours are derived from the times when both are set</p>
                     @error('end_time')
                         <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
@@ -67,10 +67,10 @@
                     @foreach ($oldBreaks as $i => $break)
                         <div class="break-row flex items-center gap-3">
                             <input type="time" name="breaks[{{ $i }}][start]" value="{{ $break['start'] ?? '' }}"
-                                class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                             <span class="text-gray-500">to</span>
                             <input type="time" name="breaks[{{ $i }}][end]" value="{{ $break['end'] ?? '' }}"
-                                class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                             <button type="button" class="remove-break text-red-600 hover:text-red-800 text-sm">Remove</button>
                         </div>
                     @endforeach
@@ -83,7 +83,7 @@
             <div class="mt-6">
                 <label for="rate" class="block text-sm font-medium text-gray-700">Hourly Rate ($)</label>
                 <input type="number" name="rate" id="rate" value="{{ old('rate') }}" step="0.01" min="0"
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 <p class="mt-1 text-sm text-gray-500">Leave empty to use project default</p>
             </div>
 
@@ -96,7 +96,7 @@
             <div class="mt-6">
                 <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
                 <textarea name="description" id="description" rows="3"
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">{{ old('description') }}</textarea>
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">{{ old('description') }}</textarea>
             </div>
 
             <div class="mt-6 flex justify-end gap-3">
@@ -113,10 +113,10 @@
     <template id="breakTemplate">
         <div class="break-row flex items-center gap-3">
             <input type="time" name="breaks[__INDEX__][start]"
-                class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
             <span class="text-gray-500">to</span>
             <input type="time" name="breaks[__INDEX__][end]"
-                class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
             <button type="button" class="remove-break text-red-600 hover:text-red-800 text-sm">Remove</button>
         </div>
     </template>

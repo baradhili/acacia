@@ -1,3 +1,35 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@plugin "@tailwindcss/forms";
+
+/* Module templates sit outside resources/views but inside the project,
+   so auto-detection would find them anyway — registered explicitly to
+   pin the source set (the v3 config covered modules only via compiled
+   storage/framework/views, which existed only for pages rendered
+   before the build). The framework's pagination views can't be pinned
+   the same way: @source does not override .gitignore, and /vendor is
+   ignored, so they are published to resources/views/vendor/pagination
+   (published copies take precedence at render time too). */
+@source "../../Modules/**/resources/views/**/*.blade.php";
+
+/* The dashboard card spans are composed at runtime — interpolated
+   into Blade from the PHP registry (CoreNav spans) and swapped by
+   widget-manager.js on width cycling — so no scanner ever sees
+   them as literals. Inlining keeps every override the layout
+   feature can emit in the stylesheet. */
+@source inline("md:col-span-1 md:col-span-2 lg:col-span-1 lg:col-span-2 lg:col-span-3 lg:col-span-4");
+
+@theme {
+    --font-sans: "Figtree", ui-sans-serif, system-ui, -apple-system, "BlinkMacSystemFont", "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+/* v3 preflight gave every element a default border color (gray-200);
+   v4 leaves it at currentcolor. Bare `border` usages that pair no
+   border-color utility (card/table wrappers, logo thumbs) would gain
+   text-colored edges, so the v3 default is restored until every bare
+   border carries an explicit color. */
+@layer base {
+    *, ::before, ::after {
+        border-color: var(--color-gray-200);
+    }
+}

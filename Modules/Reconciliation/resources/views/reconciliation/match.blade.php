@@ -53,7 +53,7 @@
                     </label>
                     <input type="text" name="q" id="q" value="{{ $search }}" maxlength="100"
                         placeholder="e.g. PAY-2026-0001, Acme, AWS"
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 text-sm">
                 </div>
                 <button type="submit"
                     class="px-3 py-2 bg-slate-600 text-white text-sm rounded-md hover:bg-slate-700 shrink-0">Search</button>
@@ -139,7 +139,7 @@
             <div>
                 <label for="manual_type" class="block text-sm font-medium text-gray-700 mb-1">Type</label>
                 <select name="type" id="manual_type"
-                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                     <option value="payment">Payment</option>
                     <option value="bill_payment">Supplier payment</option>
                     <option value="reimbursement_payment">Employee reimbursement</option>
@@ -149,12 +149,12 @@
             <div>
                 <label for="target_id" class="block text-sm font-medium text-gray-700 mb-1">Id</label>
                 <input type="number" name="target_id" id="target_id" min="1" required
-                    class="w-32 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    class="w-32 rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
             </div>
             <div class="flex-1 min-w-[240px]">
                 <label for="notes" class="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
                 <input type="text" name="notes" id="notes" maxlength="500"
-                    class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    class="w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
             </div>
             <button type="submit"
                 class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700">Match</button>

@@ -113,7 +113,7 @@
                 <label for="repository" class="block text-sm font-medium text-gray-700 mb-1">Repository URL</label>
                 <input type="text" name="repository" id="repository" required maxlength="500"
                     value="{{ old('repository') }}" placeholder="https://github.com/you/erp-some-module"
-                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 @error('repository') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
             </div>
             <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 shrink-0">

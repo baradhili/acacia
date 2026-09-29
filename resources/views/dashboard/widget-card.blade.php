@@ -15,11 +15,11 @@
     <div x-show="isEditing" x-cloak class="absolute top-2 right-2 z-20 flex gap-1">
         <button type="button" @click="cycleWidth($el.closest('.widget-card'))"
             title="{{ __('widgets.resize') }}"
-            class="w-7 h-7 flex items-center justify-center rounded bg-white/90 border border-gray-300 text-gray-600 text-sm shadow-sm hover:bg-gray-100"
+            class="w-7 h-7 flex items-center justify-center rounded bg-white/90 border border-gray-300 text-gray-600 text-sm shadow-xs hover:bg-gray-100"
             aria-label="{{ __('widgets.resize') }}">&harr;</button>
         <button type="button" @click="removeWidget($el.closest('.widget-card'))"
             title="{{ __('widgets.remove') }}"
-            class="w-7 h-7 flex items-center justify-center rounded bg-white/90 border border-gray-300 text-red-600 text-sm shadow-sm hover:bg-red-50"
+            class="w-7 h-7 flex items-center justify-center rounded bg-white/90 border border-gray-300 text-red-600 text-sm shadow-xs hover:bg-red-50"
             aria-label="{{ __('widgets.remove') }}">&times;</button>
     </div>
 </div>

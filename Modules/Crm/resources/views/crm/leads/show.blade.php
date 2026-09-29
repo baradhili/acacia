@@ -65,7 +65,7 @@
                         <div class="flex-1">
                             <label class="block text-sm font-medium text-gray-700 mb-1">Client name</label>
                             <input type="text" name="client_name" value="{{ old('client_name', $lead->company ?: $lead->name) }}" required maxlength="255"
-                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                         </div>
                         <button type="submit" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded-md">Convert</button>
                     </form>
@@ -82,13 +82,13 @@
                 <form action="{{ route('crm.leads.activities.store', $lead) }}" method="POST" class="mb-4">
                     @csrf
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-                        <select name="type" class="rounded-md border-gray-300 shadow-sm text-sm">
+                        <select name="type" class="rounded-md border-gray-300 shadow-xs text-sm">
                             @foreach (\Modules\Crm\Models\LeadActivity::TYPES as $type)
                                 <option value="{{ $type }}" {{ old('type', 'note') === $type ? 'selected' : '' }}>{{ ucfirst($type) }}</option>
                             @endforeach
                         </select>
                         <input type="text" name="summary" value="{{ old('summary') }}" required maxlength="500" placeholder="What happened / what's next"
-                            class="md:col-span-3 rounded-md border-gray-300 shadow-sm text-sm">
+                            class="md:col-span-3 rounded-md border-gray-300 shadow-xs text-sm">
                     </div>
                     <div class="flex justify-end mt-3">
                         <button type="submit" class="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white text-sm rounded-md">Log</button>
@@ -121,13 +121,13 @@
                 <h2 class="text-lg font-semibold text-gray-800 mb-4">Funnel</h2>
                 <form action="{{ route('crm.leads.status', $lead) }}" method="POST">
                     @csrf
-                    <select name="status" class="block w-full rounded-md border-gray-300 shadow-sm text-sm mb-3">
+                    <select name="status" class="block w-full rounded-md border-gray-300 shadow-xs text-sm mb-3">
                         @foreach (\Modules\Crm\Models\Lead::labels() as $value => $label)
                             <option value="{{ $value }}" {{ $lead->status === $value ? 'selected' : '' }}>{{ $label }}</option>
                         @endforeach
                     </select>
                     <input type="text" name="loss_reason" placeholder="Loss reason (when moving to Lost)" maxlength="255"
-                        class="block w-full rounded-md border-gray-300 shadow-sm text-sm mb-3"
+                        class="block w-full rounded-md border-gray-300 shadow-xs text-sm mb-3"
                         value="{{ old('loss_reason', $lead->loss_reason) }}">
                     <button type="submit" class="w-full px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white text-sm rounded-md">Move</button>
                 </form>

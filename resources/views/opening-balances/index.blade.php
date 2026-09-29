@@ -28,7 +28,7 @@
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Fiscal Year</label>
                 <select name="year" onchange="this.form.submit()"
-                        class="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        class="rounded-md border-gray-300 shadow-xs focus:border-blue-500 focus:ring-blue-500">
                     @forelse($periods as $p)
                         <option value="{{ $p->calendar_year }}" {{ $period?->is($p) ? 'selected' : '' }}>
                             FY{{ $p->calendar_year }}
@@ -91,13 +91,13 @@
                                         <input type="number" step="0.01" min="0" {{ $systemGenerated ? 'disabled' : '' }}
                                                name="balances[{{ $account->id }}][debit]"
                                                value="{{ old('balances.'.$account->id.'.debit', $debit) }}"
-                                               class="w-full max-w-[10rem] ml-auto rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right disabled:bg-gray-100 disabled:text-gray-500">
+                                               class="w-full max-w-[10rem] ml-auto rounded-md border-gray-300 shadow-xs focus:border-blue-500 focus:ring-blue-500 text-right disabled:bg-gray-100 disabled:text-gray-500">
                                     </td>
                                     <td class="px-6 py-2">
                                         <input type="number" step="0.01" min="0" {{ $systemGenerated ? 'disabled' : '' }}
                                                name="balances[{{ $account->id }}][credit]"
                                                value="{{ old('balances.'.$account->id.'.credit', $credit) }}"
-                                               class="w-full max-w-[10rem] ml-auto rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-right disabled:bg-gray-100 disabled:text-gray-500">
+                                               class="w-full max-w-[10rem] ml-auto rounded-md border-gray-300 shadow-xs focus:border-blue-500 focus:ring-blue-500 text-right disabled:bg-gray-100 disabled:text-gray-500">
                                     </td>
                                 </tr>
                             @endforeach

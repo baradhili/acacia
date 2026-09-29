@@ -1,7 +1,7 @@
 <!-- Top Bar — feature dropdowns render the nav registry (core +
      module contributions), role-filtered by App\Support\Nav; the user
      menu is shell UI and stays literal. -->
-<header class="sticky top-0 z-30 h-16 bg-white shadow-sm border-b border-gray-200 flex items-center justify-between px-6 shrink-0">
+<header class="sticky top-0 z-30 h-16 bg-white shadow-xs border-b border-gray-200 flex items-center justify-between px-6 shrink-0">
     <div>
         <h1 class="text-xl font-semibold text-gray-800">@yield('title', 'Dashboard')</h1>
     </div>

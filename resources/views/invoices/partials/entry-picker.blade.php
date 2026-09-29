@@ -69,7 +69,7 @@
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Issue Date *</label>
             <input type="date" name="issue_date" value="{{ old('issue_date', now()->toDateString()) }}" required
-                class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">
             @error('issue_date')
                 <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
             @enderror
@@ -79,7 +79,7 @@
             <label class="block text-sm font-medium text-gray-700 mb-1">Due Date *</label>
             <input type="date" name="due_date" value="{{ old('due_date', now()->addDays($dueDays)->toDateString()) }}"
                 required
-                class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">
             @error('due_date')
                 <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
             @enderror
@@ -89,13 +89,13 @@
     <div class="mt-4">
         <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
         <textarea name="notes" rows="2"
-            class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">{{ old('notes') }}</textarea>
+            class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">{{ old('notes') }}</textarea>
     </div>
 
     <div class="mt-4">
         <label class="block text-sm font-medium text-gray-700 mb-1">Terms & Conditions</label>
         <textarea name="terms" rows="2"
-            class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">{{ old('terms', config('australian.invoice.terms')) }}</textarea>
+            class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">{{ old('terms', config('australian.invoice.terms')) }}</textarea>
     </div>
 
     <div class="mt-6 flex justify-end gap-8 border-t border-gray-200 pt-4">
