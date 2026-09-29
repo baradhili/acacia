@@ -13,7 +13,7 @@ use Symfony\Component\HttpFoundation\Response;
  * Request::secure() reflects the forwarded client scheme — pinning
  * browsers to HTTPS over plain HTTP would be a no-op at best.
  */
-class SetSecurityHeaders
+class SecureHeaders
 {
     public function handle(Request $request, Closure $next): Response
     {

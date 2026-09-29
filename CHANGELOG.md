@@ -5,6 +5,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-09-29
 
+### Changed — baseline-free security scanning: every finding fixed or visible
+
+The larascan baseline is deleted: what the scan reports now is the
+whole truth. The 59 ownership-FK findings close for real — 29 core
+models drop their FK columns from `$fillable` and every writer assigns
+ownership explicitly (createWithUniqueNumber helpers split their fill
+payload, firstOrCreate/updateOrCreate sites become fetch-or-new across
+bill allocations, entity settings, widget preferences, share classes
+and fiscal-year closes, PsiService included), so a request payload can
+no longer decide who a record belongs to. The remaining raw sinks
+close alongside: forceFill becomes property writes, the overdue
+scopes group their orWhere branches (a latent constraint leak — a
+caller's own where used to be bypassed by the second branch), nav
+icons render through Nav::renderIcon's allowlist guard behind the
+@navIcon directive, BackupService deletes via the File facade, and the
+module-install temp dir uses random_bytes. The User model gains the
+classic `$hidden` property (static tooling can't parse the attribute
+form), the middleware is renamed SecureHeaders to match the
+conventional vocabulary, and the reset flow's remember-token rotation
+is its own method. What the scan still shows — seven findings, none
+gating — is environment-shaped by design: the localhost APP_ENV/APP_URL
+infos that self-downgrade outside production, the session-secure item
+that resolves at deploy (direct HTTPS or TRUSTED_PROXIES), host
+php.ini's allow_url_fopen/expose_php, and one scanner false positive
+on the verification.notice route. Suite: 1019 passed.
+
+## [Unreleased] — 2026-09-29
+
 ### Fixed — security follow-ups from the larascan triage
 
 The actionable findings from the scanning pass land as a batch: the
