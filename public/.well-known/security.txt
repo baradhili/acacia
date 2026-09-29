@@ -1,0 +1,5 @@
+# https://securitytxt.org / RFC 9116 — where researchers report
+# vulnerabilities in Acacia. Add a Canonical field (and re-date an
+# Expires) once the deployment sits on its stable production domain.
+Contact: https://github.com/baradhili/acacia/security/advisories
+Preferred-Languages: en
