@@ -5,6 +5,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-09-28
 
+### Fixed — merge-review round: the cross-module relation guards itself
+
+The CRM lead's `estimate()` relation imported the Proposals module's
+Estimate without the `class_exists` check the cross-module rule
+requires — the lead view's `Route::has` guards protected the view
+path, but any other caller (`$lead->estimate` from a future API,
+export or tinker) would fatal the moment Proposals is uninstalled.
+The relation now guards itself: with the module absent it binds to a
+placeholder constrained to never match a row (the FK and the
+core-schema estimates table outlive the class), so every caller gets
+null. The sidebar labels the module's provider registers ("Estimates",
+"New Estimate") also move to translation keys
+(`lang/en/proposals.php`) per the translation policy — no `en_AU`
+override needed, identical spelling.
+
+## [Unreleased] — 2026-09-28
+
 ### Changed — modularisation arc finished: estimates extracted to Modules/Proposals
 
 Quotes/estimates move out of the core app into **Modules/Proposals**, the

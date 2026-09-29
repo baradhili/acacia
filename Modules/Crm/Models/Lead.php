@@ -142,12 +142,18 @@ class Lead extends Model
 
     /**
      * The estimate prepared through the proposal-stage shortcut.
-     * Module-to-module soft dep on Proposals: only dereference behind
-     * a Route::has guard on the estimates routes (the lead view), so
-     * a deployment without Proposals never loads it.
+     * Soft dependency on the Proposals module (the cross-module
+     * class_exists rule): when the module is uninstalled the FK
+     * outlives its class, so the relation binds to the
+     * OrphanedEstimate placeholder — which can never match a row —
+     * and every caller gets null instead of a missing-class fatal.
      */
     public function estimate(): BelongsTo
     {
+        if (! class_exists(Estimate::class)) {
+            return $this->belongsTo(OrphanedEstimate::class)->whereRaw('1 = 0');
+        }
+
         return $this->belongsTo(Estimate::class);
     }
 
