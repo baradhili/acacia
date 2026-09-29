@@ -211,13 +211,22 @@ class FiscalYearService
 
     /**
      * The workflow row for $year, created in trial status when absent.
+     * entity_id is an unfillable FK — assigned explicitly on the create
+     * path instead of firstOrCreate.
      */
     public function ensureCloseRecord(Entity $entity, int $year): FiscalYearClose
     {
-        return FiscalYearClose::firstOrCreate(
-            ['entity_id' => $entity->id, 'year' => $year],
-            ['status' => FiscalYearClose::STATUS_TRIAL],
-        );
+        $record = FiscalYearClose::where('entity_id', $entity->id)
+            ->where('year', $year)
+            ->first();
+        if (! $record) {
+            $record = new FiscalYearClose;
+            $record->fill(['year' => $year, 'status' => FiscalYearClose::STATUS_TRIAL]);
+            $record->entity_id = $entity->id;
+            $record->save();
+        }
+
+        return $record;
     }
 
     /**

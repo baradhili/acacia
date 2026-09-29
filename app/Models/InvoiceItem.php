@@ -11,8 +11,6 @@ class InvoiceItem extends Model
     use HasFactory;
 
     protected $fillable = [
-        'invoice_id',
-        'time_entry_id',
         'description',
         'quantity',
         'unit_price',
@@ -106,9 +104,12 @@ class InvoiceItem extends Model
     /**
      * Build an (unsaved) invoice item from a time entry.
      *
-     * Does NOT persist — the caller must save it (e.g. via
-     * $invoice->items()->create($item->getAttributes()) or ->save()), so the
-     * invoice_id foreign key is set by the relationship.
+     * Does NOT persist — the caller must save it, with invoice_id set by the
+     * relationship (e.g. $invoice->items()->make($item->getAttributes())).
+     * time_entry_id is outside $fillable: it is set here by explicit
+     * assignment, and the caller must re-assign it after the relation
+     * make()/create() (which drops unfillable keys from the attribute
+     * array).
      */
     public static function createFromTimeEntry(TimeEntry $timeEntry): self
     {
@@ -117,14 +118,15 @@ class InvoiceItem extends Model
             $description = $timeEntry->project->name.' - '.$description;
         }
 
-        $item = new self([
-            'time_entry_id' => $timeEntry->id,
+        $item = new self;
+        $item->fill([
             'description' => $description,
             'quantity' => $timeEntry->hours,
             'unit_price' => $timeEntry->effective_rate,
             'tax_rate' => config('australian.gst.rate', 10),
             'sort_order' => 0,
         ]);
+        $item->time_entry_id = $timeEntry->id;
 
         $item->calculateTotals();
 

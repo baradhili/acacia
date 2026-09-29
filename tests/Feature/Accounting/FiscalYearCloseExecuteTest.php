@@ -179,12 +179,14 @@ class FiscalYearCloseExecuteTest extends TestCase
         $year = $this->closableYear();
 
         $client = Client::factory()->create();
-        Payment::create([
-            'client_id' => $client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 500,
             'payment_date' => $year.'-11-01',
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $client->id;
+        $payment->save();
 
         $this->approvedRecord($year);
 

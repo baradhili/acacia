@@ -39,6 +39,35 @@ class IfrsReportsFinancialTest extends TestCase
 
     protected Account $travel;
 
+    /**
+     * Invoice with its client assigned directly — client_id left the
+     * core model's $fillable in the mass-assignment hardening, so a
+     * plain ::create() would drop it and lose ownership.
+     */
+    protected function createInvoiceFor(Client $client, array $attributes): Invoice
+    {
+        $invoice = new Invoice;
+        $invoice->fill($attributes);
+        $invoice->client_id = $client->id;
+        $invoice->save();
+
+        return $invoice;
+    }
+
+    /**
+     * Payment with its client assigned directly — same FK hardening
+     * rationale as createInvoiceFor.
+     */
+    protected function createPaymentFor(Client $client, array $attributes): Payment
+    {
+        $payment = new Payment;
+        $payment->fill($attributes);
+        $payment->client_id = $client->id;
+        $payment->save();
+
+        return $payment;
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -249,8 +278,7 @@ class IfrsReportsFinancialTest extends TestCase
     public function test_aging_report_buckets_overdue_ar_invoice(): void
     {
         $client = Client::factory()->create(['name' => 'Aging Client Co']);
-        $invoice = Invoice::create([
-            'client_id' => $client->id,
+        $invoice = $this->createInvoiceFor($client, [
             'issue_date' => now()->subDays(60)->toDateString(),
             'due_date' => now()->subDays(40)->toDateString(), // 40 days past due
             'status' => Invoice::STATUS_SENT,
@@ -264,8 +292,7 @@ class IfrsReportsFinancialTest extends TestCase
         $invoice->refresh();
         $invoice->recalculateTotals();
 
-        $payment = Payment::create([
-            'client_id' => $client->id,
+        $payment = $this->createPaymentFor($client, [
             'amount' => 50,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
@@ -282,8 +309,7 @@ class IfrsReportsFinancialTest extends TestCase
     public function test_aging_report_keeps_a_same_day_due_invoice_current(): void
     {
         $client = Client::factory()->create(['name' => 'Same Day Client Co']);
-        $invoice = Invoice::create([
-            'client_id' => $client->id,
+        $invoice = $this->createInvoiceFor($client, [
             'issue_date' => now()->subDay()->toDateString(),
             'due_date' => now()->toDateString(), // due earlier on the as-of day
             'status' => Invoice::STATUS_SENT,
@@ -310,7 +336,7 @@ class IfrsReportsFinancialTest extends TestCase
     public function test_aging_report_ap_variant_uses_bills(): void
     {
         $supplier = Supplier::create(['name' => 'Aging Supplier Co']);
-        $bill = Bill::create(['supplier_id' => $supplier->id]);
+        $bill = Bill::createWithUniqueNumber(['supplier_id' => $supplier->id]);
         $bill->items()->create([
             'description' => 'Supplies',
             'quantity' => 1,
@@ -332,8 +358,7 @@ class IfrsReportsFinancialTest extends TestCase
     public function test_income_by_customer_shows_outstanding(): void
     {
         $client = Client::factory()->create(['name' => 'Income Client Co']);
-        $invoice = Invoice::create([
-            'client_id' => $client->id,
+        $invoice = $this->createInvoiceFor($client, [
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
@@ -347,8 +372,7 @@ class IfrsReportsFinancialTest extends TestCase
         $invoice->refresh();
         $invoice->recalculateTotals();
 
-        $payment = Payment::create([
-            'client_id' => $client->id,
+        $payment = $this->createPaymentFor($client, [
             'amount' => 50,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
@@ -365,7 +389,7 @@ class IfrsReportsFinancialTest extends TestCase
     public function test_expenses_by_category_report_renders(): void
     {
         $supplier = Supplier::create(['name' => 'Category Supplier Co']);
-        $bill = Bill::create([
+        $bill = Bill::createWithUniqueNumber([
             'supplier_id' => $supplier->id,
             'bill_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),

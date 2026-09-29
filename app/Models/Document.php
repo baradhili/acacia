@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class Document extends Model
 {
@@ -13,7 +15,6 @@ class Document extends Model
 
     protected $fillable = [
         'documentable_type',
-        'documentable_id',
         'name',
         'file_path',
         'mime_type',
@@ -36,9 +37,9 @@ class Document extends Model
         static::deleting(function ($document) {
             if ($document->file_path) {
                 try {
-                    \Illuminate\Support\Facades\Storage::disk('public')->delete($document->file_path);
+                    Storage::disk('public')->delete($document->file_path);
                 } catch (\Throwable $e) {
-                    \Illuminate\Support\Facades\Log::warning('Failed to delete document file', [
+                    Log::warning('Failed to delete document file', [
                         'document_id' => $document->id,
                         'file_path' => $document->file_path,
                         'error' => $e->getMessage(),

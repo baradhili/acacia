@@ -10,6 +10,7 @@ use App\Models\Payment;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
 use App\Models\User;
+use IFRS\Models\Entity;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -30,15 +31,15 @@ class DocumentViewUploadTest extends TestCase
 
         $this->user = User::factory()->create();
         $this->user->assignRole('admin');
-        
+
         Storage::fake('public');
     }
 
     public function test_invoice_edit_view_displays_document_upload_form(): void
     {
         $client = Client::factory()->create();
-        $invoice = Invoice::create([
-            'client_id' => $client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'invoice_number' => 'INV-2024-0001',
             'status' => 'draft',
             'issue_date' => now(),
@@ -47,6 +48,8 @@ class DocumentViewUploadTest extends TestCase
             'tax_amount' => 10,
             'total' => 110,
         ]);
+        $invoice->client_id = $client->id;
+        $invoice->save();
 
         $response = $this->actingAs($this->user)->get(route('invoices.edit', $invoice));
 
@@ -60,8 +63,8 @@ class DocumentViewUploadTest extends TestCase
     public function test_document_upload_input_accepts_multiple_files(): void
     {
         $client = Client::factory()->create();
-        $invoice = Invoice::create([
-            'client_id' => $client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'invoice_number' => 'INV-2024-0008',
             'status' => 'draft',
             'issue_date' => now(),
@@ -70,6 +73,8 @@ class DocumentViewUploadTest extends TestCase
             'tax_amount' => 10,
             'total' => 110,
         ]);
+        $invoice->client_id = $client->id;
+        $invoice->save();
 
         $response = $this->actingAs($this->user)->get(route('invoices.edit', $invoice));
 
@@ -87,7 +92,7 @@ class DocumentViewUploadTest extends TestCase
     {
         // bills.edit loads expense accounts through the IFRS package's
         // EntityScope, which dereferences the authed user's entity.
-        $entity = \IFRS\Models\Entity::create([
+        $entity = Entity::create([
             'name' => 'Test Entity',
             'locale' => 'en_AU',
             'multi_currency' => false,
@@ -96,8 +101,8 @@ class DocumentViewUploadTest extends TestCase
         $this->user->update(['entity_id' => $entity->id]);
 
         $client = Client::factory()->create();
-        $invoice = Invoice::create([
-            'client_id' => $client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'invoice_number' => 'INV-2024-0009',
             'status' => 'draft',
             'issue_date' => now(),
@@ -106,21 +111,27 @@ class DocumentViewUploadTest extends TestCase
             'tax_amount' => 10,
             'total' => 110,
         ]);
-        $bill = Bill::create(['supplier_id' => Supplier::factory()->create()->id]);
-        $payment = Payment::create([
-            'client_id' => $client->id,
+        $invoice->client_id = $client->id;
+        $invoice->save();
+        $bill = Bill::createWithUniqueNumber(['supplier_id' => Supplier::factory()->create()->id]);
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 110,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
-        $purchaseOrder = PurchaseOrder::create([
-            'client_id' => $client->id,
+        $payment->client_id = $client->id;
+        $payment->save();
+        $purchaseOrder = new PurchaseOrder;
+        $purchaseOrder->fill([
             'po_number' => 'PO-2024-0001',
             'title' => 'Test PO',
             'status' => 'draft',
             'budgeted_amount' => 5000,
             'used_amount' => 0,
         ]);
+        $purchaseOrder->client_id = $client->id;
+        $purchaseOrder->save();
 
         $pages = [
             [route('invoices.edit', $invoice), 'Invoice'],
@@ -138,15 +149,15 @@ class DocumentViewUploadTest extends TestCase
             $response->assertSee('documentUploadArea', false);
             $response->assertSee('uploadFiles(e.dataTransfer.files)');
             // The component derives the type from the model's class name.
-            $response->assertSee('value="' . $type . '"', false);
+            $response->assertSee('value="'.$type.'"', false);
         }
     }
 
     public function test_can_upload_document_for_invoice_via_view(): void
     {
         $client = Client::factory()->create();
-        $invoice = Invoice::create([
-            'client_id' => $client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'invoice_number' => 'INV-2024-0002',
             'status' => 'draft',
             'issue_date' => now(),
@@ -155,6 +166,8 @@ class DocumentViewUploadTest extends TestCase
             'tax_amount' => 10,
             'total' => 110,
         ]);
+        $invoice->client_id = $client->id;
+        $invoice->save();
 
         // Use the real test PDF file
         $testPdfPath = base_path('tests/test upload doc.pdf');
@@ -175,7 +188,7 @@ class DocumentViewUploadTest extends TestCase
         ]);
 
         $response->assertStatus(201);
-        
+
         $this->assertDatabaseHas('documents', [
             'documentable_type' => 'App\\Models\\Invoice',
             'documentable_id' => $invoice->id,
@@ -187,7 +200,7 @@ class DocumentViewUploadTest extends TestCase
         $document = Document::where('documentable_type', 'App\\Models\\Invoice')
             ->where('documentable_id', $invoice->id)
             ->first();
-        
+
         $this->assertNotNull($document);
         $this->assertEquals('test upload doc.pdf', $document->name);
     }
@@ -195,8 +208,8 @@ class DocumentViewUploadTest extends TestCase
     public function test_invoice_view_shows_uploaded_documents(): void
     {
         $client = Client::factory()->create();
-        $invoice = Invoice::create([
-            'client_id' => $client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'invoice_number' => 'INV-2024-0003',
             'status' => 'draft',
             'issue_date' => now(),
@@ -205,6 +218,8 @@ class DocumentViewUploadTest extends TestCase
             'tax_amount' => 10,
             'total' => 110,
         ]);
+        $invoice->client_id = $client->id;
+        $invoice->save();
 
         // Create a document for the invoice
         Document::factory()->create([
@@ -226,8 +241,8 @@ class DocumentViewUploadTest extends TestCase
     public function test_can_delete_document_from_invoice_view(): void
     {
         $client = Client::factory()->create();
-        $invoice = Invoice::create([
-            'client_id' => $client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'invoice_number' => 'INV-2024-0004',
             'status' => 'draft',
             'issue_date' => now(),
@@ -236,6 +251,8 @@ class DocumentViewUploadTest extends TestCase
             'tax_amount' => 10,
             'total' => 110,
         ]);
+        $invoice->client_id = $client->id;
+        $invoice->save();
 
         $document = Document::factory()->create([
             'documentable_type' => 'App\\Models\\Invoice',
@@ -258,8 +275,8 @@ class DocumentViewUploadTest extends TestCase
     public function test_can_download_document_from_invoice_view(): void
     {
         $client = Client::factory()->create();
-        $invoice = Invoice::create([
-            'client_id' => $client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'invoice_number' => 'INV-2024-0005',
             'status' => 'draft',
             'issue_date' => now(),
@@ -268,6 +285,8 @@ class DocumentViewUploadTest extends TestCase
             'tax_amount' => 10,
             'total' => 110,
         ]);
+        $invoice->client_id = $client->id;
+        $invoice->save();
 
         $document = Document::factory()->create([
             'documentable_type' => 'App\\Models\\Invoice',
@@ -290,8 +309,8 @@ class DocumentViewUploadTest extends TestCase
     public function test_invoice_edit_page_has_document_upload_scripts(): void
     {
         $client = Client::factory()->create();
-        $invoice = Invoice::create([
-            'client_id' => $client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'invoice_number' => 'INV-2024-0006',
             'status' => 'draft',
             'issue_date' => now(),
@@ -300,6 +319,8 @@ class DocumentViewUploadTest extends TestCase
             'tax_amount' => 10,
             'total' => 110,
         ]);
+        $invoice->client_id = $client->id;
+        $invoice->save();
 
         $response = $this->actingAs($this->user)->get(route('invoices.edit', $invoice));
 
@@ -313,8 +334,8 @@ class DocumentViewUploadTest extends TestCase
     public function test_document_upload_with_real_pdf_file(): void
     {
         $client = Client::factory()->create();
-        $invoice = Invoice::create([
-            'client_id' => $client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'invoice_number' => 'INV-2024-0007',
             'status' => 'draft',
             'issue_date' => now(),
@@ -323,15 +344,17 @@ class DocumentViewUploadTest extends TestCase
             'tax_amount' => 10,
             'total' => 110,
         ]);
+        $invoice->client_id = $client->id;
+        $invoice->save();
 
         // Use the exact test PDF file from /tests directory
         $testPdfPath = base_path('tests/test upload doc.pdf');
-        
-        $this->assertFileExists($testPdfPath, 'Test PDF file should exist at: ' . $testPdfPath);
-        
+
+        $this->assertFileExists($testPdfPath, 'Test PDF file should exist at: '.$testPdfPath);
+
         $originalContent = file_get_contents($testPdfPath);
         $this->assertStringStartsWith('%PDF', $originalContent, 'File should be a valid PDF');
-        
+
         $file = new UploadedFile(
             $testPdfPath,
             'test upload doc.pdf',
@@ -355,7 +378,7 @@ class DocumentViewUploadTest extends TestCase
         $this->assertNotNull($document);
         $this->assertEquals('test upload doc.pdf', $document->name);
         $this->assertEquals('application/pdf', $document->mime_type);
-        
+
         // Verify the file was stored
         $this->assertTrue(Storage::disk('public')->exists($document->file_path));
     }

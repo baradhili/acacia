@@ -58,13 +58,27 @@ class Phase45RemainingTest extends TestCase
     // Project Staff Rate Override Tests
     // ============================================================
 
+    /**
+     * Project staff assignment with its project/user ownership assigned
+     * directly — both FKs left the core model's $fillable in the
+     * mass-assignment hardening, so ::create() would drop them.
+     */
+    protected function assignStaff(array $attributes = []): ProjectStaff
+    {
+        $assignment = new ProjectStaff;
+        $assignment->fill($attributes);
+        $assignment->project_id = $this->project->id;
+        $assignment->user_id = $this->staff->id;
+        $assignment->save();
+
+        return $assignment;
+    }
+
     public function test_project_staff_assignment_with_custom_charge_rate_overrides_default_rate(): void
     {
         $customRate = 175.00;
 
-        $projectStaff = ProjectStaff::create([
-            'project_id' => $this->project->id,
-            'user_id' => $this->staff->id,
+        $projectStaff = $this->assignStaff([
             'hourly_rate' => $customRate,
             'is_active' => true,
         ]);
@@ -75,9 +89,7 @@ class Phase45RemainingTest extends TestCase
 
     public function test_project_staff_falls_back_to_project_default_rate_when_no_custom_rate(): void
     {
-        $projectStaff = ProjectStaff::create([
-            'project_id' => $this->project->id,
-            'user_id' => $this->staff->id,
+        $projectStaff = $this->assignStaff([
             'hourly_rate' => null,
             'is_active' => true,
         ]);
@@ -87,9 +99,7 @@ class Phase45RemainingTest extends TestCase
 
     public function test_project_staff_can_be_deactivated(): void
     {
-        $projectStaff = ProjectStaff::create([
-            'project_id' => $this->project->id,
-            'user_id' => $this->staff->id,
+        $projectStaff = $this->assignStaff([
             'hourly_rate' => 175.00,
             'is_active' => true,
         ]);

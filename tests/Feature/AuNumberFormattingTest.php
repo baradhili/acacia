@@ -51,7 +51,12 @@ class AuNumberFormattingTest extends TestCase
 
     public function test_company_profile_accepts_spaced_identifiers_and_redisplays_formatted(): void
     {
-        $profile = CompanyProfile::create(['entity_id' => $this->entity->id, 'country' => 'AU']);
+        // entity_id is an FK outside CompanyProfile's $fillable
+        // (mass-assignment hardening) — ownership is assigned directly.
+        $profile = new CompanyProfile;
+        $profile->fill(['country' => 'AU']);
+        $profile->entity_id = $this->entity->id;
+        $profile->save();
 
         $this->actingAs($this->admin)
             ->put(route('company-profile.update'), [

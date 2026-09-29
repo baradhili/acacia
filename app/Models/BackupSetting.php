@@ -56,6 +56,7 @@ class BackupSetting extends Model
      */
     public function recordSuccess(): void
     {
-        $this->forceFill(['last_backup_at' => now()])->save();
+        $this->last_backup_at = now();
+        $this->save();
     }
 }

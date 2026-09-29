@@ -142,13 +142,15 @@ class MatchingTolerancesAndMaintenanceTest extends TestCase
      */
     protected function postedPayment(Client $client, float $amount, string $date): Payment
     {
-        $payment = Payment::create([
-            'client_id' => $client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => $amount,
             'payment_date' => $date,
             'payment_method' => Payment::METHOD_BANK_TRANSFER,
             'status' => Payment::STATUS_COMPLETED,
         ]);
+        $payment->client_id = $client->id;
+        $payment->save();
         $this->assertNotNull($payment->postToIFRS());
 
         return $payment;

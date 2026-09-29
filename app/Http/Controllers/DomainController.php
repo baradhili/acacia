@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Domain;
 use App\Models\Prepayment;
 use App\Services\IfrsPosting;
-use Carbon\Carbon;
 use IFRS\Models\Account;
 use Illuminate\Http\Request;
 
@@ -36,7 +35,11 @@ class DomainController extends Controller
     {
         $validated = $this->validated($request);
 
-        Domain::create($validated + ['entity_id' => IfrsPosting::resolveEntity()?->id]);
+        // entity_id is an unfillable FK — assign it explicitly.
+        $domain = new Domain;
+        $domain->fill($validated);
+        $domain->entity_id = IfrsPosting::resolveEntity()?->id;
+        $domain->save();
 
         return redirect()->route('domains.index')->with('success', 'Domain added to the registry.');
     }
@@ -85,7 +88,7 @@ class DomainController extends Controller
         if ($domain->indefinite_life) {
             return $reject('Indefinite-life domains are not amortised.');
         }
-        if (!$domain->useful_life_months || $domain->useful_life_months < 1) {
+        if (! $domain->useful_life_months || $domain->useful_life_months < 1) {
             return $reject('Set a useful life (months) before creating the schedule.');
         }
         if ((float) $domain->cost <= 0) {
@@ -103,7 +106,7 @@ class DomainController extends Controller
             : $this->accountByCode(config('subscriptions.domain_intangible_code', 170));
         $expenseAccount = $this->accountByCode(config('subscriptions.amortisation_expense_code', 7910));
 
-        if (!$assetAccount || !$expenseAccount) {
+        if (! $assetAccount || ! $expenseAccount) {
             return $reject('Intangible (170) or Amortisation Expense (7910) accounts are not seeded.');
         }
 
@@ -112,11 +115,10 @@ class DomainController extends Controller
         $periods = $domain->useful_life_months;
         $total = (float) $domain->cost;
 
-        $domain->prepayments()->create([
-            'entity_id' => $entity->id,
+        // domain_id comes from the relation; the entity and account FKs
+        // are unfillable and assigned explicitly.
+        $prepayment = $domain->prepayments()->make([
             'description' => "Domain amortisation: {$domain->name}",
-            'asset_account_id' => $assetAccount->id,
-            'expense_account_id' => $expenseAccount->id,
             'service_start' => $start->toDateString(),
             'service_end' => $end->toDateString(),
             'periods' => $periods,
@@ -125,6 +127,10 @@ class DomainController extends Controller
             'next_period_date' => $start->copy()->endOfMonth()->toDateString(),
             'status' => Prepayment::STATUS_ACTIVE,
         ]);
+        $prepayment->entity_id = $entity->id;
+        $prepayment->asset_account_id = $assetAccount->id;
+        $prepayment->expense_account_id = $expenseAccount->id;
+        $prepayment->save();
 
         return redirect()->route('prepayments.index')
             ->with('success', "Amortisation schedule created for {$domain->name} — the runner will post {$periods} monthly entries.");

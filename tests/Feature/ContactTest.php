@@ -73,15 +73,19 @@ class ContactTest extends TestCase
     {
         $client = Client::factory()->create();
 
-        $document = Document::create([
+        // documentable_id is an FK outside Document's $fillable
+        // (mass-assignment hardening) — ownership is assigned directly.
+        $document = new Document;
+        $document->fill([
             'documentable_type' => Client::class,
-            'documentable_id' => $client->id,
             'name' => 'Contract.pdf',
             'file_path' => 'documents/contract.pdf',
             'mime_type' => 'application/pdf',
             'size' => 1024,
             'uploaded_by' => $this->admin->id,
         ]);
+        $document->documentable_id = $client->id;
+        $document->save();
 
         $this->assertCount(1, $client->documents);
         $this->assertEquals('Contract.pdf', $client->documents->first()->name);

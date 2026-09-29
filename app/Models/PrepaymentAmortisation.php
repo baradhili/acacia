@@ -14,11 +14,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class PrepaymentAmortisation extends Model
 {
     protected $fillable = [
-        'prepayment_id',
         'period_date',
         'amount',
-        'ifrs_transaction_id',
-        'reversal_transaction_id',
         'reversed_at',
     ];
 

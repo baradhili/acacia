@@ -133,7 +133,10 @@ class FrankingAccountTest extends TestCase
     {
         $this->entry(['entry_type' => FrankingAccountEntry::TYPE_TAX_PAYMENT, 'credit_amount' => 10000]);
 
-        $profile = CompanyProfile::create(['entity_id' => $this->entity->id, 'country' => 'AU']);
+        $profile = new CompanyProfile;
+        $profile->fill(['country' => 'AU']);
+        $profile->entity_id = $this->entity->id;
+        $profile->save();
         $class = $profile->shareClasses()->create(['code' => 'ORD', 'description' => 'Ordinary Shares']);
 
         DividendDeclaration::create([

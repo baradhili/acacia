@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Client;
 use App\Models\Project;
 use App\Models\TimeEntry;
-use App\Models\TimeEntryBreak;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -47,9 +46,12 @@ class TimeEntryController extends Controller
 
         DB::beginTransaction();
         try {
-            $entry = TimeEntry::create(
-                ['user_id' => Auth::id()] + $this->entryPayload($validated)
-            );
+            // user_id/project_id are unfillable FKs — assigned explicitly.
+            $entry = new TimeEntry;
+            $entry->fill(collect($this->entryPayload($validated))->except(['project_id'])->all());
+            $entry->user_id = Auth::id();
+            $entry->project_id = $validated['project_id'];
+            $entry->save();
             $this->syncBreaks($entry, $validated['breaks'] ?? []);
             $entry->recalculateHours();
             DB::commit();
@@ -80,10 +82,13 @@ class TimeEntryController extends Controller
 
         // Active projects plus the entry's own — a draft on a project
         // that has since gone on hold/completed stays editable rather
-        // than being stranded off the form.
+        // than being stranded off the form. The orWhere sits inside a
+        // group so it can never leak past an outer constraint.
         $projects = Project::with(['client', 'purchaseOrder'])
-            ->where('status', Project::STATUS_ACTIVE)
-            ->orWhere('id', $timeEntry->project_id)
+            ->where(function ($q) use ($timeEntry) {
+                $q->where('status', Project::STATUS_ACTIVE)
+                    ->orWhere('id', $timeEntry->project_id);
+            })
             ->orderBy('name')
             ->get();
 
@@ -104,7 +109,10 @@ class TimeEntryController extends Controller
 
         DB::beginTransaction();
         try {
-            $timeEntry->update($this->entryPayload($validated));
+            // project_id is an unfillable FK — assign it explicitly.
+            $timeEntry->fill(collect($this->entryPayload($validated))->except(['project_id'])->all());
+            $timeEntry->project_id = $validated['project_id'];
+            $timeEntry->save();
             $this->syncBreaks($timeEntry, $validated['breaks'] ?? []);
             $timeEntry->recalculateHours();
             DB::commit();
@@ -343,14 +351,14 @@ class TimeEntryController extends Controller
 
     /**
      * Replace the entry's break rows (drafts only ever hit this path).
+     * The relation sets time_entry_id itself.
      */
     protected function syncBreaks(TimeEntry $entry, array $breaks): void
     {
         $entry->breaks()->delete();
 
         foreach ($breaks as $break) {
-            TimeEntryBreak::create([
-                'time_entry_id' => $entry->id,
+            $entry->breaks()->create([
                 'start_time' => $break['start'],
                 'end_time' => $break['end'],
             ]);

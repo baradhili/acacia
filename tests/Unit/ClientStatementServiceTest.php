@@ -19,7 +19,7 @@ class ClientStatementServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new ClientStatementService();
+        $this->service = new ClientStatementService;
     }
 
     protected function createClient(array $attributes = []): Client
@@ -30,12 +30,40 @@ class ClientStatementServiceTest extends TestCase
         ], $attributes));
     }
 
+    /**
+     * Invoice owned by the client via direct attribute assignment —
+     * client_id left the core model's $fillable in the mass-assignment
+     * hardening, so ::create() would silently drop it.
+     */
+    protected function createInvoiceFor(Client $client, array $attributes): Invoice
+    {
+        $invoice = new Invoice;
+        $invoice->fill($attributes);
+        $invoice->client_id = $client->id;
+        $invoice->save();
+
+        return $invoice;
+    }
+
+    /**
+     * Payment owned by the client via direct attribute assignment —
+     * same FK hardening rationale as createInvoiceFor.
+     */
+    protected function createPaymentFor(Client $client, array $attributes): Payment
+    {
+        $payment = new Payment;
+        $payment->fill($attributes);
+        $payment->client_id = $client->id;
+        $payment->save();
+
+        return $payment;
+    }
+
     public function test_generates_statement_for_client_with_invoices(): void
     {
         $client = $this->createClient();
 
-        Invoice::create([
-            'client_id' => $client->id,
+        $this->createInvoiceFor($client, [
             'status' => Invoice::STATUS_SENT,
             'issue_date' => Carbon::parse('2025-07-15'),
             'due_date' => Carbon::parse('2025-08-15'),
@@ -65,8 +93,7 @@ class ClientStatementServiceTest extends TestCase
     {
         $client = $this->createClient();
 
-        Invoice::create([
-            'client_id' => $client->id,
+        $this->createInvoiceFor($client, [
             'status' => Invoice::STATUS_SENT,
             'issue_date' => Carbon::parse('2025-07-15'),
             'due_date' => Carbon::parse('2025-08-15'),
@@ -84,8 +111,7 @@ class ClientStatementServiceTest extends TestCase
     {
         $client = $this->createClient();
 
-        Invoice::create([
-            'client_id' => $client->id,
+        $this->createInvoiceFor($client, [
             'status' => Invoice::STATUS_PARTIALLY_PAID,
             'issue_date' => Carbon::parse('2025-07-10'),
             'due_date' => Carbon::parse('2025-08-10'),
@@ -94,8 +120,7 @@ class ClientStatementServiceTest extends TestCase
             'tax_amount' => 0,
         ]);
 
-        Payment::create([
-            'client_id' => $client->id,
+        $this->createPaymentFor($client, [
             'amount' => 400.00,
             'payment_date' => Carbon::parse('2025-07-20'),
             'payment_method' => Payment::METHOD_BANK_TRANSFER,
@@ -114,8 +139,7 @@ class ClientStatementServiceTest extends TestCase
         $client1 = $this->createClient(['name' => 'Client 1']);
         $client2 = $this->createClient(['name' => 'Client 2']);
 
-        Invoice::create([
-            'client_id' => $client1->id,
+        $this->createInvoiceFor($client1, [
             'status' => Invoice::STATUS_SENT,
             'issue_date' => Carbon::now(),
             'due_date' => Carbon::now()->addDays(30),
@@ -124,8 +148,7 @@ class ClientStatementServiceTest extends TestCase
             'tax_amount' => 0,
         ]);
 
-        Invoice::create([
-            'client_id' => $client2->id,
+        $this->createInvoiceFor($client2, [
             'status' => Invoice::STATUS_PAID,
             'issue_date' => Carbon::now(),
             'due_date' => Carbon::now()->addDays(30),
@@ -144,8 +167,7 @@ class ClientStatementServiceTest extends TestCase
     {
         $client = $this->createClient();
 
-        Invoice::create([
-            'client_id' => $client->id,
+        $this->createInvoiceFor($client, [
             'status' => Invoice::STATUS_SENT,
             'issue_date' => Carbon::parse('2025-07-20'),
             'due_date' => Carbon::parse('2025-08-20'),
@@ -154,8 +176,7 @@ class ClientStatementServiceTest extends TestCase
             'tax_amount' => 0,
         ]);
 
-        Payment::create([
-            'client_id' => $client->id,
+        $this->createPaymentFor($client, [
             'amount' => 500.00,
             'payment_date' => Carbon::parse('2025-07-25'),
             'payment_method' => Payment::METHOD_BANK_TRANSFER,
@@ -173,8 +194,7 @@ class ClientStatementServiceTest extends TestCase
     {
         $client = $this->createClient();
 
-        Invoice::create([
-            'client_id' => $client->id,
+        $this->createInvoiceFor($client, [
             'status' => Invoice::STATUS_SENT,
             'issue_date' => Carbon::parse('2025-07-15'),
             'due_date' => Carbon::parse('2025-08-15'),
@@ -183,8 +203,7 @@ class ClientStatementServiceTest extends TestCase
             'tax_amount' => 0,
         ]);
 
-        Payment::create([
-            'client_id' => $client->id,
+        $this->createPaymentFor($client, [
             'amount' => 300.00,
             'payment_date' => Carbon::parse('2025-07-20'),
             'payment_method' => Payment::METHOD_BANK_TRANSFER,

@@ -188,11 +188,10 @@ class CompanyProfileTest extends TestCase
 
         // A blank trading name clears it; the legal name can stay as-is.
         $this->entity->update(['name' => 'Kept Legal Name Pty Ltd']);
-        CompanyProfile::create([
-            'entity_id' => $this->entity->id,
-            'trading_name' => 'Old Trading Name',
-            'country' => 'AU',
-        ]);
+        $profile = new CompanyProfile;
+        $profile->fill(['trading_name' => 'Old Trading Name', 'country' => 'AU']);
+        $profile->entity_id = $this->entity->id;
+        $profile->save();
 
         $this->actingAs($this->admin)
             ->put(route('company-profile.update'), ['name' => 'Kept Legal Name Pty Ltd', 'trading_name' => ''])
@@ -212,7 +211,10 @@ class CompanyProfileTest extends TestCase
 
     public function test_company_profile_update_replaces_registry_rows(): void
     {
-        $profile = CompanyProfile::create(['entity_id' => $this->entity->id, 'country' => 'AU']);
+        $profile = new CompanyProfile;
+        $profile->fill(['country' => 'AU']);
+        $profile->entity_id = $this->entity->id;
+        $profile->save();
         $profile->directors()->create(['name' => 'Old Director']);
         $profile->allShareholders()->create(['name' => 'Old Holder', 'share_class' => 'ORD', 'shares_held' => 10]);
 
@@ -296,12 +298,14 @@ class CompanyProfileTest extends TestCase
     {
         config(['australian.abn' => '', 'australian.tfn' => '']);
 
-        CompanyProfile::create([
-            'entity_id' => $this->entity->id,
+        $seedProfile = new CompanyProfile;
+        $seedProfile->fill([
             'abn' => '51824753556',
             'tfn' => '987654321',
             'country' => 'AU',
         ]);
+        $seedProfile->entity_id = $this->entity->id;
+        $seedProfile->save();
 
         $this->actingAs($this->admin)
             ->get(route('reports.company-tax'))

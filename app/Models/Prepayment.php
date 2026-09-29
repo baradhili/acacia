@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use IFRS\Models\Account;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -15,17 +16,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Prepayment extends Model
 {
     public const STATUS_ACTIVE = 'active';
+
     public const STATUS_COMPLETED = 'completed';
+
     public const STATUS_VOID = 'void';
 
     protected $fillable = [
-        'entity_id',
-        'bill_payment_id',
-        'bill_item_id',
-        'domain_id',
         'description',
-        'asset_account_id',
-        'expense_account_id',
         'service_start',
         'service_end',
         'periods',
@@ -65,12 +62,12 @@ class Prepayment extends Model
 
     public function assetAccount(): BelongsTo
     {
-        return $this->belongsTo(\IFRS\Models\Account::class, 'asset_account_id');
+        return $this->belongsTo(Account::class, 'asset_account_id');
     }
 
     public function expenseAccount(): BelongsTo
     {
-        return $this->belongsTo(\IFRS\Models\Account::class, 'expense_account_id');
+        return $this->belongsTo(Account::class, 'expense_account_id');
     }
 
     public function amortisations(): HasMany

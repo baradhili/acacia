@@ -66,21 +66,29 @@ class ProjectController extends Controller
         // concurrent project could otherwise take it between the
         // existence validation and the create. Any revalidation
         // failure inside throws and rolls back, leaving the PO free.
+        // client_id/purchase_order_id are unfillable FKs — assigned
+        // explicitly rather than mass-assigned.
         $project = DB::transaction(function () use ($validated) {
             $this->assertPurchaseOrderFitsClient($validated, lock: true);
 
-            return Project::create($validated);
+            $project = new Project;
+            $project->fill(collect($validated)->except(['client_id', 'purchase_order_id'])->all());
+            $project->client_id = $validated['client_id'];
+            $project->purchase_order_id = $validated['purchase_order_id'];
+            $project->save();
+
+            return $project;
         });
 
         // Assign staff if provided
         if (! empty($validated['staff'])) {
             foreach ($validated['staff'] as $staffData) {
-                ProjectStaff::create([
-                    'project_id' => $project->id,
-                    'user_id' => $staffData['user_id'],
+                $assignment = $project->staffAssignments()->make([
                     'hourly_rate' => $staffData['hourly_rate'] ?? null,
                     'is_active' => true,
                 ]);
+                $assignment->user_id = $staffData['user_id'];
+                $assignment->save();
             }
         }
 
@@ -138,23 +146,27 @@ class ProjectController extends Controller
 
         // Same claim discipline as store: revalidate under a row lock so
         // the PO can't be taken (or its status change) between the check
-        // and the save, rolling both back together if it was.
+        // and the save, rolling both back together if it was. The FKs are
+        // assigned explicitly (see store()).
         DB::transaction(function () use ($validated, $project) {
             $this->assertPurchaseOrderFitsClient($validated, $project, lock: true);
 
-            $project->update($validated);
+            $project->fill(collect($validated)->except(['client_id', 'purchase_order_id'])->all());
+            $project->client_id = $validated['client_id'];
+            $project->purchase_order_id = $validated['purchase_order_id'];
+            $project->save();
         });
 
         // Sync staff assignments
         $project->staffAssignments()->delete();
         if (! empty($validated['staff'])) {
             foreach ($validated['staff'] as $staffData) {
-                ProjectStaff::create([
-                    'project_id' => $project->id,
-                    'user_id' => $staffData['user_id'],
+                $assignment = $project->staffAssignments()->make([
                     'hourly_rate' => $staffData['hourly_rate'] ?? null,
                     'is_active' => true,
                 ]);
+                $assignment->user_id = $staffData['user_id'];
+                $assignment->save();
             }
         }
 
@@ -215,10 +227,19 @@ class ProjectController extends Controller
             'hourly_rate' => 'nullable|numeric|min:0',
         ]);
 
-        ProjectStaff::updateOrCreate(
-            ['project_id' => $project->id, 'user_id' => $validated['user_id']],
-            ['hourly_rate' => $validated['hourly_rate'] ?? null]
-        );
+        // Both keys of the lookup are unfillable FKs, so the assignment is
+        // resolved manually instead of updateOrCreate.
+        $assignment = ProjectStaff::where('project_id', $project->id)
+            ->where('user_id', $validated['user_id'])
+            ->first();
+        if (! $assignment) {
+            $assignment = new ProjectStaff;
+            $assignment->project_id = $project->id;
+            $assignment->user_id = $validated['user_id'];
+            $assignment->is_active = true;
+        }
+        $assignment->hourly_rate = $validated['hourly_rate'] ?? null;
+        $assignment->save();
 
         return back()->with('success', 'Staff member assigned successfully.');
     }

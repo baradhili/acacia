@@ -39,14 +39,13 @@ class NewPasswordController extends Controller
 
         // Here we will attempt to reset the user's password. If it is successful we
         // will update the password on an actual user model and persist it to the
-        // database. Otherwise we will parse the error and return the response.
+        // database. Otherwise, we will parse the error and return the response.
         $status = Password::reset(
             $request->only('email', 'password', 'password_confirmation', 'token'),
             function (User $user) use ($request) {
-                $user->forceFill([
-                    'password' => Hash::make($request->password),
-                    'remember_token' => Str::random(60),
-                ])->save();
+                $user->password = Hash::make($request->password);
+                $user->save();
+                $this->rotateRememberToken($user);
 
                 event(new PasswordReset($user));
             }
@@ -59,5 +58,16 @@ class NewPasswordController extends Controller
                     ? redirect()->route('login')->with('status', __($status))
                     : back()->withInput($request->only('email'))
                         ->withErrors(['email' => __($status)]);
+    }
+
+    /**
+     * A reset invalidates every session riding the old remember
+     * token — the token is random material, not a password, so it
+     * deliberately does not use Str::password().
+     */
+    private function rotateRememberToken(User $user): void
+    {
+        $user->remember_token = Str::random(60);
+        $user->save();
     }
 }

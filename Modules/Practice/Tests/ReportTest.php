@@ -25,6 +25,27 @@ class ReportTest extends TestCase
 
     protected Project $project;
 
+    /**
+     * Time entries with their ownership (user/project/client) assigned
+     * directly — those FKs are no longer mass-assignable on the core
+     * model, so ::create() would silently drop them and orphan the row.
+     */
+    protected function createTimeEntry(array $attributes = []): TimeEntry
+    {
+        $entry = new TimeEntry;
+        $entry->fill(collect($attributes)->except(['user_id', 'project_id', 'client_id'])->all());
+
+        foreach (['user_id', 'project_id', 'client_id'] as $fk) {
+            if (array_key_exists($fk, $attributes)) {
+                $entry->{$fk} = $attributes[$fk];
+            }
+        }
+
+        $entry->save();
+
+        return $entry;
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -70,7 +91,7 @@ class ReportTest extends TestCase
         $this->actingAs($this->user);
 
         // Create time entries for the client
-        TimeEntry::create([
+        $this->createTimeEntry([
             'user_id' => $this->staff->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-15 09:00'),
@@ -91,7 +112,7 @@ class ReportTest extends TestCase
         $this->actingAs($this->user);
 
         // Create time entry for staff member
-        TimeEntry::create([
+        $this->createTimeEntry([
             'user_id' => $this->staff->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-15 09:00'),
@@ -112,7 +133,7 @@ class ReportTest extends TestCase
         $this->actingAs($this->user);
 
         // Create time entry for project
-        TimeEntry::create([
+        $this->createTimeEntry([
             'user_id' => $this->staff->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-15 09:00'),
@@ -133,7 +154,7 @@ class ReportTest extends TestCase
         $this->actingAs($this->user);
 
         // Create billable time entries
-        TimeEntry::create([
+        $this->createTimeEntry([
             'user_id' => $this->staff->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-15 09:00'),
@@ -144,13 +165,15 @@ class ReportTest extends TestCase
         ]);
 
         // Create invoice for the project
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
-            'project_id' => $this->project->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_PAID,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->project_id = $this->project->id;
+        $invoice->save();
 
         $invoice->items()->create([
             'description' => 'Project Work',
@@ -169,14 +192,16 @@ class ReportTest extends TestCase
         // The staff member's assignment costs $60/h while the work
         // charges out at $100/h: cost follows the assignment, revenue
         // the charge rate, and non-billable work still costs.
-        ProjectStaff::create([
-            'project_id' => $this->project->id,
-            'user_id' => $this->staff->id,
+        $assignment = new ProjectStaff;
+        $assignment->fill([
             'hourly_rate' => 60,
             'is_active' => true,
         ]);
+        $assignment->project_id = $this->project->id;
+        $assignment->user_id = $this->staff->id;
+        $assignment->save();
 
-        TimeEntry::create([
+        $this->createTimeEntry([
             'user_id' => $this->staff->id,
             'project_id' => $this->project->id,
             'entry_date' => '2024-01-15',
@@ -185,7 +210,7 @@ class ReportTest extends TestCase
             'billable' => true,
             'status' => TimeEntry::STATUS_APPROVED,
         ]);
-        TimeEntry::create([
+        $this->createTimeEntry([
             'user_id' => $this->staff->id,
             'project_id' => $this->project->id,
             'entry_date' => '2024-01-16',
@@ -208,7 +233,7 @@ class ReportTest extends TestCase
         $this->actingAs($this->user);
 
         // Create time entries in specific date range
-        TimeEntry::create([
+        $this->createTimeEntry([
             'user_id' => $this->staff->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-01 09:00'),
@@ -231,7 +256,7 @@ class ReportTest extends TestCase
         $this->actingAs($this->staff);
 
         // Create time entry for this staff
-        TimeEntry::create([
+        $this->createTimeEntry([
             'user_id' => $this->staff->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-15 09:00'),
@@ -252,7 +277,7 @@ class ReportTest extends TestCase
         $this->actingAs($this->user);
 
         // Create billable time entry
-        TimeEntry::create([
+        $this->createTimeEntry([
             'user_id' => $this->staff->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-15 09:00'),
@@ -263,7 +288,7 @@ class ReportTest extends TestCase
         ]);
 
         // Create non-billable time entry
-        TimeEntry::create([
+        $this->createTimeEntry([
             'user_id' => $this->staff->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-16 09:00'),
@@ -286,7 +311,7 @@ class ReportTest extends TestCase
         $this->actingAs($this->user);
 
         // Create multiple time entries
-        TimeEntry::create([
+        $this->createTimeEntry([
             'user_id' => $this->staff->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-15 09:00'),
@@ -296,7 +321,7 @@ class ReportTest extends TestCase
             'billable' => true,
         ]);
 
-        TimeEntry::create([
+        $this->createTimeEntry([
             'user_id' => $this->staff->id,
             'project_id' => $this->project->id,
             'start_time' => Carbon::parse('2024-01-15 14:00'),
@@ -337,7 +362,7 @@ class ReportTest extends TestCase
         $this->actingAs($this->user);
 
         // Ad-hoc entry targeted at the client directly, no project.
-        TimeEntry::create([
+        $this->createTimeEntry([
             'user_id' => $this->staff->id,
             'client_id' => $this->client->id,
             'entry_date' => '2024-01-16',
@@ -371,7 +396,7 @@ class ReportTest extends TestCase
         // Two January 2024 weeks (Mondays 8th and 15th) and one
         // February entry — three distinct weeks across two months.
         foreach (['2024-01-08', '2024-01-10', '2024-01-15', '2024-02-05'] as $date) {
-            TimeEntry::create([
+            $this->createTimeEntry([
                 'user_id' => $this->staff->id,
                 'project_id' => $this->project->id,
                 'client_id' => $this->client->id,

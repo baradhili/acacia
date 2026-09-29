@@ -15,7 +15,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class EntitySetting extends Model
 {
     protected $fillable = [
-        'entity_id',
         'open_year',
         'psi_mode',
         'psb_results',
@@ -65,9 +64,11 @@ class EntitySetting extends Model
 
     public static function setOpenYear(Entity $entity, ?int $year): void
     {
-        static::updateOrCreate(
-            ['entity_id' => $entity->id],
-            ['open_year' => $year],
-        );
+        // entity_id is an unfillable FK — resolve manually instead of
+        // updateOrCreate, which would drop it on the create path.
+        $setting = static::forEntity($entity);
+        $setting->entity_id = $entity->id;
+        $setting->open_year = $year;
+        $setting->save();
     }
 }

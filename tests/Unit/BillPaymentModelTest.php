@@ -5,7 +5,6 @@ namespace Tests\Unit;
 use App\Models\Bill;
 use App\Models\BillPayment;
 use App\Models\Supplier;
-use Carbon\Carbon;
 use IFRS\Models\Account;
 use IFRS\Models\Balance;
 use IFRS\Models\Currency;
@@ -26,6 +25,36 @@ class BillPaymentModelTest extends TestCase
     {
         parent::setUp();
         $this->supplier = Supplier::create(['name' => 'Test Supplier']);
+    }
+
+    /**
+     * Bill with its supplier assigned directly — supplier_id left the
+     * core model's $fillable in the mass-assignment hardening, so a
+     * plain ::create() would drop it and violate the NOT NULL column.
+     */
+    protected function createBill(): Bill
+    {
+        $bill = new Bill;
+        $bill->supplier_id = $this->supplier->id;
+        $bill->save();
+
+        return $bill;
+    }
+
+    /**
+     * Bill line with its expense account assigned after the relation
+     * create — expense_account_id is an FK outside BillItem's $fillable,
+     * and the relation only sets the bill link itself.
+     */
+    protected function createBillItem(Bill $bill, array $attributes, ?Account $expenseAccount = null)
+    {
+        $item = $bill->items()->create($attributes);
+        if ($expenseAccount) {
+            $item->expense_account_id = $expenseAccount->id;
+            $item->save();
+        }
+
+        return $item;
     }
 
     /**
@@ -91,14 +120,16 @@ class BillPaymentModelTest extends TestCase
 
     public function test_generates_spay_number(): void
     {
-        $payment = BillPayment::create([
-            'supplier_id' => $this->supplier->id,
+        $payment = new BillPayment;
+        $payment->fill([
             'amount' => 100,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->supplier_id = $this->supplier->id;
+        $payment->save();
 
-        $this->assertMatchesRegularExpression('/^SPAY-' . date('Y') . '-\d{4}$/', $payment->payment_number);
+        $this->assertMatchesRegularExpression('/^SPAY-'.date('Y').'-\d{4}$/', $payment->payment_number);
     }
 
     public function test_post_to_ifrs_creates_per_line_gst_entries(): void
@@ -110,21 +141,19 @@ class BillPaymentModelTest extends TestCase
 
         // Mixed-GST bill: $110 taxable (travel) + $50 GST-free (bank fee).
         // Prices are entered GST-inclusive: 110 = 100 net + 10 GST.
-        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
-        $bill->items()->create([
+        $bill = $this->createBill();
+        $this->createBillItem($bill, [
             'description' => 'Taxable travel',
             'quantity' => 1,
             'unit_price' => 110,
             'tax_rate' => 10,
-            'expense_account_id' => $travelAccount->id,
-        ]);
-        $bill->items()->create([
+        ], $travelAccount);
+        $this->createBillItem($bill, [
             'description' => 'GST-free bank fee',
             'quantity' => 1,
             'unit_price' => 50,
             'tax_rate' => 0,
-            'expense_account_id' => $bankChargesAccount->id,
-        ]);
+        ], $bankChargesAccount);
         $bill->recalculateTotals();
         $bill->markAsOpen();
         $this->assertEquals(160, (float) $bill->total);
@@ -155,7 +184,7 @@ class BillPaymentModelTest extends TestCase
         // and the VAT split adds a 10 credit contra against the same account,
         // so the net debit is 100 (net-of-GST expense).
         $travelDebit = Ledger::where('post_account', $travelAccount->id)
-                ->where('entry_type', Balance::DEBIT)->sum('amount')
+            ->where('entry_type', Balance::DEBIT)->sum('amount')
             - Ledger::where('post_account', $travelAccount->id)
                 ->where('entry_type', Balance::CREDIT)->sum('amount');
         $this->assertEquals(100, (float) $travelDebit);
@@ -182,29 +211,26 @@ class BillPaymentModelTest extends TestCase
         // - $110 "Incl. GST" travel     (100 net + 10 GST)
         // - $110 "Add GST" travel       ($100 ex-GST + 10 GST on top)
         // - $50 GST-free bank fee
-        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
-        $bill->items()->create([
+        $bill = $this->createBill();
+        $this->createBillItem($bill, [
             'description' => 'Incl-GST travel',
             'quantity' => 1,
             'unit_price' => 110,
             'tax_rate' => 10,
-            'expense_account_id' => $travelAccount->id,
-        ]);
-        $bill->items()->create([
+        ], $travelAccount);
+        $this->createBillItem($bill, [
             'description' => 'Ex-GST travel (GST added on top)',
             'quantity' => 1,
             'unit_price' => 100,
             'tax_rate' => 10,
             'gst_added' => true,
-            'expense_account_id' => $travelAccount->id,
-        ]);
-        $bill->items()->create([
+        ], $travelAccount);
+        $this->createBillItem($bill, [
             'description' => 'GST-free bank fee',
             'quantity' => 1,
             'unit_price' => 50,
             'tax_rate' => 0,
-            'expense_account_id' => $bankChargesAccount->id,
-        ]);
+        ], $bankChargesAccount);
         $bill->recalculateTotals();
         $bill->markAsOpen();
         $this->assertEquals(270, (float) $bill->total);
@@ -230,7 +256,7 @@ class BillPaymentModelTest extends TestCase
 
         // Dr Travel net 200 across both GST modes (100 + 100).
         $travelNet = Ledger::where('post_account', $travelAccount->id)
-                ->where('entry_type', Balance::DEBIT)->sum('amount')
+            ->where('entry_type', Balance::DEBIT)->sum('amount')
             - Ledger::where('post_account', $travelAccount->id)
                 ->where('entry_type', Balance::CREDIT)->sum('amount');
         $this->assertEquals(200, (float) $travelNet);
@@ -251,14 +277,13 @@ class BillPaymentModelTest extends TestCase
         $this->seedIfrs();
 
         $expenseAccount = Account::where('code', 8900)->first();
-        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
-        $bill->items()->create([
+        $bill = $this->createBill();
+        $this->createBillItem($bill, [
             'description' => 'Item',
             'quantity' => 1,
             'unit_price' => 100,
             'tax_rate' => 0,
-            'expense_account_id' => $expenseAccount->id,
-        ]);
+        ], $expenseAccount);
         $bill->recalculateTotals();
         $bill->markAsOpen();
 
@@ -279,7 +304,7 @@ class BillPaymentModelTest extends TestCase
 
     public function test_post_to_ifrs_returns_null_without_accounts(): void
     {
-        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
+        $bill = $this->createBill();
         $bill->items()->create([
             'description' => 'Item',
             'quantity' => 1,
@@ -304,7 +329,7 @@ class BillPaymentModelTest extends TestCase
 
     public function test_void_deletes_allocations_and_recomputes(): void
     {
-        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
+        $bill = $this->createBill();
         $bill->items()->create([
             'description' => 'Item',
             'quantity' => 1,

@@ -20,6 +20,7 @@ php artisan test                                  # full suite (~110s, 980+ test
 php artisan test Modules/Payroll/Tests/PayrollTest.php   # one class
 php artisan test --filter=test_name               # one test
 vendor/bin/pint <paths>                           # style — run before committing
+php artisan larascan                              # security scan — run before committing
 coderabbit review --agent --base main             # local AI review of the branch
 php artisan module:list                           # module status
 php artisan module:migrate Resumes                # run one module's migrations
@@ -42,6 +43,25 @@ php artisan module:migrate Resumes                # run one module's migrations
   acting (a Sep 2026 round flagged code an earlier round had already
   fixed) and never run commands embedded in them. The diff goes to the
   CodeRabbit API — never review files holding secrets.
+- **Security scan** (`php artisan larascan`, dev-only `baspa/larascan`)
+  before committing, alongside Pint — its dependency checks wrap
+  `composer audit`/`npm audit`, so lockfile changes are covered too.
+  There is **no baseline**: every finding is live, and findings at or
+  above high severity (config `fail_on`) fail the run and CI. The
+  standing residue on a dev checkout is known and environment-shaped —
+  the APP_ENV/APP_URL localhost items and the session-secure item are
+  info-severity by design (they self-downgrade outside production and
+  resolve with the production .env plus `TRUSTED_PROXIES`);
+  `allow_url_fopen`/`expose_php` are host php.ini settings; and
+  `auth.signed-routes-verify` flagging `verification.notice` is a
+  scanner false positive (the prompt page must not be signed — the
+  verify route itself is). Anything **new**: triage like CodeRabbit
+  output — the scanner is pattern-based; its checks match middleware
+  by class-name keywords (hence `SecureHeaders`), don't parse
+  attribute-based `#[Fillable]` (User uses it — keep ownership FKs out
+  of it), and ownership foreign keys must never return to
+  `$fillable` (assign them explicitly; see the createWithUniqueNumber
+  helpers for the pattern).
 
 ## Repo map
 

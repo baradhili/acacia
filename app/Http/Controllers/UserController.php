@@ -58,16 +58,19 @@ class UserController extends Controller
             'entity_id' => ['required', 'integer', 'exists:ifrs_entities,id'],
         ]);
 
-        $user = User::create([
+        // entity_id is an unfillable FK — assign it explicitly.
+        $user = new User;
+        $user->fill([
             'name' => $validated['name'],
             'email' => $validated['email'],
             'password' => Hash::make($validated['password']),
-            'entity_id' => $validated['entity_id'],
             'salary' => $validated['salary'] ?? null,
             'charge_out_rate' => $validated['charge_out_rate'] ?? null,
             'position' => $validated['position'] ?? null,
             'phone' => $validated['phone'] ?? null,
         ]);
+        $user->entity_id = $validated['entity_id'];
+        $user->save();
 
         // Assign roles if provided
         if (! empty($validated['roles'])) {

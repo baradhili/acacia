@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class TimeEntryBreak extends Model
 {
     protected $fillable = [
-        'time_entry_id',
         'start_time',
         'end_time',
     ];

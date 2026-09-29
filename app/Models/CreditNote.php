@@ -14,8 +14,6 @@ class CreditNote extends Model
 
     protected $fillable = [
         'credit_note_number',
-        'client_id',
-        'invoice_id',
         'created_by',
         'status',
         'issue_date',
@@ -163,8 +161,10 @@ class CreditNote extends Model
             'notes' => 'Credit note '.$this->credit_note_number.' applied to invoice '.$invoice->invoice_number,
         ]);
 
-        // Link the payment to this credit note
-        $refund->update(['credit_note_id' => $this->id]);
+        // Link the payment to this credit note. credit_note_id is outside
+        // Payment::$fillable — assign it explicitly.
+        $refund->credit_note_id = $this->id;
+        $refund->save();
 
         // Allocate the negative payment to the invoice
         $refund->allocateToInvoice($invoice, $amountToApply);
@@ -176,13 +176,15 @@ class CreditNote extends Model
         // Set status to APPLIED when credit note is fully used (remaining = 0)
         $newStatus = $newRemainingAmount <= 0 ? self::STATUS_APPLIED : $this->status;
 
-        $this->update([
-            'invoice_id' => $invoice->id,
+        // invoice_id is outside CreditNote::$fillable — assign it explicitly.
+        $this->fill([
             'status' => $newStatus,
             'applied_at' => now(),
             'applied_amount' => $newAppliedAmount,
             'remaining_amount' => $newRemainingAmount,
         ]);
+        $this->invoice_id = $invoice->id;
+        $this->save();
 
         // Ledger posting is best-effort (logged, non-fatal): the negative
         // refund posts as Cr Bank / Dr Revenue / Dr GST, mirroring the

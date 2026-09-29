@@ -250,12 +250,14 @@ class OpeningBalanceTest extends TestCase
     public function test_trial_balance_combines_opening_with_ledger_movements(): void
     {
         $client = Client::factory()->create();
-        $payment = Payment::create([
-            'client_id' => $client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 110,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $client->id;
+        $payment->save();
         $payment->postToIFRS();
 
         $this->saveBalances([
@@ -365,12 +367,14 @@ class OpeningBalanceTest extends TestCase
         // An executed close where every balance nets to zero writes no
         // Balance rows at all — the next period's opening is still
         // close-derived and must stay read-only.
-        FiscalYearClose::create([
-            'entity_id' => $this->entity->id,
+        $close = new FiscalYearClose;
+        $close->fill([
             'year' => $this->year - 1,
             'status' => FiscalYearClose::STATUS_CLOSED,
             'closed_at' => now(),
         ]);
+        $close->entity_id = $this->entity->id;
+        $close->save();
 
         $this->actingAs($this->admin)->get('/opening-balances')
             ->assertOk()
@@ -385,12 +389,14 @@ class OpeningBalanceTest extends TestCase
         // opening trial balance: accounts absent from it open at zero
         // and their pre-set history is superseded with everyone else's.
         $client = Client::factory()->create();
-        $payment = Payment::create([
-            'client_id' => $client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 110,
             'payment_date' => ($this->year - 1).'-06-30',
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $client->id;
+        $payment->save();
         $payment->postToIFRS();
 
         $this->saveBalances([

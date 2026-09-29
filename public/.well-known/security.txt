@@ -1,0 +1,7 @@
+# https://securitytxt.org / RFC 9116 — where researchers report
+# vulnerabilities in Acacia. Renew Expires before it lapses, and add
+# a Canonical field once the deployment sits on its stable production
+# domain.
+Contact: https://github.com/baradhili/acacia/security/advisories
+Expires: 2027-09-29T00:00:00.000Z
+Preferred-Languages: en

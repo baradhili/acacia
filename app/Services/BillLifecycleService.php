@@ -117,10 +117,11 @@ class BillLifecycleService
                         PrepaymentService::reverseAmortisation($entry, throw: true);
                     }
 
-                    $prepayment->forceFill(['status' => Prepayment::STATUS_VOID]);
+                    $prepayment->status = Prepayment::STATUS_VOID;
                 }
 
-                $prepayment->forceFill(['bill_item_id' => null])->save();
+                $prepayment->bill_item_id = null;
+                $prepayment->save();
             }
 
             // The documentable morph has no FK cascade — remove the

@@ -117,13 +117,17 @@ class PsiService
 
         $passes = $answers['specific_result'] && $answers['own_equipment'] && $answers['liable_for_defects'];
 
-        return EntitySetting::updateOrCreate(
-            ['entity_id' => $entity->id],
-            [
-                'psb_results' => $answers + ['passes' => $passes],
-                'psi_assessed_at' => now(),
-                'psi_mode' => ! $passes,
-            ],
-        );
+        // entity_id is ownership, not mass-assignable — fetch-or-new
+        // keeps it explicit (mirrors EntitySetting::setOpenYear()).
+        $setting = EntitySetting::where('entity_id', $entity->id)->first() ?? new EntitySetting;
+        $setting->fill([
+            'psb_results' => $answers + ['passes' => $passes],
+            'psi_assessed_at' => now(),
+            'psi_mode' => ! $passes,
+        ]);
+        $setting->entity_id = $entity->id;
+        $setting->save();
+
+        return $setting;
     }
 }

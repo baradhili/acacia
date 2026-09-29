@@ -10,8 +10,8 @@ use App\Notifications\OverdueReminderNotification;
 use App\Notifications\PaymentReceivedNotification;
 use App\Services\InvoiceNotificationService;
 use Carbon\Carbon;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class NotificationServiceTest extends TestCase
@@ -23,7 +23,7 @@ class NotificationServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new InvoiceNotificationService();
+        $this->service = new InvoiceNotificationService;
     }
 
     protected function createClient(array $attributes = []): Client
@@ -39,8 +39,10 @@ class NotificationServiceTest extends TestCase
         $client = $attributes['client'] ?? $this->createClient();
         unset($attributes['client']);
 
-        return Invoice::create(array_merge([
-            'client_id' => $client->id,
+        // client_id is an FK outside Invoice's $fillable (mass-assignment
+        // hardening) — ownership is assigned, never mass-assigned.
+        $invoice = new Invoice;
+        $invoice->fill(array_merge([
             'status' => Invoice::STATUS_SENT,
             'issue_date' => Carbon::now()->subDays(30),
             'due_date' => Carbon::now()->subDays(1),
@@ -48,6 +50,10 @@ class NotificationServiceTest extends TestCase
             'subtotal' => 1000.00,
             'tax_amount' => 0,
         ], $attributes));
+        $invoice->client_id = $client->id;
+        $invoice->save();
+
+        return $invoice;
     }
 
     protected function createPayment(array $attributes = []): Payment
@@ -55,13 +61,18 @@ class NotificationServiceTest extends TestCase
         $client = $attributes['client'] ?? $this->createClient();
         unset($attributes['client']);
 
-        return Payment::create(array_merge([
-            'client_id' => $client->id,
+        // Same FK hardening as createInvoice — assign, don't mass-assign.
+        $payment = new Payment;
+        $payment->fill(array_merge([
             'amount' => 500.00,
             'payment_date' => Carbon::now(),
             'payment_method' => Payment::METHOD_BANK_TRANSFER,
             'status' => Payment::STATUS_COMPLETED,
         ], $attributes));
+        $payment->client_id = $client->id;
+        $payment->save();
+
+        return $payment;
     }
 
     public function test_payment_received_notification_array_format(): void
@@ -119,7 +130,7 @@ class NotificationServiceTest extends TestCase
         $invoice = $this->createInvoice();
 
         $notification = new OverdueReminderNotification($invoice, 15);
-        
+
         $this->assertEquals(15, $notification->daysOverdue);
         $this->assertEquals($invoice->id, $notification->invoice->id);
     }
@@ -140,8 +151,8 @@ class NotificationServiceTest extends TestCase
         $payment = $this->createPayment();
 
         $notification = new PaymentReceivedNotification($payment);
-        
-        $this->assertInstanceOf(\Illuminate\Contracts\Queue\ShouldQueue::class, $notification);
+
+        $this->assertInstanceOf(ShouldQueue::class, $notification);
     }
 
     public function test_overdue_reminder_notification_is_queuable(): void
@@ -149,7 +160,7 @@ class NotificationServiceTest extends TestCase
         $invoice = $this->createInvoice();
 
         $notification = new OverdueReminderNotification($invoice, 5);
-        
-        $this->assertInstanceOf(\Illuminate\Contracts\Queue\ShouldQueue::class, $notification);
+
+        $this->assertInstanceOf(ShouldQueue::class, $notification);
     }
 }

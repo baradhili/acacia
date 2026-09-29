@@ -21,7 +21,7 @@
                     <div class="flex items-center justify-between group">
                         <a href="{{ route($item['route']) }}"
                             class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors flex-1 {{ request()->routeIs(...(array) $item['active']) ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
-                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">{!! $item['icon'] !!}</svg>
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">@navIcon($item['icon'])</svg>
                             {{ $item['label'] }}
                         </a>
                         <a href="{{ route($item['add']) }}"
@@ -31,7 +31,7 @@
                 @else
                     <a href="{{ route($item['route']) }}"
                         class="flex items-center px-3 py-2 mb-1 rounded-lg transition-colors {{ request()->routeIs(...(array) $item['active']) ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">
-                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">{!! $item['icon'] ?? '' !!}</svg>
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">@navIcon($item['icon'] ?? '')</svg>
                         {{ $item['label'] }}
                     </a>
                 @endif

@@ -1,0 +1,20 @@
+# Weekly dependency updates. The composer entry covers app and module
+# dependencies together — the wikimedia merge-plugin folds
+# Modules/*/composer.json into the root lock, so scanning the root is
+# sufficient. github-actions tracks the SHA-pinned CI actions.
+version: 2
+updates:
+  - package-ecosystem: composer
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

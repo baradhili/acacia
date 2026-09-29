@@ -72,36 +72,48 @@ class ManualMatchAndLearningTest extends TestCase
 
     protected function payment(Client $client, float $amount, string $date, array $attributes = []): Payment
     {
-        return Payment::create(array_merge([
-            'client_id' => $client->id,
+        $payment = new Payment;
+        $payment->fill(array_merge([
             'amount' => $amount,
             'payment_date' => $date,
             'payment_method' => Payment::METHOD_BANK_TRANSFER,
             'status' => Payment::STATUS_COMPLETED,
         ], $attributes));
+        $payment->client_id = $client->id;
+        $payment->save();
+
+        return $payment;
     }
 
     protected function bill(Supplier $supplier, float $total, string $date): Bill
     {
-        return Bill::create([
-            'supplier_id' => $supplier->id,
+        $bill = new Bill;
+        $bill->fill([
             'bill_date' => $date,
             'due_date' => $date,
             'subtotal' => $total,
             'total' => $total,
             'status' => Bill::STATUS_OPEN,
         ]);
+        $bill->supplier_id = $supplier->id;
+        $bill->save();
+
+        return $bill;
     }
 
     protected function billPayment(Supplier $supplier, float $amount, string $date): BillPayment
     {
-        return BillPayment::create([
-            'supplier_id' => $supplier->id,
+        $payment = new BillPayment;
+        $payment->fill([
             'amount' => $amount,
             'payment_date' => $date,
             'payment_method' => BillPayment::METHOD_BANK_TRANSFER,
             'status' => BillPayment::STATUS_COMPLETED,
         ]);
+        $payment->supplier_id = $supplier->id;
+        $payment->save();
+
+        return $payment;
     }
 
     public function test_match_screen_lists_amount_close_candidates_and_matching_records_history(): void

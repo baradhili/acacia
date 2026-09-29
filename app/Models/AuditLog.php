@@ -9,16 +9,16 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 class AuditLog extends Model
 {
     const ACTION_CREATED = 'created';
+
     const ACTION_UPDATED = 'updated';
+
     const ACTION_DELETED = 'deleted';
 
     public $timestamps = false;
 
     protected $fillable = [
         'auditable_type',
-        'auditable_id',
         'action',
-        'user_id',
         'user_name',
         'ip_address',
         'user_agent',
@@ -63,11 +63,11 @@ class AuditLog extends Model
     public function scopeForModel($query, string $modelType, ?int $modelId = null)
     {
         $query->where('auditable_type', $modelType);
-        
+
         if ($modelId !== null) {
             $query->where('auditable_id', $modelId);
         }
-        
+
         return $query;
     }
 
@@ -106,6 +106,7 @@ class AuditLog extends Model
         if (empty($this->changed_fields)) {
             return 'None';
         }
+
         return implode(', ', $this->changed_fields);
     }
 }

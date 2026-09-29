@@ -3,14 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\Bill;
-use App\Models\BillItem;
 use App\Models\BillPayment;
-use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
 use App\Models\Supplier;
 use App\Models\User;
-use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class BillTest extends TestCase
@@ -18,6 +16,7 @@ class BillTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected Supplier $supplier;
 
     protected function setUp(): void
@@ -66,9 +65,9 @@ class BillTest extends TestCase
 
     public function test_bill_generates_correct_bill_number(): void
     {
-        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
+        $bill = Bill::createWithUniqueNumber(['supplier_id' => $this->supplier->id]);
 
-        $this->assertMatchesRegularExpression('/^BILL-' . date('Y') . '-\d{4}$/', $bill->bill_number);
+        $this->assertMatchesRegularExpression('/^BILL-'.date('Y').'-\d{4}$/', $bill->bill_number);
     }
 
     public function test_bill_calculates_mixed_gst_totals_correctly(): void
@@ -76,7 +75,7 @@ class BillTest extends TestCase
         // Line A: $110 GST-inclusive = $100 + $10 GST (taxable)
         // Line B: $100 GST-free   = $100
         // => subtotal 200, tax 10, total 210
-        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
+        $bill = Bill::createWithUniqueNumber(['supplier_id' => $this->supplier->id]);
         $bill->items()->create([
             'description' => 'Taxable line',
             'quantity' => 1,
@@ -270,7 +269,7 @@ class BillTest extends TestCase
 
         $payment = BillPayment::first();
         $this->assertNotNull($payment);
-        $this->assertMatchesRegularExpression('/^SPAY-' . date('Y') . '-\d{4}$/', $payment->payment_number);
+        $this->assertMatchesRegularExpression('/^SPAY-'.date('Y').'-\d{4}$/', $payment->payment_number);
         $this->assertEquals('credit_card', $payment->payment_method);
         $this->assertEquals('CARD-123', $payment->reference);
         // No IFRS accounts are seeded here, so posting no-ops (logged, non-fatal).
@@ -320,19 +319,19 @@ class BillTest extends TestCase
 
     public function test_bill_status_transitions(): void
     {
-        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
+        $bill = Bill::createWithUniqueNumber(['supplier_id' => $this->supplier->id]);
 
         // draft -> open
         $this->assertTrue($bill->markAsOpen());
         $this->assertEquals(Bill::STATUS_OPEN, $bill->status);
 
         // open -> cancelled is valid
-        $openBill = Bill::create(['supplier_id' => $this->supplier->id]);
+        $openBill = Bill::createWithUniqueNumber(['supplier_id' => $this->supplier->id]);
         $openBill->markAsOpen();
         $this->assertTrue($openBill->cancel());
 
         // paid bills cannot transition anywhere
-        $paidBill = Bill::create(['supplier_id' => $this->supplier->id]);
+        $paidBill = Bill::createWithUniqueNumber(['supplier_id' => $this->supplier->id]);
         $paidBill->markAsOpen();
         $paidBill->update(['status' => Bill::STATUS_PAID, 'paid_at' => now()]);
         $this->assertFalse($paidBill->canTransitionTo(Bill::STATUS_CANCELLED));
@@ -344,7 +343,7 @@ class BillTest extends TestCase
     public function test_edit_and_delete_permissions_follow_payment_state(): void
     {
         // Draft: editable
-        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
+        $bill = Bill::createWithUniqueNumber(['supplier_id' => $this->supplier->id]);
         $this->assertTrue($bill->canBeEdited());
 
         // Unpaid open bill: editable and deletable. (No view-render
@@ -359,7 +358,7 @@ class BillTest extends TestCase
 
         // Paid bill: NOT editable (unpay or delete it instead), but the
         // delete route stays available via the reversal cascade.
-        $paid = Bill::create(['supplier_id' => $this->supplier->id]);
+        $paid = Bill::createWithUniqueNumber(['supplier_id' => $this->supplier->id]);
         $paid->markAsOpen();
         $paid->update(['status' => Bill::STATUS_PAID, 'paid_at' => now()]);
         $this->assertFalse($paid->canBeEdited());
@@ -373,7 +372,7 @@ class BillTest extends TestCase
         $this->assertDatabaseMissing('bills', ['id' => $paid->id]);
 
         // Partially paid bill (allocation exists): not editable
-        $partial = Bill::create(['supplier_id' => $this->supplier->id]);
+        $partial = Bill::createWithUniqueNumber(['supplier_id' => $this->supplier->id]);
         $partial->markAsOpen();
         $payment = BillPayment::createWithUniqueNumber([
             'supplier_id' => $this->supplier->id,
@@ -387,7 +386,7 @@ class BillTest extends TestCase
 
     public function test_edit_upserts_items_preserving_ids(): void
     {
-        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
+        $bill = Bill::createWithUniqueNumber(['supplier_id' => $this->supplier->id]);
         $itemA = $bill->items()->create([
             'description' => 'Keep me',
             'quantity' => 1,
@@ -439,7 +438,7 @@ class BillTest extends TestCase
 
     public function test_update_preserves_and_sets_add_gst_lines(): void
     {
-        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
+        $bill = Bill::createWithUniqueNumber(['supplier_id' => $this->supplier->id]);
         $exGst = $bill->items()->create([
             'description' => 'Ex-GST line',
             'quantity' => 1,
@@ -493,7 +492,7 @@ class BillTest extends TestCase
 
     public function test_payment_rejected_for_draft_and_paid_bills(): void
     {
-        $draft = Bill::create(['supplier_id' => $this->supplier->id]);
+        $draft = Bill::createWithUniqueNumber(['supplier_id' => $this->supplier->id]);
         $response = $this->actingAs($this->user)
             ->post(route('bills.recordPayment', $draft), [
                 'amount' => 10,
@@ -502,7 +501,7 @@ class BillTest extends TestCase
             ]);
         $response->assertSessionHas('error');
 
-        $paid = Bill::create(['supplier_id' => $this->supplier->id]);
+        $paid = Bill::createWithUniqueNumber(['supplier_id' => $this->supplier->id]);
         $paid->markAsOpen();
         $paid->update(['status' => Bill::STATUS_PAID]);
         $response = $this->actingAs($this->user)
@@ -517,7 +516,7 @@ class BillTest extends TestCase
 
     public function test_record_full_payment_marks_bill_paid(): void
     {
-        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
+        $bill = Bill::createWithUniqueNumber(['supplier_id' => $this->supplier->id]);
         $bill->items()->create([
             'description' => 'Item',
             'quantity' => 2,
@@ -542,7 +541,7 @@ class BillTest extends TestCase
 
     public function test_partial_payment_sets_partially_paid(): void
     {
-        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
+        $bill = Bill::createWithUniqueNumber(['supplier_id' => $this->supplier->id]);
         $bill->items()->create([
             'description' => 'Item',
             'quantity' => 1,
@@ -575,7 +574,7 @@ class BillTest extends TestCase
 
     public function test_overdue_scope_excludes_paid_bills(): void
     {
-        $overdueBill = Bill::create([
+        $overdueBill = Bill::createWithUniqueNumber([
             'supplier_id' => $this->supplier->id,
             'bill_date' => now()->subDays(60)->toDateString(),
             'due_date' => now()->subDays(30)->toDateString(),
@@ -589,7 +588,7 @@ class BillTest extends TestCase
         $overdueBill->recalculateTotals();
         $overdueBill->markAsOpen();
 
-        $paidBill = Bill::create([
+        $paidBill = Bill::createWithUniqueNumber([
             'supplier_id' => $this->supplier->id,
             'bill_date' => now()->subDays(60)->toDateString(),
             'due_date' => now()->subDays(30)->toDateString(),
@@ -614,9 +613,9 @@ class BillTest extends TestCase
     {
         $otherSupplier = Supplier::create(['name' => 'Other Supplier']);
 
-        $open = Bill::create(['supplier_id' => $this->supplier->id]);
+        $open = Bill::createWithUniqueNumber(['supplier_id' => $this->supplier->id]);
         $open->markAsOpen();
-        $draft = Bill::create(['supplier_id' => $otherSupplier->id]);
+        $draft = Bill::createWithUniqueNumber(['supplier_id' => $otherSupplier->id]);
 
         $response = $this->actingAs($this->user)
             ->get(route('bills.index', ['status' => 'open']));
@@ -633,7 +632,7 @@ class BillTest extends TestCase
 
     public function test_update_status_from_payments_rederives_overdue(): void
     {
-        $bill = Bill::create([
+        $bill = Bill::createWithUniqueNumber([
             'supplier_id' => $this->supplier->id,
             'due_date' => now()->subDays(10)->toDateString(),
         ]);

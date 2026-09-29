@@ -42,7 +42,6 @@ class ReimbursementPayment extends Model
 
     protected $fillable = [
         'payment_number',
-        'employee_id',
         'paid_by',
         'amount',
         'payment_date',
@@ -50,7 +49,6 @@ class ReimbursementPayment extends Model
         'reference',
         'notes',
         'status',
-        'ifrs_transaction_id',
     ];
 
     protected $casts = [
@@ -97,14 +95,20 @@ class ReimbursementPayment extends Model
 
     /**
      * Create with a retry on payment_number races — same pattern as
-     * BillPayment::createWithUniqueNumber().
+     * BillPayment::createWithUniqueNumber(). employee_id is an unfillable
+     * FK and is assigned explicitly rather than mass-assigned.
      */
     public static function createWithUniqueNumber(array $attributes): self
     {
         $attempts = 5;
         for ($i = 1; $i <= $attempts; $i++) {
             try {
-                return self::create($attributes);
+                $payment = new self;
+                $payment->fill(collect($attributes)->except(['employee_id', 'ifrs_transaction_id'])->all());
+                $payment->employee_id = $attributes['employee_id'] ?? null;
+                $payment->save();
+
+                return $payment;
             } catch (QueryException $e) {
                 $errorInfo = $e->errorInfo ?? [];
                 $isUnique = ($errorInfo[0] ?? null) === '23000' || ($errorInfo[1] ?? null) === 1062;
@@ -257,7 +261,9 @@ class ReimbursementPayment extends Model
             // post() saves the transaction AND writes the ledger rows.
             $journalEntry->post();
 
-            $this->update(['ifrs_transaction_id' => $journalEntry->id]);
+            // ifrs_transaction_id is an unfillable FK — assign explicitly.
+            $this->ifrs_transaction_id = $journalEntry->id;
+            $this->save();
 
             Log::info("Reimbursement payment {$this->id} posted to IFRS", [
                 'ifrs_transaction_id' => $journalEntry->id,

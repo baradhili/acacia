@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class Payment extends Model
@@ -28,7 +29,6 @@ class Payment extends Model
 
     protected $fillable = [
         'payment_number',
-        'client_id',
         'received_by',
         'amount',
         'payment_date',
@@ -36,8 +36,6 @@ class Payment extends Model
         'reference',
         'notes',
         'status',
-        'ifrs_receipt_id',
-        'credit_note_id',
     ];
 
     protected $casts = [
@@ -108,13 +106,23 @@ class Payment extends Model
      * the loser of a race gets a QueryException (SQLSTATE 23000). Each retry
      * re-enters the creating hook, which regenerates from the now-higher max,
      * so the next attempt picks the following number.
+     *
+     * The ownership foreign keys are outside Payment::$fillable (explicit
+     * ownership assignment), so they are pulled out of the fill payload and
+     * assigned as attributes.
      */
     public static function createWithUniqueNumber(array $attributes): self
     {
         $attempts = 5;
         for ($i = 1; $i <= $attempts; $i++) {
             try {
-                return self::create($attributes);
+                $payment = new self;
+                $payment->fill(collect($attributes)->except(['client_id', 'ifrs_receipt_id', 'credit_note_id'])->all());
+                $payment->client_id = $attributes['client_id'] ?? null;
+                $payment->credit_note_id = $attributes['credit_note_id'] ?? null;
+                $payment->save();
+
+                return $payment;
             } catch (QueryException $e) {
                 if (! self::isUniqueViolation($e) || $i === $attempts) {
                     throw $e;
@@ -231,28 +239,40 @@ class Payment extends Model
             throw new \InvalidArgumentException('Allocation amount must be greater than zero.');
         }
 
-        $unallocated = $this->unallocated_amount;
-        if ($amount > $unallocated) {
-            throw new \InvalidArgumentException(
-                "Cannot allocate {$amount} to invoice {$invoice->id}: "
-                ."only {$unallocated} unallocated on payment {$this->id}."
-            );
-        }
+        // The unallocated check and the allocation write run inside one
+        // locking transaction: two concurrent allocations of the same
+        // payment/invoice pair would otherwise both miss the lookup and
+        // insert duplicate rows. The unique (payment, invoice) index is
+        // the backstop; the lock keeps check-then-write atomic.
+        $allocation = DB::transaction(function () use ($invoice, $amount) {
+            $unallocated = $this->unallocated_amount;
+            if ($amount > $unallocated) {
+                throw new \InvalidArgumentException(
+                    "Cannot allocate {$amount} to invoice {$invoice->id}: "
+                    ."only {$unallocated} unallocated on payment {$this->id}."
+                );
+            }
 
-        $allocation = PaymentAllocation::firstOrCreate(
-            [
-                'payment_id' => $this->id,
-                'invoice_id' => $invoice->id,
-            ],
-            [
-                'amount' => $amount,
-            ]
-        );
+            // Foreign keys are outside PaymentAllocation::$fillable, so the
+            // allocation is looked up and created with explicit ownership
+            // assignment rather than firstOrCreate (which would drop them).
+            $allocation = PaymentAllocation::where('payment_id', $this->id)
+                ->where('invoice_id', $invoice->id)
+                ->lockForUpdate()
+                ->first();
+            if (! $allocation) {
+                $allocation = new PaymentAllocation;
+                $allocation->fill(['amount' => $amount]);
+                $allocation->payment_id = $this->id;
+                $allocation->invoice_id = $invoice->id;
+                $allocation->save();
+            } else {
+                // Update allocation amount if it already exists
+                $allocation->increment('amount', $amount);
+            }
 
-        // Update allocation amount if it already exists
-        if ($allocation->wasRecentlyCreated === false) {
-            $allocation->increment('amount', $amount);
-        }
+            return $allocation;
+        });
 
         // Update invoice status
         $invoice->updateStatusFromPayments();
@@ -480,8 +500,10 @@ class Payment extends Model
             // (save() alone leaves it unposted and invisible to reports).
             $journalEntry->post();
 
-            // Store the IFRS transaction id.
-            $this->update(['ifrs_receipt_id' => $journalEntry->id]);
+            // Store the IFRS transaction id. ifrs_receipt_id is outside
+            // $fillable — assign it explicitly.
+            $this->ifrs_receipt_id = $journalEntry->id;
+            $this->save();
 
             Log::info("Payment {$this->id} posted to IFRS", [
                 'ifrs_receipt_id' => $journalEntry->id,

@@ -4,12 +4,13 @@ namespace Tests\Feature;
 
 use App\Models\Bill;
 use App\Models\BillPayment;
+use App\Models\Domain;
 use App\Models\Prepayment;
 use App\Models\Supplier;
+use App\Models\User;
 use App\Services\PrepaymentService;
 use Carbon\Carbon;
 use IFRS\Models\Account;
-use IFRS\Models\Balance;
 use IFRS\Models\Currency;
 use IFRS\Models\Entity;
 use IFRS\Models\Ledger;
@@ -17,6 +18,7 @@ use IFRS\Models\ReportingPeriod;
 use IFRS\Models\Vat;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /**
@@ -31,10 +33,15 @@ class PrepaymentAmortisationTest extends TestCase
     use RefreshDatabase;
 
     protected Entity $entity;
+
     protected Supplier $supplier;
+
     protected Account $bank;
+
     protected Account $prepaid;
+
     protected Account $gstReceivable;
+
     protected Account $subscriptionExpense;
 
     protected function setUp(): void
@@ -114,22 +121,23 @@ class PrepaymentAmortisationTest extends TestCase
 
     protected function payPrepaidBill(float $unitPriceInclGst, string $serviceStart, string $serviceEnd, ?Account $account = null): Prepayment
     {
-        $bill = Bill::create([
+        $bill = Bill::createWithUniqueNumber([
             'supplier_id' => $this->supplier->id,
             'bill_date' => $serviceStart,
             'due_date' => $serviceStart,
         ]);
-        $bill->items()->create([
+        $item = $bill->items()->make([
             'description' => 'Annual SaaS subscription',
             'quantity' => 1,
             'unit_price' => $unitPriceInclGst,
             'tax_rate' => 10,
             'gst_added' => false, // inclusive
-            'expense_account_id' => ($account ?? $this->prepaid)->id,
             'is_prepaid' => true,
             'service_start' => $serviceStart,
             'service_end' => $serviceEnd,
         ]);
+        $item->expense_account_id = ($account ?? $this->prepaid)->id;
+        $item->save();
         $bill->recalculateTotals();
         $bill->markAsOpen();
 
@@ -207,19 +215,20 @@ class PrepaymentAmortisationTest extends TestCase
     public function test_non_prepaid_line_posts_straight_to_expense(): void
     {
         // Acceptance 5.4 (monthly billing): no prepayment is created.
-        $bill = Bill::create([
+        $bill = Bill::createWithUniqueNumber([
             'supplier_id' => $this->supplier->id,
             'bill_date' => '2025-07-15',
             'due_date' => '2025-08-14',
         ]);
-        $bill->items()->create([
+        $item = $bill->items()->make([
             'description' => 'Monthly SaaS (billed in arrears)',
             'quantity' => 1,
             'unit_price' => 110,
             'tax_rate' => 10,
             'gst_added' => false,
-            'expense_account_id' => $this->subscriptionExpense->id,
         ]);
+        $item->expense_account_id = $this->subscriptionExpense->id;
+        $item->save();
         $bill->recalculateTotals();
         $bill->markAsOpen();
 
@@ -281,10 +290,10 @@ class PrepaymentAmortisationTest extends TestCase
 
     public function test_prepayment_screens_and_schedule_report_render(): void
     {
-        $user = \App\Models\User::factory()->create();
+        $user = User::factory()->create();
         $user->entity_id = $this->entity->id;
         $user->save();
-        \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'admin']);
+        Role::firstOrCreate(['name' => 'admin']);
         $user->assignRole('admin');
 
         $prepayment = $this->payPrepaidBill(1320.0, '2025-07-01', '2026-06-30');
@@ -316,19 +325,20 @@ class PrepaymentAmortisationTest extends TestCase
      */
     protected function payBillLine(float $unitPriceInclGst, Account $account): void
     {
-        $bill = Bill::create([
+        $bill = Bill::createWithUniqueNumber([
             'supplier_id' => $this->supplier->id,
             'bill_date' => '2025-07-01',
             'due_date' => '2025-07-01',
         ]);
-        $bill->items()->create([
-            'description' => 'Bill line to ' . $account->code,
+        $item = $bill->items()->make([
+            'description' => 'Bill line to '.$account->code,
             'quantity' => 1,
             'unit_price' => $unitPriceInclGst,
             'tax_rate' => 10,
             'gst_added' => false,
-            'expense_account_id' => $account->id,
         ]);
+        $item->expense_account_id = $account->id;
+        $item->save();
         $bill->recalculateTotals();
         $bill->markAsOpen();
 
@@ -362,20 +372,22 @@ class PrepaymentAmortisationTest extends TestCase
 
     public function test_finite_life_domain_amortises_from_the_registry(): void
     {
-        $user = \App\Models\User::factory()->create();
+        $user = User::factory()->create();
         $user->entity_id = $this->entity->id;
         $user->save();
-        \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'admin']);
+        Role::firstOrCreate(['name' => 'admin']);
         $user->assignRole('admin');
 
-        $domain = \App\Models\Domain::create([
-            'entity_id' => $this->entity->id,
+        $domain = new Domain;
+        $domain->fill([
             'name' => 'example.com.au',
             'cost' => 2400,
             'indefinite_life' => false,
             'useful_life_months' => 24,
             'purchased_at' => '2025-07-01',
         ]);
+        $domain->entity_id = $this->entity->id;
+        $domain->save();
 
         $response = $this->actingAs($user)
             ->post(route('domains.amortisation', $domain));
@@ -395,25 +407,27 @@ class PrepaymentAmortisationTest extends TestCase
 
     public function test_indefinite_life_domain_rejects_amortisation(): void
     {
-        $user = \App\Models\User::factory()->create();
+        $user = User::factory()->create();
         $user->entity_id = $this->entity->id;
         $user->save();
-        \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'admin']);
+        Role::firstOrCreate(['name' => 'admin']);
         $user->assignRole('admin');
 
-        $domain = \App\Models\Domain::create([
-            'entity_id' => $this->entity->id,
+        $domain = new Domain;
+        $domain->fill([
             'name' => 'forever.example.com',
             'cost' => 5000,
             'indefinite_life' => true,
             'purchased_at' => '2025-07-01',
         ]);
+        $domain->entity_id = $this->entity->id;
+        $domain->save();
 
         $this->actingAs($user)
             ->post(route('domains.amortisation', $domain))
             ->assertRedirect(route('domains.show', $domain))
             ->assertSessionHas('error');
 
-        $this->assertSame(0, \App\Models\Prepayment::count());
+        $this->assertSame(0, Prepayment::count());
     }
 }

@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Modules\Payroll\Models\Employee;
 
@@ -31,16 +32,13 @@ class BillPayment extends Model
 
     protected $fillable = [
         'payment_number',
-        'supplier_id',
         'paid_by',
-        'employee_id',
         'amount',
         'payment_date',
         'payment_method',
         'reference',
         'notes',
         'status',
-        'ifrs_payment_id',
     ];
 
     protected $casts = [
@@ -157,13 +155,23 @@ class BillPayment extends Model
      * the loser of a race gets a QueryException (SQLSTATE 23000). Each retry
      * re-enters the creating hook, which regenerates from the now-higher max,
      * so the next attempt picks the following number.
+     *
+     * supplier_id/employee_id are foreign keys outside $fillable (explicit
+     * ownership assignment), so they are pulled out of the fill payload and
+     * assigned as attributes.
      */
     public static function createWithUniqueNumber(array $attributes): self
     {
         $attempts = 5;
         for ($i = 1; $i <= $attempts; $i++) {
             try {
-                return self::create($attributes);
+                $payment = new self;
+                $payment->fill(collect($attributes)->except(['supplier_id', 'employee_id', 'ifrs_payment_id'])->all());
+                $payment->supplier_id = $attributes['supplier_id'] ?? null;
+                $payment->employee_id = $attributes['employee_id'] ?? null;
+                $payment->save();
+
+                return $payment;
             } catch (QueryException $e) {
                 if (! self::isUniqueViolation($e) || $i === $attempts) {
                     throw $e;
@@ -279,28 +287,40 @@ class BillPayment extends Model
             throw new \InvalidArgumentException('Allocation amount must be greater than zero.');
         }
 
-        $unallocated = $this->unallocated_amount;
-        if ($amount > $unallocated) {
-            throw new \InvalidArgumentException(
-                "Cannot allocate {$amount} to bill {$bill->id}: "
-                ."only {$unallocated} unallocated on payment {$this->id}."
-            );
-        }
+        // The unallocated check and the allocation write run inside one
+        // locking transaction: two concurrent allocations of the same
+        // payment/bill pair would otherwise both miss the lookup and
+        // insert duplicate rows. The unique (payment, bill) index is
+        // the backstop; the lock keeps check-then-write atomic.
+        $allocation = DB::transaction(function () use ($bill, $amount) {
+            $unallocated = $this->unallocated_amount;
+            if ($amount > $unallocated) {
+                throw new \InvalidArgumentException(
+                    "Cannot allocate {$amount} to bill {$bill->id}: "
+                    ."only {$unallocated} unallocated on payment {$this->id}."
+                );
+            }
 
-        $allocation = BillPaymentAllocation::firstOrCreate(
-            [
-                'bill_payment_id' => $this->id,
-                'bill_id' => $bill->id,
-            ],
-            [
-                'amount' => $amount,
-            ]
-        );
+            // Foreign keys are outside BillPaymentAllocation::$fillable, so the
+            // allocation is looked up and created with explicit ownership
+            // assignment rather than firstOrCreate (which would drop them).
+            $allocation = BillPaymentAllocation::where('bill_payment_id', $this->id)
+                ->where('bill_id', $bill->id)
+                ->lockForUpdate()
+                ->first();
+            if (! $allocation) {
+                $allocation = new BillPaymentAllocation;
+                $allocation->fill(['amount' => $amount]);
+                $allocation->bill_payment_id = $this->id;
+                $allocation->bill_id = $bill->id;
+                $allocation->save();
+            } else {
+                // Update allocation amount if it already exists
+                $allocation->increment('amount', $amount);
+            }
 
-        // Update allocation amount if it already exists
-        if ($allocation->wasRecentlyCreated === false) {
-            $allocation->increment('amount', $amount);
-        }
+            return $allocation;
+        });
 
         // Update bill status
         $bill->updateStatusFromPayments();
@@ -550,8 +570,10 @@ class BillPayment extends Model
             // (save() alone leaves it unposted and invisible to reports).
             $journalEntry->post();
 
-            // Store the IFRS transaction id.
-            $this->update(['ifrs_payment_id' => $journalEntry->id]);
+            // Store the IFRS transaction id (explicit assignment — the FK is
+            // not fillable).
+            $this->ifrs_payment_id = $journalEntry->id;
+            $this->save();
 
             // Prepaid bill lines funded by this payment spawn amortisation
             // schedules. Best-effort like the posting itself: a failure
@@ -644,12 +666,13 @@ class BillPayment extends Model
 
             // postToIFRS() skips payments that already carry a
             // transaction id — clear it so the corrected posting runs.
-            $this->forceFill(['ifrs_payment_id' => null])->save();
+            $this->ifrs_payment_id = null;
+            $this->save();
 
-            $this->update([
-                'payment_method' => $method,
-                'employee_id' => $method === self::METHOD_EMPLOYEE_REIMBURSEMENT ? $employeeId : null,
-            ]);
+            // employee_id is an unfillable FK — assign it explicitly.
+            $this->payment_method = $method;
+            $this->employee_id = $method === self::METHOD_EMPLOYEE_REIMBURSEMENT ? $employeeId : null;
+            $this->save();
             $this->refresh();
 
             if ($this->postToIFRS() === null) {
@@ -788,7 +811,8 @@ class BillPayment extends Model
                 }
             }
 
-            $prepayment->forceFill(['status' => Prepayment::STATUS_VOID])->save();
+            $prepayment->status = Prepayment::STATUS_VOID;
+            $prepayment->save();
         }
 
         return $reversed;

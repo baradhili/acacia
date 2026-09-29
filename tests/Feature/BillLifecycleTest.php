@@ -32,6 +32,7 @@ class BillLifecycleTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected Supplier $supplier;
 
     protected function setUp(): void
@@ -130,12 +131,16 @@ class BillLifecycleTest extends TestCase
 
     protected function makeBill(array $items, array $attributes = []): Bill
     {
-        $bill = Bill::create(array_merge([
+        $bill = Bill::createWithUniqueNumber(array_merge([
             'supplier_id' => $this->supplier->id,
         ], $attributes));
 
         foreach ($items as $item) {
-            $bill->items()->create($item);
+            // The account FKs are unfillable — assign them explicitly.
+            $billItem = $bill->items()->make(collect($item)->except(['expense_account_id', 'amortise_to_account_id'])->all());
+            $billItem->expense_account_id = $item['expense_account_id'] ?? null;
+            $billItem->amortise_to_account_id = $item['amortise_to_account_id'] ?? null;
+            $billItem->save();
         }
         $bill->recalculateTotals();
         $bill->markAsOpen();
@@ -177,7 +182,7 @@ class BillLifecycleTest extends TestCase
         $bill = $this->makeBill([
             // $110 GST-inclusive coded to 8900: Dr 8900 $100, Dr GST $10
             ['description' => 'Item', 'quantity' => 1, 'unit_price' => 110, 'tax_rate' => 10,
-             'expense_account_id' => $this->account(8900)->id],
+                'expense_account_id' => $this->account(8900)->id],
         ]);
         $payment = $this->payBill($bill, 110);
 
@@ -208,11 +213,11 @@ class BillLifecycleTest extends TestCase
         // Bill A: $100 GST-free to 8900. Bill B: $110 GST-inclusive to 5300.
         $billA = $this->makeBill([
             ['description' => 'A', 'quantity' => 1, 'unit_price' => 100, 'tax_rate' => 0,
-             'expense_account_id' => $this->account(8900)->id],
+                'expense_account_id' => $this->account(8900)->id],
         ]);
         $billB = $this->makeBill([
             ['description' => 'B', 'quantity' => 1, 'unit_price' => 110, 'tax_rate' => 10,
-             'expense_account_id' => $this->account(5300)->id],
+                'expense_account_id' => $this->account(5300)->id],
         ]);
 
         $payment = BillPayment::createWithUniqueNumber([
@@ -255,7 +260,7 @@ class BillLifecycleTest extends TestCase
     {
         $bill = $this->makeBill([
             ['description' => 'Item', 'quantity' => 1, 'unit_price' => 110, 'tax_rate' => 10,
-             'expense_account_id' => $this->account(8900)->id],
+                'expense_account_id' => $this->account(8900)->id],
         ]);
         $payment = $this->payBill($bill, 110);
 
@@ -282,11 +287,11 @@ class BillLifecycleTest extends TestCase
     {
         $billA = $this->makeBill([
             ['description' => 'A', 'quantity' => 1, 'unit_price' => 100, 'tax_rate' => 0,
-             'expense_account_id' => $this->account(8900)->id],
+                'expense_account_id' => $this->account(8900)->id],
         ]);
         $billB = $this->makeBill([
             ['description' => 'B', 'quantity' => 1, 'unit_price' => 110, 'tax_rate' => 10,
-             'expense_account_id' => $this->account(5300)->id],
+                'expense_account_id' => $this->account(5300)->id],
         ]);
 
         $payment = BillPayment::createWithUniqueNumber([
@@ -328,11 +333,11 @@ class BillLifecycleTest extends TestCase
     {
         $bill = $this->makeBill([
             ['description' => 'Annual licence', 'quantity' => 1, 'unit_price' => 110, 'tax_rate' => 10,
-             'expense_account_id' => $this->account(460)->id,
-             'is_prepaid' => true,
-             'service_start' => now()->subMonth()->startOfMonth()->toDateString(),
-             'service_end' => now()->addMonths(11)->endOfMonth()->toDateString(),
-             'amortise_to_account_id' => $this->account(7500)->id],
+                'expense_account_id' => $this->account(460)->id,
+                'is_prepaid' => true,
+                'service_start' => now()->subMonth()->startOfMonth()->toDateString(),
+                'service_end' => now()->addMonths(11)->endOfMonth()->toDateString(),
+                'amortise_to_account_id' => $this->account(7500)->id],
         ]);
         $payment = $this->payBill($bill, 110);
 
@@ -366,7 +371,7 @@ class BillLifecycleTest extends TestCase
     {
         $bill = $this->makeBill([
             ['description' => 'Item', 'quantity' => 1, 'unit_price' => 110, 'tax_rate' => 10,
-             'expense_account_id' => $this->account(8900)->id],
+                'expense_account_id' => $this->account(8900)->id],
         ]);
         $payment = $this->payBill($bill, 110);
         $transactionsBefore = DB::table('ifrs_transactions')->count();
@@ -391,7 +396,7 @@ class BillLifecycleTest extends TestCase
     {
         $bill = $this->makeBill([
             ['description' => 'Item', 'quantity' => 1, 'unit_price' => 110, 'tax_rate' => 10,
-             'expense_account_id' => $this->account(8900)->id],
+                'expense_account_id' => $this->account(8900)->id],
         ]);
         $payment = $this->payBill($bill, 110);
 
@@ -422,11 +427,11 @@ class BillLifecycleTest extends TestCase
         // the exclusive payment on B and B's own paid state untouched.
         $billA = $this->makeBill([
             ['description' => 'A', 'quantity' => 1, 'unit_price' => 100, 'tax_rate' => 0,
-             'expense_account_id' => $this->account(8900)->id],
+                'expense_account_id' => $this->account(8900)->id],
         ]);
         $billB = $this->makeBill([
             ['description' => 'B', 'quantity' => 1, 'unit_price' => 110, 'tax_rate' => 10,
-             'expense_account_id' => $this->account(5300)->id],
+                'expense_account_id' => $this->account(5300)->id],
         ]);
 
         $shared = BillPayment::createWithUniqueNumber([

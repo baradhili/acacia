@@ -43,6 +43,39 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Debug Blacklist
+    |--------------------------------------------------------------------------
+    |
+    | Key names Whoops must mask when APP_DEBUG renders an exception
+    | page — a screenshotted debug dump is the classic follow-on
+    | breach. Masked in both the env and _SERVER sections.
+    |
+    */
+
+    'debug_blacklist' => [
+        // Whoops masks by superglobal name — '_ENV', not 'env', or
+        // the section silently protects nothing.
+        '_ENV' => [
+            'APP_KEY',
+            'DB_PASSWORD',
+            'REDIS_PASSWORD',
+            'MAIL_PASSWORD',
+            'AWS_ACCESS_KEY_ID',
+            'AWS_SECRET_ACCESS_KEY',
+        ],
+
+        '_SERVER' => [
+            'APP_KEY',
+            'DB_PASSWORD',
+            'REDIS_PASSWORD',
+            'MAIL_PASSWORD',
+            'AWS_ACCESS_KEY_ID',
+            'AWS_SECRET_ACCESS_KEY',
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Application URL
     |--------------------------------------------------------------------------
     |

@@ -110,12 +110,14 @@ class BasCashBasisTest extends TestCase
         ]);
 
         $client = Client::factory()->create();
-        $invoice = Invoice::create([
-            'client_id' => $client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $invoice->client_id = $client->id;
+        $invoice->save();
         $invoice->items()->create([
             'description' => 'Service',
             'quantity' => 1,
@@ -135,12 +137,14 @@ class BasCashBasisTest extends TestCase
         $this->assertNotNull($payment->postToIFRS(), $payment->lastPostingError ?? 'posting failed');
 
         $supplier = Supplier::create(['name' => 'Tax Supplier Co']);
-        $bill = Bill::create([
-            'supplier_id' => $supplier->id,
+        $bill = new Bill;
+        $bill->fill([
             'bill_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Bill::STATUS_OPEN,
         ]);
+        $bill->supplier_id = $supplier->id;
+        $bill->save();
         $bill->items()->create([
             'description' => 'Supplies',
             'quantity' => 1,

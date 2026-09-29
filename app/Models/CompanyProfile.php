@@ -26,7 +26,6 @@ class CompanyProfile extends Model
     public const TAX_RATE_COMPANY = 'company';
 
     protected $fillable = [
-        'entity_id',
         'trading_name',
         'logo',
         'abn',

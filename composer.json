@@ -57,6 +57,7 @@
         "spatie/laravel-permission": "^6.0"
     },
     "require-dev": {
+        "baspa/larascan": "^3.1",
         "fakerphp/faker": "^1.23",
         "laravel/pail": "^1.2.5",
         "laravel/pao": "^1.0.6",

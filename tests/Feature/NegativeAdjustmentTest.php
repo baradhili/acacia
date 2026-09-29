@@ -37,7 +37,7 @@ class NegativeAdjustmentTest extends TestCase
 
     public function test_bill_adjustment_lines_change_subtotal_and_gst_separately(): void
     {
-        $bill = Bill::create(['supplier_id' => $this->supplier->id]);
+        $bill = Bill::createWithUniqueNumber(['supplier_id' => $this->supplier->id]);
         $bill->items()->create([
             'description' => 'Taxable line',
             'quantity' => 1,
@@ -66,11 +66,15 @@ class NegativeAdjustmentTest extends TestCase
 
     public function test_invoice_adjustment_lines_change_subtotal_and_gst_separately(): void
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        // client_id is an FK outside Invoice's $fillable (mass-assignment
+        // hardening) — ownership is assigned, never mass-assigned.
+        $invoice = new Invoice;
+        $invoice->fill([
             'status' => Invoice::STATUS_DRAFT,
             'issue_date' => now()->toDateString(),
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
         $invoice->items()->create([
             'description' => 'Consulting',
             'quantity' => 1,

@@ -16,8 +16,6 @@ class Bill extends Model
 
     protected $fillable = [
         'bill_number',
-        'supplier_id',
-        'project_id',
         'created_by',
         'status',
         'bill_date',
@@ -116,13 +114,23 @@ class Bill extends Model
      * the loser of a race gets a QueryException (SQLSTATE 23000). Each retry
      * re-enters the creating hook, which regenerates from the now-higher max,
      * so the next attempt picks the following number.
+     *
+     * supplier_id/project_id are foreign keys outside $fillable (explicit
+     * ownership assignment), so they are pulled out of the fill payload and
+     * assigned as attributes.
      */
     public static function createWithUniqueNumber(array $attributes): self
     {
         $attempts = 5;
         for ($i = 1; $i <= $attempts; $i++) {
             try {
-                return self::create($attributes);
+                $bill = new self;
+                $bill->fill(collect($attributes)->except(['supplier_id', 'project_id'])->all());
+                $bill->supplier_id = $attributes['supplier_id'] ?? null;
+                $bill->project_id = $attributes['project_id'] ?? null;
+                $bill->save();
+
+                return $bill;
             } catch (QueryException $e) {
                 if (! self::isUniqueViolation($e) || $i === $attempts) {
                     throw $e;
@@ -466,24 +474,29 @@ class Bill extends Model
      */
     public function scopeOverdue($query)
     {
-        return $query->where('status', self::STATUS_OVERDUE)
-            ->orWhere(function ($q) {
-                $q->whereIn('status', [self::STATUS_OPEN, self::STATUS_PARTIALLY_PAID])
-                    ->where('due_date', '<', now()->toDateString())
-                  // For bills with a positive total, require an outstanding
-                  // balance (total > completed allocations). Zero-total bills
-                  // fall through (the status/due_date checks alone apply).
-                    ->where(function ($q) {
-                        $q->where('total', '<=', 0)
-                            ->orWhereRaw(
-                                'bills.total - COALESCE(('
-                                .'SELECT SUM(bill_payment_allocations.amount) FROM bill_payment_allocations'
-                                .' JOIN bill_payments ON bill_payments.id = bill_payment_allocations.bill_payment_id'
-                                .' WHERE bill_payment_allocations.bill_id = bills.id'
-                                ." AND bill_payments.status = '".BillPayment::STATUS_COMPLETED.'\'), 0) > 0'
-                            );
-                    });
-            });
+        // The two branches are grouped so a caller chaining its own
+        // where() before the scope keeps it on BOTH branches — an
+        // ungrouped orWhere would let the second branch ignore it.
+        return $query->where(function ($query) {
+            $query->where('status', self::STATUS_OVERDUE)
+                ->orWhere(function ($q) {
+                    $q->whereIn('status', [self::STATUS_OPEN, self::STATUS_PARTIALLY_PAID])
+                        ->where('due_date', '<', now()->toDateString())
+                      // For bills with a positive total, require an outstanding
+                      // balance (total > completed allocations). Zero-total bills
+                      // fall through (the status/due_date checks alone apply).
+                        ->where(function ($q) {
+                            $q->where('total', '<=', 0)
+                                ->orWhereRaw(
+                                    'bills.total - COALESCE(('
+                                    .'SELECT SUM(bill_payment_allocations.amount) FROM bill_payment_allocations'
+                                    .' JOIN bill_payments ON bill_payments.id = bill_payment_allocations.bill_payment_id'
+                                    .' WHERE bill_payment_allocations.bill_id = bills.id'
+                                    ." AND bill_payments.status = '".BillPayment::STATUS_COMPLETED.'\'), 0) > 0'
+                                );
+                        });
+                });
+        });
     }
 
     /**

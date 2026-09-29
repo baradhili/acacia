@@ -44,3 +44,11 @@ jobs:
 
       - name: Run the test suite
         run: php artisan test
+
+      # Static security scan (baspa/larascan), no baseline — a red
+      # step means findings at or above high severity; the standing
+      # sub-high residue is environment-shaped (see AGENTS.md). Must
+      # run after the env prep (scan reads .env/config) and the npm
+      # build (dependency checks wrap npm audit).
+      - name: Security scan (larascan)
+        run: php artisan larascan

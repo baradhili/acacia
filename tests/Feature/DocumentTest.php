@@ -44,7 +44,7 @@ class DocumentTest extends TestCase
     public function test_can_upload_document_for_bill(): void
     {
         $supplier = Supplier::factory()->create();
-        $bill = Bill::create(['supplier_id' => $supplier->id]);
+        $bill = Bill::createWithUniqueNumber(['supplier_id' => $supplier->id]);
 
         $file = UploadedFile::fake()->create('receipt.pdf', 1024);
 
@@ -67,8 +67,8 @@ class DocumentTest extends TestCase
     public function test_can_upload_document_for_invoice(): void
     {
         $client = Client::factory()->create();
-        $invoice = Invoice::create([
-            'client_id' => $client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'invoice_number' => 'INV-2024-0001',
             'status' => 'draft',
             'issue_date' => now(),
@@ -77,6 +77,8 @@ class DocumentTest extends TestCase
             'tax_amount' => 10,
             'total' => 110,
         ]);
+        $invoice->client_id = $client->id;
+        $invoice->save();
 
         $file = UploadedFile::fake()->create('invoice.pdf', 1024);
 
@@ -133,7 +135,7 @@ class DocumentTest extends TestCase
     public function test_can_get_documents_for_model(): void
     {
         $supplier = Supplier::factory()->create();
-        $bill = Bill::create(['supplier_id' => $supplier->id]);
+        $bill = Bill::createWithUniqueNumber(['supplier_id' => $supplier->id]);
 
         Document::factory()->count(3)->create([
             'documentable_type' => 'App\\Models\\Bill',
@@ -218,7 +220,7 @@ class DocumentTest extends TestCase
     public function test_document_polymorphic_relationship(): void
     {
         $supplier = Supplier::factory()->create();
-        $bill = Bill::create(['supplier_id' => $supplier->id]);
+        $bill = Bill::createWithUniqueNumber(['supplier_id' => $supplier->id]);
 
         $document = Document::factory()->create([
             'documentable_type' => 'App\Models\Bill',
@@ -232,7 +234,7 @@ class DocumentTest extends TestCase
     public function test_bill_has_documents_relationship(): void
     {
         $supplier = Supplier::factory()->create();
-        $bill = Bill::create(['supplier_id' => $supplier->id]);
+        $bill = Bill::createWithUniqueNumber(['supplier_id' => $supplier->id]);
 
         Document::factory()->count(2)->create([
             'documentable_type' => 'App\Models\Bill',
@@ -246,8 +248,8 @@ class DocumentTest extends TestCase
     public function test_invoice_has_documents_relationship(): void
     {
         $client = Client::factory()->create();
-        $invoice = Invoice::create([
-            'client_id' => $client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'invoice_number' => 'INV-2024-0002',
             'status' => 'draft',
             'issue_date' => now(),
@@ -256,6 +258,8 @@ class DocumentTest extends TestCase
             'tax_amount' => 10,
             'total' => 110,
         ]);
+        $invoice->client_id = $client->id;
+        $invoice->save();
 
         Document::factory()->count(3)->create([
             'documentable_type' => 'App\Models\Invoice',
@@ -307,14 +311,16 @@ class DocumentTest extends TestCase
     public function test_can_upload_document_for_purchase_order(): void
     {
         $client = Client::factory()->create();
-        $po = PurchaseOrder::create([
-            'client_id' => $client->id,
+        $po = new PurchaseOrder;
+        $po->fill([
             'po_number' => 'PO-2024-0001',
             'title' => 'Test PO',
             'status' => 'draft',
             'budgeted_amount' => 5000,
             'used_amount' => 0,
         ]);
+        $po->client_id = $client->id;
+        $po->save();
 
         $file = UploadedFile::fake()->create('po.pdf', 1024);
 
@@ -335,14 +341,16 @@ class DocumentTest extends TestCase
     public function test_can_upload_document_for_payment(): void
     {
         $client = Client::factory()->create();
-        $payment = Payment::create([
-            'client_id' => $client->id,
+        $payment = new Payment;
+        $payment->fill([
             'payment_number' => 'PAY-2024-0001',
             'amount' => 500,
             'payment_date' => now(),
             'payment_method' => 'bank_transfer',
             'status' => 'completed',
         ]);
+        $payment->client_id = $client->id;
+        $payment->save();
 
         $file = UploadedFile::fake()->create('receipt.pdf', 1024);
 

@@ -21,7 +21,6 @@ class ShareClass extends Model
     public const STATUS_INACTIVE = 'I';
 
     protected $fillable = [
-        'company_profile_id',
         'code',
         'description',
         'voting_rights',

@@ -6,6 +6,7 @@ use App\Models\BackupSetting;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 
 /**
@@ -116,7 +117,7 @@ class BackupService
         foreach ($this->archivesByType() as $archives) {
             // Newest first, so everything past the keep window is stale.
             foreach (array_slice($archives, $keep) as $stale) {
-                unlink($stale['path']);
+                File::delete($stale['path']);
                 $removed[] = $stale['name'];
             }
         }
@@ -230,7 +231,7 @@ class BackupService
 
             return $this->gzip($dump);
         } finally {
-            @unlink($dump);
+            File::delete($dump);
         }
     }
 
@@ -269,7 +270,7 @@ class BackupService
 
             return $this->gzip($snapshot);
         } finally {
-            @unlink($snapshot);
+            File::delete($snapshot);
         }
     }
 
@@ -333,7 +334,7 @@ class BackupService
         );
 
         if (! $result->successful() || ! is_file($archive) || filesize($archive) === 0) {
-            @unlink($archive);
+            File::delete($archive);
             throw new \RuntimeException('Archiving stored files failed: '.trim($result->errorOutput()));
         }
 
@@ -350,7 +351,7 @@ class BackupService
         $result = Process::timeout(3600)->run('gzip -f '.escapeshellarg($file));
 
         if (! $result->successful() || ! is_file($file.'.gz') || filesize($file.'.gz') === 0) {
-            @unlink($file.'.gz');
+            File::delete($file.'.gz');
             throw new \RuntimeException('Compressing '.basename($file).' failed: '.trim($result->errorOutput()));
         }
 

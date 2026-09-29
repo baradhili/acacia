@@ -6,7 +6,6 @@ use App\Mail\PaymentReceiptMail;
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\Payment;
-use App\Models\PaymentAllocation;
 use App\Rules\NotInClosedPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -42,7 +41,7 @@ class PaymentController extends Controller
     {
         $clients = Client::orderBy('name')->pluck('name', 'id');
         $paymentMethods = Payment::paymentMethods();
-        
+
         $selectedClient = $request->client_id ? Client::with('invoices')->find($request->client_id) : null;
 
         return view('payments.create', compact(
@@ -69,7 +68,7 @@ class PaymentController extends Controller
 
         // Unchecked rows submit nothing; drop anything incomplete defensively.
         $allocations = array_filter($validated['invoice_allocations'] ?? [], function ($allocation) {
-            return !empty($allocation['invoice_id']) && (float) ($allocation['amount'] ?? 0) > 0;
+            return ! empty($allocation['invoice_id']) && (float) ($allocation['amount'] ?? 0) > 0;
         });
 
         if ($validated['allocate_type'] === 'manual' && empty($allocations)) {
@@ -103,15 +102,15 @@ class PaymentController extends Controller
             if ((float) $allocation['amount'] > $invoice->amount_due) {
                 return back()->withInput()->with('error',
                     "Allocation for {$invoice->invoice_number} exceeds its outstanding balance of $"
-                    . number_format($invoice->amount_due, 2) . '.');
+                    .number_format($invoice->amount_due, 2).'.');
             }
         }
 
         $totalAllocated = array_sum(array_map(fn ($a) => (float) $a['amount'], $allocations));
         if ($totalAllocated > (float) $validated['amount']) {
             return back()->withInput()->with('error',
-                'Total allocations ($' . number_format($totalAllocated, 2)
-                . ') exceed the payment amount ($' . number_format((float) $validated['amount'], 2) . ').');
+                'Total allocations ($'.number_format($totalAllocated, 2)
+                .') exceed the payment amount ($'.number_format((float) $validated['amount'], 2).').');
         }
 
         DB::beginTransaction();
@@ -157,7 +156,8 @@ class PaymentController extends Controller
                 ->with('success', 'Payment recorded successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->withInput()->with('error', 'Error recording payment: ' . $e->getMessage());
+
+            return back()->withInput()->with('error', 'Error recording payment: '.$e->getMessage());
         }
     }
 
@@ -210,8 +210,8 @@ class PaymentController extends Controller
         $allocatedAmount = (float) $payment->allocated_amount;
         if ((float) $validated['amount'] < $allocatedAmount) {
             return back()->withInput()->with('error',
-                'Amount cannot be less than $' . number_format($allocatedAmount, 2)
-                . ' already allocated to invoices. Remove the allocations first.');
+                'Amount cannot be less than $'.number_format($allocatedAmount, 2)
+                .' already allocated to invoices. Remove the allocations first.');
         }
 
         // #13: reject changing the client when allocations exist — those
@@ -226,14 +226,16 @@ class PaymentController extends Controller
 
         DB::beginTransaction();
         try {
-            $payment->update([
-                'client_id' => $validated['client_id'],
+            // client_id is unfillable — assign explicitly.
+            $payment->fill([
                 'amount' => $validated['amount'],
                 'payment_date' => $validated['payment_date'],
                 'payment_method' => $validated['payment_method'],
                 'reference' => $validated['reference'] ?? null,
                 'notes' => $validated['notes'] ?? null,
             ]);
+            $payment->client_id = $validated['client_id'];
+            $payment->save();
 
             // Recompute allocated invoice statuses against the new amount.
             foreach ($payment->allocations as $allocation) {
@@ -246,7 +248,8 @@ class PaymentController extends Controller
                 ->with('success', 'Payment updated successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->withInput()->with('error', 'Error updating payment: ' . $e->getMessage());
+
+            return back()->withInput()->with('error', 'Error updating payment: '.$e->getMessage());
         }
     }
 
@@ -274,7 +277,8 @@ class PaymentController extends Controller
                 ->with('success', 'Payment deleted successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', 'Error deleting payment: ' . $e->getMessage());
+
+            return back()->with('error', 'Error deleting payment: '.$e->getMessage());
         }
     }
 
@@ -300,11 +304,11 @@ class PaymentController extends Controller
             // Same correlated-subquery pattern as Invoice::scopeOverdue.
             ->whereRaw(
                 'COALESCE(invoices.total, 0) - COALESCE(('
-                . 'SELECT SUM(amount) FROM payment_allocations'
-                . ' WHERE payment_allocations.invoice_id = invoices.id'
-                . '), 0) > 0'
+                .'SELECT SUM(amount) FROM payment_allocations'
+                .' WHERE payment_allocations.invoice_id = invoices.id'
+                .'), 0) > 0'
             )
-            ->orderByRaw("CASE WHEN invoices.status = '" . Invoice::STATUS_DRAFT . "' THEN 1 ELSE 0 END")
+            ->orderByRaw("CASE WHEN invoices.status = '".Invoice::STATUS_DRAFT."' THEN 1 ELSE 0 END")
             ->orderBy('due_date')
             ->get()
             ->map(function ($invoice) {
@@ -359,7 +363,7 @@ class PaymentController extends Controller
         if ($validated['amount'] > $invoice->amount_due) {
             return back()->with('error',
                 'Amount exceeds the invoice\'s outstanding balance of $'
-                . number_format($invoice->amount_due, 2) . '.');
+                .number_format($invoice->amount_due, 2).'.');
         }
 
         // Verify amount available
@@ -411,7 +415,8 @@ class PaymentController extends Controller
                 'All allocations removed. The full payment amount is now unallocated.');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', 'Error removing allocations: ' . $e->getMessage());
+
+            return back()->with('error', 'Error removing allocations: '.$e->getMessage());
         }
     }
 }

@@ -126,7 +126,9 @@ class BillController extends Controller
             ]);
 
             foreach ($validated['items'] as $index => $item) {
-                $bill->items()->create([
+                // bill_id comes from the relation; the account FKs are
+                // unfillable and assigned explicitly.
+                $billItem = $bill->items()->make([
                     'description' => $item['description'],
                     'quantity' => $item['quantity'],
                     'unit_price' => $item['unit_price'],
@@ -135,13 +137,14 @@ class BillController extends Controller
                     // "Incl. GST" wins if both boxes are somehow submitted
                     'gst_added' => empty($item['gst']) && ! empty($item['gst_add']),
                     'discount_percent' => $item['discount_percent'] ?? 0,
-                    'expense_account_id' => $item['expense_account_id'] ?? null,
                     'is_prepaid' => ! empty($item['is_prepaid']),
                     'service_start' => ! empty($item['is_prepaid']) ? $item['service_start'] : null,
                     'service_end' => ! empty($item['is_prepaid']) ? $item['service_end'] : null,
-                    'amortise_to_account_id' => $item['amortise_to_account_id'] ?? null,
                     'sort_order' => $index,
                 ]);
+                $billItem->expense_account_id = $item['expense_account_id'] ?? null;
+                $billItem->amortise_to_account_id = $item['amortise_to_account_id'] ?? null;
+                $billItem->save();
             }
 
             $bill->recalculateTotals();
@@ -269,14 +272,16 @@ class BillController extends Controller
 
         DB::beginTransaction();
         try {
-            $bill->update([
-                'supplier_id' => $validated['supplier_id'],
-                'project_id' => $validated['project_id'] ?? null,
+            // supplier_id/project_id are unfillable FKs — assign explicitly.
+            $bill->fill([
                 'bill_date' => $validated['bill_date'],
                 'due_date' => $validated['due_date'],
                 'reference' => $validated['reference'] ?? null,
                 'notes' => $validated['notes'] ?? null,
             ]);
+            $bill->supplier_id = $validated['supplier_id'];
+            $bill->project_id = $validated['project_id'] ?? null;
+            $bill->save();
 
             // Upsert items: keep existing item ids stable (preserving
             // expense_account_id links) rather than deleting and recreating.
@@ -307,18 +312,25 @@ class BillController extends Controller
                     // "Incl. GST" wins if both boxes are somehow submitted
                     'gst_added' => empty($item['gst']) && ! empty($item['gst_add']),
                     'discount_percent' => $item['discount_percent'] ?? 0,
-                    'expense_account_id' => $item['expense_account_id'] ?? null,
                     'is_prepaid' => ! empty($item['is_prepaid']),
                     'service_start' => ! empty($item['is_prepaid']) ? $item['service_start'] : null,
                     'service_end' => ! empty($item['is_prepaid']) ? $item['service_end'] : null,
-                    'amortise_to_account_id' => $item['amortise_to_account_id'] ?? null,
                     'sort_order' => $index,
                 ];
 
+                // The account FKs are unfillable — assign them explicitly on
+                // both the update and create arms.
                 if ($itemId && $existingItems->has($itemId)) {
-                    $existingItems->get($itemId)->update($payload);
+                    $existing = $existingItems->get($itemId);
+                    $existing->fill($payload);
+                    $existing->expense_account_id = $item['expense_account_id'] ?? null;
+                    $existing->amortise_to_account_id = $item['amortise_to_account_id'] ?? null;
+                    $existing->save();
                 } else {
-                    $bill->items()->create($payload);
+                    $billItem = $bill->items()->make($payload);
+                    $billItem->expense_account_id = $item['expense_account_id'] ?? null;
+                    $billItem->amortise_to_account_id = $item['amortise_to_account_id'] ?? null;
+                    $billItem->save();
                 }
             }
 

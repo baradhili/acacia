@@ -29,7 +29,7 @@ here once their changelog entry lands. Ordered by priority.
     - [ ] Client acceptance portal: tokenised share link where the client reads the proposal, toggles optional lines with totals recalculating, and accepts with a typed/drawn e-signature that locks the document (propsly); the signature feeds the existing accepted state.
     - [ ] Engagement tracking on sent proposals: open/view notifications and per-section read analytics (propsly's tracking and engagement scores).
 
-- [ ] Static security testing: look at `laravel-security/pentest-scanner` or `baspa/larascan`
+- [ ] Larascan deploy-time residue — the scan is baseline-free as of Sep 2026 (every code finding fixed; the FK mass-assignment sweep made ownership explicit across 29 models). What's left only resolves at deploy: php.ini posture (`allow_url_fopen=Off`, `expose_php=Off`), and the localhost env infos (APP_URL, session-secure) clear with the production .env. The `verification.notice` signed-route finding is a known scanner false positive — revisit if larascan ever fixes its route heuristic.
 
 - [ ] https://docs.markwhen.com/ might be good to integrate into projects section - but only once we have a client module and a real project module
 

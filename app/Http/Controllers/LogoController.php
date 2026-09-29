@@ -145,14 +145,18 @@ class LogoController extends Controller
 
     /**
      * The reporting entity's company profile row (firstOrNew so a logo
-     * can be uploaded before any other detail was ever saved).
+     * can be uploaded before any other detail was ever saved). entity_id
+     * is an unfillable FK — reassigned explicitly so a first-time insert
+     * carries its owner.
      */
     protected function companyProfile(): CompanyProfile
     {
         $entity = IfrsPosting::resolveEntity();
         abort_unless((bool) $entity, 404, 'No IFRS entity configured.');
 
-        return CompanyProfile::firstOrNew(['entity_id' => $entity->id]);
+        return tap(CompanyProfile::firstOrNew(['entity_id' => $entity->id]), function (CompanyProfile $profile) use ($entity) {
+            $profile->entity_id = $entity->id;
+        });
     }
 
     /**

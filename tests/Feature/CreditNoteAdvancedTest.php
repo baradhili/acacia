@@ -6,7 +6,6 @@ use App\Models\Client;
 use App\Models\CreditNote;
 use App\Models\CreditNoteItem;
 use App\Models\Invoice;
-use App\Models\InvoiceItem;
 use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -17,6 +16,7 @@ class CreditNoteAdvancedTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected Client $client;
 
     protected function setUp(): void
@@ -32,12 +32,14 @@ class CreditNoteAdvancedTest extends TestCase
 
     protected function createInvoiceWithAmount(float $amount): Invoice
     {
-        $invoice = Invoice::create([
-            'client_id' => $this->client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $invoice->client_id = $this->client->id;
+        $invoice->save();
 
         $invoice->items()->create([
             'description' => 'Test Service',
@@ -47,6 +49,7 @@ class CreditNoteAdvancedTest extends TestCase
         ]);
 
         $invoice->refresh();
+
         return $invoice;
     }
 
@@ -55,13 +58,15 @@ class CreditNoteAdvancedTest extends TestCase
         $invoice = $this->createInvoiceWithAmount(110); // Total = $110 with GST
 
         // Create full credit note
-        $creditNote = CreditNote::create([
-            'client_id' => $this->client->id,
+        $creditNote = new CreditNote;
+        $creditNote->fill([
             'issue_date' => now()->toDateString(),
             'reason' => 'Full refund',
             'total' => 110,
             'remaining_amount' => 110,
         ]);
+        $creditNote->client_id = $this->client->id;
+        $creditNote->save();
 
         // Apply credit note to invoice
         $result = $creditNote->applyToInvoice($invoice);
@@ -82,13 +87,15 @@ class CreditNoteAdvancedTest extends TestCase
         $invoice = $this->createInvoiceWithAmount(110);
 
         // Create partial credit note ($55)
-        $creditNote = CreditNote::create([
-            'client_id' => $this->client->id,
+        $creditNote = new CreditNote;
+        $creditNote->fill([
             'issue_date' => now()->toDateString(),
             'reason' => 'Partial refund',
             'total' => 55,
             'remaining_amount' => 55,
         ]);
+        $creditNote->client_id = $this->client->id;
+        $creditNote->save();
 
         // Apply partial credit note
         $result = $creditNote->applyToInvoice($invoice);
@@ -108,12 +115,14 @@ class CreditNoteAdvancedTest extends TestCase
         $invoice = $this->createInvoiceWithAmount(110);
 
         // First, pay the invoice
-        $payment = Payment::create([
-            'client_id' => $this->client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 110,
             'payment_date' => now()->toDateString(),
             'payment_method' => Payment::METHOD_BANK_TRANSFER,
         ]);
+        $payment->client_id = $this->client->id;
+        $payment->save();
 
         $payment->allocateToInvoice($invoice, 110);
 
@@ -121,13 +130,15 @@ class CreditNoteAdvancedTest extends TestCase
         $this->assertEquals(Invoice::STATUS_PAID, $invoice->status);
 
         // Now create credit note for refund
-        $creditNote = CreditNote::create([
-            'client_id' => $this->client->id,
+        $creditNote = new CreditNote;
+        $creditNote->fill([
             'issue_date' => now()->toDateString(),
             'reason' => 'Customer refund request',
             'total' => 110,
             'remaining_amount' => 110,
         ]);
+        $creditNote->client_id = $this->client->id;
+        $creditNote->save();
 
         // Apply credit note to invoice (refund workflow)
         $result = $creditNote->applyToInvoice($invoice);
@@ -144,8 +155,8 @@ class CreditNoteAdvancedTest extends TestCase
     public function test_voiding_credit_note_with_partial_allocations_is_prevented(): void
     {
         // Create credit note and apply partially
-        $creditNote = CreditNote::create([
-            'client_id' => $this->client->id,
+        $creditNote = new CreditNote;
+        $creditNote->fill([
             'issue_date' => now()->toDateString(),
             'reason' => 'Partial refund',
             'total' => 110,
@@ -154,6 +165,8 @@ class CreditNoteAdvancedTest extends TestCase
             'status' => CreditNote::STATUS_APPLIED,
             'applied_at' => now(),
         ]);
+        $creditNote->client_id = $this->client->id;
+        $creditNote->save();
 
         // Try to void
         $result = $creditNote->void();
@@ -166,13 +179,15 @@ class CreditNoteAdvancedTest extends TestCase
     {
         $invoice = $this->createInvoiceWithAmount(110);
 
-        $creditNote = CreditNote::create([
-            'client_id' => $this->client->id,
+        $creditNote = new CreditNote;
+        $creditNote->fill([
             'issue_date' => now()->toDateString(),
             'reason' => 'Test',
             'total' => 110,
             'remaining_amount' => 110,
         ]);
+        $creditNote->client_id = $this->client->id;
+        $creditNote->save();
 
         // First application
         $result1 = $creditNote->applyToInvoice($invoice);
@@ -199,14 +214,16 @@ class CreditNoteAdvancedTest extends TestCase
 
     public function test_void_issued_credit_note_succeeds(): void
     {
-        $creditNote = CreditNote::create([
-            'client_id' => $this->client->id,
+        $creditNote = new CreditNote;
+        $creditNote->fill([
             'issue_date' => now()->toDateString(),
             'reason' => 'Test',
             'total' => 100,
             'remaining_amount' => 100,
             'status' => CreditNote::STATUS_ISSUED,
         ]);
+        $creditNote->client_id = $this->client->id;
+        $creditNote->save();
 
         $result = $creditNote->void();
 

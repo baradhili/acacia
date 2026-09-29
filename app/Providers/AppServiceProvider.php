@@ -17,6 +17,10 @@ use App\Observers\TimeEntryObserver;
 use App\Support\Nav;
 use App\Support\WidgetLayout;
 use App\Support\Widgets;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -36,6 +40,19 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // The guest auth routes need distinct limiter names: Laravel's
+        // default throttle key is only domain|ip, so without names the
+        // form views would drain the credential budget of the POSTs
+        // (and login would share a bucket with registration).
+        RateLimiter::for('auth-forms', fn (Request $request) => Limit::perMinute(60)->by($request->ip()));
+
+        RateLimiter::for('auth-credentials', fn (Request $request) => Limit::perMinute(5)->by($request->ip()));
+
+        // The only sanctioned raw echo in the shell: nav icons pass
+        // Nav::renderIcon's allowlist guard (see its docblock) — views
+        // emitting icon markup any other way reintroduce the XSS sink.
+        Blade::directive('navIcon', fn (string $expression = '') => "<?php echo \App\Support\Nav::renderIcon({$expression}); ?>");
+
         // The shell's registration surfaces: core features (and later,
         // module providers) contribute nav sections and dashboard
         // widgets through these registries; the views render whatever

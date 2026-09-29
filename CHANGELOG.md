@@ -3,6 +3,77 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] — 2026-09-29
+
+### Changed — baseline-free security scanning: every finding fixed or visible
+
+The larascan baseline is deleted: what the scan reports now is the
+whole truth. The 59 ownership-FK findings close for real — 29 core
+models drop their FK columns from `$fillable` and every writer assigns
+ownership explicitly (createWithUniqueNumber helpers split their fill
+payload, firstOrCreate/updateOrCreate sites become fetch-or-new across
+bill allocations, entity settings, widget preferences, share classes
+and fiscal-year closes, PsiService included), so a request payload can
+no longer decide who a record belongs to. The remaining raw sinks
+close alongside: forceFill becomes property writes, the overdue
+scopes group their orWhere branches (a latent constraint leak — a
+caller's own where used to be bypassed by the second branch), nav
+icons render through Nav::renderIcon's allowlist guard behind the
+@navIcon directive, BackupService deletes via the File facade, and the
+module-install temp dir uses random_bytes. The User model gains the
+classic `$hidden` property (static tooling can't parse the attribute
+form), the middleware is renamed SecureHeaders to match the
+conventional vocabulary, and the reset flow's remember-token rotation
+is its own method. What the scan still shows — seven findings, none
+gating — is environment-shaped by design: the localhost APP_ENV/APP_URL
+infos that self-downgrade outside production, the session-secure item
+that resolves at deploy (direct HTTPS or TRUSTED_PROXIES), host
+php.ini's allow_url_fopen/expose_php, and one scanner false positive
+on the verification.notice route. Suite: 1019 passed.
+
+## [Unreleased] — 2026-09-29
+
+### Fixed — security follow-ups from the larascan triage
+
+The actionable findings from the scanning pass land as a batch: the
+guest auth routes are throttled (5/min per IP on the login and
+registration posts, a NAT-friendly 60/min on the form pages, each
+limit regression-tested); every response now carries
+X-Content-Type-Options, X-Frame-Options: SAMEORIGIN and Referrer-Policy
+from a global middleware, with Strict-Transport-Security sent only on
+secure requests so the pin can never train browsers over plain HTTP;
+session payloads encrypt at rest; Whoops masks the secret env keys
+(APP_KEY, database/Redis/mail/AWS credentials) when APP_DEBUG renders
+an exception page; and the framework default error pages are replaced
+by standalone 500/503 blades (inline styles, copy from lang/errors.php)
+that render even while the app is broken. The audited npm dev
+dependencies (nanoid, fast-uri) are patched. Repo hygiene: dependabot
+watches composer/npm/actions weekly and security.txt routes
+researchers to GitHub private vulnerability reporting. CI now runs
+`php artisan larascan` on every build — the baseline is pruned to the
+96 findings the triage deliberately keeps (the FK-in-$fillable mass
+awaits the multi-entity mass-assignment policy; the rest are verified
+false positives or environment-context items that only resolve at
+deploy).
+
+## [Unreleased] — 2026-09-29
+
+### Added — static security scanning wired into the agent workflow
+
+`baspa/larascan` (dev-only) runs as `php artisan larascan` before
+committing, per AGENTS.md — chosen over `laravel-security/pentest-scanner`,
+which has no tagged release and no Laravel 13 support. Findings at or above
+high severity fail the run; `larascan-baseline.json` (committed) absorbs the
+109 findings the Sep 2026 triage worked through — mostly false positives
+from pattern-matching (attribute-based `#[Hidden]`, deliberate `orWhere`
+scope composition, service-side `forceFill`), with the genuine items
+deferred to the todo list: login/register route throttling, `npm audit fix`
+(nanoid, fast-uri), production header/session posture, dependabot and
+security.txt. The first scan also surfaced five dependency advisories,
+fixed in the same change: `league/commonmark` 2.9.0 → 2.10 (four DoS/XSS
+GHSAs) and `maatwebsite/excel` 3.1.69 → 3.1.70 (CVE-2026-84374 — exports
+written outside the configured disk on caller-controlled paths).
+
 ## [Unreleased] — 2026-09-28
 
 ### Fixed — merge-review round: the cross-module relation guards itself

@@ -84,10 +84,12 @@ class AdministrationController extends Controller
             'retention_years' => ['nullable', 'integer', 'min:1', 'max:50'],
         ]);
 
-        EntitySetting::updateOrCreate(
-            ['entity_id' => $entity->id],
-            ['retention_years' => $validated['retention_years']],
-        );
+        // entity_id is an unfillable FK — resolve the setting manually
+        // instead of updateOrCreate, which would drop it on create.
+        $setting = EntitySetting::firstOrNew(['entity_id' => $entity->id]);
+        $setting->entity_id = $entity->id;
+        $setting->retention_years = $validated['retention_years'];
+        $setting->save();
 
         $years = $validated['retention_years']
             ?? PruneClosedYearLedgers::DEFAULT_RETENTION_YEARS;

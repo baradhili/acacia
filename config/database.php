@@ -35,7 +35,20 @@ return [
         'sqlite' => [
             'driver' => 'sqlite',
             'url' => env('DB_URL'),
-            'database' => env('DB_DATABASE', database_path('database.sqlite')),
+            // A relative DB_DATABASE is anchored to the app root — an
+            // Artisan worker or scheduled command started outside the
+            // repository would otherwise resolve it against its own
+            // working directory and miss the database entirely.
+            'database' => (function () {
+                $database = env('DB_DATABASE');
+                if ($database === null || $database === '') {
+                    return database_path('database.sqlite');
+                }
+
+                return str_starts_with($database, '/') || str_starts_with($database, ':')
+                    ? $database
+                    : base_path($database);
+            })(),
             'prefix' => '',
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
             'busy_timeout' => null,

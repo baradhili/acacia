@@ -8,6 +8,7 @@ use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Supplier;
+use App\Models\User;
 use App\Services\FiscalYearService;
 use Database\Seeders\IFRSSeeder;
 use Database\Seeders\RoleSeeder;
@@ -21,7 +22,9 @@ class ClosedPeriodEnforcementTest extends TestCase
     use RefreshDatabase;
 
     protected Entity $entity;
+
     protected FiscalYearService $service;
+
     protected int $closedYear;
 
     protected function setUp(): void
@@ -31,10 +34,10 @@ class ClosedPeriodEnforcementTest extends TestCase
         $this->seed(RoleSeeder::class);
         $this->seed(UserSeeder::class);
         $this->seed(IFRSSeeder::class);
-        $this->actingAs(\App\Models\User::where('email', 'admin@example.com')->first());
+        $this->actingAs(User::where('email', 'admin@example.com')->first());
 
         $this->entity = Entity::first();
-        $this->service = new FiscalYearService();
+        $this->service = new FiscalYearService;
         $this->closedYear = $this->service->currentYear($this->entity) - 1;
 
         // Close the prior year up front (empty P&L is fine — the guards
@@ -49,7 +52,7 @@ class ClosedPeriodEnforcementTest extends TestCase
         $this->post('/payments', [
             'client_id' => $client->id,
             'amount' => 100,
-            'payment_date' => $this->closedYear . '-09-15',
+            'payment_date' => $this->closedYear.'-09-15',
             'payment_method' => 'bank_transfer',
             'allocate_type' => 'no',
         ])->assertSessionHasErrors('payment_date');
@@ -81,17 +84,19 @@ class ClosedPeriodEnforcementTest extends TestCase
     public function test_payment_update_rejects_closed_year_date(): void
     {
         $client = Client::factory()->create();
-        $payment = Payment::create([
-            'client_id' => $client->id,
+        $payment = new Payment;
+        $payment->fill([
             'amount' => 100,
             'payment_date' => now()->toDateString(),
             'payment_method' => 'bank_transfer',
         ]);
+        $payment->client_id = $client->id;
+        $payment->save();
 
         $this->patch("/payments/{$payment->id}", [
             'client_id' => $client->id,
             'amount' => 150,
-            'payment_date' => $this->closedYear . '-08-01',
+            'payment_date' => $this->closedYear.'-08-01',
             'payment_method' => 'bank_transfer',
             'notes' => 'backdated',
         ])->assertSessionHasErrors('payment_date');
@@ -109,7 +114,7 @@ class ClosedPeriodEnforcementTest extends TestCase
         $this->post('/bill-payments', [
             'supplier_id' => $supplier->id,
             'amount' => 200,
-            'payment_date' => $this->closedYear . '-11-30',
+            'payment_date' => $this->closedYear.'-11-30',
             'payment_method' => 'bank_transfer',
             'allocate_type' => 'no',
         ])->assertSessionHasErrors('payment_date');
@@ -123,12 +128,14 @@ class ClosedPeriodEnforcementTest extends TestCase
     public function test_invoice_record_payment_rejects_closed_year_date(): void
     {
         $client = Client::factory()->create();
-        $invoice = Invoice::create([
-            'client_id' => $client->id,
+        $invoice = new Invoice;
+        $invoice->fill([
             'issue_date' => now()->toDateString(),
             'due_date' => now()->addDays(30)->toDateString(),
             'status' => Invoice::STATUS_SENT,
         ]);
+        $invoice->client_id = $client->id;
+        $invoice->save();
         $invoice->items()->create([
             'description' => 'Service',
             'quantity' => 1,
@@ -139,7 +146,7 @@ class ClosedPeriodEnforcementTest extends TestCase
 
         $this->post("/invoices/{$invoice->id}/record-payment", [
             'amount' => 100,
-            'payment_date' => $this->closedYear . '-12-01',
+            'payment_date' => $this->closedYear.'-12-01',
             'payment_method' => 'bank_transfer',
         ])->assertSessionHasErrors('payment_date');
 
@@ -154,7 +161,7 @@ class ClosedPeriodEnforcementTest extends TestCase
         $payment = BillPayment::createWithUniqueNumber([
             'supplier_id' => $supplier->id,
             'amount' => 300,
-            'payment_date' => $this->closedYear . '-10-05',
+            'payment_date' => $this->closedYear.'-10-05',
             'payment_method' => 'bank_transfer',
         ]);
 
@@ -172,8 +179,8 @@ class ClosedPeriodEnforcementTest extends TestCase
         $supplier = Supplier::factory()->create();
         $bill = Bill::createWithUniqueNumber([
             'supplier_id' => $supplier->id,
-            'bill_date' => $this->closedYear . '-09-01',
-            'due_date' => $this->closedYear . '-10-01',
+            'bill_date' => $this->closedYear.'-09-01',
+            'due_date' => $this->closedYear.'-10-01',
             'status' => Bill::STATUS_OPEN,
         ]);
         $bill->items()->create([
@@ -187,7 +194,7 @@ class ClosedPeriodEnforcementTest extends TestCase
         $payment = BillPayment::createWithUniqueNumber([
             'supplier_id' => $supplier->id,
             'amount' => 400,
-            'payment_date' => $this->closedYear . '-10-05',
+            'payment_date' => $this->closedYear.'-10-05',
             'payment_method' => 'bank_transfer',
         ]);
         $payment->allocateToBill($bill, 400);
