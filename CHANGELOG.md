@@ -5,6 +5,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-09-29
 
+### Fixed — security follow-ups from the larascan triage
+
+The actionable findings from the scanning pass land as a batch: the
+guest auth routes are throttled (5/min per IP on the login and
+registration posts, a NAT-friendly 60/min on the form pages, each
+limit regression-tested); every response now carries
+X-Content-Type-Options, X-Frame-Options: SAMEORIGIN and Referrer-Policy
+from a global middleware, with Strict-Transport-Security sent only on
+secure requests so the pin can never train browsers over plain HTTP;
+session payloads encrypt at rest; Whoops masks the secret env keys
+(APP_KEY, database/Redis/mail/AWS credentials) when APP_DEBUG renders
+an exception page; and the framework default error pages are replaced
+by standalone 500/503 blades (inline styles, copy from lang/errors.php)
+that render even while the app is broken. The audited npm dev
+dependencies (nanoid, fast-uri) are patched. Repo hygiene: dependabot
+watches composer/npm/actions weekly and security.txt routes
+researchers to GitHub private vulnerability reporting. CI now runs
+`php artisan larascan` on every build — the baseline is pruned to the
+96 findings the triage deliberately keeps (the FK-in-$fillable mass
+awaits the multi-entity mass-assignment policy; the rest are verified
+false positives or environment-context items that only resolve at
+deploy).
+
+## [Unreleased] — 2026-09-29
+
 ### Added — static security scanning wired into the agent workflow
 
 `baspa/larascan` (dev-only) runs as `php artisan larascan` before
