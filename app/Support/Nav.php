@@ -28,6 +28,37 @@ class Nav
     /** Children that arrived before their dropdown did (see addTopbarChild). */
     protected array $pendingTopbarChildren = [];
 
+    /** Neutral fallback when a registered icon fails the guard. */
+    protected const FALLBACK_ICON = '<circle cx="12" cy="12" r="8" fill="none"></circle>';
+
+    /**
+     * Sanitise an icon fragment for raw emission. Icons are inner-SVG
+     * markup (the shell wraps them in its own <svg>) coming from
+     * code-registered nav entries; this guard is what makes the raw
+     * echo safe rather than merely conventional: only allowlisted
+     * inline-SVG shapes pass, event handlers and script-ish content
+     * never do, and anything invalid degrades to a neutral dot.
+     * Views must emit icons through @navIcon, never {!! !!}.
+     */
+    public static function renderIcon(?string $icon): string
+    {
+        $icon = trim((string) $icon);
+
+        if ($icon === '') {
+            return '';
+        }
+
+        $shapes = 'path|circle|rect|line|polyline|polygon|ellipse|g|title|defs|use';
+        $startsAllowed = "/^<(?:{$shapes})[\s\/>]/i";
+        $openOrCloseTag = "/<(?!\/?(?:{$shapes})[\s\/>])/i";
+
+        $safe = preg_match($startsAllowed, $icon) === 1
+            && preg_match($openOrCloseTag, $icon) !== 1
+            && preg_match('/\son\w+\s*=|javascript:/i', $icon) !== 1;
+
+        return $safe ? $icon : self::FALLBACK_ICON;
+    }
+
     public function addSidebar(array $items): void
     {
         $this->sidebar = array_merge($this->sidebar, $items);

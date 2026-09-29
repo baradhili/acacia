@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\BillPayment;
 use App\Models\Prepayment;
 use App\Models\PrepaymentAmortisation;
-use App\Services\IfrsPosting;
 use Carbon\Carbon;
 use IFRS\Models\Account;
 use IFRS\Models\Entity;
@@ -43,7 +42,7 @@ class PrepaymentService
 
         foreach ($payment->allocations as $allocation) {
             $bill = $allocation->bill()->with('items')->first();
-            if (!$bill) {
+            if (! $bill) {
                 continue;
             }
 
@@ -69,14 +68,15 @@ class PrepaymentService
                     : (int) round($allocationCents * ((float) $item->total * 100) / $billTotalCents);
                 $distributed += $shareCents;
 
-                if (!$item->is_prepaid || $shareCents <= 0) {
+                if (! $item->is_prepaid || $shareCents <= 0) {
                     continue;
                 }
-                if (!$item->expense_account_id) {
+                if (! $item->expense_account_id) {
                     Log::warning('Prepaid bill item has no account — prepayment not created', [
                         'bill_item_id' => $item->id,
                         'bill_payment_id' => $payment->id,
                     ]);
+
                     continue;
                 }
 
@@ -158,7 +158,7 @@ class PrepaymentService
         $asOf = Carbon::parse($asOf ?? today())->endOfDay();
         $limit = $asOf->min($prepayment->service_end->copy()->endOfMonth());
 
-        $lockService = app(\App\Services\PeriodLockService::class);
+        $lockService = app(PeriodLockService::class);
         $posted = 0;
 
         $prepayment->refresh();
@@ -172,9 +172,9 @@ class PrepaymentService
                 ->where('period_date', $periodDate->toDateString())
                 ->exists();
             if ($exists) {
-                $prepayment->forceFill([
-                    'next_period_date' => self::nextMonthEnd($periodDate),
-                ])->save();
+                $prepayment->next_period_date = Carbon::parse(self::nextMonthEnd($periodDate));
+                $prepayment->save();
+
                 continue;
             }
 
@@ -188,6 +188,7 @@ class PrepaymentService
             if ($dryRun) {
                 $posted++;
                 $prepayment->next_period_date = Carbon::parse(self::nextMonthEnd($periodDate));
+
                 continue;
             }
 
@@ -220,7 +221,7 @@ class PrepaymentService
                 'credited' => true,
                 'entity_id' => $entity->id,
                 'narration' => "Prepayment amortisation: {$prepayment->description}",
-                'reference' => 'PREPAY-' . $prepayment->id,
+                'reference' => 'PREPAY-'.$prepayment->id,
             ]);
 
             // Persisted before addLineItem() — unsaved items share a
@@ -241,15 +242,15 @@ class PrepaymentService
             ]);
 
             $posted++;
-            $prepayment->forceFill([
-                'next_period_date' => self::nextMonthEnd($periodDate),
-            ])->save();
+            $prepayment->next_period_date = Carbon::parse(self::nextMonthEnd($periodDate));
+            $prepayment->save();
         }
 
-        if (!$dryRun) {
+        if (! $dryRun) {
             $remainingPeriods = $prepayment->periods - $prepayment->amortisations()->count();
             if ($remainingPeriods <= 0) {
-                $prepayment->forceFill(['status' => Prepayment::STATUS_COMPLETED])->save();
+                $prepayment->status = Prepayment::STATUS_COMPLETED;
+                $prepayment->save();
             }
         }
 
@@ -266,26 +267,27 @@ class PrepaymentService
      */
     public static function reverseAmortisation(PrepaymentAmortisation $entry, bool $throw = false): ?int
     {
-        if (!$entry->isPosted() || $entry->isReversed()) {
+        if (! $entry->isPosted() || $entry->isReversed()) {
             return null;
         }
 
         try {
             $reversalId = IfrsPosting::reverseTransaction(
                 (int) $entry->ifrs_transaction_id,
-                'Reversal of prepayment amortisation: ' . $entry->prepayment?->description,
-                'PREPAY-' . $entry->prepayment_id,
+                'Reversal of prepayment amortisation: '.$entry->prepayment?->description,
+                'PREPAY-'.$entry->prepayment_id,
                 throw: true,
             );
         } catch (\Throwable $e) {
             if ($throw) {
                 throw $e;
             }
-            \Illuminate\Support\Facades\Log::error('Failed to reverse prepayment amortisation', [
+            Log::error('Failed to reverse prepayment amortisation', [
                 'prepayment_amortisation_id' => $entry->id,
                 'error' => $e->getMessage(),
                 'exception' => get_class($e),
             ]);
+
             return null;
         }
 

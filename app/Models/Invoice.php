@@ -516,24 +516,29 @@ class Invoice extends Model
         // balance is under adjustment — see hasActiveCreditNote()).
         $noActiveCreditNote = fn ($q) => $q->whereDoesntHave('creditNotes', fn ($cn) => $cn->where('status', '!=', CreditNote::STATUS_VOID));
 
-        return $query->where(fn ($q) => $q->where('status', self::STATUS_OVERDUE)->where($noActiveCreditNote))
-            ->orWhere(function ($q) use ($noActiveCreditNote) {
-                $q->where($noActiveCreditNote);
-                $q->whereIn('status', [self::STATUS_SENT, self::STATUS_PARTIALLY_PAID])
-                    ->where('due_date', '<', now()->toDateString())
-                  // For invoices with a positive total, require an outstanding
-                  // balance (total > sum of allocations). Zero-total invoices
-                  // fall through (the status/due_date checks alone apply).
-                    ->where(function ($q) {
-                        $q->where('total', '<=', 0)
-                            ->orWhereRaw(
-                                'invoices.total - COALESCE(('
-                                .'SELECT SUM(amount) FROM payment_allocations'
-                                .' WHERE payment_allocations.invoice_id = invoices.id'
-                                .'), 0) > 0'
-                            );
-                    });
-            });
+        // The two branches are grouped so a caller chaining its own
+        // where() before the scope keeps it on BOTH branches — an
+        // ungrouped orWhere would let the second branch ignore it.
+        return $query->where(function ($query) use ($noActiveCreditNote) {
+            $query->where(fn ($q) => $q->where('status', self::STATUS_OVERDUE)->where($noActiveCreditNote))
+                ->orWhere(function ($q) use ($noActiveCreditNote) {
+                    $q->where($noActiveCreditNote);
+                    $q->whereIn('status', [self::STATUS_SENT, self::STATUS_PARTIALLY_PAID])
+                        ->where('due_date', '<', now()->toDateString())
+                      // For invoices with a positive total, require an outstanding
+                      // balance (total > sum of allocations). Zero-total invoices
+                      // fall through (the status/due_date checks alone apply).
+                        ->where(function ($q) {
+                            $q->where('total', '<=', 0)
+                                ->orWhereRaw(
+                                    'invoices.total - COALESCE(('
+                                    .'SELECT SUM(amount) FROM payment_allocations'
+                                    .' WHERE payment_allocations.invoice_id = invoices.id'
+                                    .'), 0) > 0'
+                                );
+                        });
+                });
+        });
     }
 
     /**

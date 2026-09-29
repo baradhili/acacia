@@ -466,24 +466,29 @@ class Bill extends Model
      */
     public function scopeOverdue($query)
     {
-        return $query->where('status', self::STATUS_OVERDUE)
-            ->orWhere(function ($q) {
-                $q->whereIn('status', [self::STATUS_OPEN, self::STATUS_PARTIALLY_PAID])
-                    ->where('due_date', '<', now()->toDateString())
-                  // For bills with a positive total, require an outstanding
-                  // balance (total > completed allocations). Zero-total bills
-                  // fall through (the status/due_date checks alone apply).
-                    ->where(function ($q) {
-                        $q->where('total', '<=', 0)
-                            ->orWhereRaw(
-                                'bills.total - COALESCE(('
-                                .'SELECT SUM(bill_payment_allocations.amount) FROM bill_payment_allocations'
-                                .' JOIN bill_payments ON bill_payments.id = bill_payment_allocations.bill_payment_id'
-                                .' WHERE bill_payment_allocations.bill_id = bills.id'
-                                ." AND bill_payments.status = '".BillPayment::STATUS_COMPLETED.'\'), 0) > 0'
-                            );
-                    });
-            });
+        // The two branches are grouped so a caller chaining its own
+        // where() before the scope keeps it on BOTH branches — an
+        // ungrouped orWhere would let the second branch ignore it.
+        return $query->where(function ($query) {
+            $query->where('status', self::STATUS_OVERDUE)
+                ->orWhere(function ($q) {
+                    $q->whereIn('status', [self::STATUS_OPEN, self::STATUS_PARTIALLY_PAID])
+                        ->where('due_date', '<', now()->toDateString())
+                      // For bills with a positive total, require an outstanding
+                      // balance (total > completed allocations). Zero-total bills
+                      // fall through (the status/due_date checks alone apply).
+                        ->where(function ($q) {
+                            $q->where('total', '<=', 0)
+                                ->orWhereRaw(
+                                    'bills.total - COALESCE(('
+                                    .'SELECT SUM(bill_payment_allocations.amount) FROM bill_payment_allocations'
+                                    .' JOIN bill_payments ON bill_payments.id = bill_payment_allocations.bill_payment_id'
+                                    .' WHERE bill_payment_allocations.bill_id = bills.id'
+                                    ." AND bill_payments.status = '".BillPayment::STATUS_COMPLETED.'\'), 0) > 0'
+                                );
+                        });
+                });
+        });
     }
 
     /**

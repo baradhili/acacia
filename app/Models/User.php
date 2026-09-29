@@ -4,7 +4,6 @@ namespace App\Models;
 
 use IFRS\Models\Entity;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -15,9 +14,13 @@ use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Traits\HasRoles;
 
 #[Fillable(['name', 'email', 'password', 'salary', 'charge_out_rate', 'position', 'phone', 'profile_photo', 'entity_id'])]
-#[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
+    // Classic property rather than the #[Hidden] attribute: static
+    // tooling (larascan's password check) reads properties only, and
+    // every other model in the app uses the classic form.
+    protected $hidden = ['password', 'remember_token'];
+
     use HasFactory, HasRoles, Notifiable, SoftDeletes;
 
     protected function casts(): array

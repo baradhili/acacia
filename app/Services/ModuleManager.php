@@ -67,7 +67,7 @@ class ModuleManager
             throw new \InvalidArgumentException('Only https GitHub repository URLs can be installed.');
         }
 
-        $temp = storage_path('app/module-install-'.uniqid());
+        $temp = storage_path('app/module-install-'.bin2hex(random_bytes(4)));
         $this->mustRun(['git', 'clone', '--depth', '1', $url, $temp], "Could not clone {$url}");
 
         try {

@@ -644,7 +644,8 @@ class BillPayment extends Model
 
             // postToIFRS() skips payments that already carry a
             // transaction id — clear it so the corrected posting runs.
-            $this->forceFill(['ifrs_payment_id' => null])->save();
+            $this->ifrs_payment_id = null;
+            $this->save();
 
             $this->update([
                 'payment_method' => $method,
@@ -788,7 +789,8 @@ class BillPayment extends Model
                 }
             }
 
-            $prepayment->forceFill(['status' => Prepayment::STATUS_VOID])->save();
+            $prepayment->status = Prepayment::STATUS_VOID;
+            $prepayment->save();
         }
 
         return $reversed;

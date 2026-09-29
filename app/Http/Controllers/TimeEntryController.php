@@ -80,10 +80,13 @@ class TimeEntryController extends Controller
 
         // Active projects plus the entry's own — a draft on a project
         // that has since gone on hold/completed stays editable rather
-        // than being stranded off the form.
+        // than being stranded off the form. The orWhere sits inside a
+        // group so it can never leak past an outer constraint.
         $projects = Project::with(['client', 'purchaseOrder'])
-            ->where('status', Project::STATUS_ACTIVE)
-            ->orWhere('id', $timeEntry->project_id)
+            ->where(function ($q) use ($timeEntry) {
+                $q->where('status', Project::STATUS_ACTIVE)
+                    ->orWhere('id', $timeEntry->project_id);
+            })
             ->orderBy('name')
             ->get();
 
