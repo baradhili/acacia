@@ -7,7 +7,7 @@ here once their changelog entry lands. Ordered by priority.
 
 - [ ] Bring the remaining resource_mgr concepts into acacia — services (Sep 2026) and the skills library (Sep 2026, Modules/Skills) are across; the allocations/resourcing concepts are what's left. Review https://github.com/baradhili/resource_mgr for those.
 
-- [ ] Ability to have multiple un-related company entities with separate everything against same user - aka same user can be admin of more than one org.
+- [ ] Ability to have multiple un-related company entities with separate everything on same system - do we do this by user associations or by landing domain? Justify why it cannot be one user to one or more entities?
 
 - [ ] Modules per company (builds on the multi-entity item above).
 
