@@ -57,4 +57,23 @@ class RouteThrottlingTest extends TestCase
 
         $this->get('/login')->assertStatus(429);
     }
+
+    public function test_form_views_do_not_drain_the_credential_budget(): void
+    {
+        // The named limiters must keep separate buckets: with the
+        // default domain|ip throttle key, five form views would leave
+        // the next POST login at its ceiling and 429.
+        $user = User::factory()->create();
+
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $this->get('/login')->assertOk();
+        }
+
+        $this->post('/login', [
+            'email' => $user->email,
+            'password' => 'wrong-password',
+        ])->assertStatus(302)->assertSessionHasErrors('email');
+
+        $this->assertGuest();
+    }
 }

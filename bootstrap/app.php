@@ -17,6 +17,13 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Proxies to trust for X-Forwarded-* headers (CIDR list or
+        // *), empty by default so nothing is trusted locally. Behind
+        // a TLS-terminating proxy this is what makes Request::secure()
+        // truthful — the HSTS branch of SetSecurityHeaders and the
+        // session cookie's secure flag both depend on it.
+        $middleware->trustProxies(at: array_filter(array_map('trim', explode(',', (string) env('TRUSTED_PROXIES', '')))));
+
         $middleware->alias([
             'entity' => EnsureUserHasEntity::class,
             'role' => RoleMiddleware::class,

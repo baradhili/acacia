@@ -53,7 +53,9 @@ return [
     */
 
     'debug_blacklist' => [
-        'env' => [
+        // Whoops masks by superglobal name — '_ENV', not 'env', or
+        // the section silently protects nothing.
+        '_ENV' => [
             'APP_KEY',
             'DB_PASSWORD',
             'REDIS_PASSWORD',

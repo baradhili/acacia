@@ -9,8 +9,8 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * Baseline browser-hardening headers for every response (clickjacking,
  * MIME-sniffing, referrer leakage). HSTS is sent only on secure
- * requests: behind a TLS-terminating proxy, TrustProxies must be
- * configured so Request::secure() reflects the client scheme — pinning
+ * requests: behind a TLS-terminating proxy set TRUSTED_PROXIES so
+ * Request::secure() reflects the forwarded client scheme — pinning
  * browsers to HTTPS over plain HTTP would be a no-op at best.
  */
 class SetSecurityHeaders

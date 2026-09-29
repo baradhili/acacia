@@ -13,21 +13,23 @@ use Illuminate\Support\Facades\Route;
 
 // Credential endpoints are brute-force gates (5/min per IP); the form
 // pages get a generous ceiling (60/min) that stops hammering without
-// tripping up a shared-office NAT rendering the login screen.
+// tripping up a shared-office NAT rendering the login screen. The
+// named limiters (AppServiceProvider) keep the two budgets in
+// separate buckets — the default throttle key is shared per IP.
 Route::middleware('guest')->group(function () {
     Route::get('register', [RegisteredUserController::class, 'create'])
-        ->middleware('throttle:60,1')
+        ->middleware('throttle:auth-forms')
         ->name('register');
 
     Route::post('register', [RegisteredUserController::class, 'store'])
-        ->middleware('throttle:5,1');
+        ->middleware('throttle:auth-credentials');
 
     Route::get('login', [AuthenticatedSessionController::class, 'create'])
-        ->middleware('throttle:60,1')
+        ->middleware('throttle:auth-forms')
         ->name('login');
 
     Route::post('login', [AuthenticatedSessionController::class, 'store'])
-        ->middleware('throttle:5,1');
+        ->middleware('throttle:auth-credentials');
 
     Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])
         ->name('password.request');

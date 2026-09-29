@@ -29,8 +29,11 @@ class SecurityHeadersTest extends TestCase
     {
         // The middleware is prepended so it wraps
         // PreventRequestsDuringMaintenance — a 503 must still be
-        // hardened, and it renders the custom errors/503 view.
+        // hardened, and it renders the custom errors/503 view. A
+        // pre-existing down file (the app really being in maintenance)
+        // is restored, not deleted.
         $down = storage_path('framework/down');
+        $existing = is_file($down) ? file_get_contents($down) : null;
         file_put_contents($down, json_encode(['retry_at' => now()->addMinutes(10)->getTimestamp()]));
 
         try {
@@ -39,7 +42,11 @@ class SecurityHeadersTest extends TestCase
                 ->assertHeader('X-Content-Type-Options', 'nosniff')
                 ->assertHeader('X-Frame-Options', 'SAMEORIGIN');
         } finally {
-            @unlink($down);
+            if ($existing !== null) {
+                file_put_contents($down, $existing);
+            } else {
+                @unlink($down);
+            }
         }
     }
 }
