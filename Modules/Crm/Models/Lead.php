@@ -3,11 +3,11 @@
 namespace Modules\Crm\Models;
 
 use App\Models\Client;
-use App\Models\Estimate;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Modules\Proposals\Models\Estimate;
 
 /**
  * A lead moving through the sales funnel: new → contacted →
@@ -142,9 +142,18 @@ class Lead extends Model
 
     /**
      * The estimate prepared through the proposal-stage shortcut.
+     * Soft dependency on the Proposals module (the cross-module
+     * class_exists rule): when the module is uninstalled the FK
+     * outlives its class, so the relation binds to the
+     * OrphanedEstimate placeholder — which can never match a row —
+     * and every caller gets null instead of a missing-class fatal.
      */
     public function estimate(): BelongsTo
     {
+        if (! class_exists(Estimate::class)) {
+            return $this->belongsTo(OrphanedEstimate::class)->whereRaw('1 = 0');
+        }
+
         return $this->belongsTo(Estimate::class);
     }
 

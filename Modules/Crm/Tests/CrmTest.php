@@ -3,7 +3,6 @@
 namespace Modules\Crm\Tests;
 
 use App\Models\Client;
-use App\Models\Estimate;
 use App\Models\User;
 use App\Support\Nav;
 use App\Support\Widgets;
@@ -11,6 +10,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Modules\Crm\Models\Lead;
 use Modules\Crm\Models\LeadActivity;
 use Modules\Crm\Models\SalesTarget;
+use Modules\Proposals\Models\Estimate;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 

@@ -168,6 +168,14 @@ Running Acacia in a production environment and need guaranteed response times, c
 - One-click convert PO → invoice, or invoice partially
 - Email alerts at 80% and 100% utilisation
 
+### Proposals (Proposals module)
+
+- Line-item estimates with section grouping and optional extras quoted outside the committed total
+- Lines can reference catalogue services with a tailored description/price (rate-card link kept)
+- Statuses: `draft → sent → accepted → rejected / expired → converted`
+- Duplicate as new draft; convert accepted estimates to invoices (optional extras ride along on request)
+- Proposal-stage CRM hand-off: prepare an estimate pre-filled from a lead, linked back to it
+
 ### Invoices
 
 - Manual creation or generation from time entries / PO

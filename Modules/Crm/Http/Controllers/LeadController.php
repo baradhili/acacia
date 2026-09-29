@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 use Modules\Crm\Models\Lead;
 use Modules\Crm\Models\LeadActivity;
 
@@ -205,12 +206,17 @@ class LeadController extends Controller
     /**
      * The proposal-stage shortcut: jump to the estimate form carrying
      * the lead, which pre-fills the plan, value and a first line (the
-     * core controller accepts the lead via its soft Crm dependency).
+     * Proposals module's controller accepts the lead via its soft Crm
+     * dependency). Degrades when Proposals is disabled.
      */
     public function estimate(Lead $lead)
     {
         if ($lead->status !== Lead::STATUS_PROPOSAL) {
             return back()->with('error', 'Only proposal-stage leads can prepare an estimate.');
+        }
+
+        if (! Route::has('estimates.create')) {
+            return back()->with('error', __('crm.estimates_unavailable'));
         }
 
         return redirect()->route('estimates.create', ['lead_id' => $lead->id]);

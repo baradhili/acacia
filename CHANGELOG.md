@@ -5,6 +5,58 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-09-28
 
+### Fixed — merge-review round: the cross-module relation guards itself
+
+The CRM lead's `estimate()` relation imported the Proposals module's
+Estimate without the `class_exists` check the cross-module rule
+requires — the lead view's `Route::has` guards protected the view
+path, but any other caller (`$lead->estimate` from a future API,
+export or tinker) would fatal the moment Proposals is uninstalled.
+The relation now guards itself: with the module absent it binds to a
+placeholder constrained to never match a row (the FK and the
+core-schema estimates table outlive the class), so every caller gets
+null. The sidebar labels the module's provider registers ("Estimates",
+"New Estimate") also move to translation keys
+(`lang/en/proposals.php`) per the translation policy — no `en_AU`
+override needed, identical spelling.
+
+## [Unreleased] — 2026-09-28
+
+### Changed — modularisation arc finished: estimates extracted to Modules/Proposals
+
+Quotes/estimates move out of the core app into **Modules/Proposals**, the
+ninth shipped module, following the Practice/Taxation precedent — every
+URL and route name unchanged, so bookmarks, views and the CRM
+proposal-stage hand-off keep working. The controller, models and views
+move verbatim (git mv); the sidebar Estimates item re-registers from the
+provider at its old CoreNav position; the estimates tables stay in the
+core squashed schema (the Reconciliation bank-tables precedent). One
+seam needed pinning: documents rows written before the move store the
+polymorphic type as the legacy `App\Models\Estimate` class string, so
+the provider registers a morph-map alias keeping those rows — and the
+DocumentController write path, which builds that string itself —
+resolving against the moved class, with no data migration. CRM's lead →
+estimate link becomes a module-to-module soft dependency (`Route::has`
+guards in the lead view, a graceful fallback in the proposal-stage
+shortcut); `Client::estimates()` — unused — is dropped so the core holds
+no core-to-module relation. The module is the landing zone for the
+proposal-management roadmap now queued in `todo-list.md` (builder,
+pricing packages, live preview, branded PDF, client acceptance portal —
+grounded in ProposalForge and propsly).
+
+### Fixed — a zeroed line discount no longer leaves a stale amount
+
+`EstimateItem::calculateTotals()` only rewrote `discount_amount`
+inside the `discount_percent > 0` branch, so dropping a line's
+discount percent to zero kept the earlier calculation in the row and
+the tax/total rode on it. The amount is now always derived from the
+percent — zero percent zeroes it — which is the invariant the moved
+model's docblock states (caught in the extraction's review round; no
+write path ever set a flat `discount_amount`, so no stored data can
+carry the stale shape).
+
+## [Unreleased] — 2026-09-28
+
 ### Fixed — registry swaps no longer collide positions
 
 The sibling of the registry-growth hole: a widget unregistered while

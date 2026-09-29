@@ -1,0 +1,17 @@
+{
+    "name": "Proposals",
+    "alias": "proposals",
+    "description": "Quotes and estimates: line-item estimates with optional extras and sections, the draft → sent → accepted → converted lifecycle, conversion to invoices, and the CRM proposal-stage hand-off. The home for the proposal-management roadmap (builder, packages, client acceptance).",
+    "keywords": [
+        "estimates",
+        "quotes",
+        "proposals"
+    ],
+    "priority": 0,
+    "version": "1.0.0",
+    "providers": [
+        "Modules\\Proposals\\Providers\\ProposalsServiceProvider"
+    ],
+    "files": [],
+    "core": true
+}

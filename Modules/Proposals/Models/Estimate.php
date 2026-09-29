@@ -1,13 +1,29 @@
 <?php
 
-namespace App\Models;
+namespace Modules\Proposals\Models;
 
+use App\Models\Client;
+use App\Models\Document;
+use App\Models\Invoice;
+use App\Models\Project;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
+/**
+ * A quote/estimate for a client: numbered EST-YYYY-NNNN, moving
+ * through a guarded state machine (draft → sent → accepted →
+ * converted; rejected/expired are terminal except expired may be
+ * re-sent). Totals are always derived — recalculated from the
+ * non-optional items on every save — and optional lines are quoted
+ * as extras outside the committed figures until the conversion to
+ * an invoice asks for them. The polymorphic documents seam stores
+ * the legacy 'App\Models\Estimate' alias (see the module provider's
+ * morph map) so rows written before the module move keep resolving.
+ */
 class Estimate extends Model
 {
     use HasFactory;

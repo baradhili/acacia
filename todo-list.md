@@ -21,9 +21,15 @@ here once their changelog entry lands. Ordered by priority.
 
 - [ ] CRM follow-ups from the Sep 2026 module: email/calendar integrations, per-owner targets.
 
-- [ ] Static security testing: look at `laravel-security/pentest-scanner` or `baspa/larascan`
+- [ ] Proposal management — flesh the Proposals module (Sep 2026 extraction of estimates) into a full proposal builder. Reference products: [ProposalForge](https://github.com/ICodingStack/ProposalForge) (smart builder, pricing packages, live preview, PDF export) and [propsly](https://github.com/Old-G/propsly) (block editor, e-signature, tracking). Queued pieces, roughly in build order:
+    - [ ] Structured proposal documents on top of the estimate lines: cover/intro, scope, deliverables and timeline sections; content variables (`{{client.name}}`, `{{estimate.total}}`, …) resolved at render time (propsly's variable model).
+    - [ ] Good/Better/Best pricing packages: present the existing optional lines as tiered packages the client chooses between, with a recommended tier (ProposalForge's Basic/Standard/Premium); the chosen package drives the invoice conversion.
+    - [ ] Live split preview while editing: a client-facing preview pane updating in real time beside the form (ProposalForge's Live Split Preview; Alpine on the existing create/edit forms).
+    - [ ] Branded PDF export: one-click, print-ready, logo + accent colour (ProposalForge's 2×-DPI html2canvas/jsPDF approach vs the Resumes LuaLaTeX precedent).
+    - [ ] Client acceptance portal: tokenised share link where the client reads the proposal, toggles optional lines with totals recalculating, and accepts with a typed/drawn e-signature that locks the document (propsly); the signature feeds the existing accepted state.
+    - [ ] Engagement tracking on sent proposals: open/view notifications and per-section read analytics (propsly's tracking and engagement scores).
 
-- [ ] Finish the modularisation arc: Create "Proposals"  module and extract Estimates into it. Add tasks to todo-list.md to flesh out proposal management.Based on: [GitHub - ICodingStack/ProposalForge: ProposalForge — Elegant &amp; Intelligent Proposal Generator Create beautiful, professional proposals and quotes in minutes with smart builder, pricing packages, real-time preview, and one-click PDF export. 100% free • Open source • Works offline · GitHub](https://github.com/ICodingStack/ProposalForge) or  [GitHub - Old-G/propsly · GitHub](https://github.com/Old-G/propsly)
+- [ ] Static security testing: look at `laravel-security/pentest-scanner` or `baspa/larascan`
 
 - [ ] https://docs.markwhen.com/ might be good to integrate into projects section - but only once we have a client module and a real project module
 
