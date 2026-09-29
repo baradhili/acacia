@@ -29,7 +29,7 @@ here once their changelog entry lands. Ordered by priority.
     - [ ] Client acceptance portal: tokenised share link where the client reads the proposal, toggles optional lines with totals recalculating, and accepts with a typed/drawn e-signature that locks the document (propsly); the signature feeds the existing accepted state.
     - [ ] Engagement tracking on sent proposals: open/view notifications and per-section read analytics (propsly's tracking and engagement scores).
 
-- [ ] Static security testing: look at `laravel-security/pentest-scanner` or `baspa/larascan`
+- [ ] Security fixes from the Sep 2026 larascan triage (the scanner landed and these are baselined until fixed — drop the baseline entries as each lands): login/register route throttling in `routes/auth.php`; `npm audit fix` (nanoid, fast-uri); production posture — session encrypt/secure-cookie, HSTS + X-Frame-Options + nosniff + Referrer-Policy middleware, debug blacklist, custom 500/503 error pages; repo hygiene — dependabot.yml, security.txt, `.env.example` missing the `DB_*`/`CACHE_PREFIX` keys.
 
 - [ ] https://docs.markwhen.com/ might be good to integrate into projects section - but only once we have a client module and a real project module
 

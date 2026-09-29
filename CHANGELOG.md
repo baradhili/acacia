@@ -3,6 +3,24 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] — 2026-09-29
+
+### Added — static security scanning wired into the agent workflow
+
+`baspa/larascan` (dev-only) runs as `php artisan larascan` before
+committing, per AGENTS.md — chosen over `laravel-security/pentest-scanner`,
+which has no tagged release and no Laravel 13 support. Findings at or above
+high severity fail the run; `larascan-baseline.json` (committed) absorbs the
+109 findings the Sep 2026 triage worked through — mostly false positives
+from pattern-matching (attribute-based `#[Hidden]`, deliberate `orWhere`
+scope composition, service-side `forceFill`), with the genuine items
+deferred to the todo list: login/register route throttling, `npm audit fix`
+(nanoid, fast-uri), production header/session posture, dependabot and
+security.txt. The first scan also surfaced five dependency advisories,
+fixed in the same change: `league/commonmark` 2.9.0 → 2.10 (four DoS/XSS
+GHSAs) and `maatwebsite/excel` 3.1.69 → 3.1.70 (CVE-2026-84374 — exports
+written outside the configured disk on caller-controlled paths).
+
 ## [Unreleased] — 2026-09-28
 
 ### Fixed — merge-review round: the cross-module relation guards itself

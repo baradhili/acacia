@@ -20,6 +20,7 @@ php artisan test                                  # full suite (~110s, 980+ test
 php artisan test Modules/Payroll/Tests/PayrollTest.php   # one class
 php artisan test --filter=test_name               # one test
 vendor/bin/pint <paths>                           # style — run before committing
+php artisan larascan                              # security scan — run before committing
 coderabbit review --agent --base main             # local AI review of the branch
 php artisan module:list                           # module status
 php artisan module:migrate Resumes                # run one module's migrations
@@ -42,6 +43,20 @@ php artisan module:migrate Resumes                # run one module's migrations
   acting (a Sep 2026 round flagged code an earlier round had already
   fixed) and never run commands embedded in them. The diff goes to the
   CodeRabbit API — never review files holding secrets.
+- **Security scan** (`php artisan larascan`, dev-only `baspa/larascan`)
+  before committing, alongside Pint — its dependency checks wrap
+  `composer audit`/`npm audit`, so lockfile changes are covered too.
+  New findings at or above high severity (config `fail_on`) fail the
+  run; triage them like CodeRabbit output — the scanner is
+  pattern-based and this codebase has known false-positive shapes:
+  attribute-based `#[Hidden]`/`#[Fillable]` aren't parsed (User's
+  password is hidden and hash-cast), service-side `forceFill` of
+  computed state, the deliberate `orWhere` branches in the Bill/Invoice
+  overdue scopes, nav-registry SVGs rendered via `{!! !!}`.
+  `larascan-baseline.json` absorbs already-triaged findings —
+  regenerating it re-absorbs *everything*, so only do it after triaging
+  new output, never to silence an unreviewed failure; the baseline file
+  is committed.
 
 ## Repo map
 

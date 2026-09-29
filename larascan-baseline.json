@@ -1,0 +1,685 @@
+{
+    "version": 1,
+    "generated_at": "2026-09-29T06:41:37+00:00",
+    "findings": [
+        {
+            "check": "auth.login-throttle",
+            "file": null,
+            "message": "Login route '(unnamed)' (POST login) has no throttle middleware \u2014 brute-force attacks unmitigated. Add ->middleware('throttle:5,1').",
+            "severity": "high",
+            "count": 1
+        },
+        {
+            "check": "auth.login-throttle",
+            "file": null,
+            "message": "Login route 'login' (GET login) has no throttle middleware \u2014 brute-force attacks unmitigated. Add ->middleware('throttle:5,1').",
+            "severity": "high",
+            "count": 1
+        },
+        {
+            "check": "auth.password-column-plain",
+            "file": "app/Models/User.php",
+            "message": "User model in app/Models/User.php doesn't appear to mark 'password' as hidden or use the 'hashed' cast \u2014 verify password storage is hashed and not exposed in API responses.",
+            "severity": "critical",
+            "count": 1
+        },
+        {
+            "check": "auth.registration-rate-limit",
+            "file": null,
+            "message": "Registration route register has no throttle middleware \u2014 automated signups unmitigated. Add ->middleware('throttle:5,1').",
+            "severity": "info",
+            "count": 2
+        },
+        {
+            "check": "auth.signed-routes-verify",
+            "file": null,
+            "message": "Email verification route 'verification.notice' (verify-email) is missing 'signed' middleware \u2014 URL parameters can be tampered with.",
+            "severity": "low",
+            "count": 1
+        },
+        {
+            "check": "config.app-env",
+            "file": null,
+            "message": "APP_ENV is 'local' \u2014 leaks development-mode behavior in production.",
+            "severity": "info",
+            "count": 1
+        },
+        {
+            "check": "config.debug-blacklist",
+            "file": null,
+            "message": "app.debug_blacklist is empty \u2014 Whoops debug pages will expose all env, server and request data when an exception fires.",
+            "severity": "info",
+            "count": 1
+        },
+        {
+            "check": "config.env-example-sync",
+            "file": null,
+            "message": "Keys present in .env but missing from .env.example: DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME, DB_PASSWORD, CACHE_PREFIX",
+            "severity": "low",
+            "count": 1
+        },
+        {
+            "check": "cookies.session-encrypt",
+            "file": null,
+            "message": "session.encrypt is false \u2014 session payloads (including flash data and CSRF tokens) are stored in plaintext on the session driver.",
+            "severity": "high",
+            "count": 1
+        },
+        {
+            "check": "cookies.session-secure",
+            "file": null,
+            "message": "SESSION_SECURE_COOKIE is false \u2014 sessions cookies will be sent over HTTP and can be hijacked on shared networks.",
+            "severity": "info",
+            "count": 1
+        },
+        {
+            "check": "crypto.password-self-generated",
+            "file": "app/Http/Controllers/Auth/NewPasswordController.php",
+            "message": "Weak generator (Str::random/md5/sha1/uniqid/random_bytes/bin2hex) used near a password symbol \u2014 use Str::password() for app-generated passwords.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "crypto.weak-random",
+            "file": "app/Services/ModuleManager.php",
+            "message": "Weak random function 'uniqid' \u2014 not cryptographically secure. Use random_bytes(), random_int(), or Str::random() for security-sensitive tokens.",
+            "severity": "high",
+            "count": 1
+        },
+        {
+            "check": "dependencies.npm-audit",
+            "file": null,
+            "message": "fast-uri 3.0.0 - 3.1.6 \u2014 fast-uri vulnerable to authority injection via an unvalidated port in serialize",
+            "severity": "high",
+            "count": 1
+        },
+        {
+            "check": "dependencies.npm-audit",
+            "file": null,
+            "message": "nanoid <3.3.18 \u2014 nanoid: custom generators can loop indefinitely when size is zero",
+            "severity": "high",
+            "count": 1
+        },
+        {
+            "check": "files.unlink-user-input",
+            "file": "app/Services/BackupService.php",
+            "message": "`unlink()` deletes filesystem entries \u2014 verify path is not user-controlled.",
+            "severity": "critical",
+            "count": 5
+        },
+        {
+            "check": "headers.hsts",
+            "file": null,
+            "message": "No HSTS middleware detected in the HTTP kernel \u2014 Strict-Transport-Security header is essential for HTTPS-only deployments.",
+            "severity": "info",
+            "count": 1
+        },
+        {
+            "check": "headers.referrer-policy",
+            "file": null,
+            "message": "No Referrer-Policy middleware detected \u2014 set a Referrer-Policy header to control referrer information leakage.",
+            "severity": "low",
+            "count": 1
+        },
+        {
+            "check": "headers.x-content-type-options",
+            "file": null,
+            "message": "No X-Content-Type-Options middleware detected \u2014 without nosniff, browsers may MIME-sniff responses and execute untrusted content.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "headers.x-frame-options",
+            "file": null,
+            "message": "No X-Frame-Options middleware detected \u2014 without it, your application may be vulnerable to clickjacking attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "injection.host-header",
+            "file": null,
+            "message": "app.url is not set or points to localhost \u2014 host header injection can redirect users, set cookies, generate signed URLs, and poison password reset emails.",
+            "severity": "info",
+            "count": 1
+        },
+        {
+            "check": "logging.custom-error-pages",
+            "file": "resources/views/errors/500.blade.php",
+            "message": "Custom error page resources/views/errors/500.blade.php is missing \u2014 default Laravel error pages may leak Whoops debug info.",
+            "severity": "low",
+            "count": 1
+        },
+        {
+            "check": "logging.custom-error-pages",
+            "file": "resources/views/errors/503.blade.php",
+            "message": "Custom error page resources/views/errors/503.blade.php is missing \u2014 default Laravel error pages may leak Whoops debug info.",
+            "severity": "low",
+            "count": 1
+        },
+        {
+            "check": "models.force-fill-user-input",
+            "file": "app/Http/Controllers/Auth/NewPasswordController.php",
+            "message": "forceFill() bypasses $fillable/$guarded mass-assignment protection.",
+            "severity": "high",
+            "count": 1
+        },
+        {
+            "check": "models.force-fill-user-input",
+            "file": "app/Models/BackupSetting.php",
+            "message": "forceFill() bypasses $fillable/$guarded mass-assignment protection.",
+            "severity": "high",
+            "count": 1
+        },
+        {
+            "check": "models.force-fill-user-input",
+            "file": "app/Models/BillPayment.php",
+            "message": "forceFill() bypasses $fillable/$guarded mass-assignment protection.",
+            "severity": "high",
+            "count": 2
+        },
+        {
+            "check": "models.force-fill-user-input",
+            "file": "app/Services/BillLifecycleService.php",
+            "message": "forceFill() bypasses $fillable/$guarded mass-assignment protection.",
+            "severity": "high",
+            "count": 2
+        },
+        {
+            "check": "models.force-fill-user-input",
+            "file": "app/Services/PrepaymentService.php",
+            "message": "forceFill() bypasses $fillable/$guarded mass-assignment protection.",
+            "severity": "high",
+            "count": 3
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/AuditLog.php",
+            "message": "Foreign key 'auditable_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/AuditLog.php",
+            "message": "Foreign key 'user_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/Bill.php",
+            "message": "Foreign key 'project_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/Bill.php",
+            "message": "Foreign key 'supplier_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/BillItem.php",
+            "message": "Foreign key 'amortise_to_account_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/BillItem.php",
+            "message": "Foreign key 'bill_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/BillItem.php",
+            "message": "Foreign key 'expense_account_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/BillPayment.php",
+            "message": "Foreign key 'employee_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/BillPayment.php",
+            "message": "Foreign key 'ifrs_payment_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/BillPayment.php",
+            "message": "Foreign key 'supplier_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/BillPaymentAllocation.php",
+            "message": "Foreign key 'bill_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/BillPaymentAllocation.php",
+            "message": "Foreign key 'bill_payment_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/CompanyDirector.php",
+            "message": "Foreign key 'company_profile_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/CompanyProfile.php",
+            "message": "Foreign key 'entity_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/CompanyShareholder.php",
+            "message": "Foreign key 'company_profile_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/CreditNote.php",
+            "message": "Foreign key 'client_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/CreditNote.php",
+            "message": "Foreign key 'invoice_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/CreditNoteItem.php",
+            "message": "Foreign key 'credit_note_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/Document.php",
+            "message": "Foreign key 'documentable_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/Domain.php",
+            "message": "Foreign key 'account_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/Domain.php",
+            "message": "Foreign key 'entity_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/EntitySetting.php",
+            "message": "Foreign key 'entity_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/FiscalYearClose.php",
+            "message": "Foreign key 'entity_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/Invoice.php",
+            "message": "Foreign key 'client_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/Invoice.php",
+            "message": "Foreign key 'ifrs_invoice_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/Invoice.php",
+            "message": "Foreign key 'parent_invoice_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/Invoice.php",
+            "message": "Foreign key 'project_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/Invoice.php",
+            "message": "Foreign key 'purchase_order_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/InvoiceItem.php",
+            "message": "Foreign key 'invoice_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/InvoiceItem.php",
+            "message": "Foreign key 'time_entry_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/Payment.php",
+            "message": "Foreign key 'client_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/Payment.php",
+            "message": "Foreign key 'credit_note_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/Payment.php",
+            "message": "Foreign key 'ifrs_receipt_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/PaymentAllocation.php",
+            "message": "Foreign key 'invoice_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/PaymentAllocation.php",
+            "message": "Foreign key 'payment_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/Prepayment.php",
+            "message": "Foreign key 'asset_account_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/Prepayment.php",
+            "message": "Foreign key 'bill_item_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/Prepayment.php",
+            "message": "Foreign key 'bill_payment_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/Prepayment.php",
+            "message": "Foreign key 'domain_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/Prepayment.php",
+            "message": "Foreign key 'entity_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/Prepayment.php",
+            "message": "Foreign key 'expense_account_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/PrepaymentAmortisation.php",
+            "message": "Foreign key 'ifrs_transaction_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/PrepaymentAmortisation.php",
+            "message": "Foreign key 'prepayment_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/PrepaymentAmortisation.php",
+            "message": "Foreign key 'reversal_transaction_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/Project.php",
+            "message": "Foreign key 'client_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/Project.php",
+            "message": "Foreign key 'purchase_order_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/ProjectStaff.php",
+            "message": "Foreign key 'project_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/ProjectStaff.php",
+            "message": "Foreign key 'user_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/PurchaseOrder.php",
+            "message": "Foreign key 'client_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/PurchaseOrder.php",
+            "message": "Foreign key 'project_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/ReimbursementPayment.php",
+            "message": "Foreign key 'employee_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/ReimbursementPayment.php",
+            "message": "Foreign key 'ifrs_transaction_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/ShareClass.php",
+            "message": "Foreign key 'company_profile_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/TimeEntry.php",
+            "message": "Foreign key 'client_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/TimeEntry.php",
+            "message": "Foreign key 'project_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/TimeEntry.php",
+            "message": "Foreign key 'purchase_order_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/TimeEntry.php",
+            "message": "Foreign key 'user_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/TimeEntryBreak.php",
+            "message": "Foreign key 'time_entry_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "models.foreign-key-fillable",
+            "file": "app/Models/WidgetPreference.php",
+            "message": "Foreign key 'user_id' in $fillable \u2014 allows mass assignment of ownership, enabling tenant escape attacks.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "php.allow-url-fopen",
+            "file": null,
+            "message": "allow_url_fopen is on \u2014 file functions can be tricked into reading remote URLs, enabling SSRF and credential exfiltration via file:// or http:// wrappers.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "php.expose-php",
+            "file": null,
+            "message": "expose_php is on \u2014 server response headers (X-Powered-By) leak the PHP version, helping attackers fingerprint your stack.",
+            "severity": "low",
+            "count": 1
+        },
+        {
+            "check": "repo.dependabot",
+            "file": null,
+            "message": "No .github/dependabot.yml configured \u2014 automated dependency vulnerability scanning is not enabled for this repo.",
+            "severity": "low",
+            "count": 1
+        },
+        {
+            "check": "repo.security-txt",
+            "file": null,
+            "message": "public/.well-known/security.txt is missing \u2014 add a security.txt file so researchers know where to report vulnerabilities. See https://securitytxt.org/.",
+            "severity": "low",
+            "count": 1
+        },
+        {
+            "check": "routing.api-http-only",
+            "file": null,
+            "message": "API route api/widget-preferences has no HTTPS-enforcing middleware and APP_URL is http://localhost. Add 'force.https' middleware or set APP_URL to https://.",
+            "severity": "info",
+            "count": 3
+        },
+        {
+            "check": "routing.api-http-only",
+            "file": null,
+            "message": "API route api/widget-preferences/hidden-widgets has no HTTPS-enforcing middleware and APP_URL is http://localhost. Add 'force.https' middleware or set APP_URL to https://.",
+            "severity": "info",
+            "count": 1
+        },
+        {
+            "check": "routing.api-http-only",
+            "file": null,
+            "message": "API route api/widget-preferences/reset has no HTTPS-enforcing middleware and APP_URL is http://localhost. Add 'force.https' middleware or set APP_URL to https://.",
+            "severity": "info",
+            "count": 1
+        },
+        {
+            "check": "sql.orwhere-scope-bypass",
+            "file": "app/Http/Controllers/TimeEntryController.php",
+            "message": "orWhere() chained directly after where() \u2014 wrap in ->where(function ($q) { $q->where(...)->orWhere(...); }) to scope it correctly.",
+            "severity": "high",
+            "count": 1
+        },
+        {
+            "check": "sql.orwhere-scope-bypass",
+            "file": "app/Models/Bill.php",
+            "message": "orWhere() chained directly after where() \u2014 wrap in ->where(function ($q) { $q->where(...)->orWhere(...); }) to scope it correctly.",
+            "severity": "high",
+            "count": 1
+        },
+        {
+            "check": "sql.orwhere-scope-bypass",
+            "file": "app/Models/Invoice.php",
+            "message": "orWhere() chained directly after where() \u2014 wrap in ->where(function ($q) { $q->where(...)->orWhere(...); }) to scope it correctly.",
+            "severity": "high",
+            "count": 1
+        },
+        {
+            "check": "xss.blade-unescaped",
+            "file": "views/layouts/navigation.blade.php",
+            "message": "Blade {!! ... !!} unescaped output containing PHP variable \u2014 potential XSS if variable holds user input. Use {{ }} for HTML-escaped output.",
+            "severity": "high",
+            "count": 2
+        }
+    ]
+}
