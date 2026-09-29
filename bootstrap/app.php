@@ -24,7 +24,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'role_or_permission' => RoleOrPermissionMiddleware::class,
         ]);
 
-        $middleware->append(SetSecurityHeaders::class);
+        // Prepended so it wraps PreventRequestsDuringMaintenance —
+        // maintenance 503s carry the hardening headers too.
+        $middleware->prepend(SetSecurityHeaders::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
