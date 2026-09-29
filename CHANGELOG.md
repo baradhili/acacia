@@ -5,6 +5,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-09-29
 
+### Changed — dependency round: ten Dependabot PRs landed, tailwind v4 deferred
+
+The September Dependabot queue clears in one verified pass. The one
+runtime dependency, spatie/laravel-permission, moves 6.25 → 8.3 (the
+v7 modernization with Event/Command-suffixed class renames, then v8's
+extended BackedEnum support): no schema or config republish is needed
+for this app — the only references to renamed classes were the event
+docblock in config/permission.php, updated here — and the full suite
+(1019 tests) runs green against it. Dev/test tooling follows: pint
+1.32.1, orchestra/testbench 11.3.0, mockery 1.6.15, postcss 8.5.28,
+laravel-vite-plugin 3.2.0. The two hook-tooling majors are taken
+deliberately: lint-staged 17 and @commitlint/config-conventional 21
+declare engine floors of Node ≥ 22.22.1 and ≥ 22.12 (CI runs Node 22;
+both verified working under the workstation's 20.20 too, ahead of the
+Node 24 move). CI actions pin-setup refreshes land (setup-node v7,
+setup-php SHA, matching the comment that had drifted after the
+earlier checkout bump). tailwindcss 4 is the one PR rejected: v4
+drops the PostCSS plugin and `@tailwind` directives this app still
+builds with, so the branch is closed (ignore-this-major) pending a
+dedicated CSS-first migration — @tailwindcss/vite is already parked
+in package.json as the landing spot; see the todo list.
+
+## [Unreleased] — 2026-09-29
+
 ### Changed — baseline-free security scanning: every finding fixed or visible
 
 The larascan baseline is deleted: what the scan reports now is the

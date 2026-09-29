@@ -13,6 +13,8 @@ here once their changelog entry lands. Ordered by priority.
 
 - [ ] cucumber tests via behat — plan reviewed and refreshed 2026-09-28: .zcode/plans/behat-migration-plan.md (scope renewal with maintainer is the first step; suite has grown to 55 feature files + the Modules suite since the original approval).
 
+- [ ] Tailwind 3 → 4 migration — Dependabot's tailwindcss 4 PR (#53, Sep 2026) was closed: v4 drops the PostCSS plugin and `@tailwind` directives the build still uses. The migration is CSS-first: wire `@tailwindcss/vite` (already in package.json) into vite.config.js, replace `@tailwind base/components/utilities` with `@import 'tailwindcss'`, port tailwind.config.js (Figtree font stack, the dashboard safelist the widget-manager emits at runtime) to `@theme`/`@source`, re-check `@tailwindcss/forms`, then visual QA — v4 preflight and default-border changes are not covered by the test suite.
+
 - [ ] Backfill class docblocks on the ~83 pre-convention core classes (app/Models, app/Http/Controllers, widgets, console commands, remaining services — found by the Sep 2026 docblock audit). Write them as code is touched per AGENTS.md, or as one dedicated documentation pass; state invariants, not narrations.
 
 - [ ] Freeform dashboard resize: drag handles/heights beyond the column-span cycling the layout management ships (Sep 2026) — gridstack is already in package.json if this lands.

@@ -14,8 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Pinned to tag SHAs so an upstream tag moving cannot change what
-      # this workflow executes (checkout v4.2.2, setup-php 2.37.0,
-      # setup-node v4.1.0).
+      # this workflow executes (checkout v7.0.1, setup-php 2.37.0,
+      # setup-node v7.0.0).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: shivammathur/setup-php@accd6127cb78bee3e8082180cb391013d204ef9f # v2.37.0
