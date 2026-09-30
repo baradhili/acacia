@@ -9,7 +9,7 @@ here once their changelog entry lands. Ordered by priority.
 
 - [ ] Dead code recorded as such by the Sep 2026 docblock pass — decide keep-or-delete: Vendor model (suppliers mirror, zero references), Api\DashboardController (JSON widget layer, unrouted), QuickActionsWidget/WelcomeWidget (unregistered), InvoiceNotificationService (only tests call it), AuditLog table rows (the observer writes syslog; nothing persists the table).
 
-- [ ] Bring the remaining resource_mgr concepts into acacia — services (Sep 2026) and the skills library (Sep 2026, Modules/Skills) are across; the allocations/resourcing concepts are what's left. Review https://github.com/baradhili/resource_mgr for those.
+- [ ] Bring the remaining resource_mgr concepts into acacia — services (Sep 2026) and the skills library (Sep 2026, Modules/Skills) are across; the allocations/resourcing concepts are what's left - this needs a "what-if" concept to allow multiple attempts at solving situations until one is acceptable - remember resource allocation is a NP-hard problem - first step should be to expand the tasks in the same way we have done with proposals. Review https://github.com/baradhili/resource_mgr for those.
 
 - [ ] Ability to have multiple un-related company entities with separate everything on same system - do we do this by user associations or by landing domain? Justify why it cannot be one user to one or more entities?
 
