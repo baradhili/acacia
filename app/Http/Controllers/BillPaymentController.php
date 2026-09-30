@@ -15,6 +15,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Supplier payments: capture, allocation across bills, employee-expense
+ * approval, voiding and method corrections. Company payments post at
+ * once — Cr Bank / Dr Expense / Dr GST Receivable — while employee-paid
+ * ones post only on admin/accountant approval against Employee
+ * Reimbursements Payable. Voiding and unapplying mirror-reverse the
+ * journal; posted payments are voided, never deleted.
+ */
 class BillPaymentController extends Controller
 {
     public function index(Request $request)

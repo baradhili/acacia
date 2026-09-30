@@ -12,6 +12,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * Timesheet CRUD and the draft -> submitted -> approved/rejected
+ * workflow (unapprove returns an entry to draft, but never once it is
+ * allocated to an invoice). Routes carry plain auth with no role gate,
+ * so approval is not role-restricted. Only drafts can be edited or
+ * deleted, one entry per staff member per client per day is enforced,
+ * and timed entries derive their hours as the span minus breaks.
+ */
 class TimeEntryController extends Controller
 {
     public function index()

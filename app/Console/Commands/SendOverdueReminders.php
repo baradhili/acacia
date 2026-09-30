@@ -3,11 +3,24 @@
 namespace App\Console\Commands;
 
 use App\Models\Invoice;
+use App\Models\User;
 use App\Notifications\OverdueReminderNotification;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Notification;
 
+/**
+ * Chases overdue invoices by email (daily 08:00,
+ * overdue-reminders.log): for each Invoice::overdue() match at least
+ * --days past due (default 1), mails the client and every admin an
+ * OverdueReminderNotification (mail channel). Currently broken: the
+ * intended 3-day re-send guard reads $invoice->notifications(), a
+ * relation Invoice does not have, and the call sits before the send
+ * try/catch and the dry-run branch — the first invoice past the
+ * --days filter throws BadMethodCallException and aborts the run,
+ * so no reminders go out at all until the guard is fixed
+ * (todo-list).
+ */
 class SendOverdueReminders extends Command
 {
     protected $signature = 'notifications:overdue-reminders
@@ -20,13 +33,14 @@ class SendOverdueReminders extends Command
     {
         $minDays = (int) $this->option('days');
         $dryRun = $this->option('dry-run');
-        
+
         $overdueInvoices = Invoice::overdue()
             ->with('client')
             ->get();
 
         if ($overdueInvoices->isEmpty()) {
             $this->info('No overdue invoices found.');
+
             return Command::SUCCESS;
         }
 
@@ -37,10 +51,11 @@ class SendOverdueReminders extends Command
 
         foreach ($overdueInvoices as $invoice) {
             $daysOverdue = Carbon::parse($invoice->due_date)->diffInDays(now());
-            
+
             if ($daysOverdue < $minDays) {
                 $this->line("Skipping invoice {$invoice->invoice_number} - only {$daysOverdue} days overdue (min: {$minDays})");
                 $skipped++;
+
                 continue;
             }
 
@@ -53,6 +68,7 @@ class SendOverdueReminders extends Command
             if ($lastReminderSent && $lastReminderSent->pivot->created_at->diffInDays(now()) < 3) {
                 $this->line("Skipping invoice {$invoice->invoice_number} - reminder sent recently");
                 $skipped++;
+
                 continue;
             }
 
@@ -64,9 +80,9 @@ class SendOverdueReminders extends Command
                     if ($invoice->client && $invoice->client->email) {
                         Notification::send($invoice->client, new OverdueReminderNotification($invoice, $daysOverdue));
                     }
-                    
+
                     // Also send to admin users
-                    $admins = \App\Models\User::role('admin')->get();
+                    $admins = User::role('admin')->get();
                     foreach ($admins as $admin) {
                         Notification::send($admin, new OverdueReminderNotification($invoice, $daysOverdue));
                     }

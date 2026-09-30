@@ -11,6 +11,13 @@ use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
+/**
+ * Owns the signed-in user's profile screen (profile.* routes). Beyond
+ * the stock Breeze edit/update/destroy it manages a profile photo on
+ * the public disk (with a best-effort storage:link) and force-deletes
+ * the account — bypassing the User model's soft deletes — after
+ * re-checking the password.
+ */
 class ProfileController extends Controller
 {
     /**

@@ -24,6 +24,16 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
+/**
+ * Owns the boot-time wiring: the per-IP auth rate limiters
+ * (60/min for form views, 5/min for credential posts), the
+ * Blade directive @navIcon (the shell's only sanctioned raw echo),
+ * CoreNav's registration into the Nav and Widgets singletons,
+ * the view composers feeding the navigation/topbar layouts and
+ * the dashboard's saved widget layout, and the observers —
+ * TimeEntryObserver, InvoiceObserver and AuditObserver on the
+ * eight core financial models.
+ */
 class AppServiceProvider extends ServiceProvider
 {
     /**

@@ -3,20 +3,34 @@
 namespace App\Exports;
 
 use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithTitle;
-use Maatwebsite\Excel\Concerns\ShouldAutoSize;
-use Carbon\Carbon;
 
-class AccountStatementExport implements FromCollection, WithHeadings, WithTitle, ShouldAutoSize
+/**
+ * Excel (maatwebsite) rendering of an IFRS account statement: header
+ * block, opening/closing-balance summary and running-balance rows.
+ * LedgerReportController::exportAccountStatementExcel — the reports
+ * screen's Excel button, on the entity-guarded reports routes — has
+ * already walked the ledger legs and computed the balances; this
+ * class only flattens what it is handed into the downloaded .xlsx.
+ */
+class AccountStatementExport implements FromCollection, ShouldAutoSize, WithHeadings, WithTitle
 {
     protected $account;
+
     protected $startDate;
+
     protected $endDate;
+
     protected $openingBalance;
+
     protected $closingBalance;
+
     protected $totalDebit;
+
     protected $totalCredit;
+
     protected $transactions;
 
     public function __construct(

@@ -3,6 +3,42 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] — 2026-09-30
+
+### Changed — class docblocks backfilled across the pre-convention core
+
+The dedicated documentation pass from the Sep 2026 audit's backlog
+item: the 88 core classes still lacking a class-level docblock —
+models, HTTP controllers, console commands, services, widgets,
+mailers, notifications, observers, form requests, the provider,
+trait and view components — now carry one in the house prose style,
+stating invariants rather than narrating: posting legs with account
+codes, status machines, ownership-FK/mass-assignment rules,
+scheduler idempotency guards, who sends which mail. Every claim was
+verified against migrations, routes and callers before writing, not
+paraphrased. The pass also let Pint normalise a handful of legacy
+style deviations in touched services/observers (import order,
+`! ` spacing, FQCNs).
+
+Documenting surfaced dead code the docblocks now record as such:
+the Vendor model (a suppliers mirror with zero references),
+`Api\DashboardController` and the QuickActions/Welcome widgets
+(unrouted/unregistered), and `InvoiceNotificationService` /
+`AuditLog` (no production caller / writer). Two live bugs it
+surfaced are queued in todo-list.md: the overdue-reminder throttle
+calls a nonexistent `$invoice->notifications()` relation, and
+`ClientStatementMail` renders a missing `emails.client-statement`
+view.
+
+### Fixed — `period:unlock` was unparseable
+
+`app/Console/Commands/UnlockPeriod.php` put a `??` fallback inside a
+`{$...}` string interpolation ("Locked by: …"), which PHP cannot
+parse — the file failed `php -l` outright and the command would fatal
+whenever the class loaded (nothing autoloads it outside direct
+invocation, which is why the suite never tripped). Found while
+backfilling its docblock; the fallback now concatenates instead.
+
 ## [Unreleased] — 2026-09-29
 
 ### Changed — tailwindcss 3.4 → 4.3: the CSS-first migration

@@ -2,6 +2,12 @@
 
 namespace App\Traits;
 
+/**
+ * Key/value custom fields on a model's custom_fields JSON column
+ * (array-cast). Used by Client, Supplier and Vendor — the contacts
+ * migration gives each a nullable json column. The mutators assign
+ * the whole attribute, so changes persist only on save.
+ */
 trait HasCustomFields
 {
     /**

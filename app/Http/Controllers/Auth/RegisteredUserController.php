@@ -14,6 +14,13 @@ use Illuminate\Validation\Rules;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
+/**
+ * Open self-registration (no invite or admin gate; only the route
+ * throttles). Custom over stock Breeze: the new user is linked to the
+ * instance's first IFRS entity — entity_id is an unfillable FK, so it
+ * is assigned explicitly (null on entity-less fresh installs) — then
+ * Registered fires and the user is logged straight in.
+ */
 class RegisteredUserController extends Controller
 {
     /**

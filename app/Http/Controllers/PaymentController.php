@@ -12,6 +12,14 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 
+/**
+ * Client payments (money in): capture with explicit per-invoice
+ * allocations or left unallocated, plus later allocation and
+ * un-allocation. Target invoices must belong to the paying client,
+ * be live (not draft, paid or cancelled) and not be over-allocated.
+ * Payments post to IFRS best-effort — Dr Bank / Cr Revenue, GST
+ * apportioned per line; removing an allocation never touches the ledger.
+ */
 class PaymentController extends Controller
 {
     public function index(Request $request)

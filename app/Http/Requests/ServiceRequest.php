@@ -5,6 +5,13 @@ namespace App\Http\Requests;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
+/**
+ * Validates a billable Service catalogue entry for
+ * ServiceController's store/update (routes restrict those to admin or
+ * accountant). The optional hourly rate must be non-negative with at
+ * most 8 integer digits and 4 decimals — matching the model's
+ * decimal:4 cast.
+ */
 class ServiceRequest extends FormRequest
 {
     /**

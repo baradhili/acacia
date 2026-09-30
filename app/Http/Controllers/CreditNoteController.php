@@ -9,6 +9,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Client credit notes — "negative invoices" reducing what a client
+ * owes. Applying one creates a negative Payment (linked via
+ * credit_note_id), draws down remaining_amount, and posts
+ * best-effort with every receipt leg flipped (Cr Bank / Dr Revenue /
+ * Dr GST); the note turns applied when its balance runs out. Only
+ * issued notes are edited, deleted or voided.
+ */
 class CreditNoteController extends Controller
 {
     public function index(Request $request)

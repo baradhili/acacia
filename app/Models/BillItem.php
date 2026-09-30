@@ -7,6 +7,15 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * A bill line: qty × unit price less discount, with the GST treatment
+ * chosen per line — the entered amount is tax-inclusive unless
+ * gst_added marks it ex-GST, tax_rate 0 is GST-free, and gst_override
+ * replaces the derived tax. expense_account_id picks the IFRS account
+ * the payment's Dr leg posts to; is_prepaid lines carry a service
+ * period that funds a Prepayment amortisation schedule when paid.
+ * Saving recalculates the line and the parent bill's totals follow.
+ */
 class BillItem extends Model
 {
     use HasFactory;

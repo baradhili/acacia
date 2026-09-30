@@ -6,6 +6,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * One charge line on an invoice. The saving hook computes the
+ * tax-inclusive total — an explicit gst_override replaces the
+ * rate-derived GST — and saved/deleted hooks re-run the parent
+ * invoice's recalculateTotals(). 4dp quantity/unit_price casts keep
+ * sub-cent reverse-invoice prices exact; time_entry_id is outside
+ * $fillable and assigned explicitly by createFromTimeEntry().
+ */
 class InvoiceItem extends Model
 {
     use HasFactory;

@@ -13,6 +13,14 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * Records the company paying back an employee who financed a purchase
+ * personally — the pay-back leg of a BillPayment captured on the
+ * employee method. store() caps the amount at the employee's
+ * approved-but-unreimbursed balance under a serialising row lock, then
+ * posts Dr Employee Reimbursements Payable / Cr Bank (GST was claimed
+ * at capture). Records are only ever voided, never edited or deleted.
+ */
 class ReimbursementPaymentController extends Controller
 {
     public function index(Request $request)

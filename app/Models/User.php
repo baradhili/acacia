@@ -13,6 +13,15 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Traits\HasRoles;
 
+/**
+ * An application user — admin, accountant or staff via Spatie
+ * HasRoles — with charge_out_rate driving time-tracking billing
+ * rates. Belongs to an IFRS Entity (IfrsPosting::resolveEntity
+ * prefers the authed user's entity); soft-deleted. Mass assignment
+ * is declared by the #[Fillable] attribute, and ownership FKs such
+ * as entity_id are deliberately outside it — they must never be
+ * added: assign them explicitly (createWithUniqueNumber helpers).
+ */
 #[Fillable(['name', 'email', 'password', 'salary', 'charge_out_rate', 'position', 'phone', 'profile_photo'])]
 class User extends Authenticatable
 {

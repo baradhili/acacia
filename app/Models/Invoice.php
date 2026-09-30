@@ -10,6 +10,17 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\QueryException;
 
+/**
+ * A client invoice — the accounts-receivable subledger document.
+ * INV-YYYY-NNNN numbers are unique (createWithUniqueNumber retries
+ * the race); ownership FKs (client, project, PO, parent, ifrs) sit
+ * outside $fillable and are assigned explicitly. Status machine:
+ * draft → sent → partially_paid → paid; cancelled is final and
+ * overdue derives from due_date; sent/overdue revert to draft only
+ * while unpaid. Totals are derived from items (recalculateTotals).
+ * Cash basis: invoices never post to IFRS — Payment is the revenue
+ * ledger event.
+ */
 class Invoice extends Model
 {
     use HasFactory;

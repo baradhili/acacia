@@ -8,6 +8,15 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
+/**
+ * Queued mail reminder for an overdue invoice, carrying the invoice
+ * and its days-overdue count. Dispatched by the
+ * notifications:overdue-reminders command (scheduled daily — its
+ * intended 3-day re-send throttle is currently broken; see that
+ * command) and by InvoiceNotificationService, each sending to the
+ * invoice's client and to every admin-role user via the mail
+ * channel only.
+ */
 class OverdueReminderNotification extends Notification implements ShouldQueue
 {
     use Queueable;
@@ -28,7 +37,7 @@ class OverdueReminderNotification extends Notification implements ShouldQueue
             ->subject("Reminder: Invoice {$this->invoice->invoice_number} is overdue")
             ->greeting("Hello {$notifiable->name},")
             ->line("This is a friendly reminder that invoice {$this->invoice->invoice_number} for {$this->invoice->formatted_total} is overdue by {$this->daysOverdue} days.")
-            ->line("**Invoice Details:**")
+            ->line('**Invoice Details:**')
             ->line("- Invoice Number: {$this->invoice->invoice_number}")
             ->line("- Invoice Date: {$this->invoice->invoice_date->format('d M Y')}")
             ->line("- Due Date: {$this->invoice->due_date->format('d M Y')}")
@@ -38,7 +47,7 @@ class OverdueReminderNotification extends Notification implements ShouldQueue
             $message->line("- Amount Paid: {$this->invoice->formatted_amount_paid}");
         }
 
-        $message->line("Please arrange payment at your earliest convenience to avoid any further delays.");
+        $message->line('Please arrange payment at your earliest convenience to avoid any further delays.');
 
         return $message
             ->action('View Invoice', url("/invoices/{$this->invoice->id}"))

@@ -8,6 +8,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
+/**
+ * A "negative invoice" reducing what a client owes. CN-YYYY-NNNN
+ * numbered (unique); status runs issued → applied when fully used,
+ * with void as the escape hatch while the full amount remains.
+ * applyToInvoice (same-client guard) creates a negative Payment
+ * allocated against the invoice, which posts Cr Bank / Dr Revenue /
+ * Dr GST; issuing one also un-marks the invoice as overdue — the
+ * balance is being adjusted, not dodged.
+ */
 class CreditNote extends Model
 {
     use HasFactory;

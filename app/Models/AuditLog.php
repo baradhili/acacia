@@ -6,6 +6,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 
+/**
+ * Polymorphic audit-trail row: auditable model plus created/updated/
+ * deleted action, old/new values, changed fields, and the requesting
+ * user, IP and user agent. $timestamps is off — the creating hook
+ * stamps created_at and the authed user itself. The live pipeline
+ * (AuditObserver → AuditService) currently writes the syslog channel
+ * instead, so no code path persists these rows yet.
+ */
 class AuditLog extends Model
 {
     const ACTION_CREATED = 'created';

@@ -7,12 +7,23 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * An app-level fiscal period (monthly/quarterly/annual) that locks
+ * dates against back-posting; unique per (year, period_type,
+ * start_date). PeriodLockService/NotInClosedPeriod consult is_locked
+ * to veto postings; the year-end close creates the FY's monthly rows
+ * and locks them ("FY N closed"), and reopen unlocks. The FY label
+ * matches ifrs_reporting_periods: FY 2025 with July start spans
+ * 1 Jul 2025 – 30 Jun 2026.
+ */
 class FiscalPeriod extends Model
 {
     use HasFactory;
 
     const TYPE_MONTHLY = 'monthly';
+
     const TYPE_QUARTERLY = 'quarterly';
+
     const TYPE_ANNUAL = 'annual';
 
     protected $fillable = [
@@ -41,7 +52,7 @@ class FiscalPeriod extends Model
 
         static::creating(function ($period) {
             // Ensure year is set from start_date if not provided
-            if (!$period->year && $period->start_date) {
+            if (! $period->year && $period->start_date) {
                 $period->year = $period->start_date->year;
             }
         });
@@ -120,7 +131,7 @@ class FiscalPeriod extends Model
     public function scopeContainingDate($query, Carbon $date)
     {
         return $query->where('start_date', '<=', $date)
-                     ->where('end_date', '>=', $date);
+            ->where('end_date', '>=', $date);
     }
 
     /**

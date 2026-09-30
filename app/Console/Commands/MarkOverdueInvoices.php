@@ -7,6 +7,14 @@ use App\Models\Invoice;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Flips sent/partially_paid invoices past their due_date to overdue
+ * (daily 07:00, invoices-overdue.log). Idempotent: flipped invoices
+ * leave the queried statuses, so re-runs only catch new candidates;
+ * invoices with an active (non-void) credit note are skipped as
+ * under adjustment. Each flip is Log::info'd; no email is sent —
+ * the client notification is still a TODO in the code.
+ */
 class MarkOverdueInvoices extends Command
 {
     protected $signature = 'invoices:mark-overdue';

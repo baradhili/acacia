@@ -11,6 +11,15 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * Project CRUD and staff assignment under plain auth. Each project
+ * claims one purchase order, and the claim is revalidated server-side
+ * under a row lock inside the save transaction — the PO must belong to
+ * the project's client and be unclaimed (the project's own stays
+ * selectable whatever its status), and a new claim must still be open.
+ * update() replaces the staff assignments wholesale rather than
+ * diffing them.
+ */
 class ProjectController extends Controller
 {
     public function index()

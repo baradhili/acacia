@@ -5,6 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * A break inside a timed entry (HH:MM(:SS) time columns); saving or
+ * deleting one makes the parent entry recompute its hours as the
+ * timed span minus all persisted breaks.
+ */
 class TimeEntryBreak extends Model
 {
     protected $fillable = [

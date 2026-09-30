@@ -22,6 +22,14 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * Client invoicing (receivables): manual drafts, invoices built from
+ * approved unbilled time entries (screened under row locks: billable,
+ * not already invoiced, single client) and from purchase orders. Only
+ * drafts are edited or deleted. recordPayment() is the sole ledger
+ * action — Dr Bank / Cr Revenue with GST split per invoice line;
+ * issuing an invoice itself never posts (cash basis).
+ */
 class InvoiceController extends Controller
 {
     public function index(Request $request)

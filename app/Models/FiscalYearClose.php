@@ -7,6 +7,16 @@ use IFRS\Models\Entity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * The year-end close workflow — one row per entity per financial
+ * year (unique), progressing trial → pending_approval → approved →
+ * closed, with reopened as the escape hatch that re-enters the
+ * cycle. FiscalYearService (behind the fiscal-year:* commands)
+ * creates it in trial and drives each transition. The close posts
+ * entries referenced "FY-CLOSE-<year>" (excluded from P&L movement
+ * in reports), records their ids for reversal on reopen, snapshots
+ * checklist/trial totals and supersedes manual opening balances.
+ */
 class FiscalYearClose extends Model
 {
     // Trial close computed; reviewable, no approval requested yet.

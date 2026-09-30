@@ -8,6 +8,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
+/**
+ * A purchase order a client issues to the firm: a billing budget
+ * drawn down by the invoices issued against it — used_amount is the
+ * sum of non-draft/non-cancelled invoice totals, kept in step by
+ * InvoiceObserver; po:check-utilization notifies admins at 80%/100%.
+ * Status machine draft → open → partially_used → completed/cancelled.
+ * At most one project may claim a PO: unique index on
+ * projects.purchase_order_id, claimed under a row lock.
+ */
 class PurchaseOrder extends Model
 {
     use HasFactory;

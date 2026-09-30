@@ -14,6 +14,15 @@ use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Storage;
 
+/**
+ * The invoice email: InvoiceController::send() dispatches it
+ * synchronously when a draft is marked sent (only when the client has
+ * an email; a send failure is logged without failing the request).
+ * Carries the Invoice plus optional custom subject/body;
+ * attachments() renders the DomPDF invoice — the resolved entity's
+ * company profile included — into tmp/ storage and attaches it as
+ * Invoice-<number>.pdf.
+ */
 class InvoiceMail extends Mailable
 {
     use Queueable, SerializesModels;

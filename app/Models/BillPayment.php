@@ -19,6 +19,16 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Modules\Payroll\Models\Employee;
 
+/**
+ * A payment to a supplier (SPAY-YYYY-NNNN, unique) — the only
+ * bill-side object that posts to IFRS, cash basis: Cr Bank 320 (or Cr
+ * Employee Reimbursements Payable 2280 when the employee paid out of
+ * pocket), Dr each item's expense account and Dr GST Receivable 430
+ * via the input Vat, allocations apportioned across bill items.
+ * ifrs_payment_id prevents double-posting; void() drops allocations,
+ * posts a mirrored ledger reversal and stops funded prepayments.
+ * Posting requires status completed (pending/void never post).
+ */
 class BillPayment extends Model
 {
     use HasFactory;

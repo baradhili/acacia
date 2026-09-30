@@ -8,6 +8,15 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Clones due recurring invoices: each is_recurring paid/draft invoice
+ * whose next_recurring_date has arrived gets a child DRAFT (unique
+ * number, items copied, parent_invoice_id set) and the parent's date
+ * advances by its frequency — that advance is the idempotency guard,
+ * so re-runs create each instalment exactly once. Each child is its
+ * own transaction; one failure rolls back only that invoice. Drafts
+ * post nothing to the ledger. Not scheduled — run by hand.
+ */
 class ProcessRecurringInvoices extends Command
 {
     protected $signature = 'invoices:process-recurring';
