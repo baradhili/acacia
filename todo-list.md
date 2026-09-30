@@ -22,12 +22,13 @@ here once their changelog entry lands. Ordered by priority.
 - [ ] CRM follow-ups from the Sep 2026 module: email/calendar integrations, per-owner targets.
 
 - [ ] Proposal management — flesh the Proposals module (Sep 2026 extraction of estimates) into a full proposal builder. Reference products: [ProposalForge](https://github.com/ICodingStack/ProposalForge) (smart builder, pricing packages, live preview, PDF export) and [propsly](https://github.com/Old-G/propsly) (block editor, e-signature, tracking). Queued pieces, roughly in build order:
-    - [ ] Structured proposal documents on top of the estimate lines: cover/intro, scope, deliverables and timeline sections; content variables (`{{client.name}}`, `{{estimate.total}}`, …) resolved at render time (propsly's variable model).
-    - [ ] Good/Better/Best pricing packages: present the existing optional lines as tiered packages the client chooses between, with a recommended tier (ProposalForge's Basic/Standard/Premium); the chosen package drives the invoice conversion.
-    - [ ] Live split preview while editing: a client-facing preview pane updating in real time beside the form (ProposalForge's Live Split Preview; Alpine on the existing create/edit forms).
-    - [ ] Branded PDF export: one-click, print-ready, logo + accent colour (ProposalForge's 2×-DPI html2canvas/jsPDF approach vs the Resumes LuaLaTeX precedent).
-    - [ ] Client acceptance portal: tokenised share link where the client reads the proposal, toggles optional lines with totals recalculating, and accepts with a typed/drawn e-signature that locks the document (propsly); the signature feeds the existing accepted state.
-    - [ ] Engagement tracking on sent proposals: open/view notifications and per-section read analytics (propsly's tracking and engagement scores).
+  
+  - [ ] Structured proposal documents on top of the estimate lines: cover/intro, scope, deliverables and timeline sections; content variables (`{{client.name}}`, `{{estimate.total}}`, …) resolved at render time (propsly's variable model).
+  - [ ] Delay until CLient portal - Good/Better/Best pricing packages: present the existing optional lines as tiered packages the client chooses between, with a recommended tier (ProposalForge's Basic/Standard/Premium); the chosen package drives the invoice conversion.
+  - [ ] elay until CLient portal - Live split preview while editing: a client-facing preview pane updating in real time beside the form (ProposalForge's Live Split Preview; Alpine on the existing create/edit forms).
+  - [ ] Branded PDF export: one-click, print-ready, logo + accent colour (ProposalForge's 2×-DPI html2canvas/jsPDF approach vs the Resumes LuaLaTeX precedent).
+  - [ ] elay until CLient portal - Client acceptance portal: tokenised share link where the client reads the proposal, toggles optional lines with totals recalculating, and accepts with a typed/drawn e-signature that locks the document (propsly); the signature feeds the existing accepted state.
+  - [ ] elay until CLient portal - Engagement tracking on sent proposals: open/view notifications and per-section read analytics (propsly's tracking and engagement scores).
 
 - [ ] Larascan deploy-time residue — the scan is baseline-free as of Sep 2026 (every code finding fixed; the FK mass-assignment sweep made ownership explicit across 29 models). What's left only resolves at deploy: php.ini posture (`allow_url_fopen=Off`, `expose_php=Off`), and the localhost env infos (APP_URL, session-secure) clear with the production .env. The `verification.notice` signed-route finding is a known scanner false positive — revisit if larascan ever fixes its route heuristic.
 
