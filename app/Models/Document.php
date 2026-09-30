@@ -9,6 +9,15 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
+/**
+ * A polymorphic file attachment — documentable covers bills, bill
+ * payments, invoices, payments, clients, suppliers, purchase orders,
+ * reimbursement payments and Proposals estimates. Bytes live on the
+ * public disk under uploads/YYYY/MM (what the backup runbook
+ * archives), never in the DB; the deleting hook drops the file
+ * best-effort. The morph has no FK cascade, so owners delete rows
+ * explicitly (BillLifecycleService does when deleting a bill).
+ */
 class Document extends Model
 {
     use HasFactory;

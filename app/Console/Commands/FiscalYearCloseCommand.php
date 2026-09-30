@@ -6,6 +6,15 @@ use App\Services\FiscalYearService;
 use App\Services\IfrsPosting;
 use Illuminate\Console\Command;
 
+/**
+ * Executes the year-end close — the trio's only ledger writer
+ * (trial posts nothing, reopen only reverses). FiscalYearService::
+ * close() posts JournalEntries (ref FY-CLOSE-{year}) zeroing every
+ * P&L account into Retained Earnings (equity 3200), marks the IFRS
+ * period CLOSED, locks the year's FiscalPeriods and writes FY+1
+ * opening balances. Needs an approved close request; --force also
+ * skips failed blocking checklist items. Undo: fiscal-year:reopen.
+ */
 class FiscalYearCloseCommand extends Command
 {
     protected $signature = 'fiscal-year:close
@@ -17,7 +26,7 @@ class FiscalYearCloseCommand extends Command
     public function handle(FiscalYearService $service): int
     {
         $entity = IfrsPosting::resolveEntity();
-        if (!$entity) {
+        if (! $entity) {
             $this->error('No IFRS entity found.');
 
             return Command::FAILURE;
@@ -35,10 +44,10 @@ class FiscalYearCloseCommand extends Command
 
         $totals = $record->trial_totals;
         $this->info("FY {$year} closed.");
-        $this->line('FY net profit:            ' . number_format($totals['fy_net_profit'], 2));
-        $this->line('Prior-years catch-up:     ' . number_format($totals['prior_years_catch_up'], 2));
-        $this->line('Net to Retained Earnings: ' . number_format($totals['net_to_retained_earnings'], 2));
-        $this->line('Closing transactions:     ' . ($record->closing_transaction_ids
+        $this->line('FY net profit:            '.number_format($totals['fy_net_profit'], 2));
+        $this->line('Prior-years catch-up:     '.number_format($totals['prior_years_catch_up'], 2));
+        $this->line('Net to Retained Earnings: '.number_format($totals['net_to_retained_earnings'], 2));
+        $this->line('Closing transactions:     '.($record->closing_transaction_ids
             ? implode(', ', $record->closing_transaction_ids)
             : 'none (no P&L balances to close)'));
 
@@ -47,7 +56,7 @@ class FiscalYearCloseCommand extends Command
         }
 
         $this->newLine();
-        $this->line('To undo: php artisan fiscal-year:reopen ' . $year);
+        $this->line('To undo: php artisan fiscal-year:reopen '.$year);
 
         return Command::SUCCESS;
     }

@@ -5,6 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * One director on a CompanyProfile's registry (cascade-deleted with
+ * it); appointment/resignation dates back the ATO Company Tax Return
+ * identification section. Listed ordered by appointment_date.
+ */
 class CompanyDirector extends Model
 {
     protected $fillable = [

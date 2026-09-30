@@ -9,6 +9,13 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
+/**
+ * Queued mail receipt for a payment, carrying the Payment and the
+ * optional Invoice it was applied to — the balance/paid-in-full lines
+ * appear only when that invoice is present. InvoiceNotificationService
+ * is the sole sender, notifying the paying client plus every
+ * admin-role user; mail is the only channel.
+ */
 class PaymentReceivedNotification extends Notification implements ShouldQueue
 {
     use Queueable;
@@ -34,11 +41,11 @@ class PaymentReceivedNotification extends Notification implements ShouldQueue
 
         if ($this->invoice) {
             $message->line("This payment has been applied to invoice {$this->invoice->invoice_number}.");
-            
+
             if ($this->invoice->amount_due > 0) {
                 $message->line("Remaining balance due: {$this->invoice->formatted_amount_due}");
             } else {
-                $message->line("This invoice has been paid in full. Thank you!");
+                $message->line('This invoice has been paid in full. Thank you!');
             }
         }
 

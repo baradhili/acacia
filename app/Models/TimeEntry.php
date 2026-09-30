@@ -9,6 +9,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
+/**
+ * Time logged by a user — timed (start/end plus persisted breaks;
+ * hours = span − breaks, recomputed whenever a break changes) or
+ * manual (the entered hours stand). Targets a project, a client
+ * directly (ad-hoc work) or neither (internal time); the saving hook
+ * denormalises client_id/purchase_order_id from the project, which
+ * always wins over supplied values. Workflow draft → submitted →
+ * approved/rejected; approved billable entries are consumed by
+ * InvoiceItem, and cancelling that invoice releases them again.
+ */
 class TimeEntry extends Model
 {
     use HasFactory;

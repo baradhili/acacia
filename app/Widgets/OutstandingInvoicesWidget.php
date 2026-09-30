@@ -5,6 +5,13 @@ namespace App\Widgets;
 use App\Models\Invoice;
 use Arrilot\Widgets\AbstractWidget;
 
+/**
+ * Dashboard card for total receivables: the sum of totals over
+ * the outstanding scope (sent, partially paid, overdue) less all
+ * payment allocations against those invoices, floored at zero.
+ * Registered by CoreNav; the figure is firm-wide — per-user
+ * layout preferences affect placement only.
+ */
 class OutstandingInvoicesWidget extends AbstractWidget
 {
     protected $config = [];

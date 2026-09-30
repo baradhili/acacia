@@ -7,6 +7,14 @@ use App\Models\PurchaseOrder;
 use IFRS\Models\Entity;
 use Illuminate\Http\Request;
 
+/**
+ * Client master-data CRUD plus the AJAX purchase-order feed the project
+ * forms use. Sits behind plain auth with no role gate, and show()'s
+ * ledger data (transactions, aging) hinges on a heuristic: the IFRS
+ * entity is found by a name-contains match on the client's name rather
+ * than a foreign key, so a renamed client silently loses its ledger
+ * view.
+ */
 class ClientController extends Controller
 {
     public function index()

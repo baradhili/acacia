@@ -9,6 +9,12 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
+/**
+ * Serves the password.confirm re-authentication screen: store()
+ * re-validates the password against the web guard and records
+ * auth.password_confirmed_at in the session before continuing to the
+ * intended route.
+ */
 class ConfirmablePasswordController extends Controller
 {
     /**

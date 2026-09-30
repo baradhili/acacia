@@ -8,6 +8,15 @@ use App\Notifications\PurchaseOrderUtilizationNotification;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Notification;
 
+/**
+ * Daily utilization sweep over open/partially_used purchase orders
+ * (06:00, po-utilization.log). Recomputes each PO's used_amount from
+ * its issued invoices — which can also flip PO status to
+ * partially_used/completed — then emails every admin/accountant the
+ * first time a PO crosses 80% and again at 100%: the notification
+ * flags (reset when the PO is reopened) fire each threshold once.
+ * Mail-only; no ledger entries.
+ */
 class CheckPoUtilization extends Command
 {
     protected $signature = 'po:check-utilization';
@@ -43,6 +52,7 @@ class CheckPoUtilization extends Command
         }
 
         $this->info("Completed. {$notified} notifications sent.");
+
         return Command::SUCCESS;
     }
 

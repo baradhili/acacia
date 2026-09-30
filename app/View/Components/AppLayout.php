@@ -5,6 +5,9 @@ namespace App\View\Components;
 use Illuminate\View\Component;
 use Illuminate\View\View;
 
+/**
+ * Blade layout component for authenticated pages: renders layouts.app.
+ */
 class AppLayout extends Component
 {
     /**

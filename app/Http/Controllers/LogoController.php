@@ -10,6 +10,15 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
+/**
+ * Uploads and removes client, supplier, and company logos — files on
+ * the public disk under a 2 MB cap, replaced file deleted. Client and
+ * supplier endpoints (svg/png/jpg/jpeg) sit behind plain auth and
+ * answer JSON; the company logo (svg/png, admin|accountant) redirects
+ * with a flash and saves onto the IFRS entity's CompanyProfile via
+ * firstOrNew, so a logo can be the first detail saved — no entity
+ * configured is a 404.
+ */
 class LogoController extends Controller
 {
     /**

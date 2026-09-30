@@ -5,6 +5,10 @@ here once their changelog entry lands. Ordered by priority.
 
 - [ ] WAIT! - Lets think about client portal need for future - Remove the "client" role concept from the app — audit RoleSeeder's roles list, any `client` role checks/assignments and portal-client user handling; user accounts should be staff-side only (admin/accountant/staff). (Sep 2026, requested while making all users show as payroll payees — the payroll UserObserver currently skips client-role users defensively, so this unpays that workaround.)
 
+- [ ] Two notification-path bugs found by the Sep 2026 docblock pass (both scheduled commands fatal on their first live run): `notifications:overdue-reminders` throttles via `$invoice->notifications()`, a relation Invoice doesn't have (BadMethodCallException thrown outside the command's try/catch), and `statements:send` renders `emails.client-statement`, a view that doesn't exist (only the invoice and payment-receipt email views ship).
+
+- [ ] Dead code recorded as such by the Sep 2026 docblock pass — decide keep-or-delete: Vendor model (suppliers mirror, zero references), Api\DashboardController (JSON widget layer, unrouted), QuickActionsWidget/WelcomeWidget (unregistered), InvoiceNotificationService (only tests call it), AuditLog table rows (the observer writes syslog; nothing persists the table).
+
 - [ ] Bring the remaining resource_mgr concepts into acacia — services (Sep 2026) and the skills library (Sep 2026, Modules/Skills) are across; the allocations/resourcing concepts are what's left. Review https://github.com/baradhili/resource_mgr for those.
 
 - [ ] Ability to have multiple un-related company entities with separate everything on same system - do we do this by user associations or by landing domain? Justify why it cannot be one user to one or more entities?
@@ -12,8 +16,6 @@ here once their changelog entry lands. Ordered by priority.
 - [ ] Modules per company (builds on the multi-entity item above).
 
 - [ ] cucumber tests via behat — plan reviewed and refreshed 2026-09-28: .zcode/plans/behat-migration-plan.md (scope renewal with maintainer is the first step; suite has grown to 55 feature files + the Modules suite since the original approval).
-
-- [ ] Backfill class docblocks on the ~83 pre-convention core classes (app/Models, app/Http/Controllers, widgets, console commands, remaining services — found by the Sep 2026 docblock audit). Write them as code is touched per AGENTS.md, or as one dedicated documentation pass; state invariants, not narrations.
 
 - [ ] Freeform dashboard resize: drag handles/heights beyond the column-span cycling the layout management ships (Sep 2026) — gridstack is already in package.json if this lands.
 

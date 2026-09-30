@@ -6,6 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Services\DashboardService;
 use Illuminate\Http\JsonResponse;
 
+/**
+ * JSON layer over DashboardService's widget payloads (cash flow, AR
+ * aging, recent invoices/payments, PO budgets, unbilled time, bank
+ * balance, P&L trend). widget() dispatches a slug to the matching
+ * get*Widget method, 404ing on anything else. Currently unrouted — no
+ * route file or test references it, and widget-layout persistence goes
+ * through Api\WidgetPreferenceController instead.
+ */
 class DashboardController extends Controller
 {
     protected DashboardService $dashboardService;
@@ -33,9 +41,9 @@ class DashboardController extends Controller
      */
     public function widget(string $widget): JsonResponse
     {
-        $method = 'get' . str_replace(' ', '', ucwords(str_replace(['-', '_'], ' ', $widget))) . 'Widget';
-        
-        if (!method_exists($this->dashboardService, $method)) {
+        $method = 'get'.str_replace(' ', '', ucwords(str_replace(['-', '_'], ' ', $widget))).'Widget';
+
+        if (! method_exists($this->dashboardService, $method)) {
             return response()->json([
                 'success' => false,
                 'message' => "Widget '{$widget}' not found",

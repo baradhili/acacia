@@ -4,8 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Services\FiscalYearService;
 use App\Services\IfrsPosting;
-use Illuminate\Http\Request;
 
+/**
+ * Renders the dashboard Blade screen for any authenticated, verified
+ * user. The only data it computes is the year-end close nudge, shown
+ * just to admins/accountants; the widget cards and their saved layout
+ * flow through the widget system (Api\WidgetPreferenceController)
+ * rather than this controller.
+ */
 class DashboardController extends Controller
 {
     public function index()

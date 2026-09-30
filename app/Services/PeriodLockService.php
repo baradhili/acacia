@@ -8,8 +8,19 @@ use App\Models\Payment;
 use Carbon\Carbon;
 use IFRS\Models\Entity;
 use IFRS\Models\ReportingPeriod;
+use IFRS\Scopes\EntityScope;
 use Illuminate\Support\Collection;
 
+/**
+ * Two-tier guard on transaction dates. The app's FiscalPeriod
+ * locks are soft, administrator-controlled checks made by
+ * controllers, the NotInClosedPeriod rule and the posting
+ * services (prepayments, Payroll, Taxation, Shares) before they
+ * write; isDateBlocked adds the hard tier — an IFRS
+ * ReportingPeriod CLOSED by the year-end close, which the package
+ * itself also rejects. Missing period rows mean open; no method
+ * here creates them.
+ */
 class PeriodLockService
 {
     /**
@@ -37,13 +48,13 @@ class PeriodLockService
             return true;
         }
 
-        $entity ??= \App\Services\IfrsPosting::resolveEntity();
-        if (!$entity) {
+        $entity ??= IfrsPosting::resolveEntity();
+        if (! $entity) {
             return false;
         }
 
         $year = ReportingPeriod::year($date, $entity);
-        $period = ReportingPeriod::withoutGlobalScope(\IFRS\Scopes\EntityScope::class)
+        $period = ReportingPeriod::withoutGlobalScope(EntityScope::class)
             ->where('entity_id', $entity->id)
             ->where('calendar_year', $year)
             ->first();
@@ -59,17 +70,17 @@ class PeriodLockService
         $locked = $this->getLockedPeriodForDate($date);
         if ($locked) {
             return "Period '{$locked->name}' is locked"
-                . ($locked->lock_reason ? " ({$locked->lock_reason})" : '')
-                . '. Contact an administrator to unlock.';
+                .($locked->lock_reason ? " ({$locked->lock_reason})" : '')
+                .'. Contact an administrator to unlock.';
         }
 
-        $entity ??= \App\Services\IfrsPosting::resolveEntity();
-        if (!$entity) {
+        $entity ??= IfrsPosting::resolveEntity();
+        if (! $entity) {
             return null;
         }
 
         $year = ReportingPeriod::year($date, $entity);
-        $period = ReportingPeriod::withoutGlobalScope(\IFRS\Scopes\EntityScope::class)
+        $period = ReportingPeriod::withoutGlobalScope(EntityScope::class)
             ->where('entity_id', $entity->id)
             ->where('calendar_year', $year)
             ->first();
@@ -78,7 +89,7 @@ class PeriodLockService
             $end = ReportingPeriod::periodEnd($date, $entity)->format('d M Y');
 
             return "Financial year {$year} is closed (ended {$end}). "
-                . 'Reopen the year from the Financial Years page or use a later date.';
+                .'Reopen the year from the Financial Years page or use a later date.';
         }
 
         return null;
@@ -100,7 +111,7 @@ class PeriodLockService
     public function lockPeriodsBeforeDate(Carbon $date, ?string $reason = null): array
     {
         $periods = FiscalPeriod::beforeDate($date)->unlocked()->get();
-        
+
         $locked = 0;
         $alreadyLocked = 0;
 
@@ -143,7 +154,7 @@ class PeriodLockService
     {
         $period = FiscalPeriod::containingDate($date)->first();
 
-        if (!$period) {
+        if (! $period) {
             return [
                 'valid' => true,
                 'message' => 'No period defined for this date',
@@ -199,7 +210,7 @@ class PeriodLockService
             'total' => $periods->count(),
             'locked' => $periods->where('is_locked', true)->count(),
             'unlocked' => $periods->where('is_locked', false)->count(),
-            'locked_periods' => $this->getLockedPeriods()->map(fn($p) => [
+            'locked_periods' => $this->getLockedPeriods()->map(fn ($p) => [
                 'name' => $p->name,
                 'locked_at' => $p->locked_at?->toIso8601String(),
                 'locked_by' => $p->lockedBy?->name,

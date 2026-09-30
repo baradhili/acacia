@@ -14,6 +14,12 @@ use Illuminate\Validation\Rules;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
+/**
+ * Completes a password reset (password.reset form, password.store
+ * submit): validates the token plus a confirmed password, runs the
+ * Password broker, and rotates the remember token so remembered
+ * sessions do not survive the reset. Success lands on the login screen.
+ */
 class NewPasswordController extends Controller
 {
     /**

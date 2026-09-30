@@ -16,6 +16,16 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * A client receipt — or, held negative, a credit-note refund — and
+ * under cash basis the sole revenue ledger event. postToIFRS posts
+ * Dr Bank (320) / Cr Revenue (4100) / Cr GST Payable (2200 via the
+ * code-G "GST 10%" Vat), apportioning each allocation across its
+ * invoice's items by GST treatment; refunds post mirrored legs, and
+ * voiding a posted payment writes a reversal. PAY-YYYY-NNNN is
+ * unique; ownership FKs (client, ifrs_receipt, credit_note) sit
+ * outside $fillable and are assigned explicitly.
+ */
 class Payment extends Model
 {
     use HasFactory;

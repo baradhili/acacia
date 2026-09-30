@@ -8,6 +8,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
+/**
+ * A supplier the firm pays — bills are received from and payments made
+ * to this contact (the bills/bill_payments FKs cascade on delete).
+ * ABN is normalised to bare digits on write; free-form custom_fields
+ * JSON, logo and supplier receipts (Document morph) attach to it.
+ */
 class Supplier extends Model
 {
     use HasCustomFields, HasFactory;

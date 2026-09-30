@@ -7,6 +7,15 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * A client engagement that time entries are logged against. May claim
+ * at most one purchase order (unique projects.purchase_order_id); the
+ * saved hook mirrors the link onto the PO row from both sides and
+ * re-syncs the denormalised client_id/purchase_order_id columns on
+ * the project's time entries whenever the linkage moves. Budgets in
+ * hours and amount; per-staff rate overrides live on project_staff.
+ * Statuses: active / on_hold / completed / cancelled.
+ */
 class Project extends Model
 {
     use HasFactory;

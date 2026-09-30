@@ -10,6 +10,16 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\QueryException;
 
+/**
+ * A supplier invoice received — the AP subledger document carrying line
+ * items and payment allocations. Cash basis by design: bills NEVER post
+ * to IFRS (no Accounts Payable leg); the supplier payment is the sole
+ * expense ledger event. bill_number (BILL-YYYY-NNNN) is unique,
+ * race-guarded by createWithUniqueNumber(). Status machine: draft →
+ * open → partially_paid → paid / overdue, with paid and cancelled both
+ * final — a paid bill is corrected by unapplying its payment, not by
+ * cancelling.
+ */
 class Bill extends Model
 {
     use HasFactory;

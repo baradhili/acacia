@@ -9,6 +9,13 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 
+/**
+ * Serves the login screen (GET/POST login) and logout. store()
+ * delegates credential checking and throttling to LoginRequest, then
+ * regenerates the session and redirects to the intended dashboard;
+ * destroy() logs out, invalidates the session and rotates the CSRF
+ * token.
+ */
 class AuthenticatedSessionController extends Controller
 {
     /**

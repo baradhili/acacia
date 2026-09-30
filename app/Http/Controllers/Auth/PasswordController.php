@@ -8,6 +8,12 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 
+/**
+ * Authenticated password changes (PUT password / password.update):
+ * the current password must match, the replacement is a confirmed
+ * Password::defaults() value, and failures surface under the
+ * updatePassword error bag.
+ */
 class PasswordController extends Controller
 {
     /**

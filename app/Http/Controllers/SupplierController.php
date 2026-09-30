@@ -6,11 +6,20 @@ use App\Models\Supplier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
+/**
+ * Supplier master data: contact and address details, category and
+ * ABN (normalised to bare digits on save). Plain CRUD, no ledger
+ * involvement — deletion cascades to the supplier's bills and
+ * payments at the database level. quickStore() is the JSON quick-add
+ * for the bill forms, validating manually so fetch callers get a
+ * 422 instead of the redirect a validation exception renders.
+ */
 class SupplierController extends Controller
 {
     public function index()
     {
         $suppliers = Supplier::withCount('documents')->paginate(15);
+
         return view('suppliers.index', compact('suppliers'));
     }
 
@@ -73,12 +82,14 @@ class SupplierController extends Controller
     public function show(Supplier $supplier)
     {
         $supplier->load('documents');
+
         return view('suppliers.show', compact('supplier'));
     }
 
     public function edit(Supplier $supplier)
     {
         $supplier->load('documents');
+
         return view('suppliers.edit', compact('supplier'));
     }
 
@@ -94,6 +105,7 @@ class SupplierController extends Controller
     public function destroy(Supplier $supplier)
     {
         $supplier->delete();
+
         return redirect()->route('suppliers.index')->with('success', 'Supplier deleted successfully.');
     }
 }

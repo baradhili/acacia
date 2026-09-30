@@ -5,6 +5,15 @@ namespace App\Console\Commands;
 use App\Models\FiscalPeriod;
 use Illuminate\Console\Command;
 
+/**
+ * Manual release of one app-level FiscalPeriod lock (what
+ * PeriodLockService::isDateLocked enforces): shows who locked it,
+ * when and why, then clears the lock fields after a confirmation
+ * prompt (--force skips it). Unlocking an already-open period is a
+ * reported no-op, so re-runs are safe. It does NOT reopen a closed
+ * financial year — the fiscal-year:close'd IFRS ReportingPeriod
+ * stays CLOSED, still blocking postings, until fiscal-year:reopen.
+ */
 class UnlockPeriod extends Command
 {
     protected $signature = 'period:unlock
