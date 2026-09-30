@@ -6,6 +6,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Assignment of a user to a project with an optional per-assignment
+ * hourly rate overriding the project default (effective_rate falls
+ * back to project.hourly_rate). Unique on (project_id, user_id);
+ * TimeEntry's staff cost uses the active assignment's rate.
+ */
 class ProjectStaff extends Model
 {
     use HasFactory;

@@ -5,6 +5,14 @@ namespace App\Widgets;
 use Arrilot\Widgets\AbstractWidget;
 use Modules\Reconciliation\Models\BankTransaction;
 
+/**
+ * Dashboard card for the bank position: credits less debits over
+ * every Reconciliation-module BankTransaction (one all() load —
+ * no entity or user scoping), plus pending/matched/ignored counts
+ * and a per-source breakdown. Registered by CoreNav; the figure
+ * is firm-wide, so per-user layout preferences affect placement
+ * only, never the numbers.
+ */
 class BankBalanceWidget extends AbstractWidget
 {
     protected $config = [];

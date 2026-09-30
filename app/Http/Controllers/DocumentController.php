@@ -8,6 +8,14 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 
+/**
+ * JSON API for the polymorphic Document attachments. Uploads land on
+ * the public disk under uploads/YYYY/MM (what the backup runbook
+ * archives) behind a mime whitelist and 20 MB cap. Routes gate only on
+ * auth — there is no ownership or role check, so any authenticated
+ * user can upload, download, or delete any model's documents, and
+ * destroy() removes the stored file along with the row.
+ */
 class DocumentController extends Controller
 {
     /**

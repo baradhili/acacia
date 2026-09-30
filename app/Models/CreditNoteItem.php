@@ -6,6 +6,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * One credit line on a credit note — the saving hook computes its
+ * tax-inclusive total. 4dp casts mirror InvoiceItem so sub-cent
+ * reverse-invoice prices survive; built from an invoice item.
+ */
 class CreditNoteItem extends Model
 {
     use HasFactory;

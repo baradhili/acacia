@@ -8,6 +8,13 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
+/**
+ * Queued mail alert that a purchase order has hit a utilization
+ * threshold (80 or 100 percent, carried as the threshold string).
+ * Sent solely by the po:check-utilization command — scheduled daily
+ * and marking each PO as notified so a threshold fires once — to
+ * users holding the admin or accountant role; mail is the only channel.
+ */
 class PurchaseOrderUtilizationNotification extends Notification implements ShouldQueue
 {
     use Queueable;
@@ -37,7 +44,7 @@ class PurchaseOrderUtilizationNotification extends Notification implements Shoul
         if ($this->threshold === '80') {
             $message->line("Remaining budget: **\${$this->purchaseOrder->remaining}**");
         } else {
-            $message->line("This PO is now fully utilized.");
+            $message->line('This PO is now fully utilized.');
         }
 
         $message->action('View Purchase Order', url("/purchase-orders/{$this->purchaseOrder->id}"))

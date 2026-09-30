@@ -18,6 +18,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Accounts payable: supplier bills — capture (incl. the paid-at-entry
+ * "paid_now" shortcut), unpaid-bill editing, lifecycle moves and
+ * payment recording. Completed payments post to IFRS best-effort
+ * (Cr Bank / Dr Expense per line / Dr GST Receivable); employee-paid
+ * captures stay pending until approval; unapplying or deleting
+ * reverses the affected legs, and closed years refuse both.
+ */
 class BillController extends Controller
 {
     public function index(Request $request)

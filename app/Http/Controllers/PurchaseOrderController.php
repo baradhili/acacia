@@ -6,6 +6,14 @@ use App\Models\Client;
 use App\Models\PurchaseOrder;
 use Illuminate\Http\Request;
 
+/**
+ * Client purchase orders — the budget envelope time entries and
+ * invoices are attributed to. Plain CRUD plus model-guarded state
+ * moves (activate, cancel, complete, reopen); only drafts are edited
+ * or deleted, and nothing here posts to the IFRS ledger. Invoicing
+ * against a PO happens in InvoiceController, which keeps its
+ * used_amount in sync via the observer chain.
+ */
 class PurchaseOrderController extends Controller
 {
     public function index()

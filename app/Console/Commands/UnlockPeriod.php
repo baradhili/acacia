@@ -5,6 +5,15 @@ namespace App\Console\Commands;
 use App\Models\FiscalPeriod;
 use Illuminate\Console\Command;
 
+/**
+ * Manual release of one app-level FiscalPeriod lock (what
+ * PeriodLockService::isDateLocked enforces): shows who locked it,
+ * when and why, then clears the lock fields after a confirmation
+ * prompt (--force skips it). Unlocking an already-open period is a
+ * reported no-op, so re-runs are safe. It does NOT reopen a closed
+ * financial year — the fiscal-year:close'd IFRS ReportingPeriod
+ * stays CLOSED, still blocking postings, until fiscal-year:reopen.
+ */
 class UnlockPeriod extends Command
 {
     protected $signature = 'period:unlock
@@ -20,23 +29,26 @@ class UnlockPeriod extends Command
 
         $period = FiscalPeriod::find($periodId);
 
-        if (!$period) {
+        if (! $period) {
             $this->error("Period not found: {$periodId}");
+
             return Command::FAILURE;
         }
 
-        if (!$period->isLocked()) {
+        if (! $period->isLocked()) {
             $this->warn("Period '{$period->name}' is not locked.");
+
             return Command::SUCCESS;
         }
 
         $this->info("Period: {$period->name}");
-        $this->info("Locked by: {$period->lockedBy?->name ?? 'Unknown'}");
+        $this->info('Locked by: '.($period->lockedBy?->name ?? 'Unknown'));
         $this->info("Locked at: {$period->locked_at}");
         $this->info("Reason: {$period->lock_reason}");
 
-        if (!$force && !$this->confirm('Are you sure you want to unlock this period?')) {
+        if (! $force && ! $this->confirm('Are you sure you want to unlock this period?')) {
             $this->warn('Operation cancelled.');
+
             return Command::FAILURE;
         }
 

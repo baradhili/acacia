@@ -5,6 +5,12 @@ namespace App\Http\Controllers;
 use IFRS\Models\Account;
 use Illuminate\Http\Request;
 
+/**
+ * Read-only view of the IFRS chart of accounts: the single index
+ * action groups accounts by account_type with an optional ?type=
+ * filter. Accounts are created by the IFRS seeders and posting
+ * services (e.g. BillPayment::ensureReimbursementAccount), not here.
+ */
 class ChartOfAccountsController extends Controller
 {
     /**
@@ -13,19 +19,19 @@ class ChartOfAccountsController extends Controller
     public function index(Request $request)
     {
         $accountType = $request->get('type');
-        
+
         $query = Account::with('category');
-        
+
         if ($accountType) {
             $query->where('account_type', $accountType);
         }
-        
+
         $accounts = $query->orderBy('account_type')
             ->orderBy('name')
             ->get();
-        
+
         $groupedAccounts = $accounts->groupBy('account_type');
-        
+
         $accountTypes = [
             Account::NON_CURRENT_ASSET => 'Non-Current Assets',
             Account::CONTRA_ASSET => 'Contra Assets',
@@ -46,7 +52,7 @@ class ChartOfAccountsController extends Controller
             Account::OTHER_EXPENSE => 'Other Expenses',
             Account::RECONCILIATION => 'Reconciliation',
         ];
-        
+
         return view('chart-of-accounts.index', [
             'groupedAccounts' => $groupedAccounts,
             'accountTypes' => $accountTypes,

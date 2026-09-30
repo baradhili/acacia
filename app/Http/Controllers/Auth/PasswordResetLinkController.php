@@ -9,6 +9,12 @@ use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
+/**
+ * Starts the reset flow (password.request form, password.email
+ * submit): validates the email, asks the Password broker to send the
+ * link, and translates the broker status into either a flash message
+ * or an error on the email field.
+ */
 class PasswordResetLinkController extends Controller
 {
     /**

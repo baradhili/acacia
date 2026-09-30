@@ -8,6 +8,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 
+/**
+ * Admin-only user management (routes gate on role:admin). Every user
+ * must be linked to an IFRS entity — the ledger and the entity-scoped
+ * screens resolve through it — and that link is an unfillable FK
+ * assigned explicitly rather than mass-assigned. Spatie roles are
+ * assigned on create and synced on update; deleting your own account
+ * is refused.
+ */
 class UserController extends Controller
 {
     public function index(Request $request)

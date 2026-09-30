@@ -10,6 +10,15 @@ use App\Models\TimeEntry;
 use Carbon\Carbon;
 use Modules\Reconciliation\Models\BankTransaction;
 
+/**
+ * Dashboard figures (cash flow, AR aging, recents, PO budgets,
+ * unbilled time, bank balance, P&L trend) as arrays for the API
+ * DashboardController — the Blade dashboard renders Arrilot
+ * widgets from the Widgets registry instead. Cash-basis: revenue
+ * is completed payments, expenses completed bill payments, and
+ * AR aging buckets whole start-of-day days to match the aging
+ * report. Queries are unscoped, so figures are firm-wide.
+ */
 class DashboardService
 {
     /**

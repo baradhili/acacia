@@ -6,9 +6,16 @@ use App\Traits\HasCustomFields;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * An unused parallel contact type: the vendors table mirrors the
+ * suppliers contact columns (adding category, dropping logo), but no
+ * controller, route, relation, factory or test references it — only
+ * the model and its migration exist. Supplier owns the entire AP flow
+ * (bills, supplier payments, quick-add from the bill form).
+ */
 class Vendor extends Model
 {
-    use HasFactory, HasCustomFields;
+    use HasCustomFields, HasFactory;
 
     protected $fillable = [
         'name',

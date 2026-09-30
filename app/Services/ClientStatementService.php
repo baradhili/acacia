@@ -8,6 +8,15 @@ use App\Models\Payment;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
+/**
+ * Builds monthly client statements: opening balance (all invoices
+ * issued before the period less completed payments before it), the
+ * period's invoices and completed payments as date-sorted line
+ * items, and the closing balance to date. Invoices count by
+ * issue_date at full total with no status filter — only payments
+ * are gated (STATUS_COMPLETED). Consumed by the scheduled
+ * statements:send command, not by any controller.
+ */
 class ClientStatementService
 {
     /**
@@ -140,7 +149,7 @@ class ClientStatementService
         }
 
         // Sort by date
-        usort($items, fn($a, $b) => $a['date']->timestamp <=> $b['date']->timestamp);
+        usort($items, fn ($a, $b) => $a['date']->timestamp <=> $b['date']->timestamp);
 
         return $items;
     }

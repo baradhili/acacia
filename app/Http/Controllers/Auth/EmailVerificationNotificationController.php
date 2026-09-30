@@ -6,6 +6,11 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
+/**
+ * Resends the verification email (POST verification.send, throttled to
+ * 6/min by the route). No-ops to the dashboard when already verified;
+ * otherwise sends the mail and flashes verification-link-sent.
+ */
 class EmailVerificationNotificationController extends Controller
 {
     /**

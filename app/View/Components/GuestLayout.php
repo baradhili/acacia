@@ -5,6 +5,9 @@ namespace App\View\Components;
 use Illuminate\View\Component;
 use Illuminate\View\View;
 
+/**
+ * Blade layout component for guest pages: renders layouts.guest.
+ */
 class GuestLayout extends Component
 {
     /**

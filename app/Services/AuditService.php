@@ -18,6 +18,15 @@ use Modules\Shares\Models\DividendDistribution;
 use Modules\Shares\Models\FrankingAccountEntry;
 use Modules\Shares\Models\Shareholding;
 
+/**
+ * Writes the financial audit trail: created/updated/deleted model
+ * events from AuditObserver (AppServiceProvider registers it for the
+ * core financial models; the Reconciliation and Shares providers add
+ * their own) go out as JSON on the syslog channel, never the
+ * database, stamped with the acting user and request. Updates diff
+ * old vs new attributes, skipping updated_at and remember_token;
+ * only $modelsToAudit entries are recorded.
+ */
 class AuditService
 {
     protected array $ignoredFields = ['updated_at', 'remember_token'];

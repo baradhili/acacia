@@ -5,6 +5,14 @@ namespace App\Console\Commands;
 use App\Models\PurchaseOrder;
 use Illuminate\Console\Command;
 
+/**
+ * Activates draft purchase orders on their start date (start_date <=
+ * today, so missed runs catch up) via PurchaseOrder::activate(), the
+ * draft -> open transition. Scheduled daily at 01:00
+ * (routes/console.php, output to po-activation.log). Idempotent: an
+ * activated PO leaves draft status and is never matched again. No
+ * notifications fire and no ledger entries post here.
+ */
 class ActivatePurchaseOrders extends Command
 {
     protected $signature = 'po:activate-pending';
@@ -24,6 +32,7 @@ class ActivatePurchaseOrders extends Command
 
         if ($posToActivate->isEmpty()) {
             $this->info('No purchase orders to activate.');
+
             return Command::SUCCESS;
         }
 
@@ -35,6 +44,7 @@ class ActivatePurchaseOrders extends Command
         }
 
         $this->info("Activated {$activated} purchase order(s).");
+
         return Command::SUCCESS;
     }
 }

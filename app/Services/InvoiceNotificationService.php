@@ -7,9 +7,17 @@ use App\Models\Payment;
 use App\Models\User;
 use App\Notifications\OverdueReminderNotification;
 use App\Notifications\PaymentReceivedNotification;
-use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 
+/**
+ * Sends payment-received and overdue-reminder notifications to the
+ * client (when it has an email) and to every admin-role user,
+ * wrapped in try/catch so a notification failure is logged and
+ * never breaks the caller. No production path calls it today — the
+ * scheduled notifications:overdue-reminders command sends the same
+ * reminders directly — so only the unit tests exercise it.
+ */
 class InvoiceNotificationService
 {
     /**

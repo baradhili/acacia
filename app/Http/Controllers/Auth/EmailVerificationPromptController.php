@@ -7,6 +7,11 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
+/**
+ * Single-action controller behind verification.notice: verified users
+ * continue to their intended destination, unverified ones get the
+ * verify-email prompt view.
+ */
 class EmailVerificationPromptController extends Controller
 {
     /**

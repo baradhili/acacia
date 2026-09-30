@@ -5,6 +5,13 @@ namespace App\Observers;
 use App\Models\Invoice;
 use App\Models\PurchaseOrder;
 
+/**
+ * Keeps PurchaseOrder.used_amount in step with the invoices counted
+ * against it: registered for Invoice in AppServiceProvider, every
+ * lifecycle hook recalculates the linked PO (both old and new when the
+ * link moves), and total-only changes are left to
+ * Invoice::recalculateTotals(), whose updateQuietly never fires events.
+ */
 class InvoiceObserver
 {
     /**
@@ -65,7 +72,7 @@ class InvoiceObserver
      */
     protected function recalculatePo(?int $poId): void
     {
-        if (!$poId) {
+        if (! $poId) {
             return;
         }
 

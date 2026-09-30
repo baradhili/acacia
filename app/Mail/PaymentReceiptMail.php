@@ -9,6 +9,13 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
+/**
+ * Receipt email: PaymentController::store() sends it synchronously
+ * once a payment is recorded and posted to the IFRS ledger — only when
+ * the client has an email, and a send failure is logged but never
+ * fails the request. Carries the Payment and an optional custom
+ * subject in a plain email body, with no attachments.
+ */
 class PaymentReceiptMail extends Mailable
 {
     use Queueable, SerializesModels;
@@ -20,8 +27,8 @@ class PaymentReceiptMail extends Mailable
 
     public function envelope(): Envelope
     {
-        $subject = $this->customSubject ?? "Payment Receipt {$this->payment->payment_number} from " . config('app.name');
-        
+        $subject = $this->customSubject ?? "Payment Receipt {$this->payment->payment_number} from ".config('app.name');
+
         return new Envelope(
             subject: $subject,
         );

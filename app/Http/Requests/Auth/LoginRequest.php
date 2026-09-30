@@ -10,6 +10,12 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * Validates the login POST and performs the authentication attempt
+ * (with remember-me) for AuthenticatedSessionController. Failures are
+ * counted against an email+IP throttle key, locking out after five
+ * attempts; a successful login clears the counter.
+ */
 class LoginRequest extends FormRequest
 {
     /**
