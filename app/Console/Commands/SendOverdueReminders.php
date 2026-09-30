@@ -13,10 +13,13 @@ use Illuminate\Support\Facades\Notification;
  * Chases overdue invoices by email (daily 08:00,
  * overdue-reminders.log): for each Invoice::overdue() match at least
  * --days past due (default 1), mails the client and every admin an
- * OverdueReminderNotification (mail channel). A per-invoice guard
- * skips invoices reminded within the last 3 days, read from the
- * invoice's notification history. --dry-run lists the reminders
- * without sending.
+ * OverdueReminderNotification (mail channel). Currently broken: the
+ * intended 3-day re-send guard reads $invoice->notifications(), a
+ * relation Invoice does not have, and the call sits before the send
+ * try/catch and the dry-run branch — the first invoice past the
+ * --days filter throws BadMethodCallException and aborts the run,
+ * so no reminders go out at all until the guard is fixed
+ * (todo-list).
  */
 class SendOverdueReminders extends Command
 {

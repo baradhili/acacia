@@ -9,11 +9,13 @@ use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 /**
- * Queued mail reminder for an overdue invoice, carrying the invoice and
- * its days-overdue count. Dispatched by the notifications:overdue-reminders
- * command (scheduled daily, throttled to one reminder per invoice every
- * three days) and by InvoiceNotificationService, each sending to the
- * invoice's client and to every admin-role user via the mail channel only.
+ * Queued mail reminder for an overdue invoice, carrying the invoice
+ * and its days-overdue count. Dispatched by the
+ * notifications:overdue-reminders command (scheduled daily — its
+ * intended 3-day re-send throttle is currently broken; see that
+ * command) and by InvoiceNotificationService, each sending to the
+ * invoice's client and to every admin-role user via the mail
+ * channel only.
  */
 class OverdueReminderNotification extends Notification implements ShouldQueue
 {
