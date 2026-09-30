@@ -58,7 +58,7 @@
             <div class="flex-1">
                 <label for="open_year" class="block text-sm font-medium text-gray-700 mb-1">Open financial year</label>
                 <select name="open_year" id="open_year"
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                     <option value="auto" {{ $storedOpenYear === null ? 'selected' : '' }}>
                         Automatic — follow the calendar (FY {{ $clockYear }})
                     </option>

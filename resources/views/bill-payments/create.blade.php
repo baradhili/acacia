@@ -31,7 +31,7 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Supplier *</label>
                     <select name="supplier_id" id="supplierSelect" required
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">
                         <option value="">Select Supplier</option>
                         @foreach ($suppliers as $id => $name)
                             <option value="{{ $id }}"
@@ -50,7 +50,7 @@
                         <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
                         <input type="number" name="amount" value="{{ old('amount') }}" step="0.01" min="0.01"
                             required
-                            class="pl-7 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                            class="pl-7 rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">
                     </div>
                     @error('amount')
                         <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
@@ -61,7 +61,7 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1">Payment Date *</label>
                     <input type="date" name="payment_date" value="{{ old('payment_date', now()->toDateString()) }}"
                         required
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">
                     @error('payment_date')
                         <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
                     @enderror
@@ -70,7 +70,7 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Payment Method *</label>
                     <select name="payment_method" id="paymentMethodSelect" required
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">
                         @foreach ($paymentMethods as $value => $label)
                             <option value="{{ $value }}" {{ old('payment_method') == $value ? 'selected' : '' }}>
                                 {{ $label }}</option>
@@ -84,7 +84,7 @@
                 <div id="employeeField" class="hidden">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Paid by employee *</label>
                     <select name="employee_id"
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">
                         <option value="">Select Employee</option>
                         @foreach ($employees as $id => $name)
                             <option value="{{ $id }}" {{ old('employee_id') == $id ? 'selected' : '' }}>{{ $name }}</option>
@@ -103,14 +103,14 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Reference</label>
                     <input type="text" name="reference" value="{{ old('reference') }}"
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full"
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full"
                         placeholder="Transaction ID, Cheque #, etc.">
                 </div>
 
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
                     <input type="text" name="notes" value="{{ old('notes') }}"
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">
                 </div>
             </div>
         </div>
@@ -231,7 +231,7 @@
                             <div class="ml-3 w-32">
                                 <input type="number" name="bill_allocations[${bill.id}][amount]"
                                     placeholder="Amount" step="0.01" min="0" disabled
-                                    class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm allocation-amount">
+                                    class="w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 text-sm allocation-amount">
                             </div>
                         </label>
                     `;

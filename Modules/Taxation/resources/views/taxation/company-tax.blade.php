@@ -19,7 +19,7 @@
                 <div>
                     <label for="fy" class="block text-sm font-medium text-gray-700 mb-1">Income year ended 30 June</label>
                     <select name="fy" id="fy"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                         @foreach ($availableFys as $year)
                             <option value="{{ $year }}" {{ (int) $fyEnd === $year ? 'selected' : '' }}>
                                 {{ $year }} (Jul {{ $year - 1 }} – Jun {{ $year }})

@@ -16,7 +16,7 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Client *</label>
                     <select name="client_id" required
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">
                         <option value="">Select Client</option>
                         @foreach($clients as $id => $name)
                             <option value="{{ $id }}" {{ old('client_id') == $id ? 'selected' : '' }}>{{ $name }}</option>
@@ -27,13 +27,13 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Issue Date *</label>
                     <input type="date" name="issue_date" value="{{ old('issue_date', now()->toDateString()) }}" required
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">
                 </div>
                 
                 <div class="md:col-span-2">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Reason *</label>
                     <select name="reason" required
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">
                         <option value="">Select Reason</option>
                         <option value="Product return">Product Return</option>
                         <option value="Service not delivered">Service Not Delivered</option>
@@ -46,7 +46,7 @@
                 <div class="md:col-span-2">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
                     <textarea name="notes" rows="2"
-                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full">{{ old('notes') }}</textarea>
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">{{ old('notes') }}</textarea>
                 </div>
             </div>
         </div>
@@ -62,25 +62,25 @@
                             <label class="block text-xs font-medium text-gray-700 mb-1">Description</label>
                             <input type="text" name="items[{{ $index }}][description]" 
                                 value="{{ $item['description'] ?? '' }}" required
-                                class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
+                                class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
                         </div>
                         <div class="col-span-2">
                             <label class="block text-xs font-medium text-gray-700 mb-1">Qty</label>
                             <input type="number" name="items[{{ $index }}][quantity]" 
                                 value="{{ $item['quantity'] ?? 1 }}" step="0.01" min="0.01" required
-                                class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm qty-input">
+                                class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm qty-input">
                         </div>
                         <div class="col-span-2">
                             <label class="block text-xs font-medium text-gray-700 mb-1">Unit Price</label>
                             <input type="number" name="items[{{ $index }}][unit_price]" 
                                 value="{{ $item['unit_price'] ?? 0 }}" step="0.01" min="0" required
-                                class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm price-input">
+                                class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm price-input">
                         </div>
                         <div class="col-span-1">
                             <label class="block text-xs font-medium text-gray-700 mb-1">Tax %</label>
                             <input type="number" name="items[{{ $index }}][tax_rate]" 
                                 value="{{ $item['tax_rate'] ?? 10 }}" step="0.01" min="0" max="100"
-                                class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm tax-input">
+                                class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm tax-input">
                         </div>
                         <div class="col-span-2">
                             <label class="block text-xs font-medium text-gray-700 mb-1">Total</label>
@@ -109,22 +109,22 @@
             <div class="col-span-5">
                 <label class="block text-xs font-medium text-gray-700 mb-1">Description</label>
                 <input type="text" name="items[__INDEX__][description]" required
-                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
+                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm">
             </div>
             <div class="col-span-2">
                 <label class="block text-xs font-medium text-gray-700 mb-1">Qty</label>
                 <input type="number" name="items[__INDEX__][quantity]" value="1" step="0.01" min="0.01" required
-                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm qty-input">
+                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm qty-input">
             </div>
             <div class="col-span-2">
                 <label class="block text-xs font-medium text-gray-700 mb-1">Unit Price</label>
                 <input type="number" name="items[__INDEX__][unit_price]" value="0" step="0.01" min="0" required
-                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm price-input">
+                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm price-input">
             </div>
             <div class="col-span-1">
                 <label class="block text-xs font-medium text-gray-700 mb-1">Tax %</label>
                 <input type="number" name="items[__INDEX__][tax_rate]" value="10" step="0.01" min="0" max="100"
-                    class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm tax-input">
+                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full text-sm tax-input">
             </div>
             <div class="col-span-2">
                 <label class="block text-xs font-medium text-gray-700 mb-1">Total</label>

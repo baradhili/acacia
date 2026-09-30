@@ -100,7 +100,7 @@
             <div>
                 <label for="frequency" class="block text-sm font-medium text-gray-700 mb-1">Frequency</label>
                 <select name="frequency" id="frequency"
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                     @foreach (\App\Models\BackupSetting::FREQUENCIES as $frequency)
                         <option value="{{ $frequency }}"
                             {{ old('frequency', $setting->frequency) === $frequency ? 'selected' : '' }}>
@@ -115,7 +115,7 @@
                 <label for="retention_count" class="block text-sm font-medium text-gray-700 mb-1">Backups kept (of each type)</label>
                 <input type="number" name="retention_count" id="retention_count" min="1" max="365"
                     value="{{ old('retention_count', $setting->retention_count) }}"
-                    class="mt-1 block w-40 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    class="mt-1 block w-40 rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 @error('retention_count') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
             </div>
 

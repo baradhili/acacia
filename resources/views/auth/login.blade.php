@@ -28,7 +28,7 @@
         <!-- Remember Me & Forgot Password -->
         <div class="flex items-center justify-between mb-8">
             <label for="remember_me" class="inline-flex items-center cursor-pointer">
-                <input id="remember_me" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 transition" name="remember">
+                <input id="remember_me" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-xs focus:ring-indigo-500 transition" name="remember">
                 <span class="ms-2 text-sm text-gray-600">{{ __('Remember me') }}</span>
             </label>
 
@@ -40,7 +40,7 @@
         </div>
 
         <!-- Submit Button -->
-        <x-primary-button class="flex justify-center w-full py-3 rounded-lg shadow-sm transition active:scale-[0.98]">
+        <x-primary-button class="flex justify-center w-full py-3 rounded-lg shadow-xs transition active:scale-[0.98]">
             {{ __('Log in') }}
         </x-primary-button>
     </form>

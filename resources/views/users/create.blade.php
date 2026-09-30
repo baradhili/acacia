@@ -13,27 +13,27 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Name *</label>
                     <input type="text" name="name" value="{{ old('name') }}" required
-                           class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                           class="w-full rounded-md border-gray-300 shadow-xs focus:border-blue-500 focus:ring-blue-500">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Email *</label>
                     <input type="email" name="email" value="{{ old('email') }}" required
-                           class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                           class="w-full rounded-md border-gray-300 shadow-xs focus:border-blue-500 focus:ring-blue-500">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Password *</label>
                     <input type="password" name="password" required
-                           class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                           class="w-full rounded-md border-gray-300 shadow-xs focus:border-blue-500 focus:ring-blue-500">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Confirm Password *</label>
                     <input type="password" name="password_confirmation" required
-                           class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                           class="w-full rounded-md border-gray-300 shadow-xs focus:border-blue-500 focus:ring-blue-500">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Entity *</label>
                     <select name="entity_id" required
-                           class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                           class="w-full rounded-md border-gray-300 shadow-xs focus:border-blue-500 focus:ring-blue-500">
                         @foreach ($entities as $entity)
                             <option value="{{ $entity->id }}"
                                 {{ (string) old('entity_id', $defaultEntityId) === (string) $entity->id ? 'selected' : '' }}>
@@ -46,22 +46,22 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Position</label>
                     <input type="text" name="position" value="{{ old('position') }}"
-                           class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                           class="w-full rounded-md border-gray-300 shadow-xs focus:border-blue-500 focus:ring-blue-500">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Phone</label>
                     <input type="text" name="phone" value="{{ old('phone') }}"
-                           class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                           class="w-full rounded-md border-gray-300 shadow-xs focus:border-blue-500 focus:ring-blue-500">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Salary</label>
                     <input type="number" name="salary" value="{{ old('salary') }}" step="0.01" min="0"
-                           class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                           class="w-full rounded-md border-gray-300 shadow-xs focus:border-blue-500 focus:ring-blue-500">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Charge Out Rate (per hour)</label>
                     <input type="number" name="charge_out_rate" value="{{ old('charge_out_rate') }}" step="0.01" min="0"
-                           class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                           class="w-full rounded-md border-gray-300 shadow-xs focus:border-blue-500 focus:ring-blue-500">
                 </div>
                 <div class="md:col-span-2">
                     <label class="block text-sm font-medium text-gray-700 mb-2">Roles</label>
@@ -69,7 +69,7 @@
                         @foreach(Spatie\Permission\Models\Role::all() as $role)
                             <label class="inline-flex items-center">
                                 <input type="checkbox" name="roles[]" value="{{ $role->name }}"
-                                       class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                       class="rounded border-gray-300 text-blue-600 shadow-xs focus:border-blue-500 focus:ring-blue-500">
                                 <span class="ml-2 text-sm text-gray-700">{{ ucfirst($role->name) }}</span>
                             </label>
                         @endforeach

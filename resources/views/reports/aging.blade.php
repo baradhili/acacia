@@ -14,11 +14,11 @@
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">As at Date</label>
                 <input type="date" name="as_of_date" value="{{ $asOfDate->format('Y-m-d') }}"
-                    class="rounded-md border-gray-300 shadow-sm">
+                    class="rounded-md border-gray-300 shadow-xs">
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
-                <select name="type" class="rounded-md border-gray-300 shadow-sm">
+                <select name="type" class="rounded-md border-gray-300 shadow-xs">
                     <option value="ar" {{ $type == 'ar' ? 'selected' : '' }}>Accounts Receivable</option>
                     <option value="ap" {{ $type == 'ap' ? 'selected' : '' }}>Accounts Payable</option>
                 </select>

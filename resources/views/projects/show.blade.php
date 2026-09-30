@@ -125,14 +125,14 @@
             <h4 class="text-sm font-medium text-gray-700 mb-3">Assign Staff Member</h4>
             <form action="{{ route('projects.staff.assign', $project) }}" method="POST" class="flex gap-3">
                 @csrf
-                <select name="user_id" required class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <select name="user_id" required class="flex-1 rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                     <option value="">Select Staff Member</option>
                     @foreach(\App\Models\User::role(['staff', 'accountant', 'admin'])->get() as $user)
                         <option value="{{ $user->id }}">{{ $user->name }}</option>
                     @endforeach
                 </select>
                 <input type="number" name="hourly_rate" placeholder="Hourly Rate (optional)" step="0.01" min="0"
-                    class="w-40 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    class="w-40 rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                 <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg">
                     Assign
                 </button>

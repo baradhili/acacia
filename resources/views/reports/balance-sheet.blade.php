@@ -14,7 +14,7 @@
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">As at Date</label>
                 <input type="date" name="end_date" value="{{ $endDate->format('Y-m-d') }}"
-                    class="rounded-md border-gray-300 shadow-sm">
+                    class="rounded-md border-gray-300 shadow-xs">
             </div>
             <div class="flex items-end">
                 <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">

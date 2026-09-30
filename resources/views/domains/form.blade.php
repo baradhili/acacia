@@ -27,33 +27,33 @@
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1" for="name">Domain name *</label>
             <input id="name" name="name" type="text" required value="{{ old('name', $domain->name) }}" placeholder="example.com.au"
-                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1" for="registrar">Registrar</label>
             <input id="registrar" name="registrar" type="text" value="{{ old('registrar', $domain->registrar) }}"
-                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1" for="purchased_at">Purchased</label>
             <input id="purchased_at" name="purchased_at" type="date" value="{{ old('purchased_at', optional($domain->purchased_at)->format('Y-m-d')) }}"
-                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1" for="expiry_date">Renewal due</label>
             <input id="expiry_date" name="expiry_date" type="date" value="{{ old('expiry_date', optional($domain->expiry_date)->format('Y-m-d')) }}"
-                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1" for="cost">Capitalised cost (ex GST)</label>
             <input id="cost" name="cost" type="number" step="0.01" min="0" value="{{ old('cost', $domain->cost ?? 0) }}"
-                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1" for="useful_life_months">Useful life (months) — finite only</label>
             <input id="useful_life_months" name="useful_life_months" type="number" min="1"
                 value="{{ old('useful_life_months', $domain->useful_life_months) }}"
-                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
         </div>
         <div class="md:col-span-2">
             <label class="flex items-center">
@@ -67,7 +67,7 @@
         <div class="md:col-span-2">
             <label class="block text-sm font-medium text-gray-700 mb-1" for="notes">Notes</label>
             <textarea id="notes" name="notes" rows="2"
-                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">{{ old('notes', $domain->notes) }}</textarea>
+                class="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">{{ old('notes', $domain->notes) }}</textarea>
         </div>
 
         <div class="md:col-span-2 flex justify-end gap-2">

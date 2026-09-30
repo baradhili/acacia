@@ -14,16 +14,16 @@
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
                 <input type="date" name="start_date" value="{{ $startDate->format('Y-m-d') }}"
-                    class="rounded-md border-gray-300 shadow-sm">
+                    class="rounded-md border-gray-300 shadow-xs">
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
                 <input type="date" name="end_date" value="{{ $endDate->format('Y-m-d') }}"
-                    class="rounded-md border-gray-300 shadow-sm">
+                    class="rounded-md border-gray-300 shadow-xs">
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Client</label>
-                <select name="client_id" class="rounded-md border-gray-300 shadow-sm">
+                <select name="client_id" class="rounded-md border-gray-300 shadow-xs">
                     <option value="">All Clients</option>
                     @foreach($clients as $id => $name)
                         <option value="{{ $id }}" {{ $clientId == $id ? 'selected' : '' }}>{{ $name }}</option>
