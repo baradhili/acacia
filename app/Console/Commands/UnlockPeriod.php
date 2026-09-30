@@ -20,23 +20,26 @@ class UnlockPeriod extends Command
 
         $period = FiscalPeriod::find($periodId);
 
-        if (!$period) {
+        if (! $period) {
             $this->error("Period not found: {$periodId}");
+
             return Command::FAILURE;
         }
 
-        if (!$period->isLocked()) {
+        if (! $period->isLocked()) {
             $this->warn("Period '{$period->name}' is not locked.");
+
             return Command::SUCCESS;
         }
 
         $this->info("Period: {$period->name}");
-        $this->info("Locked by: {$period->lockedBy?->name ?? 'Unknown'}");
+        $this->info('Locked by: '.($period->lockedBy?->name ?? 'Unknown'));
         $this->info("Locked at: {$period->locked_at}");
         $this->info("Reason: {$period->lock_reason}");
 
-        if (!$force && !$this->confirm('Are you sure you want to unlock this period?')) {
+        if (! $force && ! $this->confirm('Are you sure you want to unlock this period?')) {
             $this->warn('Operation cancelled.');
+
             return Command::FAILURE;
         }
 
