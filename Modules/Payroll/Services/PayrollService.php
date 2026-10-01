@@ -48,13 +48,18 @@ class PayrollService
 
     /**
      * PAYG withholding for a gross amount in the pay frequency, per
-     * NAT 1004: convert to the weekly equivalent, y = ax - b rounded
-     * to the nearest dollar, then scale the result back to the period
-     * (rounded to the cent). A quarterly payment is a lump covering
-     * 13 weeks — the weekly equivalent divides by 13 and the result
-     * scales back, the ATO's treatment for a payment spanning several
-     * pay periods, so the lump withholds at the rate the underlying
-     * weekly income earns rather than as one period's salary.
+     * NAT 1004 Schedule 1: x is the weekly equivalent of the period's
+     * earnings with cents dropped and 99 cents added back (the ATO's
+     * construction — the coefficients are calibrated against it, and
+     * the "add 99 cents" is what keeps fractional weekly equivalents
+     * from under-withholding at rounding boundaries), y = ax - b
+     * rounded to the nearest dollar, then scaled back to the period —
+     * fortnightly/quarterly exactly (whole weekly dollars), monthly
+     * × 13 ÷ 3 rounded to the nearest dollar. The x construction was
+     * missing until an STP-certified app cross-check on a quarterly
+     * director payment caught it ($7,852 vs our $7,839 — one weekly
+     * unit). A payment covering a quarter spreads across its 13
+     * weeks: weekly equivalent ÷ 13, result × 13.
      */
     public function withholding(Employee $employee, float $gross, string $frequency): float
     {
@@ -62,22 +67,15 @@ class PayrollService
             return 0.0;
         }
 
-        // No TFN provided → the ATO flat rate.
+        // No TFN provided → the ATO flat rate. Scale 4 ignores cents
+        // on both sides: whole-dollar earnings, whole-dollar result.
         if (empty($employee->tfn)) {
-            return round($gross * (float) config('payroll.no_tfn_rate', 0.47), 2);
+            return (float) floor(floor($gross) * (float) config('payroll.no_tfn_rate', 0.47));
         }
 
         $scale = $employee->taxScale();
 
-        $weekly = match ($frequency) {
-            'weekly' => $gross,
-            'fortnightly' => $gross / 2,
-            'monthly' => $gross * 3 / 13,
-            'quarterly' => $gross / 13,
-            default => throw new \InvalidArgumentException("Unknown pay frequency {$frequency}."),
-        };
-
-        $y = $this->applyScale($scale, $weekly);
+        $y = $this->applyScale($scale, $this->weeklyEarnings($gross, $frequency));
         if ($y <= 0) {
             return 0.0;
         }
@@ -85,18 +83,39 @@ class PayrollService
         $perPeriod = match ($frequency) {
             'weekly' => $y,
             'fortnightly' => $y * 2,
-            'monthly' => $y * 13 / 3,
+            'monthly' => round($y * 13 / 3),
             'quarterly' => $y * 13,
         };
 
-        return round($perPeriod, 2);
+        return (float) $perPeriod;
     }
 
     /**
-     * y = ax - b (weekly earnings against the ATO coefficient bands),
-     * rounded to the nearest dollar.
+     * x for the formulas: the weekly equivalent of the period's
+     * earnings, cents ignored, plus 99 cents — NAT 1004's stated
+     * steps for weekly ("ignore cents, add 99 cents"), fortnightly
+     * (÷ 2), monthly (× 3 ÷ 13, with the quirk that an amount ending
+     * in exactly 33 cents gains a cent first) and quarterly (÷ 13).
      */
-    protected function applyScale(int $scale, float $weeklyEarnings): float
+    protected function weeklyEarnings(float $gross, string $frequency): float
+    {
+        $weekly = match ($frequency) {
+            'weekly' => $gross,
+            'fortnightly' => $gross / 2,
+            'monthly' => (((int) round($gross * 100)) % 100 === 33 ? $gross + 0.01 : $gross) * 3 / 13,
+            'quarterly' => $gross / 13,
+            default => throw new \InvalidArgumentException("Unknown pay frequency {$frequency}."),
+        };
+
+        return floor($weekly) + 0.99;
+    }
+
+    /**
+     * y = ax - b (x = whole dollars of the weekly equivalent + 99c,
+     * against the ATO coefficient bands), rounded to the nearest
+     * dollar.
+     */
+    protected function applyScale(int $scale, float $x): float
     {
         $bands = config("payroll.scale_{$scale}");
 
@@ -105,8 +124,8 @@ class PayrollService
         }
 
         foreach ($bands as [$lessThan, $a, $b]) {
-            if ($lessThan === null || $weeklyEarnings < $lessThan) {
-                return round($weeklyEarnings * $a - $b);
+            if ($lessThan === null || $x < $lessThan) {
+                return round($x * $a - $b);
             }
         }
 

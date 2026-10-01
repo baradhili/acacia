@@ -101,17 +101,19 @@ class PayrollTest extends TestCase
     {
         $jane = $this->employee();
 
-        // ATO Scale 2 worked examples (2026-27 coefficients): weekly
-        // $2,000 → $458 and monthly $8,666.67 → $1,984.67 come from
-        // the weekly-coefficient conversion NAT 1004 specifies (weekly
-        // $2,000, rounded, × 13 ÷ 3). Fortnightly figures below follow
-        // the same conversion — the ATO's fortnightly-specific
-        // coefficient table can differ by a dollar here and there.
-        $this->assertSame(458.0, $this->payroll->withholding($jane, 2000, 'weekly'));
+        // NAT 1004 Schedule 1 steps: x = whole dollars of the weekly
+        // equivalent + 99 cents (weekly $2,000 → x 2,000.99 → y 458.58
+        // → 459; fortnightly $3,100 → x 1,550.99 → 314.58 → 315 → 630;
+        // monthly $8,666.67 → ×3÷13 = 2,000.00 → x 2,000.99 → 459 →
+        // ×13÷3 rounded to the nearest dollar = 1,989). The x
+        // construction was added after an STP-certified app
+        // cross-check caught the raw-equivalent version under-
+        // withholding (see the quarterly test).
+        $this->assertSame(459.0, $this->payroll->withholding($jane, 2000, 'weekly'));
         $this->assertSame(138.0, $this->payroll->withholding($jane, 1000, 'weekly'));
-        $this->assertSame(628.0, $this->payroll->withholding($jane, 3100, 'fortnightly'));
-        $this->assertSame(164.0, $this->payroll->withholding($jane, 1600, 'fortnightly'));
-        $this->assertSame(1984.67, $this->payroll->withholding($jane, 8666.67, 'monthly'));
+        $this->assertSame(630.0, $this->payroll->withholding($jane, 3100, 'fortnightly'));
+        $this->assertSame(166.0, $this->payroll->withholding($jane, 1600, 'fortnightly'));
+        $this->assertSame(1989.0, $this->payroll->withholding($jane, 8666.67, 'monthly'));
 
         // Below the threshold band: nothing withheld.
         $this->assertSame(0.0, $this->payroll->withholding($jane, 300, 'weekly'));
@@ -121,7 +123,8 @@ class PayrollTest extends TestCase
     {
         $jane = $this->employee(['tax_free_threshold' => false]);
 
-        $this->assertSame(264.0, $this->payroll->withholding($jane, 1000, 'weekly'));
+        // x = 1,000.99 → 0.36x − 95.5254 = 264.83 → 265.
+        $this->assertSame(265.0, $this->payroll->withholding($jane, 1000, 'weekly'));
     }
 
     public function test_no_tfn_withholds_47_percent(): void
@@ -177,15 +180,20 @@ class PayrollTest extends TestCase
     {
         $jane = $this->employee();
 
-        // The NAT 1004 conversion applied to a payment covering a
-        // quarter: weekly equivalent (÷ 13), the scale applied to that
-        // weekly figure, the result scaled back (× 13). $26,000 →
-        // $2,000/week → $458 → $5,954; $13,000 → $1,000/week → $138 →
-        // $1,794; $4,680 → $360/week sits below the tax-free band →
-        // nothing withheld.
-        $this->assertSame(5954.0, $this->payroll->withholding($jane, 26000, 'quarterly'));
+        // NAT 1004's quarterly steps: ÷ 13, ignore cents, add 99
+        // cents, scale 2 on that x, × 13. $26,000 → x 2,000.99 → 459
+        // → $5,967; $13,000 → x 1,000.99 → 138 → $1,794; $4,680 →
+        // x 360.99 sits below the tax-free band → nothing withheld.
+        $this->assertSame(5967.0, $this->payroll->withholding($jane, 26000, 'quarterly'));
         $this->assertSame(1794.0, $this->payroll->withholding($jane, 13000, 'quarterly'));
         $this->assertSame(0.0, $this->payroll->withholding($jane, 4680, 'quarterly'));
+
+        // The case that caught the missing x construction: an
+        // STP-certified app withholds $7,852 on the same earnings —
+        // raw-equivalent maths gave $7,839 (y 603 vs 604; the 99c
+        // pushes x from 2,453.33 to 2,453.99 and y over the rounding
+        // boundary).
+        $this->assertSame(7852.0, $this->payroll->withholding($jane, 31893.34, 'quarterly'));
     }
 
     public function test_a_quarterly_director_run_apportions_salary_and_withholds_quarterly(): void
@@ -356,25 +364,25 @@ class PayrollTest extends TestCase
 
     public function test_processing_a_run_posts_the_three_journals(): void
     {
-        $jane = $this->employee(); // 76h × $50 = $3,800 gross, PAYG $856, super $456
+        $jane = $this->employee(); // 76h × $50 = $3,800 gross, PAYG $854, super $456
         $run = $this->runWithPayslip($jane);
 
         $this->payroll->process($run);
 
         $payslip = $run->payslips()->first();
         $this->assertEquals(3800.0, (float) $payslip->gross);
-        $this->assertEquals(852.0, (float) $payslip->payg_withheld);
+        $this->assertEquals(854.0, (float) $payslip->payg_withheld);
         $this->assertEquals(456.0, (float) $payslip->super);
-        $this->assertEquals(2948.0, (float) $payslip->net_pay);
+        $this->assertEquals(2946.0, (float) $payslip->net_pay);
 
         // Dr expenses, Cr liabilities and the bank; the wages-payable
         // accrual nets to zero once the net is paid.
         $this->assertEquals(3800.0, $this->balance(5100));
         $this->assertEquals(456.0, $this->balance(5150));
-        $this->assertEquals(-852.0, $this->balance(2210));
+        $this->assertEquals(-854.0, $this->balance(2210));
         $this->assertEquals(-456.0, $this->balance(2220));
         $this->assertEquals(0.0, $this->balance(2235));
-        $this->assertEquals(-2948.0, $this->balance(320));
+        $this->assertEquals(-2946.0, $this->balance(320));
 
         $this->assertTrue($run->refresh()->isProcessed());
         $this->assertNotNull($run->ifrs_transaction_id);

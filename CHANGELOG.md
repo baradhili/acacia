@@ -5,6 +5,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-01
 
+### Fixed — PAYG withholding now builds x the way NAT 1004 specifies
+
+Cross-checking a quarterly director payment against an STP-certified
+app caught it: on $31,893.34 quarterly earnings the app withheld
+$7,852 where Acacia computed $7,839 — exactly one weekly unit. The
+ATO's Schedule 1 formulas take x = the whole dollars of the weekly
+equivalent plus 99 cents ("ignore any cents in the result and then
+add 99 cents"), and the coefficients are calibrated against that
+construction; Acacia was feeding the raw weekly equivalent into
+y = ax − b, under-withholding whenever the dropped cents sat near a
+rounding boundary. The fix applies the construction at every
+frequency (weekly, fortnightly ÷2, monthly ×3÷13 — including the
+ATO's add-a-cent-when-the-sum-ends-in-33-cents quirk — and quarterly
+÷13), rounds the monthly back-conversion to the nearest dollar as
+the schedule prescribes (not to cents), and applies the no-TFN flat
+rate on whole-dollar earnings truncated to whole dollars (scale 4
+ignores cents on both sides). Known unmodelled, as before: Medicare
+levy adjustment variants, working-holiday-maker scale 15 and
+withholding-declaration tax offsets. Bret's quarterly payslip now
+computes PAYG $7,852.00 (net $24,041.34).
+
 ### Added — PSI-residual director payslips
 
 The conduit-company director flow, step 2: a payee on the new "PSI

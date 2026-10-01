@@ -117,7 +117,7 @@ class PayrollRunHttpTest extends TestCase
 
         // Processing posts the journals: Dr expenses, Cr liabilities and
         // the bank; the wages-payable accrual nets to zero once the net
-        // is paid (76h × $50 = $3,800 gross, PAYG $852, super $456).
+        // is paid (76h × $50 = $3,800 gross, PAYG $854, super $456).
         $this->actingAs($this->admin())
             ->post("/payroll/runs/{$run->id}/process")
             ->assertRedirect()
@@ -127,10 +127,10 @@ class PayrollRunHttpTest extends TestCase
         $this->assertNotNull($run->ifrs_transaction_id);
         $this->assertEquals(3800.0, $this->balance(5100));
         $this->assertEquals(456.0, $this->balance(5150));
-        $this->assertEquals(-852.0, $this->balance(2210));
+        $this->assertEquals(-854.0, $this->balance(2210));
         $this->assertEquals(-456.0, $this->balance(2220));
         $this->assertEquals(0.0, $this->balance(2235));
-        $this->assertEquals(-2948.0, $this->balance(320));
+        $this->assertEquals(-2946.0, $this->balance(320));
 
         // Reversing takes the run back to draft and the ledger to zero.
         $this->actingAs($this->admin())
