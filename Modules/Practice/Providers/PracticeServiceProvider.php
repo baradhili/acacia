@@ -11,7 +11,7 @@ use Modules\Practice\Widgets\UnbilledTimeWidget;
 /**
  * The Practice module's boot: routes, views and its contributions to
  * the shell — the Time & Projects group inside the core Reports
- * dropdown (positions 10-15, ahead of the IFRS statements) and the
+ * dropdown (positions 10-14, ahead of the IFRS statements) and the
  * hours/unbilled-time dashboard widgets.
  */
 class PracticeServiceProvider extends ServiceProvider
@@ -32,9 +32,8 @@ class PracticeServiceProvider extends ServiceProvider
         ]);
         $nav->addTopbarChild('Reports', $this->reportsLink('Time by Client', 'reports.time-by-client', 11));
         $nav->addTopbarChild('Reports', $this->reportsLink('Time by Staff', 'reports.time-by-staff', 12));
-        $nav->addTopbarChild('Reports', $this->reportsLink('Time by Project', 'reports.time-by-project', 13));
-        $nav->addTopbarChild('Reports', $this->reportsLink('Project Timesheet', 'reports.project-timesheet', 14));
-        $nav->addTopbarChild('Reports', $this->reportsLink('Project Profitability', 'projects.profitability', 15));
+        $nav->addTopbarChild('Reports', $this->reportsLink('Project Timesheet', 'reports.project-timesheet', 13));
+        $nav->addTopbarChild('Reports', $this->reportsLink('Project Profitability', 'projects.profitability', 14));
 
         // Positions 30/110 slot the widgets into their shipped places in
         // the default grid (CoreNav::widgets() leaves the gaps).

@@ -15,7 +15,6 @@ use Modules\Practice\Http\Controllers\TimeReportController;
 Route::middleware(['web', 'auth'])->group(function () {
     Route::get('/reports/time-by-client', [TimeReportController::class, 'timeByClient'])->name('reports.time-by-client');
     Route::get('/reports/time-by-staff', [TimeReportController::class, 'timeByStaff'])->name('reports.time-by-staff');
-    Route::get('/reports/time-by-project', [TimeReportController::class, 'timeByProject'])->name('reports.time-by-project');
     Route::get('/reports/project-timesheet', [TimeReportController::class, 'projectTimesheet'])->name('reports.project-timesheet');
 
     Route::get('/projects/{project}/profitability', [ProjectProfitabilityController::class, 'profitability'])->name('projects.profitability.show');

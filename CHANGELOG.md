@@ -3,6 +3,25 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] — 2026-10-01
+
+### Removed — Time by Project report, redundant with Project Timesheet
+
+The Practice module's Time by Project report (route
+`/reports/time-by-project`, its controller method, view and nav slot)
+is gone. Project Timesheet already answers the same question —
+approved hours and amounts per project over any date range,
+filterable to one project — and adds the week-by-week/month-by-month
+breakdown sums clients actually ask for plus a client filter, so the
+summary-only view added nothing. The billable/non-billable split and
+budget-utilisation percentage it displayed remain available on the
+staff/client reports and the project profitability view. Bookmarked
+`time-by-project` URLs now 404; nav positions closed up. Two tests
+that only asserted HTTP 200 against the route (one passed filter
+params the controller never read) were deleted; the date-range and
+totals tests were retargeted to Project Timesheet with real
+assertions.
+
 ## [Unreleased] — 2026-09-30
 
 ### Changed — class docblocks backfilled across the pre-convention core
