@@ -18,7 +18,7 @@ class PayRun extends Model
 
     public const STATUS_PROCESSED = 'processed';
 
-    public const FREQUENCIES = ['weekly', 'fortnightly', 'monthly'];
+    public const FREQUENCIES = ['weekly', 'fortnightly', 'monthly', 'quarterly'];
 
     protected $fillable = [
         'entity_id',

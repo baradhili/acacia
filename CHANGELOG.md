@@ -5,6 +5,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-01
 
+### Added — PSI-residual director payslips
+
+The conduit-company director flow, step 2: a payee on the new "PSI
+residual" payment basis draws, as their gross on a quarterly run,
+exactly what the PSI attribution says is still required — the
+entity's financial-year PSI income less wages already paid to PSI
+workers (the PSI screen's net PSI figure). The payslip is seeded
+when the run is created; PAYG withholding and super follow as on any
+director fee. Guarded, with the reason when refused: the run must be
+quarterly, PSI mode must be on (a passed Results Test means the
+rules — and any required amount — don't apply), exactly one such
+payee may be active (the remainder is entity-wide), and a zero
+remainder seeds nothing. An explicit gross always overrides the
+computation. Attribution's "wages paid" now counts processed runs
+only — a draft run has paid nobody, so the remainder shown on the
+PSI screen stays honest until a run processes (reversing the run
+puts the wages back). The PSI Assessment screen also joined the
+sidebar beside Payroll; it previously lived only under the topbar
+Setup dropdown.
+
+### Added — quarterly pay runs
+
+Pay runs can be recorded at a quarterly frequency — the cadence a PSI
+conduit company typically pays its director. The NAT 1004 withholding
+conversion spreads the quarter's lump across the 13 weeks it covers
+(weekly equivalent ÷ 13, scale applied to that weekly figure, result
+× 13), the ATO's treatment for a payment spanning several pay
+periods. Without it, a quarterly lump entered on the closest existing
+frequency (monthly) withheld as if the lump were a single month's
+salary — annualising the payee at four times their real income.
+Salary apportionment on quarterly runs divides the annual salary by
+4. Step 2 of this flow — auto-computing the director's payslip from
+the PSI attribution screen's net PSI — is queued in the todo list.
+
 ### Removed — Time by Project report, redundant with Project Timesheet
 
 The Practice module's Time by Project report (route

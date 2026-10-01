@@ -2,6 +2,7 @@
 
 namespace Modules\Payroll\Tests;
 
+use App\Models\Client;
 use App\Models\FiscalPeriod;
 use App\Models\User;
 use App\Services\IfrsPosting;
@@ -15,6 +16,7 @@ use Modules\Payroll\Models\Employee;
 use Modules\Payroll\Models\PayRun;
 use Modules\Payroll\Observers\UserObserver;
 use Modules\Payroll\Services\PayrollService;
+use Modules\Payroll\Services\PsiService;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -27,7 +29,7 @@ use Tests\TestCase;
  */
 class PayrollTest extends TestCase
 {
-    use RefreshDatabase;
+    use BuildsServiceWork, RefreshDatabase;
 
     protected Entity $entity;
 
@@ -169,6 +171,179 @@ class PayrollTest extends TestCase
         $this->assertEquals(600.0, (float) $payslip->super);
         $this->assertGreaterThan(0, (float) $payslip->payg_withheld);
         $this->assertEquals(round(5000 - (float) $payslip->payg_withheld, 2), (float) $payslip->net_pay);
+    }
+
+    public function test_quarterly_withholding_spreads_the_lump_across_its_thirteen_weeks(): void
+    {
+        $jane = $this->employee();
+
+        // The NAT 1004 conversion applied to a payment covering a
+        // quarter: weekly equivalent (÷ 13), the scale applied to that
+        // weekly figure, the result scaled back (× 13). $26,000 →
+        // $2,000/week → $458 → $5,954; $13,000 → $1,000/week → $138 →
+        // $1,794; $4,680 → $360/week sits below the tax-free band →
+        // nothing withheld.
+        $this->assertSame(5954.0, $this->payroll->withholding($jane, 26000, 'quarterly'));
+        $this->assertSame(1794.0, $this->payroll->withholding($jane, 13000, 'quarterly'));
+        $this->assertSame(0.0, $this->payroll->withholding($jane, 4680, 'quarterly'));
+    }
+
+    public function test_a_quarterly_director_run_apportions_salary_and_withholds_quarterly(): void
+    {
+        $director = $this->employee([
+            'employment_type' => Employee::TYPE_DIRECTOR,
+            'payment_basis' => Employee::BASIS_SALARY,
+            'annual_salary' => 60000,
+        ]);
+
+        $run = $this->payroll->createRun([
+            'frequency' => 'quarterly',
+            'period_start' => '2026-07-01',
+            'period_end' => '2026-09-30',
+            'payment_date' => '2026-09-30',
+        ]);
+
+        // Salary staff are seeded on run creation: a quarter of the
+        // annual salary, withholding spread across the 13 weeks the
+        // quarter covers ($15,000 ÷ 13 → $187/week → × 13), and SG at
+        // the 12% rate in force from 1 July 2026.
+        $payslip = $run->payslips()->first();
+        $this->assertEquals(15000.0, (float) $payslip->gross);
+        $this->assertEquals(2431.0, (float) $payslip->payg_withheld);
+        $this->assertEquals(1800.0, (float) $payslip->super);
+        $this->assertEquals(12569.0, (float) $payslip->net_pay);
+
+        $this->actingAs($this->admin())
+            ->get(route('payroll.runs.create'))
+            ->assertOk()
+            ->assertSee('Quarterly');
+    }
+
+    public function test_a_quarterly_run_seeds_a_psi_residual_director_with_the_attribution_remainder(): void
+    {
+        // Failing the Results Test locks PSI mode on — the gate the
+        // residual computation requires.
+        app(PsiService::class)->recordResultsTest($this->entity, [
+            'specific_result' => true, 'own_equipment' => true, 'liable_for_defects' => false,
+        ]);
+
+        $this->serviceInvoice(Client::factory()->create(['name' => 'Main Client']), 8500);
+        $this->serviceInvoice(Client::factory()->create(['name' => 'Other Client']), 1500);
+
+        $director = $this->employee([
+            'employment_type' => Employee::TYPE_DIRECTOR,
+            'payment_basis' => Employee::BASIS_PSI_RESIDUAL,
+            'is_personal_services' => true,
+        ]);
+
+        $q1 = $this->payroll->createRun([
+            'frequency' => 'quarterly',
+            'period_start' => '2026-07-01',
+            'period_end' => '2026-09-30',
+            'payment_date' => '2026-09-30',
+        ]);
+
+        // The FY's whole service income is still unattributed, so the
+        // director's seeded gross is the full remainder — withholding
+        // spread across the quarter's 13 weeks ($10,000 ÷ 13 →
+        // $77/week → × 13) and SG at the 12% rate in force.
+        $payslip = $q1->payslips()->first();
+        $this->assertEquals(10000.0, (float) $payslip->gross);
+        $this->assertEquals(1001.0, (float) $payslip->payg_withheld);
+        $this->assertEquals(1200.0, (float) $payslip->super);
+        $this->assertEquals(8999.0, (float) $payslip->net_pay);
+
+        // Processing pays the wages, so the attribution nets to zero —
+        // and the next quarterly run with no new income seeds nothing.
+        $this->payroll->process($q1);
+        $this->assertSame(0.0, app(PsiService::class)->attribution($this->entity)['net_psi']);
+
+        $q2 = $this->payroll->createRun([
+            'frequency' => 'quarterly',
+            'period_start' => '2026-10-01',
+            'period_end' => '2026-12-31',
+            'payment_date' => '2026-12-31',
+        ]);
+        $this->assertSame(0, $q2->payslips()->count());
+
+        // New service income in Q2 re-opens the remainder by exactly
+        // that amount for the next quarterly run.
+        $this->serviceInvoice(Client::factory()->create(['name' => 'Q2 Client']), 6000, '2026-11-10');
+
+        $q3 = $this->payroll->createRun([
+            'frequency' => 'quarterly',
+            'period_start' => '2026-10-01',
+            'period_end' => '2026-12-31',
+            'payment_date' => '2026-12-31',
+        ]);
+        $this->assertEquals(6000.0, (float) $q3->payslips()->first()->gross);
+    }
+
+    public function test_psi_residual_payslips_respect_the_gates(): void
+    {
+        $director = $this->employee([
+            'employment_type' => Employee::TYPE_DIRECTOR,
+            'payment_basis' => Employee::BASIS_PSI_RESIDUAL,
+            'is_personal_services' => true,
+        ]);
+
+        $quarterly = [
+            'frequency' => 'quarterly',
+            'period_start' => '2026-07-01',
+            'period_end' => '2026-09-30',
+            'payment_date' => '2026-09-30',
+        ];
+
+        // PSI mode never recorded: seeding skips, a computed payslip
+        // refuses — but an explicit gross still pays.
+        $run = $this->payroll->createRun($quarterly);
+        $this->assertSame(0, $run->payslips()->count());
+
+        try {
+            $this->payroll->addPayslip($run, $director);
+            $this->fail('A psi_residual payslip without PSI mode should refuse.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('PSI mode is off', $e->getMessage());
+        }
+
+        $this->payroll->addPayslip($run, $director, null, 5000.0);
+        $this->assertEquals(5000.0, (float) $run->payslips()->first()->gross);
+
+        // PSI mode on, but the run is monthly: computed refuses.
+        app(PsiService::class)->recordResultsTest($this->entity, ['liable_for_defects' => false]);
+
+        $monthly = $this->payroll->createRun([
+            'frequency' => 'monthly',
+            'period_start' => '2026-10-01',
+            'period_end' => '2026-10-31',
+            'payment_date' => '2026-10-31',
+        ]);
+
+        try {
+            $this->payroll->addPayslip($monthly, $director);
+            $this->fail('A psi_residual payslip off a quarterly run should refuse.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('quarterly runs', $e->getMessage());
+        }
+
+        // A second active psi_residual payee: the remainder is
+        // entity-wide, so neither is seeded and computing refuses.
+        $this->employee([
+            'name' => 'Second Director',
+            'employment_type' => Employee::TYPE_DIRECTOR,
+            'payment_basis' => Employee::BASIS_PSI_RESIDUAL,
+            'is_personal_services' => true,
+        ]);
+
+        $crowded = $this->payroll->createRun($quarterly);
+        $this->assertSame(0, $crowded->payslips()->count());
+
+        try {
+            $this->payroll->addPayslip($crowded, $director);
+            $this->fail('A psi_residual payslip with two active residual payees should refuse.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('More than one PSI-residual payee', $e->getMessage());
+        }
     }
 
     public function test_super_guarantee_rate_follows_the_pay_date(): void

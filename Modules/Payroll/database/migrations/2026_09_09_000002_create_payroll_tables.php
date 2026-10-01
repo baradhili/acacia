@@ -24,7 +24,7 @@ return new class extends Migration
             $table->string('tfn', 20)->nullable();
             $table->string('employment_type', 20)->default('employee'); // employee | director | contractor
             $table->boolean('labour_only')->default(false); // contractors: SG applies when wholly/principally for labour
-            $table->string('payment_basis', 20)->default('hourly'); // hourly | salary
+            $table->string('payment_basis', 20)->default('hourly'); // hourly | salary | psi_residual
             $table->decimal('hourly_rate', 10, 4)->nullable();
             $table->decimal('annual_salary', 12, 2)->nullable();
             $table->boolean('tax_free_threshold')->default(true);
@@ -50,7 +50,7 @@ return new class extends Migration
             $table->date('period_start');
             $table->date('period_end');
             $table->date('payment_date');
-            $table->string('frequency', 12)->default('fortnightly'); // weekly | fortnightly | monthly
+            $table->string('frequency', 12)->default('fortnightly'); // weekly | fortnightly | monthly | quarterly
             $table->string('status', 12)->default('draft'); // draft | processed
             // The three journals a processed run posts: wages accrual,
             // super accrual, and the net bank payment.

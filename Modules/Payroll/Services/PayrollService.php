@@ -2,12 +2,14 @@
 
 namespace Modules\Payroll\Services;
 
+use App\Models\EntitySetting;
 use App\Services\IfrsPosting;
 use App\Services\PeriodLockService;
 use Carbon\Carbon;
 use IFRS\Models\Account;
 use IFRS\Models\Entity;
 use IFRS\Models\LineItem;
+use IFRS\Models\ReportingPeriod;
 use IFRS\Transactions\JournalEntry;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -32,16 +34,27 @@ use Modules\Payroll\Models\Payslip;
  * flagged on the employee, snapshotted onto their payslips, and shown
  * on the run — contractors (typically PSI workers) withhold nothing
  * and draw no super.
+ *
+ * A psi_residual payee (the conduit-company director) draws the PSI
+ * attribution remainder as their gross on quarterly runs — see
+ * psiResidualGross() for the gates; an explicit gross always wins.
  */
 class PayrollService
 {
-    public function __construct(protected PeriodLockService $locks) {}
+    public function __construct(
+        protected PeriodLockService $locks,
+        protected PsiService $psi,
+    ) {}
 
     /**
      * PAYG withholding for a gross amount in the pay frequency, per
      * NAT 1004: convert to the weekly equivalent, y = ax - b rounded
      * to the nearest dollar, then scale the result back to the period
-     * (rounded to the cent).
+     * (rounded to the cent). A quarterly payment is a lump covering
+     * 13 weeks — the weekly equivalent divides by 13 and the result
+     * scales back, the ATO's treatment for a payment spanning several
+     * pay periods, so the lump withholds at the rate the underlying
+     * weekly income earns rather than as one period's salary.
      */
     public function withholding(Employee $employee, float $gross, string $frequency): float
     {
@@ -60,6 +73,7 @@ class PayrollService
             'weekly' => $gross,
             'fortnightly' => $gross / 2,
             'monthly' => $gross * 3 / 13,
+            'quarterly' => $gross / 13,
             default => throw new \InvalidArgumentException("Unknown pay frequency {$frequency}."),
         };
 
@@ -72,6 +86,7 @@ class PayrollService
             'weekly' => $y,
             'fortnightly' => $y * 2,
             'monthly' => $y * 13 / 3,
+            'quarterly' => $y * 13,
         };
 
         return round($perPeriod, 2);
@@ -143,15 +158,71 @@ class PayrollService
     }
 
     /**
-     * Compute (not persist) a payslip's figures for an employee.
+     * The gross a psi_residual payee draws on a run: the entity's PSI
+     * attribution remainder for the run's financial year — PSI income
+     * less wages already paid to PSI workers this FY (processed runs
+     * only, so the draft being built never nets itself out). Refused,
+     * with the reason, unless: the run is quarterly (the cadence the
+     * conduit-company flow assumes), PSI mode is on (a passed Results
+     * Test means the rules — and any required amount — don't apply),
+     * exactly one such payee is active (the remainder is entity-wide;
+     * two takers would each draw it in full), and the remainder is
+     * above zero. An explicit gross override skips all of this.
+     */
+    protected function psiResidualGross(Employee $employee, PayRun $run): float
+    {
+        if ($run->frequency !== 'quarterly') {
+            throw new \InvalidArgumentException(
+                'PSI-residual payslips belong on quarterly runs — pay this payee with an explicit gross instead.'
+            );
+        }
+
+        $entity = IfrsPosting::resolveEntity();
+
+        if (! EntitySetting::forEntity($entity)->psi_mode) {
+            throw new \InvalidArgumentException(
+                'PSI mode is off (the Results Test passes, or has not been recorded) — no attribution remainder is defined; pay an explicit gross.'
+            );
+        }
+
+        $residualPayees = Employee::where('entity_id', $run->entity_id)
+            ->where('status', Employee::STATUS_ACTIVE)
+            ->where('payment_basis', Employee::BASIS_PSI_RESIDUAL)
+            ->count();
+
+        if ($residualPayees > 1) {
+            throw new \InvalidArgumentException(
+                'More than one PSI-residual payee is active — the remainder is entity-wide; enter an explicit gross.'
+            );
+        }
+
+        $attribution = $this->psi->attribution($entity, ReportingPeriod::year($run->payment_date, $entity));
+        $residual = $attribution['net_psi'];
+
+        if ($residual <= 0) {
+            throw new \InvalidArgumentException(
+                'The PSI attribution remainder for this financial year is zero — nothing is required to pay.'
+            );
+        }
+
+        return round($residual, 2);
+    }
+
+    /**
+     * Compute (not persist) a payslip's figures for an employee:
+     * gross from the PSI attribution remainder (psi_residual payees),
+     * hours × rate, salary apportionment, or an explicit override —
+     * in that order of precedence.
      *
      * @return array{hours: ?float, gross: float, payg_withheld: float, super: float, net_pay: float}
      */
     public function computePayslip(Employee $employee, PayRun $run, ?float $hours = null, ?float $grossOverride = null): array
     {
-        $gross = $grossOverride ?? ($hours !== null && $employee->hourly_rate !== null
-            ? round($hours * (float) $employee->hourly_rate, 2)
-            : $this->defaultGross($employee, $run->frequency));
+        $gross = $grossOverride ?? match (true) {
+            $employee->payment_basis === Employee::BASIS_PSI_RESIDUAL => $this->psiResidualGross($employee, $run),
+            $hours !== null && $employee->hourly_rate !== null => round($hours * (float) $employee->hourly_rate, 2),
+            default => $this->defaultGross($employee, $run->frequency),
+        };
 
         if ($gross === null || $gross <= 0) {
             throw new \InvalidArgumentException(
@@ -184,8 +255,10 @@ class PayrollService
             ]);
 
             // Seed a payslip for every active employee whose defaults
-            // can be computed (salary staff); hourly staff get theirs
-            // as hours are entered.
+            // can be computed — salary staff anywhere, a psi_residual
+            // director on a quarterly run; hourly staff get theirs as
+            // hours are entered, and gated payees are skipped until
+            // the gate opens.
             foreach (Employee::where('entity_id', $run->entity_id)->where('status', Employee::STATUS_ACTIVE)->get() as $employee) {
                 try {
                     $this->addPayslip($run, $employee);

@@ -85,7 +85,7 @@ class PayrollEmployeeController extends Controller
             'tfn' => ['nullable', new AuNumber('tfn')],
             'employment_type' => ['required', 'in:employee,director,contractor'],
             'labour_only' => ['boolean'],
-            'payment_basis' => ['required', 'in:hourly,salary'],
+            'payment_basis' => ['required', 'in:hourly,salary,psi_residual'],
             'hourly_rate' => ['nullable', 'numeric', 'min:0'],
             'annual_salary' => ['nullable', 'numeric', 'min:0'],
             'tax_free_threshold' => ['boolean'],

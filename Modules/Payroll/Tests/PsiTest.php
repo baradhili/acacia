@@ -5,7 +5,6 @@ namespace Modules\Payroll\Tests;
 use App\Models\Client;
 use App\Models\EntitySetting;
 use App\Models\Invoice;
-use App\Models\TimeEntry;
 use App\Models\User;
 use App\Services\IfrsPosting;
 use Carbon\Carbon;
@@ -26,7 +25,7 @@ use Tests\TestCase;
  */
 class PsiTest extends TestCase
 {
-    use RefreshDatabase;
+    use BuildsServiceWork, RefreshDatabase;
 
     protected Entity $entity;
 
@@ -58,48 +57,6 @@ class PsiTest extends TestCase
     protected function admin(): User
     {
         return tap(User::factory()->create(['entity_id' => $this->entity->id]))->assignRole('admin');
-    }
-
-    /** A time-entry-backed invoice: service work by construction. */
-    protected function serviceInvoice(Client $client, float $subtotal, string $date = '2026-08-15'): Invoice
-    {
-        $entry = new TimeEntry;
-        $entry->fill([
-            'entry_date' => $date,
-            'hours' => 10,
-            'rate' => $subtotal / 10,
-            'billable' => true,
-            'description' => 'Consulting',
-            'status' => 'approved',
-        ]);
-        $entry->user_id = User::factory()->create()->id;
-        $entry->client_id = $client->id;
-        $entry->save();
-
-        $invoice = new Invoice;
-        $invoice->fill([
-            'invoice_number' => 'INV-'.uniqid(),
-            'status' => Invoice::STATUS_SENT,
-            'issue_date' => $date,
-            'subtotal' => $subtotal,
-            'tax_amount' => 0,
-            'total' => $subtotal,
-        ]);
-        $invoice->client_id = $client->id;
-        $invoice->save();
-
-        $item = $invoice->items()->make([
-            'description' => 'Consulting',
-            'quantity' => 10,
-            'unit_price' => $subtotal / 10,
-            'tax_rate' => 0,
-            'tax_amount' => 0,
-            'total' => $subtotal,
-        ]);
-        $item->time_entry_id = $entry->id;
-        $item->save();
-
-        return $invoice;
     }
 
     public function test_the_80_rule_tracks_service_work_income_by_client(): void
@@ -180,16 +137,25 @@ class PsiTest extends TestCase
             'is_personal_services' => true,
         ]);
 
-        $run = app(PayrollService::class)->createRun([
+        $payroll = app(PayrollService::class);
+        $run = $payroll->createRun([
             'frequency' => 'monthly',
             'period_start' => '2026-08-01',
             'period_end' => '2026-08-31',
             'payment_date' => '2026-08-31',
         ]);
-        app(PayrollService::class)->addPayslip($run, $worker);
+        $payroll->addPayslip($run, $worker);
+
+        // A draft run has paid nobody: the full income stays
+        // attributable until processing posts the payment.
+        $draft = $this->psi->attribution($this->entity);
+        $this->assertEquals(10000.0, $draft['psi_income']);
+        $this->assertEquals(0.0, $draft['wages_paid']);
+        $this->assertEquals(10000.0, $draft['net_psi']);
+
+        $payroll->process($run);
 
         $attribution = $this->psi->attribution($this->entity);
-
         $this->assertEquals(10000.0, $attribution['psi_income']);
         $this->assertEquals(10000.0, $attribution['wages_paid']);
         $this->assertEquals(0.0, $attribution['net_psi']);

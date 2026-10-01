@@ -9,6 +9,7 @@ use App\Services\FiscalYearService;
 use Carbon\Carbon;
 use IFRS\Models\Entity;
 use IFRS\Models\ReportingPeriod;
+use Modules\Payroll\Models\PayRun;
 use Modules\Payroll\Models\Payslip;
 
 /**
@@ -77,7 +78,10 @@ class PsiService
      * The PSI attribution flow (module E): PSI received less salary
      * and wages promptly paid to the individuals who performed the
      * work — the remainder is attributed to the individual's personal
-     * return; the company is a conduit for it.
+     * return; the company is a conduit for it. "Paid" means processed
+     * runs only: a draft run has paid nobody yet, so it leaves the
+     * remainder intact until processing (and reversal puts the wages
+     * back, restoring the remainder).
      *
      * @return array{psi_income: float, wages_paid: float, net_psi: float}
      */
@@ -90,7 +94,8 @@ class PsiService
 
         $wages = round((float) Payslip::query()
             ->whereHas('payRun', fn ($q) => $q->where('entity_id', $entity->id)
-                ->whereBetween('payment_date', [$start->toDateString(), $end->toDateString()]))
+                ->whereBetween('payment_date', [$start->toDateString(), $end->toDateString()])
+                ->where('status', PayRun::STATUS_PROCESSED))
             ->whereHas('employee', fn ($q) => $q->where('is_personal_services', true))
             ->sum('gross'), 2);
 
