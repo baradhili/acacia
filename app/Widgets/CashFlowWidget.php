@@ -33,8 +33,12 @@ class CashFlowWidget extends AbstractWidget
     public function run()
     {
         $today = Carbon::now();
-        $thirtyDaysAgo = $today->copy()->subDays(30);
-        $sixtyDaysAgo = $today->copy()->subDays(60);
+        // Whole calendar days: payment dates carry no time, so a
+        // boundary carrying one would shuffle the boundary day's
+        // payments between windows by time-of-day. The lower
+        // boundary day belongs to the current period.
+        $thirtyDaysAgo = $today->copy()->subDays(30)->startOfDay();
+        $sixtyDaysAgo = $today->copy()->subDays(60)->startOfDay();
 
         $inflows = Payment::where('status', Payment::STATUS_COMPLETED)
             ->where('payment_date', '>=', $thirtyDaysAgo)

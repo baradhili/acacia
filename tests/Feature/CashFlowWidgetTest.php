@@ -80,6 +80,19 @@ class CashFlowWidgetTest extends TestCase
             'status' => BillPayment::STATUS_COMPLETED,
         ]);
 
+        // A payment on the window's lower boundary day: the boundary
+        // is a whole calendar day and belongs to the current period
+        // (a time-carrying boundary would drop it — payment dates
+        // have no time and lose the 09:00 comparison).
+        BillPayment::createWithUniqueNumber([
+            'supplier_id' => $supplier->id,
+            'paid_by' => $user->id,
+            'amount' => 75.00,
+            'payment_date' => '2026-09-01',
+            'payment_method' => BillPayment::METHOD_BANK_TRANSFER,
+            'status' => BillPayment::STATUS_COMPLETED,
+        ]);
+
         // Employee capture: credits the payable, never the bank —
         // excluded, or the same expense would count again at its
         // reimbursement.
@@ -138,8 +151,8 @@ class CashFlowWidgetTest extends TestCase
         $data = $this->widgetData();
 
         $this->assertEquals(0.0, (float) $data['inflows']);
-        $this->assertEquals(3540.43, (float) $data['outflows']);
-        $this->assertEquals(-3540.43, (float) $data['net_flow']);
+        $this->assertEquals(3615.43, (float) $data['outflows']);
+        $this->assertEquals(-3615.43, (float) $data['net_flow']);
         $this->assertSame(0.0, $data['change_percent']); // empty prior period
     }
 }
