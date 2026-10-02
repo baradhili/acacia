@@ -12,7 +12,7 @@ class RoleSeeder extends Seeder
         // Create roles matching the README specification
         $roles = [
             'admin',
-            'accountant', 
+            'accountant',
             'staff',
             'client',
         ];

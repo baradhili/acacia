@@ -224,6 +224,10 @@ class IFRSSeeder extends Seeder
         // Non-Operating Revenue (Codes 4500-4999)
         $this->createAccount('Interest Income', Account::NON_OPERATING_REVENUE, 4510, $entity);
         $this->createAccount('Other Income', Account::NON_OPERATING_REVENUE, 4520, $entity);
+        // Whole-dollar BAS settlements clear the tax accounts at their
+        // exact ledger balances; the sub-$2 rounding difference lands
+        // here (owed-to rounds down, owed-by rounds up).
+        $this->createAccount('GST Rounding', Account::NON_OPERATING_REVENUE, 4530, $entity);
 
         // ============================================
         // EXPENSE ACCOUNTS (Codes 5000-8999)

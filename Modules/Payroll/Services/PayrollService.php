@@ -2,12 +2,15 @@
 
 namespace Modules\Payroll\Services;
 
+use App\Models\EntitySetting;
+use App\Services\FiscalYearService;
 use App\Services\IfrsPosting;
 use App\Services\PeriodLockService;
 use Carbon\Carbon;
 use IFRS\Models\Account;
 use IFRS\Models\Entity;
 use IFRS\Models\LineItem;
+use IFRS\Models\ReportingPeriod;
 use IFRS\Transactions\JournalEntry;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -32,16 +35,34 @@ use Modules\Payroll\Models\Payslip;
  * flagged on the employee, snapshotted onto their payslips, and shown
  * on the run — contractors (typically PSI workers) withhold nothing
  * and draw no super.
+ *
+ * A psi_residual payee (the conduit-company director) draws the PSI
+ * attribution remainder as their gross on quarterly runs — see
+ * psiResidualGross() for the gates; an explicit gross always wins at
+ * entry, though processing still refuses a psi_residual payslip
+ * above the remaining requirement.
  */
 class PayrollService
 {
-    public function __construct(protected PeriodLockService $locks) {}
+    public function __construct(
+        protected PeriodLockService $locks,
+        protected PsiService $psi,
+    ) {}
 
     /**
      * PAYG withholding for a gross amount in the pay frequency, per
-     * NAT 1004: convert to the weekly equivalent, y = ax - b rounded
-     * to the nearest dollar, then scale the result back to the period
-     * (rounded to the cent).
+     * NAT 1004 Schedule 1: x is the weekly equivalent of the period's
+     * earnings with cents dropped and 99 cents added back (the ATO's
+     * construction — the coefficients are calibrated against it, and
+     * the "add 99 cents" is what keeps fractional weekly equivalents
+     * from under-withholding at rounding boundaries), y = ax - b
+     * rounded to the nearest dollar, then scaled back to the period —
+     * fortnightly/quarterly exactly (whole weekly dollars), monthly
+     * × 13 ÷ 3 rounded to the nearest dollar. The x construction was
+     * missing until an STP-certified app cross-check on a quarterly
+     * director payment caught it ($7,852 vs our $7,839 — one weekly
+     * unit). A payment covering a quarter spreads across its 13
+     * weeks: weekly equivalent ÷ 13, result × 13.
      */
     public function withholding(Employee $employee, float $gross, string $frequency): float
     {
@@ -49,21 +70,15 @@ class PayrollService
             return 0.0;
         }
 
-        // No TFN provided → the ATO flat rate.
+        // No TFN provided → the ATO flat rate. Scale 4 ignores cents
+        // on both sides: whole-dollar earnings, whole-dollar result.
         if (empty($employee->tfn)) {
-            return round($gross * (float) config('payroll.no_tfn_rate', 0.47), 2);
+            return (float) floor(floor($gross) * (float) config('payroll.no_tfn_rate', 0.47));
         }
 
         $scale = $employee->taxScale();
 
-        $weekly = match ($frequency) {
-            'weekly' => $gross,
-            'fortnightly' => $gross / 2,
-            'monthly' => $gross * 3 / 13,
-            default => throw new \InvalidArgumentException("Unknown pay frequency {$frequency}."),
-        };
-
-        $y = $this->applyScale($scale, $weekly);
+        $y = $this->applyScale($scale, $this->weeklyEarnings($gross, $frequency));
         if ($y <= 0) {
             return 0.0;
         }
@@ -71,17 +86,39 @@ class PayrollService
         $perPeriod = match ($frequency) {
             'weekly' => $y,
             'fortnightly' => $y * 2,
-            'monthly' => $y * 13 / 3,
+            'monthly' => round($y * 13 / 3),
+            'quarterly' => $y * 13,
         };
 
-        return round($perPeriod, 2);
+        return (float) $perPeriod;
     }
 
     /**
-     * y = ax - b (weekly earnings against the ATO coefficient bands),
-     * rounded to the nearest dollar.
+     * x for the formulas: the weekly equivalent of the period's
+     * earnings, cents ignored, plus 99 cents — NAT 1004's stated
+     * steps for weekly ("ignore cents, add 99 cents"), fortnightly
+     * (÷ 2), monthly (× 3 ÷ 13, with the quirk that an amount ending
+     * in exactly 33 cents gains a cent first) and quarterly (÷ 13).
      */
-    protected function applyScale(int $scale, float $weeklyEarnings): float
+    protected function weeklyEarnings(float $gross, string $frequency): float
+    {
+        $weekly = match ($frequency) {
+            'weekly' => $gross,
+            'fortnightly' => $gross / 2,
+            'monthly' => (((int) round($gross * 100)) % 100 === 33 ? $gross + 0.01 : $gross) * 3 / 13,
+            'quarterly' => $gross / 13,
+            default => throw new \InvalidArgumentException("Unknown pay frequency {$frequency}."),
+        };
+
+        return floor($weekly) + 0.99;
+    }
+
+    /**
+     * y = ax - b (x = whole dollars of the weekly equivalent + 99c,
+     * against the ATO coefficient bands), rounded to the nearest
+     * dollar.
+     */
+    protected function applyScale(int $scale, float $x): float
     {
         $bands = config("payroll.scale_{$scale}");
 
@@ -90,8 +127,8 @@ class PayrollService
         }
 
         foreach ($bands as [$lessThan, $a, $b]) {
-            if ($lessThan === null || $weeklyEarnings < $lessThan) {
-                return round($weeklyEarnings * $a - $b);
+            if ($lessThan === null || $x < $lessThan) {
+                return round($x * $a - $b);
             }
         }
 
@@ -143,15 +180,137 @@ class PayrollService
     }
 
     /**
-     * Compute (not persist) a payslip's figures for an employee.
+     * The gross a psi_residual payee draws on a run: the entity's PSI
+     * attribution remainder for the run's financial year — PSI income
+     * less wages already paid to PSI workers this FY (processed runs
+     * only, so the draft being built never nets itself out), less
+     * PSI-residual payslips already seeded on other DRAFT runs for
+     * the same entity and FY — the reservation that keeps two
+     * concurrent quarterly drafts from each seeding the full
+     * remainder and overpaying when both process. Ordinary draft
+     * wages reserve nothing: they are not PSI payments and a draft
+     * may never be processed. Refused, with the reason, unless: the
+     * run is quarterly (the cadence the conduit-company flow
+     * assumes), PSI mode is on (a passed Results Test means the
+     * rules — and any required amount — don't apply), exactly one
+     * such payee is active (the remainder is entity-wide; two takers
+     * would each draw it in full), and the remainder is above zero.
+     * An explicit gross override skips all of this.
+     */
+    protected function psiResidualGross(Employee $employee, PayRun $run): float
+    {
+        if ($run->frequency !== 'quarterly') {
+            throw new \InvalidArgumentException(
+                'PSI-residual payslips belong on quarterly runs — pay this payee with an explicit gross instead.'
+            );
+        }
+
+        $entity = IfrsPosting::resolveEntity();
+
+        if (! EntitySetting::forEntity($entity)->psi_mode) {
+            throw new \InvalidArgumentException(
+                'PSI mode is off (the Results Test passes, or has not been recorded) — no attribution remainder is defined; pay an explicit gross.'
+            );
+        }
+
+        $residualPayees = Employee::where('entity_id', $run->entity_id)
+            ->where('status', Employee::STATUS_ACTIVE)
+            ->where('payment_basis', Employee::BASIS_PSI_RESIDUAL)
+            ->count();
+
+        if ($residualPayees > 1) {
+            throw new \InvalidArgumentException(
+                'More than one PSI-residual payee is active — the remainder is entity-wide; enter an explicit gross.'
+            );
+        }
+
+        $residual = $this->psiRemainderExcludingRun($run, $entity);
+
+        if ($residual <= 0) {
+            throw new \InvalidArgumentException(
+                'The PSI attribution remainder for this financial year is zero (or already reserved by another draft run) — nothing is required to pay.'
+            );
+        }
+
+        return $residual;
+    }
+
+    /**
+     * The numeric remainder behind psiResidualGross(): attribution
+     * net PSI for the run's FY, less PSI-residual payslips seeded on
+     * other draft runs for the same entity and FY. Callers that act
+     * on the result (createRun's seeding, process()'s staleness
+     * check) hold the entity-row lock so concurrent runs serialise
+     * instead of both reading the same reservation state.
+     */
+    protected function psiRemainderExcludingRun(PayRun $run, Entity $entity): float
+    {
+        $fy = ReportingPeriod::year($run->payment_date, $entity);
+        $attribution = $this->psi->attribution($entity, $fy);
+        ['start' => $start, 'end' => $end] = (new FiscalYearService)->bounds($entity, $fy);
+
+        $reserved = (float) Payslip::query()
+            ->whereHas('payRun', fn ($q) => $q->where('entity_id', $run->entity_id)
+                ->where('status', PayRun::STATUS_DRAFT)
+                ->where('id', '!=', $run->id)
+                ->whereBetween('payment_date', [$start->toDateString(), $end->toDateString()]))
+            ->whereHas('employee', fn ($q) => $q->where('payment_basis', Employee::BASIS_PSI_RESIDUAL))
+            ->sum('gross');
+
+        return round($attribution['net_psi'] - $reserved, 2);
+    }
+
+    /**
+     * Processing guard: a psi_residual payslip was computed when it
+     * was seeded and the requirement may have moved since. Under the
+     * entity lock (the one createRun's seeding holds), re-derive
+     * today's remainder and refuse the run when its PSI-residual
+     * payslips' COMBINED gross exceeds it — checked per run, not per
+     * payslip, so two partial payslips can't each slip under the cap.
+     * Reverse the run to draft and re-add the payslips to refresh.
+     * Applies to explicit overrides as well: this basis pays what PSI
+     * requires and no more, and posting is where that invariant is
+     * enforced.
+     */
+    protected function assertPsiResidualsWithinRemainder(PayRun $run, Entity $entity): void
+    {
+        $psiPayslips = $run->payslips()
+            ->whereHas('employee', fn ($q) => $q->where('payment_basis', Employee::BASIS_PSI_RESIDUAL))
+            ->get();
+
+        if ($psiPayslips->isEmpty()) {
+            return;
+        }
+
+        DB::table('ifrs_entities')->where('id', $run->entity_id)->lockForUpdate()->first();
+
+        $available = $this->psiRemainderExcludingRun($run, $entity);
+        $psiGross = round((float) $psiPayslips->sum('gross'), 2);
+
+        if ($psiGross > $available + 0.005) {
+            throw new \InvalidArgumentException(sprintf(
+                'The run\'s PSI-residual payslips ($%s combined) exceed the remaining PSI requirement ($%s) — reverse the run to draft and re-add the payslip to refresh the amount.',
+                number_format($psiGross, 2),
+                number_format($available, 2),
+            ));
+        }
+    }
+
+    /**
+     * Compute (not persist) a payslip's figures for an employee:
+     * gross from the PSI attribution remainder (psi_residual payees),
+     * hours × rate, salary apportionment, or an explicit override —
+     * in that order of precedence.
      *
      * @return array{hours: ?float, gross: float, payg_withheld: float, super: float, net_pay: float}
      */
     public function computePayslip(Employee $employee, PayRun $run, ?float $hours = null, ?float $grossOverride = null): array
     {
-        $gross = $grossOverride ?? ($hours !== null && $employee->hourly_rate !== null
-            ? round($hours * (float) $employee->hourly_rate, 2)
-            : $this->defaultGross($employee, $run->frequency));
+        $gross = $grossOverride ?? match (true) {
+            $employee->payment_basis === Employee::BASIS_PSI_RESIDUAL => $this->psiResidualGross($employee, $run),
+            $hours !== null && $employee->hourly_rate !== null => round($hours * (float) $employee->hourly_rate, 2),
+            default => $this->defaultGross($employee, $run->frequency),
+        };
 
         if ($gross === null || $gross <= 0) {
             throw new \InvalidArgumentException(
@@ -183,9 +342,18 @@ class PayrollService
                 'notes' => $data['notes'] ?? null,
             ]);
 
+            // Serialise PSI-residual seeding on the entity row — the
+            // same lock process() takes for its staleness check.
+            // Without it, two concurrent runs read the same
+            // reservation state before either payslip lands and both
+            // seed the full remainder.
+            DB::table('ifrs_entities')->where('id', $run->entity_id)->lockForUpdate()->first();
+
             // Seed a payslip for every active employee whose defaults
-            // can be computed (salary staff); hourly staff get theirs
-            // as hours are entered.
+            // can be computed — salary staff anywhere, a psi_residual
+            // director on a quarterly run; hourly staff get theirs as
+            // hours are entered, and gated payees are skipped until
+            // the gate opens.
             foreach (Employee::where('entity_id', $run->entity_id)->where('status', Employee::STATUS_ACTIVE)->get() as $employee) {
                 try {
                     $this->addPayslip($run, $employee);
@@ -243,6 +411,13 @@ class PayrollService
         $net = round($gross - $payg, 2);
 
         return DB::transaction(function () use ($run, $entity, $gross, $payg, $super, $net) {
+            // A psi_residual payslip was computed when it was seeded;
+            // the requirement may have moved since (another run
+            // processed, a run reversed, an invoice cancelled). Under
+            // the same entity lock as seeding, refuse one that now
+            // exceeds the remainder.
+            $this->assertPsiResidualsWithinRemainder($run, $entity);
+
             $wages = $this->account($entity, 'wages_expense');
             $superExpense = $this->accountOrCreate($entity, 'super_expense', Account::OPERATING_EXPENSE, 'Superannuation Expense');
             $paygAccount = $this->account($entity, 'payg_withholding');

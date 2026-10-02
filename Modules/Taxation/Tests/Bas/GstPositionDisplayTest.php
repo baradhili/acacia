@@ -66,8 +66,17 @@ class GstPositionDisplayTest extends TestCase
             ->get('/reports/gst')
             ->assertOk()
             ->assertSee('Unlodged GST position')
-            ->assertSee('$1,000.00', false)
-            ->assertSee('$400.00', false)
+            // Whole dollars, no symbol or separator — the figures
+            // paste straight into the ATO BAS labels.
+            ->assertSee('>1000<', false)
+            ->assertSee('>400<', false)
+            ->assertDontSee('$1,000', false)
+            ->assertDontSee('$400', false)
+            // The BAS labels the amounts paste into — the GST rows are
+            // 1A/1B (G1 is total sales, which the receipts row carries).
+            ->assertSee('GST on sales (1A)')
+            ->assertSee('GST on purchases (1B)')
+            ->assertSee('(G1)')
             ->assertSee('Net payable to the ATO');
     }
 

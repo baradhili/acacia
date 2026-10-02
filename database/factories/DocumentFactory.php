@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Document>
+ * @extends Factory<Document>
  */
 class DocumentFactory extends Factory
 {
@@ -19,9 +19,9 @@ class DocumentFactory extends Factory
      */
     public function definition(): array
     {
-        $name = $this->faker->word . '.pdf';
-        $path = 'uploads/' . $this->faker->date('Y/m') . '/' . Str::random(10) . '.pdf';
-        
+        $name = $this->faker->word.'.pdf';
+        $path = 'uploads/'.$this->faker->date('Y/m').'/'.Str::random(10).'.pdf';
+
         return [
             'documentable_type' => 'App\Models\Bill',
             'documentable_id' => $this->faker->numberBetween(1, 10),
@@ -36,7 +36,7 @@ class DocumentFactory extends Factory
     /**
      * Indicate the document is for an invoice.
      */
-    public function forInvoice(int $invoiceId = null): static
+    public function forInvoice(?int $invoiceId = null): static
     {
         return $this->state(fn (array $attributes) => [
             'documentable_type' => 'App\Models\Invoice',
@@ -47,7 +47,7 @@ class DocumentFactory extends Factory
     /**
      * Indicate the document is for a bill.
      */
-    public function forBill(int $billId = null): static
+    public function forBill(?int $billId = null): static
     {
         return $this->state(fn (array $attributes) => [
             'documentable_type' => 'App\Models\Bill',
@@ -58,7 +58,7 @@ class DocumentFactory extends Factory
     /**
      * Indicate the document is for an estimate.
      */
-    public function forEstimate(int $estimateId = null): static
+    public function forEstimate(?int $estimateId = null): static
     {
         return $this->state(fn (array $attributes) => [
             'documentable_type' => 'App\Models\Estimate',
@@ -72,7 +72,7 @@ class DocumentFactory extends Factory
     public function ofType(string $mimeType, string $extension): static
     {
         return $this->state(fn (array $attributes) => [
-            'name' => $this->faker->word . '.' . $extension,
+            'name' => $this->faker->word.'.'.$extension,
             'mime_type' => $mimeType,
         ]);
     }

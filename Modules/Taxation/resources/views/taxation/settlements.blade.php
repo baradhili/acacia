@@ -70,12 +70,13 @@
                     @php($position = $positions[$type])
                     <tr>
                         <td class="py-2 pr-4 font-medium text-gray-700">{{ \Modules\Taxation\Models\BasSettlement::typeLabel($type) }}</td>
-                        <td class="py-2 pr-4 text-right">${{ number_format($position['payable'], 2) }}</td>
-                        <td class="py-2 pr-4 text-right">${{ number_format($position['receivable'], 2) }}</td>
-                        <td class="py-2 text-right font-bold {{ $position['net'] >= 0 ? 'text-red-700' : 'text-green-700' }}">
-                            ${{ number_format(abs($position['net']), 2) }}
+                        @php($wholeNet = floor($position['payable']) - ceil($position['receivable']))
+                        <td class="py-2 pr-4 text-right">{{ floor($position['payable']) }}</td>
+                        <td class="py-2 pr-4 text-right">{{ ceil($position['receivable']) }}</td>
+                        <td class="py-2 text-right font-bold {{ $wholeNet >= 0 ? 'text-red-700' : 'text-green-700' }}">
+                            {{ abs($wholeNet) }}
                             <span class="text-xs font-medium">
-                                {{ $position['net'] > 0 ? 'payable to ATO' : ($position['net'] < 0 ? 'refundable from ATO' : '— nothing to settle') }}
+                                {{ $wholeNet > 0 ? 'payable to ATO' : ($wholeNet < 0 ? 'refundable from ATO' : '— nothing to settle') }}
                             </span>
                         </td>
                     </tr>
@@ -86,7 +87,7 @@
         @if ($priorGstCarry ?? null)
             <div class="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
                 <strong>Rolls in FY{{ $priorGstCarry['fy_end'] }}:</strong>
-                ${{ number_format(abs($priorGstCarry['net']), 2) }}
+                {{ (int) abs($priorGstCarry['net']) }}
                 {{ $priorGstCarry['net'] >= 0 ? 'payable' : 'refundable' }} carried from the prior
                 financial year sits inside this GST position — recording a settlement now rolls it
                 in with the current year's quarters in one ATO payment, no separate settlement needed.

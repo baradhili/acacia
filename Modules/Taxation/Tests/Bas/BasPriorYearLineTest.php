@@ -172,7 +172,7 @@ class BasPriorYearLineTest extends TestCase
             ->get('/bas-settlements?as_at=2026-09-30')
             ->assertOk()
             ->assertSee('Rolls in FY2026', false)
-            ->assertSee('1,000.00', false);
+            ->assertSee('>1000<', false);
 
         // Once the Q1 settlement lands, the carry note steps aside —
         // the position card alone shows what remains.

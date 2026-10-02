@@ -25,6 +25,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * payment is for the personal exertion of an individual (their
  * payslips are flagged through to the pay run for the entity's PSI
  * assessment).
+ *
+ * The psi_residual basis is the conduit-company director's: their
+ * quarterly gross is whatever the PSI attribution says is still
+ * required (entity PSI income less wages already paid to PSI workers
+ * this FY), computed by PayrollService when the run is built — the
+ * single-director Pty Ltd paying themselves what the ATO rules
+ * require and nothing more. An explicit gross override always wins
+ * over the computed remainder.
  */
 class Employee extends Model
 {
@@ -37,6 +45,9 @@ class Employee extends Model
     public const BASIS_HOURLY = 'hourly';
 
     public const BASIS_SALARY = 'salary';
+
+    /** Gross = the entity's PSI attribution remainder (PayrollService). */
+    public const BASIS_PSI_RESIDUAL = 'psi_residual';
 
     public const STATUS_ACTIVE = 'active';
 
@@ -88,7 +99,11 @@ class Employee extends Model
 
     public static function bases(): array
     {
-        return [self::BASIS_HOURLY => 'Hourly', self::BASIS_SALARY => 'Salary'];
+        return [
+            self::BASIS_HOURLY => 'Hourly',
+            self::BASIS_SALARY => 'Salary',
+            self::BASIS_PSI_RESIDUAL => 'PSI residual',
+        ];
     }
 
     public function user(): BelongsTo

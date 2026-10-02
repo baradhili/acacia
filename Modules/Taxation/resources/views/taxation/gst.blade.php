@@ -29,32 +29,32 @@
         </form>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- GST Collected (G1) -->
+            <!-- GST Collected (1A) -->
             <div class="bg-green-50 rounded-lg p-6">
                 <h3 class="text-lg font-semibold text-green-800 mb-4">GST Collected (Output Tax)</h3>
                 <table class="w-full">
                     <tr>
-                        <td class="py-2">Total Receipts (incl. GST)</td>
-                        <td class="text-right">${{ number_format($totalReceipts, 2) }}</td>
+                        <td class="py-2">Total sales — cash receipts, incl. GST (G1)</td>
+                        <td class="text-right">{{ (int) $totalReceipts }}</td>
                     </tr>
                     <tr class="border-t">
-                        <td class="py-2 font-semibold">GST on Sales (G1)</td>
-                        <td class="text-right font-bold text-green-700">${{ number_format($gstCollected, 2) }}</td>
+                        <td class="py-2 font-semibold">GST on sales (1A)</td>
+                        <td class="text-right font-bold text-green-700">{{ floor($gstCollected) }}</td>
                     </tr>
                 </table>
             </div>
 
-            <!-- GST Paid (G2) -->
+            <!-- GST Paid (1B) -->
             <div class="bg-red-50 rounded-lg p-6">
                 <h3 class="text-lg font-semibold text-red-800 mb-4">GST Paid (Input Tax)</h3>
                 <table class="w-full">
                     <tr>
-                        <td class="py-2">Total Payments (incl. GST)</td>
-                        <td class="text-right">${{ number_format($totalPayments, 2) }}</td>
+                        <td class="py-2">Total payments, incl. GST</td>
+                        <td class="text-right">{{ (int) $totalPayments }}</td>
                     </tr>
                     <tr class="border-t">
-                        <td class="py-2 font-semibold">GST on Purchases (G2)</td>
-                        <td class="text-right font-bold text-red-700">${{ number_format($gstPaid, 2) }}</td>
+                        <td class="py-2 font-semibold">GST on purchases (1B)</td>
+                        <td class="text-right font-bold text-red-700">{{ ceil($gstPaid) }}</td>
                     </tr>
                 </table>
             </div>
@@ -64,17 +64,18 @@
         <div class="mt-6 bg-indigo-50 rounded-lg p-6">
             <div class="flex justify-between items-center">
                 <span class="text-xl font-bold text-indigo-800">Net GST Payable/Refundable</span>
-                <span class="text-2xl font-bold {{ $netGst >= 0 ? 'text-green-700' : 'text-red-700' }}">
-                    ${{ number_format($netGst, 2) }}
+                <span class="text-2xl font-bold {{ floor($gstCollected) - ceil($gstPaid) >= 0 ? 'text-green-700' : 'text-red-700' }}">
+                    {{ floor($gstCollected) - ceil($gstPaid) }}
                 </span>
             </div>
             <p class="text-sm text-indigo-600 mt-2">
-                @if($netGst > 0)
-                    You need to pay GST to the ATO
-                @elseif($netGst < 0)
-                    You are entitled to a GST refund from the ATO
+                @php($wholeNet = floor($gstCollected) - ceil($gstPaid))
+                @if($wholeNet > 0)
+                    Informational net of the two labels above — 1A exceeds 1B, so GST is payable
+                @elseif($wholeNet < 0)
+                    Informational net of the two labels above — 1B exceeds 1A, so a refund is due
                 @else
-                    No GST payable or refundable
+                    1A equals 1B — no GST payable or refundable
                 @endif
             </p>
             @hasanyrole('admin|accountant')
@@ -97,25 +98,28 @@
             <table class="w-full max-w-md">
                 <tr>
                     <td class="py-2">GST payable (owed to the ATO)</td>
-                    <td class="text-right">${{ number_format($unlodged['payable'], 2) }}</td>
+                    <td class="text-right">{{ floor($unlodged['payable']) }}</td>
                 </tr>
                 <tr>
                     <td class="py-2">GST receivable (refund due)</td>
-                    <td class="text-right">${{ number_format($unlodged['receivable'], 2) }}</td>
+                    <td class="text-right">{{ ceil($unlodged['receivable']) }}</td>
                 </tr>
                 <tr class="border-t border-gray-200">
                     <td class="py-2 font-semibold">
-                        Net {{ $unlodged['net'] >= 0 ? 'payable to the ATO' : 'refundable from the ATO' }}
+                        Net {{ floor($unlodged['payable']) - ceil($unlodged['receivable']) >= 0 ? 'payable to the ATO' : 'refundable from the ATO' }}
                     </td>
-                    <td class="text-right font-bold">${{ number_format(abs($unlodged['net']), 2) }}</td>
+                    <td class="text-right font-bold">{{ abs(floor($unlodged['payable']) - ceil($unlodged['receivable'])) }}</td>
                 </tr>
             </table>
         </div>
 
         <div class="mt-6 text-sm text-gray-500">
-            <p><strong>Note:</strong> Cash basis — GST is recognised when payments are received or made (the posted
-            ledger legs), not when invoices or bills are issued. Unposted payments appear once backfilled
-            (<code>ifrs:post-payments</code>).</p>
+            <p><strong>Note:</strong> Amounts are whole dollars, rounding the ATO-conservative
+            way — owed to the ATO rounds down, owed by the ATO rounds up — so the labels copy
+            straight into the BAS and the net matches the form's own arithmetic. The net line
+            is informational: the ATO form asks for 1A and 1B separately and nets them itself. Cash basis — GST is recognised when payments
+            are received or made (the posted ledger legs), not when invoices or bills are
+            issued. Unposted payments appear once backfilled (<code>ifrs:post-payments</code>).</p>
             <p class="mt-1">This is a simplified GST/BAS report. For actual BAS lodgement,
             please refer to ATO guidelines and ensure all transactions are correctly classified.</p>
         </div>

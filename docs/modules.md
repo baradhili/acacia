@@ -11,7 +11,7 @@ hook into.
 
 | Module | Owns | Notes |
 |---|---|---|
-| `Payroll` | Pay runs, employees, PAYG withholding + super (NAT 1004), PSI assessment | config exposed as `config('payroll.*')` |
+| `Payroll` | Pay runs (weekly→quarterly), employees, PAYG withholding + super (NAT 1004), PSI assessment with PSI-residual director payslips | config exposed as `config('payroll.*')` |
 | `Reconciliation` | Bank statement import, matching + learning, counterparty rules | bank tables live in the core squashed schema |
 | `Shares` | Shareholding ledger, franking account, dividend runs | company identity (CompanyShareholder/ShareClass) stays core |
 | `Crm` | Leads through the sales funnel, activity history, client conversion, monthly sales targets | first module authored in place (its migrations ship in the module) |
