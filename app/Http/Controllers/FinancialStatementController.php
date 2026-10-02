@@ -251,6 +251,25 @@ class FinancialStatementController extends Controller
         ));
     }
 
+    /**
+     * The indirect-method cash flow statement over the IFRS ledger.
+     * The operating section decomposes: above the net-profit line,
+     * per-account income and expense movements (the same
+     * closing-excluding rows the P&L shows, via pnlAccountRows) so
+     * payroll reads as its own line instead of hiding inside the
+     * profit figure — the displayed profit is the sum of those rows;
+     * below it, the package's movement sections (receivables,
+     * supplier payables, taxation control — GST and PAYG withheld —
+     * other current assets/liabilities, provisions), which are
+     * exactly the six the package sums with profit into the
+     * operating total, so those lines tie out with no residual plug.
+     * Sections with no movement are omitted. Movements are
+     * cash-flow-signed (positive = source of cash); the breakdown
+     * rows are statement-signed (income positive, expenses negative).
+     * Investing and financing stay at the package's granularity —
+     * balance movements on non-current accounts and equity, which
+     * this firm has few of.
+     */
     public function cashFlowStatement(Request $request)
     {
         $entity = $this->ifrsEntity();
@@ -270,17 +289,65 @@ class FinancialStatementController extends Controller
 
         // The package derives cash flows from balance movements, not
         // per-account lines; present the components it does expose.
-        $profit = (float) $sections['balances'][CashFlowStatement::PROFIT];
         $operatingTotal = (float) $sections['results'][CashFlowStatement::OPERATIONS_CASH_FLOW];
         $investingTotal = (float) $sections['results'][CashFlowStatement::INVESTMENT_CASH_FLOW];
         $financingTotal = (float) $sections['results'][CashFlowStatement::FINANCING_CASH_FLOW];
         $netCash = (float) $sections['balances'][CashFlowStatement::NET_CASH_FLOW];
 
+        // The profit decomposition: income and expense movements per
+        // account, so each cost line (payroll especially) is visible
+        // before the net-profit figure that swallows them.
+        $incomeRows = $this->pnlAccountRows(
+            [Account::OPERATING_REVENUE, Account::NON_OPERATING_REVENUE],
+            $startDate, $endDate
+        );
+        $directCostRows = $this->pnlAccountRows([Account::DIRECT_EXPENSE], $startDate, $endDate);
+        $expenseRows = $this->pnlAccountRows(
+            [Account::OPERATING_EXPENSE, Account::OVERHEAD_EXPENSE, Account::OTHER_EXPENSE],
+            $startDate, $endDate
+        );
+
+        $operating = [];
+        foreach ($incomeRows as $row) {
+            $operating[] = ['account' => ['name' => 'Income — '.$row['account']['name']], 'balance' => (float) $row['balance']];
+        }
+        foreach ($directCostRows as $row) {
+            $operating[] = ['account' => ['name' => 'Direct costs — '.$row['account']['name']], 'balance' => -1 * (float) $row['balance']];
+        }
+        foreach ($expenseRows as $row) {
+            $operating[] = ['account' => ['name' => 'Operating expenses — '.$row['account']['name']], 'balance' => -1 * (float) $row['balance']];
+        }
+
+        $operating[] = [
+            'account' => ['name' => 'Net profit for the period'],
+            'balance' => round(array_sum(array_column($operating, 'balance')), 2),
+        ];
+
+        // The six movement sections behind the operating total, in
+        // statement order, labelled for the chart this firm keeps
+        // (payroll and reimbursement payables are current
+        // liabilities; GST and withheld PAYG sit in the taxation
+        // control accounts).
+        $operatingMovements = [
+            'Change in receivables' => CashFlowStatement::RECEIVABLES,
+            'Change in supplier payables' => CashFlowStatement::PAYABLES,
+            'Change in taxation liabilities (GST, PAYG withheld)' => CashFlowStatement::TAXATION,
+            'Change in other current assets' => CashFlowStatement::CURRENT_ASSETS,
+            'Change in other current liabilities (wages, super, reimbursements)' => CashFlowStatement::CURRENT_LIABILITIES,
+            'Change in provisions' => CashFlowStatement::PROVISIONS,
+        ];
+
+        foreach ($operatingMovements as $label => $section) {
+            $movement = round((float) $sections['balances'][$section], 2);
+            if (abs($movement) < 0.005) {
+                continue;
+            }
+
+            $operating[] = ['account' => ['name' => $label], 'balance' => $movement];
+        }
+
         $lines = ['statement' => [
-            'operating' => [
-                ['account' => ['name' => 'Net profit for the period'], 'balance' => round(abs($profit), 2)],
-                ['account' => ['name' => 'Working capital & other operating movements'], 'balance' => round(abs($operatingTotal - $profit), 2)],
-            ],
+            'operating' => $operating,
             'operatingTotal' => round(abs($operatingTotal), 2),
             'investing' => [
                 ['account' => ['name' => 'Non-current asset movements'], 'balance' => round(abs($investingTotal), 2)],

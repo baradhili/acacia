@@ -5,6 +5,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-02
 
+### Changed — cash flow report decomposes the operating section
+
+Operating activities read as one net-profit line plus a single
+catch-all "working capital & other operating movements" figure —
+payroll (and every other expense) hid inside profit. The section now
+breaks down: per-account income and expense movements above the
+net-profit line (the same closing-excluding rows the P&L shows, so
+Salaries & Wages, Superannuation and each cost line read by name),
+then the working-capital movements itemised below it — receivables,
+supplier payables, taxation (GST and withheld PAYG), other current
+assets, other current liabilities (wages, super and reimbursement
+payables) and provisions: the six sections the package sums into
+the operating total, so the lines tie out with no residual plug.
+Lines with no movement over the period are omitted.
+
 ### Fixed — cash flow widget counts payroll and reimbursements
 
 The dashboard's 30-day cash flow widget read outflows from supplier
