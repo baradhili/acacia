@@ -5,6 +5,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-02
 
+### Changed — BAS settlements lodge whole dollars, the conservative way
+
+Settlements now record and pay whole-dollar amounts using the
+ATO-conservative pair: owed TO the ATO rounds down and owed BY the
+ATO rounds up, with the payment the rounded labels subtracted — the
+arithmetic the BAS form itself performs (verified against a lodged
+statement: 1A $3,781 from $3,781.33, 1B $175 from $174.69, pay
+$3,606). The ATO carries nothing over, so the clearing journal still
+clears the tax accounts at their exact ledger balances and a second,
+sub-$2 rounding journal moves the difference between the exact and
+rounded nets into a new GST Rounding account (4530, non-operating
+revenue; lazily created on existing installs) — cents never linger
+on the tax accounts. Cents alone refuse to lodge. The settlements
+screen shows whole dollars throughout, and the GST report applies
+the same owed-down/owed-up rounding so its labels paste and net
+exactly like the form. The September-quarter GST settlement was
+re-recorded on this basis after its predecessors were reversed:
+$3,781 payable against $175 receivable — $3,606 to the ATO, paid by
+11 November — leaving the GST accounts at zero with 64c in GST
+Rounding.
+
 ### Changed — GST report amounts paste straight into the BAS
 
 The GST/BAS report showed `$x,xxx.xx` amounts — fine to read, useless

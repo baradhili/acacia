@@ -239,6 +239,59 @@ class BasSettlementTest extends TestCase
         $this->assertEqualsWithDelta($bankBefore, $this->balance($this->bank), 0.001);
     }
 
+    public function test_settlements_lodge_whole_dollars_and_clear_the_cents_to_rounding(): void
+    {
+        $this->collect(1000.75);
+        $this->paid(400.40);
+        $bankBefore = $this->balance($this->bank);
+
+        $settlement = $this->settle();
+
+        // Owed-to rounds down, owed-by rounds up — the BAS form's own
+        // conservative pair: 1A 1000, 1B 401, pay 599.
+        $this->assertEqualsWithDelta(1000.0, $settlement->gst_payable, 0.001);
+        $this->assertEqualsWithDelta(401.0, $settlement->gst_receivable, 0.001);
+        $this->assertEqualsWithDelta(599.0, $settlement->net_amount, 0.001);
+        $this->assertEqualsWithDelta(599.0, $settlement->bank_amount, 0.001);
+        $this->assertEqualsWithDelta($bankBefore - 599.0, $this->balance($this->bank), 0.001);
+
+        // The tax accounts clear at their exact balances — cents never
+        // carry over — and the $1.35 kept back sits in GST Rounding.
+        $this->assertEqualsWithDelta(0.0, $this->balance($this->gstPayable), 0.001);
+        $this->assertEqualsWithDelta(0.0, $this->balance($this->gstReceivable), 0.001);
+        $this->assertEqualsWithDelta(-1.35, $this->balance($this->account(4530)), 0.001);
+        $this->assertNotNull($settlement->ifrs_rounding_transaction_id);
+    }
+
+    public function test_a_rounded_refund_also_clears_to_rounding(): void
+    {
+        $this->collect(78.33);
+        $this->paid(274.69);
+        $bankBefore = $this->balance($this->bank);
+
+        $settlement = $this->settle();
+
+        // 1A 78 (down), 1B 275 (up): a $197 refund against an exact
+        // net of $196.36 — the bank receives the rounded figure.
+        $this->assertSame(BasSettlement::DIRECTION_REFUND, $settlement->direction);
+        $this->assertEqualsWithDelta(197.0, $settlement->bank_amount, 0.001);
+        $this->assertEqualsWithDelta($bankBefore + 197.0, $this->balance($this->bank), 0.001);
+        $this->assertEqualsWithDelta(0.0, $this->balance($this->gstPayable), 0.001);
+        $this->assertEqualsWithDelta(0.0, $this->balance($this->gstReceivable), 0.001);
+        // The extra 64c received is rounding income.
+        $this->assertEqualsWithDelta(-0.64, $this->balance($this->account(4530)), 0.001);
+    }
+
+    public function test_cents_alone_refuse_to_lodge(): void
+    {
+        $this->collect(0.75);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Only cents remain unsettled');
+
+        $this->settle();
+    }
+
     public function test_refuses_when_there_is_nothing_to_settle(): void
     {
         $this->expectException(\InvalidArgumentException::class);

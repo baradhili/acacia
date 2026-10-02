@@ -39,7 +39,7 @@
                     </tr>
                     <tr class="border-t">
                         <td class="py-2 font-semibold">GST on sales (1A)</td>
-                        <td class="text-right font-bold text-green-700">{{ (int) $gstCollected }}</td>
+                        <td class="text-right font-bold text-green-700">{{ floor($gstCollected) }}</td>
                     </tr>
                 </table>
             </div>
@@ -54,7 +54,7 @@
                     </tr>
                     <tr class="border-t">
                         <td class="py-2 font-semibold">GST on purchases (1B)</td>
-                        <td class="text-right font-bold text-red-700">{{ (int) $gstPaid }}</td>
+                        <td class="text-right font-bold text-red-700">{{ ceil($gstPaid) }}</td>
                     </tr>
                 </table>
             </div>
@@ -64,14 +64,15 @@
         <div class="mt-6 bg-indigo-50 rounded-lg p-6">
             <div class="flex justify-between items-center">
                 <span class="text-xl font-bold text-indigo-800">Net GST Payable/Refundable</span>
-                <span class="text-2xl font-bold {{ $netGst >= 0 ? 'text-green-700' : 'text-red-700' }}">
-                    {{ (int) $netGst }}
+                <span class="text-2xl font-bold {{ floor($gstCollected) - ceil($gstPaid) >= 0 ? 'text-green-700' : 'text-red-700' }}">
+                    {{ floor($gstCollected) - ceil($gstPaid) }}
                 </span>
             </div>
             <p class="text-sm text-indigo-600 mt-2">
-                @if($netGst > 0)
+                @php($wholeNet = floor($gstCollected) - ceil($gstPaid))
+                @if($wholeNet > 0)
                     Informational net of the two labels above — 1A exceeds 1B, so GST is payable
-                @elseif($netGst < 0)
+                @elseif($wholeNet < 0)
                     Informational net of the two labels above — 1B exceeds 1A, so a refund is due
                 @else
                     1A equals 1B — no GST payable or refundable
@@ -97,26 +98,26 @@
             <table class="w-full max-w-md">
                 <tr>
                     <td class="py-2">GST payable (owed to the ATO)</td>
-                    <td class="text-right">{{ (int) $unlodged['payable'] }}</td>
+                    <td class="text-right">{{ floor($unlodged['payable']) }}</td>
                 </tr>
                 <tr>
                     <td class="py-2">GST receivable (refund due)</td>
-                    <td class="text-right">{{ (int) $unlodged['receivable'] }}</td>
+                    <td class="text-right">{{ ceil($unlodged['receivable']) }}</td>
                 </tr>
                 <tr class="border-t border-gray-200">
                     <td class="py-2 font-semibold">
-                        Net {{ $unlodged['net'] >= 0 ? 'payable to the ATO' : 'refundable from the ATO' }}
+                        Net {{ floor($unlodged['payable']) - ceil($unlodged['receivable']) >= 0 ? 'payable to the ATO' : 'refundable from the ATO' }}
                     </td>
-                    <td class="text-right font-bold">{{ (int) abs($unlodged['net']) }}</td>
+                    <td class="text-right font-bold">{{ abs(floor($unlodged['payable']) - ceil($unlodged['receivable'])) }}</td>
                 </tr>
             </table>
         </div>
 
         <div class="mt-6 text-sm text-gray-500">
-            <p><strong>Note:</strong> Amounts are whole dollars with the cents dropped (the
-            ATO's round-down) — copy them straight into the BAS labels; no cents, separators
-            or symbols to strip. The net line is informational: the ATO form asks for 1A and
-            1B separately and nets them itself. Cash basis — GST is recognised when payments
+            <p><strong>Note:</strong> Amounts are whole dollars, rounding the ATO-conservative
+            way — owed to the ATO rounds down, owed by the ATO rounds up — so the labels copy
+            straight into the BAS and the net matches the form's own arithmetic. The net line
+            is informational: the ATO form asks for 1A and 1B separately and nets them itself. Cash basis — GST is recognised when payments
             are received or made (the posted ledger legs), not when invoices or bills are
             issued. Unposted payments appear once backfilled (<code>ifrs:post-payments</code>).</p>
             <p class="mt-1">This is a simplified GST/BAS report. For actual BAS lodgement,

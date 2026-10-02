@@ -60,6 +60,7 @@ class BasSettlement extends Model
         'bank_amount',
         'direction',
         'ifrs_transaction_id',
+        'ifrs_rounding_transaction_id',
         'reversal_transaction_id',
         'reversed_at',
         'reference',
@@ -84,6 +85,17 @@ class BasSettlement extends Model
     public function transaction(): BelongsTo
     {
         return $this->belongsTo(Transaction::class, 'ifrs_transaction_id');
+    }
+
+    /**
+     * The rounding adjustment posted beside the clearing journal when
+     * the BAS's whole-dollar net differs from the ledger's exact one
+     * (owed-to rounds down, owed-by rounds up) — null when the
+     * position was already whole dollars.
+     */
+    public function roundingTransaction(): BelongsTo
+    {
+        return $this->belongsTo(Transaction::class, 'ifrs_rounding_transaction_id');
     }
 
     public function reversal(): BelongsTo

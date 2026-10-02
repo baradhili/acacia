@@ -458,9 +458,9 @@ class PaygInstalmentAccrualTest extends TestCase
         $this->actingAs($this->admin())
             ->get('/bas-settlements')
             ->assertOk()
-            ->assertSee('$'.number_format(8000, 2))
+            ->assertSee('$8,000.00', false)
             ->assertSee('25%')
-            ->assertSee('$'.number_format(2000, 2))
+            ->assertSee('$2,000.00', false)
             ->assertDontSee('BAS_INSTALLMENT_RATE');
     }
 

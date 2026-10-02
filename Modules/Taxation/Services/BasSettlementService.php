@@ -225,6 +225,16 @@ class BasSettlementService
      * snapshot row — in one transaction. The bank date is typically in
      * the month after the covered quarter (BAS lodgement lag).
      *
+     * Amounts lodge whole dollars the ATO-conservative way: owed TO
+     * the ATO rounds down and owed BY the ATO rounds up, and the net
+     * is those rounded labels subtracted — the arithmetic the BAS
+     * form itself performs, matching the lodged payment to the cent.
+     * The ATO carries nothing over, so the clearing journal still
+     * clears the tax accounts at their exact ledger balances and a
+     * second, sub-$2 rounding journal moves the difference between
+     * the exact and rounded nets into GST Rounding — the cents never
+     * linger on the tax accounts.
+     *
      * @param  array{as_at: mixed, settled_at: mixed, type?: string, reference?: ?string, notes?: ?string}  $data
      */
     public function settle(array $data): BasSettlement
@@ -258,25 +268,57 @@ class BasSettlementService
                 ->lockForUpdate()
                 ->first();
 
-            ['payable' => $payable, 'receivable' => $receivable, 'net' => $net] = $this->positionFor($entity, $accounts, $asAt->copy()->endOfDay());
+            ['payable' => $payableRaw, 'receivable' => $receivableRaw, 'net' => $netRaw] = $this->positionFor($entity, $accounts, $asAt->copy()->endOfDay());
 
-            if ($payable < 0.005 && $receivable < 0.005) {
+            if ($payableRaw < 0.005 && $receivableRaw < 0.005) {
                 throw new \InvalidArgumentException("There is no unsettled {$label} as at {$asAt->format('d M Y')}.");
             }
 
+            // Cents alone cannot lodge — checked on the RAW balances,
+            // before ceil() could inflate a sub-dollar receivable into
+            // a lodgable label.
+            if ($payableRaw < 1 && $receivableRaw < 1) {
+                throw new \InvalidArgumentException(
+                    "Only cents remain unsettled {$label} as at {$asAt->format('d M Y')} — nothing whole-dollar to lodge."
+                );
+            }
+
+            // The BAS labels: owed-to rounds down, owed-by rounds up,
+            // and the payment is the rounded labels subtracted.
+            $payable = floor($payableRaw);
+            $receivable = ceil($receivableRaw);
+            $net = round($payable - $receivable, 2);
+
+            // The clearing journal follows the ledger's own net — the
+            // rounded labels can flip its sign at a boundary, and the
+            // journal's shape must stay coherent with the exact
+            // balances it clears. The rounding journal then moves the
+            // bank to the rounded figure, and the record documents
+            // the lodged labels and their net.
+            $journalDirection = $netRaw >= 0 ? BasSettlement::DIRECTION_PAY : BasSettlement::DIRECTION_REFUND;
             $direction = $net >= 0 ? BasSettlement::DIRECTION_PAY : BasSettlement::DIRECTION_REFUND;
 
+            // The clearing journal at the ledger's exact balances —
+            // the tax accounts clear in full, never carrying cents.
             $journal = $this->postSettlementJournal(
                 $entity,
                 $accounts,
-                $payable,
-                $receivable,
-                $net,
-                $direction,
+                $payableRaw,
+                $receivableRaw,
+                $netRaw,
+                $journalDirection,
                 $settledAt,
                 $asAt,
                 $type,
             );
+
+            // The rounding adjustment when the rounded net differs
+            // from the exact one: the bank moves |$net| across both
+            // journals combined.
+            $rounding = round(abs($netRaw - $net), 2);
+            $roundingJournal = $rounding >= 0.005
+                ? $this->postRoundingJournal($entity, $rounding, $direction, $settledAt, $asAt, $type)
+                : null;
 
             $settlement = BasSettlement::create([
                 'entity_id' => $entity->id,
@@ -289,6 +331,7 @@ class BasSettlementService
                 'bank_amount' => abs($net),
                 'direction' => $direction,
                 'ifrs_transaction_id' => $journal->id,
+                'ifrs_rounding_transaction_id' => $roundingJournal?->id,
                 'reference' => $data['reference'] ?? null,
                 'notes' => $data['notes'] ?? null,
             ]);
@@ -313,13 +356,14 @@ class BasSettlementService
     }
 
     /**
-     * Mirror a settlement's journal back out (a recorded mistake) and
-     * mark the settlement reversed, restoring the GST balances. The
-     * reversal keeps the original transaction date, so the same
-     * date/period guards as posting apply first — a period locked
-     * since the settlement was recorded refuses with a clear error —
-     * and the ledger reversal and the settlement state commit or roll
-     * back together.
+     * Mirror a settlement's journals back out (a recorded mistake) and
+     * mark the settlement reversed, restoring the tax balances — both
+     * the clearing journal and the rounding adjustment when one was
+     * posted. The reversals keep the original transaction dates, so
+     * the same date/period guards as posting apply first — a period
+     * locked since the settlement was recorded refuses with a clear
+     * error — and the ledger reversals and the settlement state commit
+     * or roll back together.
      */
     public function reverse(BasSettlement $settlement): BasSettlement
     {
@@ -340,6 +384,15 @@ class BasSettlementService
                 'BAS-SETT-'.static::typeCode($settlement->type).'-'.$settlement->as_at->format('Ymd').'-REV',
                 throw: true,
             );
+
+            if ($settlement->ifrs_rounding_transaction_id) {
+                IfrsPosting::reverseTransaction(
+                    (int) $settlement->ifrs_rounding_transaction_id,
+                    'Reversal of BAS settlement rounding — '.$settlement->label(),
+                    'BAS-SETT-'.static::typeCode($settlement->type).'-'.$settlement->as_at->format('Ymd').'-ROUND-REV',
+                    throw: true,
+                );
+            }
 
             if (class_exists(FrankingAccountEntry::class)) {
                 $this->reverseFrankingEntry($settlement, $reversalId);
@@ -544,6 +597,74 @@ class BasSettlementService
         $journal->post();
 
         return $journal;
+    }
+
+    /**
+     * The rounding adjustment beside the clearing journal: the tax
+     * accounts cleared at their exact balances and the clearing
+     * journal moved the bank at that exact net, but the bank must
+     * move the whole-dollar BAS net — which under the conservative
+     * pair (owed-to down, owed-by up) is always at most the exact
+     * one. The sub-$2 difference therefore always tops the bank back
+     * up to the rounded figure and credits GST Rounding: Dr Bank /
+     * Cr Rounding, both directions.
+     */
+    protected function postRoundingJournal(
+        Entity $entity,
+        float $rounding,
+        string $direction,
+        Carbon $settledAt,
+        Carbon $asAt,
+        string $type,
+    ): JournalEntry {
+        $bank = Account::where('entity_id', $entity->id)
+            ->where('code', config('australian.bas.bank_account_code', 320))
+            ->first();
+        if (! $bank) {
+            throw new \InvalidArgumentException('The operating bank account is not configured.');
+        }
+
+        $roundingAccount = $this->ensureRoundingAccount($entity);
+
+        IfrsPosting::ensureReportingPeriod($settledAt, $entity);
+
+        $journal = new JournalEntry([
+            'transaction_date' => IfrsPosting::transactionDate($settledAt, $entity),
+            'account_id' => $bank->id,
+            'credited' => false,
+            'entity_id' => $entity->id,
+            'currency_id' => $entity->currency_id,
+            'narration' => 'BAS settlement rounding — '.BasSettlement::typeLabel($type).' to '.$asAt->format('d M Y'),
+            'reference' => 'BAS-SETT-'.static::typeCode($type).'-'.$asAt->format('Ymd').'-ROUND',
+        ]);
+
+        $line = LineItem::create([
+            'account_id' => $roundingAccount->id,
+            'amount' => $rounding,
+            'quantity' => 1,
+            'entity_id' => $entity->id,
+        ]);
+        $journal->addLineItem($line);
+
+        $journal->post();
+
+        return $journal;
+    }
+
+    /**
+     * The GST Rounding account (4530, non-operating revenue): seeded
+     * on fresh installs, lazily created for existing ones.
+     */
+    protected function ensureRoundingAccount(Entity $entity): Account
+    {
+        return Account::firstOrCreate(
+            ['entity_id' => $entity->id, 'code' => config('australian.bas.rounding_account_code', 4530)],
+            [
+                'account_type' => Account::NON_OPERATING_REVENUE,
+                'name' => 'GST Rounding',
+                'currency_id' => $entity->currency_id,
+            ],
+        );
     }
 
     /**
