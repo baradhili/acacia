@@ -3,6 +3,24 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] — 2026-10-02
+
+### Fixed — cash flow widget counts payroll and reimbursements
+
+The dashboard's 30-day cash flow widget read outflows from supplier
+bill payments alone, so the two other ways cash leaves the bank were
+invisible: payroll (net pay posts as a journal, never a bill
+payment) and employee reimbursements. Outflows now sum supplier
+payments on bank methods, completed reimbursements, and processed
+pay runs' net — net rather than gross, because the withheld PAYG
+pays the ATO, not staff. Employee-reimbursement captures are
+excluded from the supplier leg on purpose: a capture credits the
+payable, not the bank, and counting both legs would book the same
+expense twice (the capture also previously inflated outflows
+although no company cash had moved). The prior-period comparison
+inherits the same legs. The ledger-based cash flow report was
+already complete — only the widget's event-based sums had the gap.
+
 ## [Unreleased] — 2026-10-01
 
 ### Fixed — PAYG withholding now builds x the way NAT 1004 specifies
