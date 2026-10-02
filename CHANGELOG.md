@@ -5,6 +5,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-02
 
+### Fixed — a second draft can't double-seed the PSI remainder
+
+The PSI-residual computation counts processed runs only (a draft
+has paid nobody), which left a hole: two concurrent quarterly drafts
+each seeded the full attribution remainder, and processing both
+overpaid. The remainder now subtracts PSI-residual payslips already
+seeded on other draft runs for the same entity and financial year —
+the run being built excluded, and ordinary draft wages reserve
+nothing since they are not PSI payments and a draft may never be
+processed. (Found in code review.)
+
 ### Changed — cash flow report decomposes the operating section
 
 Operating activities read as one net-profit line plus a single
@@ -90,8 +101,9 @@ periods. Without it, a quarterly lump entered on the closest existing
 frequency (monthly) withheld as if the lump were a single month's
 salary — annualising the payee at four times their real income.
 Salary apportionment on quarterly runs divides the annual salary by
-4. Step 2 of this flow — auto-computing the director's payslip from
-the PSI attribution screen's net PSI — is queued in the todo list.
+4. The step-2 companion of this flow — auto-computing the director's
+payslip from the PSI attribution's net PSI — is implemented in the
+PSI-residual director payslips entry above.
 
 ### Removed — Time by Project report, redundant with Project Timesheet
 
