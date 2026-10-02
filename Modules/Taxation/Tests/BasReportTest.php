@@ -484,17 +484,18 @@ class BasReportTest extends TestCase
             ->get(route('reports.gst', ['start_date' => '2025-07-01', 'end_date' => '2026-06-30']));
 
         $response->assertStatus(200);
-        // GST figures come from the posted Vat account ledger legs.
-        $response->assertSee('$10.00'); // GST on sales
-        $response->assertSee('$5.00');  // GST on purchases / net payable
+        // GST figures come from the posted Vat account ledger legs;
+        // whole dollars (ATO paste format) pinned to their cells.
+        $response->assertSee('>10<', false); // GST on sales
+        $response->assertSee('>5<', false);  // GST on purchases / net payable
         // Totals are the posted receipts and payments behind those legs.
-        $response->assertSee('Total Receipts (incl. GST)');
-        $response->assertSee('$110.00');
-        $response->assertSee('Total Payments (incl. GST)');
-        $response->assertSee('$55.00');
+        $response->assertSee('Total sales — cash receipts, incl. GST (G1)');
+        $response->assertSee('>110<', false);
+        $response->assertSee('Total payments, incl. GST');
+        $response->assertSee('>55<', false);
         // The unpaid invoice's figures are absent.
-        $response->assertDontSee('$220.00');
-        $response->assertDontSee('$20.00');
+        $response->assertDontSee('>220<', false);
+        $response->assertDontSee('>20<', false);
     }
 
     public function test_gst_report_nets_refund_reversals_per_vat_account(): void
@@ -572,12 +573,12 @@ class BasReportTest extends TestCase
             ]));
 
         $response->assertStatus(200);
-        // The refund's Dr 10 on 2200 nets collected GST to $0.00 rather
+        // The refund's Dr 10 on 2200 nets collected GST to 0 rather
         // than being miscounted as GST paid; 430's Dr 5 stays GST paid.
         // (Old per-side totals were $10.00 collected / $15.00 paid.)
-        $response->assertDontSee('$10.00');
-        $response->assertDontSee('$15.00');
-        $response->assertSee('$5.00');
+        $response->assertDontSee('>10<', false);
+        $response->assertDontSee('>15<', false);
+        $response->assertSee('>5<', false);
     }
 
     public function test_bas_export_pdf_generates(): void

@@ -11,9 +11,12 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 /**
- * Time Reports — approved time summarised by client, staff, project
- * and the client-facing per-project timesheet. Reads the time tracking
- * subledger only; no IFRS dependency.
+ * Time Reports — approved time summarised by client and staff, plus
+ * the per-project timesheet (weekly/monthly sums per project, the
+ * client-facing report). The project axis is covered by the
+ * timesheet; the old summary-only by-project report was removed as
+ * redundant. Reads the time tracking subledger only; no IFRS
+ * dependency.
  */
 class TimeReportController extends Controller
 {
@@ -116,59 +119,6 @@ class TimeReportController extends Controller
 
         return view('practice.time-by-staff', compact(
             'byStaff', 'staff', 'startDate', 'endDate', 'userId',
-            'totalHours', 'totalAmount'
-        ));
-    }
-
-    public function timeByProject(Request $request)
-    {
-        $startDate = $request->get('start_date')
-            ? Carbon::parse($request->start_date)
-            : Carbon::now()->startOfMonth();
-
-        $endDate = $request->get('end_date')
-            ? Carbon::parse($request->end_date)->endOfDay()
-            : Carbon::now()->endOfDay();
-
-        $projectId = $request->get('project_id');
-
-        $query = TimeEntry::with(['project.client', 'user'])
-            ->whereBetween('entry_date', [$startDate->toDateString(), $endDate->toDateString()])
-            ->approved();
-
-        if ($projectId) {
-            $query->where('project_id', $projectId);
-        }
-
-        $timeEntries = $query->get();
-
-        // Group by project
-        $byProject = $timeEntries->groupBy('project_id')
-            ->map(function ($entries, $projectId) {
-                $project = $entries->first()->project;
-
-                return [
-                    'project' => $project,
-                    'client' => $project?->client?->name ?? 'N/A',
-                    'total_hours' => $entries->sum('hours'),
-                    'total_amount' => $entries->sum('total'),
-                    'billable_hours' => $entries->where('billable', true)->sum('hours'),
-                    'non_billable_hours' => $entries->where('billable', false)->sum('hours'),
-                    'entry_count' => $entries->count(),
-                    'budget_hours' => $project?->budget_hours,
-                    'utilization' => $project?->budget_hours
-                        ? round(($entries->sum('hours') / $project->budget_hours) * 100, 1)
-                        : null,
-                ];
-            })->sortByDesc('total_hours');
-
-        $projects = Project::orderBy('name')->pluck('name', 'id');
-
-        $totalHours = $byProject->sum('total_hours');
-        $totalAmount = $byProject->sum('total_amount');
-
-        return view('practice.time-by-project', compact(
-            'byProject', 'projects', 'startDate', 'endDate', 'projectId',
             'totalHours', 'totalAmount'
         ));
     }

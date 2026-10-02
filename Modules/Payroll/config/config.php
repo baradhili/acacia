@@ -89,5 +89,6 @@ return [
         'weekly' => 52,
         'fortnightly' => 26,
         'monthly' => 12,
+        'quarterly' => 4,
     ],
 ];

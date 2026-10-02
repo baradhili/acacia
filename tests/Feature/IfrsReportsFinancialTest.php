@@ -233,6 +233,88 @@ class IfrsReportsFinancialTest extends TestCase
         $response->assertSee('Net Cash Movement');
     }
 
+    public function test_cash_flow_breaks_the_profit_line_down_and_itemises_movements(): void
+    {
+        $receivable = Account::create([
+            'name' => 'Trade Debtors',
+            'account_type' => Account::RECEIVABLE,
+            'code' => 1100,
+            'currency_id' => $this->currency->id,
+            'entity_id' => $this->entity->id,
+        ]);
+        $revenue = Account::create([
+            'name' => 'Consulting Revenue',
+            'account_type' => Account::OPERATING_REVENUE,
+            'code' => 4000,
+            'currency_id' => $this->currency->id,
+            'entity_id' => $this->entity->id,
+        ]);
+
+        // An unbilled accrual: Dr receivable / Cr revenue. The
+        // breakdown must show the income and expense lines above a
+        // profit figure, the receivable's growth as a −$500
+        // movement, and the operating total netting to the cash
+        // actually spent.
+        $accrual = new JournalEntry([
+            'account_id' => $receivable->id,
+            'transaction_date' => Carbon::now(),
+            'narration' => 'Accrued consulting fees',
+            'currency_id' => $this->currency->id,
+            'credited' => false,
+        ]);
+        $accrual->addLineItem(
+            LineItem::create([
+                'account_id' => $revenue->id,
+                'amount' => 500,
+                'quantity' => 1,
+                'credited' => true,
+                'entity_id' => $this->entity->id,
+            ])
+        );
+        $accrual->post();
+
+        // A $200 fee refund (Dr revenue / Cr bank): the income line
+        // must NET to $300 — the signed movement keeps the reversal's
+        // direction instead of two positive magnitudes.
+        $refund = new JournalEntry([
+            'account_id' => $revenue->id,
+            'transaction_date' => Carbon::now(),
+            'narration' => 'Fee refund',
+            'currency_id' => $this->currency->id,
+            'credited' => false,
+        ]);
+        $refund->addLineItem(
+            LineItem::create([
+                'account_id' => $this->bank->id,
+                'amount' => 200,
+                'quantity' => 1,
+                'credited' => true,
+                'entity_id' => $this->entity->id,
+            ])
+        );
+        $refund->post();
+
+        $this->postExpense(110);
+
+        $response = $this->get(route('reports.cash-flow'));
+
+        $response->assertStatus(200);
+        $response->assertSee('Income — Consulting Revenue');
+        $response->assertSee('300.00');
+        $response->assertSee('Operating expenses — Travel & Accommodation');
+        $response->assertSee('-110.00');
+        $response->assertSee('Net profit for the period');
+        $response->assertSee('190.00');
+        $response->assertSee('Change in receivables');
+        $response->assertSee('-500.00');
+
+        // The operating footer keeps its sign: profit $190 less the
+        // $500 receivable growth is a $-310 operating result (the
+        // expense row shares -110.00, so pin the footer cell itself).
+        $response->assertSee('<td class="text-right font-bold">$-310.00</td>', false);
+        $response->assertDontSee('Working capital & other operating movements');
+    }
+
     public function test_account_statement_shows_posted_ledger_entries(): void
     {
         $this->postExpense(110);

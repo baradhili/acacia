@@ -80,12 +80,6 @@ class ReportTest extends TestCase
         $response->assertRedirect('/login');
     }
 
-    public function test_time_by_project_route_requires_authentication(): void
-    {
-        $response = $this->get(route('reports.time-by-project'));
-        $response->assertRedirect('/login');
-    }
-
     public function test_time_by_client_report_filters_correctly(): void
     {
         $this->actingAs($this->user);
@@ -128,25 +122,41 @@ class ReportTest extends TestCase
         $response->assertStatus(200);
     }
 
-    public function test_time_by_project_report_filters_correctly(): void
+    public function test_time_report_with_date_range(): void
     {
         $this->actingAs($this->user);
 
-        // Create time entry for project
+        // One entry inside the requested range, one outside it: the
+        // project timesheet must filter on start_date/end_date and
+        // honour the project filter.
         $this->createTimeEntry([
             'user_id' => $this->staff->id,
             'project_id' => $this->project->id,
-            'start_time' => Carbon::parse('2024-01-15 09:00'),
-            'end_time' => Carbon::parse('2024-01-15 17:00'),
-            'hours' => 8,
+            'client_id' => $this->client->id,
+            'entry_date' => '2024-01-10',
+            'hours' => 5,
             'billable' => true,
+            'status' => TimeEntry::STATUS_APPROVED,
+        ]);
+        $this->createTimeEntry([
+            'user_id' => $this->staff->id,
+            'project_id' => $this->project->id,
+            'client_id' => $this->client->id,
+            'entry_date' => '2024-03-05',
+            'hours' => 3,
+            'billable' => true,
+            'status' => TimeEntry::STATUS_APPROVED,
         ]);
 
-        $response = $this->get(route('reports.time-by-project', [
+        $response = $this->get(route('reports.project-timesheet', [
             'project_id' => $this->project->id,
+            'start_date' => '2024-01-01',
+            'end_date' => '2024-02-29',
         ]));
 
         $response->assertStatus(200);
+        $response->assertSee('5.00 hours');  // in-range entry summed
+        $response->assertDontSee('3.00');    // out-of-range entry excluded
     }
 
     public function test_project_profitability_calculation(): void
@@ -228,29 +238,6 @@ class ReportTest extends TestCase
             ->assertSee('$40.00'); // profit
     }
 
-    public function test_time_report_with_date_range(): void
-    {
-        $this->actingAs($this->user);
-
-        // Create time entries in specific date range
-        $this->createTimeEntry([
-            'user_id' => $this->staff->id,
-            'project_id' => $this->project->id,
-            'start_time' => Carbon::parse('2024-01-01 09:00'),
-            'end_time' => Carbon::parse('2024-01-01 17:00'),
-            'hours' => 8,
-            'billable' => true,
-        ]);
-
-        $response = $this->get(route('reports.time-by-project', [
-            'project_id' => $this->project->id,
-            'from_date' => '2024-01-01',
-            'to_date' => '2024-01-31',
-        ]));
-
-        $response->assertStatus(200);
-    }
-
     public function test_staff_user_can_view_own_time_reports(): void
     {
         $this->actingAs($this->staff);
@@ -272,72 +259,43 @@ class ReportTest extends TestCase
         $response->assertStatus(200);
     }
 
-    public function test_non_billable_time_excluded_from_revenue(): void
-    {
-        $this->actingAs($this->user);
-
-        // Create billable time entry
-        $this->createTimeEntry([
-            'user_id' => $this->staff->id,
-            'project_id' => $this->project->id,
-            'start_time' => Carbon::parse('2024-01-15 09:00'),
-            'end_time' => Carbon::parse('2024-01-15 17:00'),
-            'hours' => 8,
-            'rate' => 100,
-            'billable' => true,
-        ]);
-
-        // Create non-billable time entry
-        $this->createTimeEntry([
-            'user_id' => $this->staff->id,
-            'project_id' => $this->project->id,
-            'start_time' => Carbon::parse('2024-01-16 09:00'),
-            'end_time' => Carbon::parse('2024-01-16 17:00'),
-            'hours' => 8,
-            'rate' => 100,
-            'billable' => false,
-        ]);
-
-        $response = $this->get(route('reports.time-by-project', [
-            'project_id' => $this->project->id,
-            'billable_only' => true,
-        ]));
-
-        $response->assertStatus(200);
-    }
-
     public function test_time_report_totals_calculation(): void
     {
         $this->actingAs($this->user);
 
-        // Create multiple time entries
+        // Two half-day entries on the same date: the project
+        // timesheet's grand total must sum them.
         $this->createTimeEntry([
             'user_id' => $this->staff->id,
             'project_id' => $this->project->id,
-            'start_time' => Carbon::parse('2024-01-15 09:00'),
-            'end_time' => Carbon::parse('2024-01-15 13:00'),
+            'client_id' => $this->client->id,
+            'entry_date' => '2024-01-15',
             'hours' => 4,
             'rate' => 100,
             'billable' => true,
+            'status' => TimeEntry::STATUS_APPROVED,
         ]);
 
         $this->createTimeEntry([
             'user_id' => $this->staff->id,
             'project_id' => $this->project->id,
-            'start_time' => Carbon::parse('2024-01-15 14:00'),
-            'end_time' => Carbon::parse('2024-01-15 18:00'),
+            'client_id' => $this->client->id,
+            'entry_date' => '2024-01-15',
             'hours' => 4,
             'rate' => 100,
             'billable' => true,
+            'status' => TimeEntry::STATUS_APPROVED,
         ]);
 
-        $response = $this->get(route('reports.time-by-project', [
+        $response = $this->get(route('reports.project-timesheet', [
             'project_id' => $this->project->id,
+            'start_date' => '2024-01-01',
+            'end_date' => '2024-01-31',
         ]));
 
         $response->assertStatus(200);
         // Total should be 8 hours
-        $response->assertSee('8');
+        $response->assertSee('8.00 hours');
     }
 
     public function test_report_routes_exist(): void
@@ -347,7 +305,7 @@ class ReportTest extends TestCase
         $routes = [
             'reports.time-by-client',
             'reports.time-by-staff',
-            'reports.time-by-project',
+            'reports.project-timesheet',
         ];
 
         foreach ($routes as $route) {

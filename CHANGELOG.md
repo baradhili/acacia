@@ -3,6 +3,171 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] — 2026-10-02
+
+### Changed — BAS settlements lodge whole dollars, the conservative way
+
+Settlements now record and pay whole-dollar amounts using the
+ATO-conservative pair: owed TO the ATO rounds down and owed BY the
+ATO rounds up, with the payment the rounded labels subtracted — the
+arithmetic the BAS form itself performs (verified against a lodged
+statement: 1A $3,781 from $3,781.33, 1B $175 from $174.69, pay
+$3,606). The ATO carries nothing over, so the clearing journal still
+clears the tax accounts at their exact ledger balances and a second,
+sub-$2 rounding journal moves the difference between the exact and
+rounded nets into a new GST Rounding account (4530, non-operating
+revenue; lazily created on existing installs) — cents never linger
+on the tax accounts. Cents alone refuse to lodge. The settlements
+screen shows whole dollars throughout, and the GST report applies
+the same owed-down/owed-up rounding so its labels paste and net
+exactly like the form. The September-quarter GST settlement was
+re-recorded on this basis after its predecessors were reversed:
+$3,781 payable against $175 receivable — $3,606 to the ATO, paid by
+11 November — leaving the GST accounts at zero with 64c in GST
+Rounding.
+
+### Changed — GST report amounts paste straight into the BAS
+
+The GST/BAS report showed `$x,xxx.xx` amounts — fine to read, useless
+to paste: the ATO BAS labels take whole dollars only, so every figure
+had to be re-keyed. All amounts on the report are now whole dollars
+with the cents dropped (the ATO's round-down), no symbol or thousands
+separator (e.g. `31893`), ready to copy straight into the form. The
+label tags were also corrected to match the ATO fields they feed:
+GST on sales is 1A and GST on purchases is 1B (the old tags read G1/
+G2, but G1 is total sales — which the receipts row now carries — and
+G2 is exports), and the net line is explicitly informational — it
+nets 1A against 1B for reading, since the ATO form asks for the two
+labels separately and nets them itself.
+
+### Fixed — a second draft can't double-seed the PSI remainder
+
+The PSI-residual computation counts processed runs only (a draft
+has paid nobody), which left a hole: two concurrent quarterly drafts
+each seeded the full attribution remainder, and processing both
+overpaid. The remainder now subtracts PSI-residual payslips already
+seeded on other draft runs for the same entity and financial year —
+the run being built excluded, and ordinary draft wages reserve
+nothing since they are not PSI payments and a draft may never be
+processed. Seeding and the new posting guard serialise on the entity
+row (two concurrent run creations no longer read the same
+reservation state), and processing refuses a psi_residual payslip
+whose stored gross exceeds the remainder re-derived at posting time —
+the amount was computed at seeding, and a processed run, a reversal
+or a cancelled invoice may have shrunk the requirement since.
+(Further code review.)
+
+### Changed — cash flow report decomposes the operating section
+
+Operating activities read as one net-profit line plus a single
+catch-all "working capital & other operating movements" figure —
+payroll (and every other expense) hid inside profit. The section now
+breaks down: per-account income and expense movements above the
+net-profit line (the same closing-excluding rows the P&L shows, so
+Salaries & Wages, Superannuation and each cost line read by name),
+then the working-capital movements itemised below it — receivables,
+supplier payables, taxation (GST and withheld PAYG), other current
+assets, other current liabilities (wages, super and reimbursement
+payables) and provisions: the six sections the package sums into
+the operating total, so the lines tie out with no residual plug.
+Lines with no movement over the period are omitted. (A later review
+round put every operating line on one basis — signed, selected-
+period, closure-excluded movements — so refunds and reversals keep
+their direction, custom date ranges apply to the movement lines too
+(the package computes its own FY-to-date regardless), and the
+operating footer keeps its sign instead of an absolute value.)
+
+### Fixed — cash flow widget counts payroll and reimbursements
+
+The dashboard's 30-day cash flow widget read outflows from supplier
+bill payments alone, so the two other ways cash leaves the bank were
+invisible: payroll (net pay posts as a journal, never a bill
+payment) and employee reimbursements. Outflows now sum supplier
+payments on bank methods, completed reimbursements, and processed
+pay runs' net — net rather than gross, because the withheld PAYG
+pays the ATO, not staff. Employee-reimbursement captures are
+excluded from the supplier leg on purpose: a capture credits the
+payable, not the bank, and counting both legs would book the same
+expense twice (the capture also previously inflated outflows
+although no company cash had moved). The prior-period comparison
+inherits the same legs. The ledger-based cash flow report was
+already complete — only the widget's event-based sums had the gap.
+
+## [Unreleased] — 2026-10-01
+
+### Fixed — PAYG withholding now builds x the way NAT 1004 specifies
+
+Cross-checking a quarterly director payment against an STP-certified
+app caught it: on $31,893.34 quarterly earnings the app withheld
+$7,852 where Acacia computed $7,839 — exactly one weekly unit. The
+ATO's Schedule 1 formulas take x = the whole dollars of the weekly
+equivalent plus 99 cents ("ignore any cents in the result and then
+add 99 cents"), and the coefficients are calibrated against that
+construction; Acacia was feeding the raw weekly equivalent into
+y = ax − b, under-withholding whenever the dropped cents sat near a
+rounding boundary. The fix applies the construction at every
+frequency (weekly, fortnightly ÷2, monthly ×3÷13 — including the
+ATO's add-a-cent-when-the-sum-ends-in-33-cents quirk — and quarterly
+÷13), rounds the monthly back-conversion to the nearest dollar as
+the schedule prescribes (not to cents), and applies the no-TFN flat
+rate on whole-dollar earnings truncated to whole dollars (scale 4
+ignores cents on both sides). Known unmodelled, as before: Medicare
+levy adjustment variants, working-holiday-maker scale 15 and
+withholding-declaration tax offsets. Bret's quarterly payslip now
+computes PAYG $7,852.00 (net $24,041.34).
+
+### Added — PSI-residual director payslips
+
+The conduit-company director flow, step 2: a payee on the new "PSI
+residual" payment basis draws, as their gross on a quarterly run,
+exactly what the PSI attribution says is still required — the
+entity's financial-year PSI income less wages already paid to PSI
+workers (the PSI screen's net PSI figure). The payslip is seeded
+when the run is created; PAYG withholding and super follow as on any
+director fee. Guarded, with the reason when refused: the run must be
+quarterly, PSI mode must be on (a passed Results Test means the
+rules — and any required amount — don't apply), exactly one such
+payee may be active (the remainder is entity-wide), and a zero
+remainder seeds nothing. An explicit gross always overrides the
+computation. Attribution's "wages paid" now counts processed runs
+only — a draft run has paid nobody, so the remainder shown on the
+PSI screen stays honest until a run processes (reversing the run
+puts the wages back). The PSI Assessment screen also joined the
+sidebar beside Payroll; it previously lived only under the topbar
+Setup dropdown.
+
+### Added — quarterly pay runs
+
+Pay runs can be recorded at a quarterly frequency — the cadence a PSI
+conduit company typically pays its director. The NAT 1004 withholding
+conversion spreads the quarter's lump across the 13 weeks it covers
+(weekly equivalent ÷ 13, scale applied to that weekly figure, result
+× 13), the ATO's treatment for a payment spanning several pay
+periods. Without it, a quarterly lump entered on the closest existing
+frequency (monthly) withheld as if the lump were a single month's
+salary — annualising the payee at four times their real income.
+Salary apportionment on quarterly runs divides the annual salary by
+4. The step-2 companion of this flow — auto-computing the director's
+payslip from the PSI attribution's net PSI — is implemented in the
+PSI-residual director payslips entry above.
+
+### Removed — Time by Project report, redundant with Project Timesheet
+
+The Practice module's Time by Project report (route
+`/reports/time-by-project`, its controller method, view and nav slot)
+is gone. Project Timesheet already answers the same question —
+approved hours and amounts per project over any date range,
+filterable to one project — and adds the week-by-week/month-by-month
+breakdown sums clients actually ask for plus a client filter, so the
+summary-only view added nothing. The billable/non-billable split and
+budget-utilisation percentage it displayed remain available on the
+staff/client reports and the project profitability view. Bookmarked
+`time-by-project` URLs now 404; nav positions closed up. Two tests
+that only asserted HTTP 200 against the route (one passed filter
+params the controller never read) were deleted; the date-range and
+totals tests were retargeted to Project Timesheet with real
+assertions.
+
 ## [Unreleased] — 2026-09-30
 
 ### Changed — class docblocks backfilled across the pre-convention core

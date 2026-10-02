@@ -96,6 +96,39 @@ class FinancialStatementController extends Controller
         return $rows;
     }
 
+    /**
+     * Signed (debit-positive) movements per account over the period,
+     * excluding year-end closing entries, keyed by account id (names
+     * are carried along but are not unique across the chart).
+     * Unlike pnlAccountRows() these keep their sign, so refunds and
+     * reversals read in the right direction once the statement
+     * negates them into its convention.
+     *
+     * @param  list<string>  $accountTypes
+     * @return array<int, array{id: int, name: string, movement: float}>
+     */
+    protected function pnlSignedMovements(array $accountTypes, Carbon $startDate, Carbon $endDate): array
+    {
+        $entity = $this->ifrsEntity();
+        $rows = [];
+
+        foreach (Account::where('entity_id', $entity->id)
+            ->whereIn('account_type', $accountTypes)
+            ->orderBy('code')
+            ->get() as $account
+        ) {
+            $movement = FiscalYearService::movementExcludingClosures($account, $startDate, $endDate, $entity);
+
+            if (abs($movement) < 0.005) {
+                continue;
+            }
+
+            $rows[$account->id] = ['id' => $account->id, 'name' => $account->name, 'movement' => $movement];
+        }
+
+        return $rows;
+    }
+
     public function trialBalance(Request $request)
     {
         $endDate = $request->get('end_date')
@@ -251,6 +284,22 @@ class FinancialStatementController extends Controller
         ));
     }
 
+    /**
+     * The indirect-method cash flow statement over the IFRS ledger.
+     * Every operating line — the profit breakdown above the
+     * net-profit row and the six working-capital movement sections
+     * below it — is a signed, selected-period, closure-excluded
+     * movement (pnlSignedMovements), so payroll reads as its own
+     * line, refunds and reversals keep their direction, the section
+     * sums internally to a signed operating total with no residual
+     * plug, and custom date ranges are honoured on every line (the
+     * package's getSections() balances are FY-to-date regardless of
+     * the requested period, which is why the movements are derived
+     * here). Zero-movement lines are omitted. Investing, financing
+     * and the net-cash footer derive the same way (non-current and
+     * equity movements in cash-flow sign), so the whole statement
+     * honours the selected period.
+     */
     public function cashFlowStatement(Request $request)
     {
         $entity = $this->ifrsEntity();
@@ -265,23 +314,73 @@ class FinancialStatementController extends Controller
 
         $this->getReportingPeriod($endDate);
 
-        $statement = new CashFlowStatement($startDate->toDateString(), $endDate->toDateString(), $entity);
-        $sections = $statement->getSections();
+        // Every operating line is a signed, selected-period,
+        // closure-excluded movement (pnlSignedMovements — debit-
+        // positive, negated here into statement convention: income
+        // positive, expenses and asset growth negative), so the
+        // section sums internally and refunds/reversals keep their
+        // direction instead of arriving as magnitudes.
+        $signed = fn (array $types) => $this->pnlSignedMovements($types, $startDate, $endDate);
 
-        // The package derives cash flows from balance movements, not
-        // per-account lines; present the components it does expose.
-        $profit = (float) $sections['balances'][CashFlowStatement::PROFIT];
-        $operatingTotal = (float) $sections['results'][CashFlowStatement::OPERATIONS_CASH_FLOW];
-        $investingTotal = (float) $sections['results'][CashFlowStatement::INVESTMENT_CASH_FLOW];
-        $financingTotal = (float) $sections['results'][CashFlowStatement::FINANCING_CASH_FLOW];
-        $netCash = (float) $sections['balances'][CashFlowStatement::NET_CASH_FLOW];
+        $operating = [];
+        foreach ($signed([Account::OPERATING_REVENUE, Account::NON_OPERATING_REVENUE]) as $row) {
+            $operating[] = ['account' => ['name' => 'Income — '.$row['name']], 'balance' => round(-$row['movement'], 2)];
+        }
+        foreach ($signed([Account::DIRECT_EXPENSE]) as $row) {
+            $operating[] = ['account' => ['name' => 'Direct costs — '.$row['name']], 'balance' => round(-$row['movement'], 2)];
+        }
+        foreach ($signed([Account::OPERATING_EXPENSE, Account::OVERHEAD_EXPENSE, Account::OTHER_EXPENSE]) as $row) {
+            $operating[] = ['account' => ['name' => 'Operating expenses — '.$row['name']], 'balance' => round(-$row['movement'], 2)];
+        }
+
+        $profit = round(array_sum(array_column($operating, 'balance')), 2);
+        $operating[] = ['account' => ['name' => 'Net profit for the period'], 'balance' => $profit];
+
+        // The six working-capital movement sections behind the
+        // operating total, on the same selected-period basis (the
+        // package's getSections() versions are FY-to-date), labelled
+        // for the chart this firm keeps: payroll and reimbursement
+        // payables are current liabilities; GST and withheld PAYG
+        // sit in the taxation control accounts. Balance-sheet
+        // movements negate into cash-flow sign — asset growth is a
+        // use of cash (the package's own convention).
+        $operatingMovements = [
+            'Change in receivables' => CashFlowStatement::RECEIVABLES,
+            'Change in supplier payables' => CashFlowStatement::PAYABLES,
+            'Change in taxation liabilities (GST, PAYG withheld)' => CashFlowStatement::TAXATION,
+            'Change in other current assets' => CashFlowStatement::CURRENT_ASSETS,
+            'Change in other current liabilities (wages, super, reimbursements)' => CashFlowStatement::CURRENT_LIABILITIES,
+            'Change in provisions' => CashFlowStatement::PROVISIONS,
+        ];
+
+        $movementTotal = 0.0;
+        foreach ($operatingMovements as $label => $section) {
+            $movement = round(-1 * array_sum(array_column($signed(config('ifrs')[$section]), 'movement')), 2);
+            if (abs($movement) < 0.005) {
+                continue;
+            }
+
+            $operating[] = ['account' => ['name' => $label], 'balance' => $movement];
+            $movementTotal += $movement;
+        }
+
+        // Investing, financing and the net cash footer on the same
+        // selected-period basis (the package's getSections() results
+        // are FY-to-date regardless of the requested period, which
+        // would make the footer contradict the operating section on
+        // custom ranges): non-current and equity movements negated
+        // into cash-flow sign, netted with the operating result.
+        $investingTotal = round(-1 * array_sum(array_column($signed(config('ifrs')[CashFlowStatement::NON_CURRENT_ASSETS]), 'movement')), 2);
+        $financingTotal = round(-1 * (
+            array_sum(array_column($signed(config('ifrs')[CashFlowStatement::NON_CURRENT_LIABILITIES]), 'movement'))
+            + array_sum(array_column($signed(config('ifrs')[CashFlowStatement::EQUITY]), 'movement'))
+        ), 2);
+        $operatingTotal = round($profit + $movementTotal, 2);
+        $netCash = round($operatingTotal + $investingTotal + $financingTotal, 2);
 
         $lines = ['statement' => [
-            'operating' => [
-                ['account' => ['name' => 'Net profit for the period'], 'balance' => round(abs($profit), 2)],
-                ['account' => ['name' => 'Working capital & other operating movements'], 'balance' => round(abs($operatingTotal - $profit), 2)],
-            ],
-            'operatingTotal' => round(abs($operatingTotal), 2),
+            'operating' => $operating,
+            'operatingTotal' => $operatingTotal,
             'investing' => [
                 ['account' => ['name' => 'Non-current asset movements'], 'balance' => round(abs($investingTotal), 2)],
             ],
