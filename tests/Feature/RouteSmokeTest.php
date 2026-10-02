@@ -104,10 +104,10 @@ class RouteSmokeTest extends TestCase
         }
 
         // Guard the guard: an empty loop would pass vacuously. The
-        // floor is half the current route count, not the count itself
-        // — redundant screens get removed (the Time by Project report
-        // took the table to exactly 100 and broke a >100 floor), and
-        // the guard only needs to catch a vacuous or gutted loop.
-        $this->assertGreaterThan(50, $hits, 'The smoke loop should have hit a meaningful number of routes.');
+        // floor sits just under the current route count (~100) —
+        // redundant screens get removed (the Time by Project report
+        // took the table to exactly 100 and broke a >100 floor) —
+        // while still catching a vacuous or gutted loop.
+        $this->assertGreaterThan(90, $hits, 'The smoke loop should have hit a meaningful number of routes.');
     }
 }
