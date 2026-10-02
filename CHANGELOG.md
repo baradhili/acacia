@@ -5,6 +5,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-02
 
+### Changed — GST report amounts paste straight into the BAS
+
+The GST/BAS report showed `$x,xxx.xx` amounts — fine to read, useless
+to paste: the ATO BAS labels take whole dollars only, so every figure
+had to be re-keyed. All amounts on the report are now whole dollars
+with the cents dropped (the ATO's round-down), no symbol or thousands
+separator (e.g. `31893`), ready to copy straight into the form. The
+label tags were also corrected to match the ATO fields they feed:
+GST on sales is 1A and GST on purchases is 1B (the old tags read G1/
+G2, but G1 is total sales — which the receipts row now carries — and
+G2 is exports), and the net line is explicitly informational — it
+nets 1A against 1B for reading, since the ATO form asks for the two
+labels separately and nets them itself.
+
 ### Fixed — a second draft can't double-seed the PSI remainder
 
 The PSI-residual computation counts processed runs only (a draft
@@ -14,7 +28,13 @@ overpaid. The remainder now subtracts PSI-residual payslips already
 seeded on other draft runs for the same entity and financial year —
 the run being built excluded, and ordinary draft wages reserve
 nothing since they are not PSI payments and a draft may never be
-processed. (Found in code review.)
+processed. Seeding and the new posting guard serialise on the entity
+row (two concurrent run creations no longer read the same
+reservation state), and processing refuses a psi_residual payslip
+whose stored gross exceeds the remainder re-derived at posting time —
+the amount was computed at seeding, and a processed run, a reversal
+or a cancelled invoice may have shrunk the requirement since.
+(Further code review.)
 
 ### Changed — cash flow report decomposes the operating section
 
@@ -29,7 +49,12 @@ supplier payables, taxation (GST and withheld PAYG), other current
 assets, other current liabilities (wages, super and reimbursement
 payables) and provisions: the six sections the package sums into
 the operating total, so the lines tie out with no residual plug.
-Lines with no movement over the period are omitted.
+Lines with no movement over the period are omitted. (A later review
+round put every operating line on one basis — signed, selected-
+period, closure-excluded movements — so refunds and reversals keep
+their direction, custom date ranges apply to the movement lines too
+(the package computes its own FY-to-date regardless), and the
+operating footer keeps its sign instead of an absolute value.)
 
 ### Fixed — cash flow widget counts payroll and reimbursements
 
