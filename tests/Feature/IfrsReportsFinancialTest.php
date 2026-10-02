@@ -252,9 +252,9 @@ class IfrsReportsFinancialTest extends TestCase
 
         // An unbilled accrual: Dr receivable / Cr revenue. The
         // breakdown must show the income and expense lines above a
-        // profit of $390 ($500 revenue − $110 travel), the
-        // receivable's growth as a −$500 movement, and the operating
-        // total netting to the $110 of cash actually spent.
+        // profit figure, the receivable's growth as a −$500
+        // movement, and the operating total netting to the cash
+        // actually spent.
         $accrual = new JournalEntry([
             'account_id' => $receivable->id,
             'transaction_date' => Carbon::now(),
@@ -273,19 +273,45 @@ class IfrsReportsFinancialTest extends TestCase
         );
         $accrual->post();
 
+        // A $200 fee refund (Dr revenue / Cr bank): the income line
+        // must NET to $300 — the signed movement keeps the reversal's
+        // direction instead of two positive magnitudes.
+        $refund = new JournalEntry([
+            'account_id' => $revenue->id,
+            'transaction_date' => Carbon::now(),
+            'narration' => 'Fee refund',
+            'currency_id' => $this->currency->id,
+            'credited' => false,
+        ]);
+        $refund->addLineItem(
+            LineItem::create([
+                'account_id' => $this->bank->id,
+                'amount' => 200,
+                'quantity' => 1,
+                'credited' => true,
+                'entity_id' => $this->entity->id,
+            ])
+        );
+        $refund->post();
+
         $this->postExpense(110);
 
         $response = $this->get(route('reports.cash-flow'));
 
         $response->assertStatus(200);
         $response->assertSee('Income — Consulting Revenue');
-        $response->assertSee('500.00');
+        $response->assertSee('300.00');
         $response->assertSee('Operating expenses — Travel & Accommodation');
         $response->assertSee('-110.00');
         $response->assertSee('Net profit for the period');
-        $response->assertSee('390.00');
+        $response->assertSee('190.00');
         $response->assertSee('Change in receivables');
         $response->assertSee('-500.00');
+
+        // The operating footer keeps its sign: profit $190 less the
+        // $500 receivable growth is a $-310 operating result (the
+        // expense row shares -110.00, so pin the footer cell itself).
+        $response->assertSee('<td class="text-right font-bold">$-310.00</td>', false);
         $response->assertDontSee('Working capital & other operating movements');
     }
 
