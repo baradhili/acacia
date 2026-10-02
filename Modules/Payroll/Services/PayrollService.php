@@ -3,6 +3,7 @@
 namespace Modules\Payroll\Services;
 
 use App\Models\EntitySetting;
+use App\Services\FiscalYearService;
 use App\Services\IfrsPosting;
 use App\Services\PeriodLockService;
 use Carbon\Carbon;
@@ -180,13 +181,19 @@ class PayrollService
      * The gross a psi_residual payee draws on a run: the entity's PSI
      * attribution remainder for the run's financial year — PSI income
      * less wages already paid to PSI workers this FY (processed runs
-     * only, so the draft being built never nets itself out). Refused,
-     * with the reason, unless: the run is quarterly (the cadence the
-     * conduit-company flow assumes), PSI mode is on (a passed Results
-     * Test means the rules — and any required amount — don't apply),
-     * exactly one such payee is active (the remainder is entity-wide;
-     * two takers would each draw it in full), and the remainder is
-     * above zero. An explicit gross override skips all of this.
+     * only, so the draft being built never nets itself out), less
+     * PSI-residual payslips already seeded on other DRAFT runs for
+     * the same entity and FY — the reservation that keeps two
+     * concurrent quarterly drafts from each seeding the full
+     * remainder and overpaying when both process. Ordinary draft
+     * wages reserve nothing: they are not PSI payments and a draft
+     * may never be processed. Refused, with the reason, unless: the
+     * run is quarterly (the cadence the conduit-company flow
+     * assumes), PSI mode is on (a passed Results Test means the
+     * rules — and any required amount — don't apply), exactly one
+     * such payee is active (the remainder is entity-wide; two takers
+     * would each draw it in full), and the remainder is above zero.
+     * An explicit gross override skips all of this.
      */
     protected function psiResidualGross(Employee $employee, PayRun $run): float
     {
@@ -215,16 +222,27 @@ class PayrollService
             );
         }
 
-        $attribution = $this->psi->attribution($entity, ReportingPeriod::year($run->payment_date, $entity));
-        $residual = $attribution['net_psi'];
+        $fy = ReportingPeriod::year($run->payment_date, $entity);
+        $attribution = $this->psi->attribution($entity, $fy);
+        ['start' => $start, 'end' => $end] = (new FiscalYearService)->bounds($entity, $fy);
+
+        $reserved = (float) Payslip::query()
+            ->whereHas('payRun', fn ($q) => $q->where('entity_id', $run->entity_id)
+                ->where('status', PayRun::STATUS_DRAFT)
+                ->where('id', '!=', $run->id)
+                ->whereBetween('payment_date', [$start->toDateString(), $end->toDateString()]))
+            ->whereHas('employee', fn ($q) => $q->where('payment_basis', Employee::BASIS_PSI_RESIDUAL))
+            ->sum('gross');
+
+        $residual = round($attribution['net_psi'] - $reserved, 2);
 
         if ($residual <= 0) {
             throw new \InvalidArgumentException(
-                'The PSI attribution remainder for this financial year is zero — nothing is required to pay.'
+                'The PSI attribution remainder for this financial year is zero (or already reserved by another draft run) — nothing is required to pay.'
             );
         }
 
-        return round($residual, 2);
+        return $residual;
     }
 
     /**

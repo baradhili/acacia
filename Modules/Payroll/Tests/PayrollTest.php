@@ -285,6 +285,17 @@ class PayrollTest extends TestCase
             'payment_date' => '2026-12-31',
         ]);
         $this->assertEquals(6000.0, (float) $q3->payslips()->first()->gross);
+
+        // A concurrent second draft must not double-seed: q3's
+        // unprocessed residual payslip reserves the remainder for
+        // its financial year.
+        $shadow = $this->payroll->createRun([
+            'frequency' => 'quarterly',
+            'period_start' => '2026-10-01',
+            'period_end' => '2026-12-31',
+            'payment_date' => '2026-12-31',
+        ]);
+        $this->assertSame(0, $shadow->payslips()->count());
     }
 
     public function test_psi_residual_payslips_respect_the_gates(): void
