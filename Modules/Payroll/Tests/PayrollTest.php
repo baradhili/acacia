@@ -4,6 +4,7 @@ namespace Modules\Payroll\Tests;
 
 use App\Models\Client;
 use App\Models\FiscalPeriod;
+use App\Models\Invoice;
 use App\Models\User;
 use App\Services\IfrsPosting;
 use App\Services\OpeningBalances;
@@ -296,6 +297,41 @@ class PayrollTest extends TestCase
             'payment_date' => '2026-12-31',
         ]);
         $this->assertSame(0, $shadow->payslips()->count());
+    }
+
+    public function test_processing_refuses_a_stale_psi_residual_payslip(): void
+    {
+        app(PsiService::class)->recordResultsTest($this->entity, ['liable_for_defects' => false]);
+
+        $invoice = $this->serviceInvoice(Client::factory()->create(['name' => 'Stale Client']), 6000, '2026-11-10');
+
+        $director = $this->employee([
+            'employment_type' => Employee::TYPE_DIRECTOR,
+            'payment_basis' => Employee::BASIS_PSI_RESIDUAL,
+            'is_personal_services' => true,
+        ]);
+
+        $run = $this->payroll->createRun([
+            'frequency' => 'quarterly',
+            'period_start' => '2026-10-01',
+            'period_end' => '2026-12-31',
+            'payment_date' => '2026-12-31',
+        ]);
+        $this->assertEquals(6000.0, (float) $run->payslips()->first()->gross);
+
+        // The invoice is cancelled after seeding: the requirement
+        // shrinks below the seeded gross, and posting must refuse.
+        $invoice->update(['status' => Invoice::STATUS_CANCELLED]);
+
+        try {
+            $this->payroll->process($run);
+            $this->fail('Processing a stale PSI-residual payslip should refuse.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('exceed the remaining PSI requirement', $e->getMessage());
+        }
+
+        $this->assertFalse($run->refresh()->isProcessed());
+        $this->assertEquals(0.0, $this->balance(5100));
     }
 
     public function test_psi_residual_payslips_respect_the_gates(): void

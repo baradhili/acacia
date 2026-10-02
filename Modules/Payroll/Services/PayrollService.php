@@ -38,7 +38,9 @@ use Modules\Payroll\Models\Payslip;
  *
  * A psi_residual payee (the conduit-company director) draws the PSI
  * attribution remainder as their gross on quarterly runs — see
- * psiResidualGross() for the gates; an explicit gross always wins.
+ * psiResidualGross() for the gates; an explicit gross always wins at
+ * entry, though processing still refuses a psi_residual payslip
+ * above the remaining requirement.
  */
 class PayrollService
 {
@@ -222,6 +224,27 @@ class PayrollService
             );
         }
 
+        $residual = $this->psiRemainderExcludingRun($run, $entity);
+
+        if ($residual <= 0) {
+            throw new \InvalidArgumentException(
+                'The PSI attribution remainder for this financial year is zero (or already reserved by another draft run) — nothing is required to pay.'
+            );
+        }
+
+        return $residual;
+    }
+
+    /**
+     * The numeric remainder behind psiResidualGross(): attribution
+     * net PSI for the run's FY, less PSI-residual payslips seeded on
+     * other draft runs for the same entity and FY. Callers that act
+     * on the result (createRun's seeding, process()'s staleness
+     * check) hold the entity-row lock so concurrent runs serialise
+     * instead of both reading the same reservation state.
+     */
+    protected function psiRemainderExcludingRun(PayRun $run, Entity $entity): float
+    {
         $fy = ReportingPeriod::year($run->payment_date, $entity);
         $attribution = $this->psi->attribution($entity, $fy);
         ['start' => $start, 'end' => $end] = (new FiscalYearService)->bounds($entity, $fy);
@@ -234,15 +257,43 @@ class PayrollService
             ->whereHas('employee', fn ($q) => $q->where('payment_basis', Employee::BASIS_PSI_RESIDUAL))
             ->sum('gross');
 
-        $residual = round($attribution['net_psi'] - $reserved, 2);
+        return round($attribution['net_psi'] - $reserved, 2);
+    }
 
-        if ($residual <= 0) {
-            throw new \InvalidArgumentException(
-                'The PSI attribution remainder for this financial year is zero (or already reserved by another draft run) — nothing is required to pay.'
-            );
+    /**
+     * Processing guard: a psi_residual payslip was computed when it
+     * was seeded and the requirement may have moved since. Under the
+     * entity lock (the one createRun's seeding holds), re-derive
+     * today's remainder and refuse the run when its PSI-residual
+     * payslips' COMBINED gross exceeds it — checked per run, not per
+     * payslip, so two partial payslips can't each slip under the cap.
+     * Reverse the run to draft and re-add the payslips to refresh.
+     * Applies to explicit overrides as well: this basis pays what PSI
+     * requires and no more, and posting is where that invariant is
+     * enforced.
+     */
+    protected function assertPsiResidualsWithinRemainder(PayRun $run, Entity $entity): void
+    {
+        $psiPayslips = $run->payslips()
+            ->whereHas('employee', fn ($q) => $q->where('payment_basis', Employee::BASIS_PSI_RESIDUAL))
+            ->get();
+
+        if ($psiPayslips->isEmpty()) {
+            return;
         }
 
-        return $residual;
+        DB::table('ifrs_entities')->where('id', $run->entity_id)->lockForUpdate()->first();
+
+        $available = $this->psiRemainderExcludingRun($run, $entity);
+        $psiGross = round((float) $psiPayslips->sum('gross'), 2);
+
+        if ($psiGross > $available + 0.005) {
+            throw new \InvalidArgumentException(sprintf(
+                'The run\'s PSI-residual payslips ($%s combined) exceed the remaining PSI requirement ($%s) — reverse the run to draft and re-add the payslip to refresh the amount.',
+                number_format($psiGross, 2),
+                number_format($available, 2),
+            ));
+        }
     }
 
     /**
@@ -290,6 +341,13 @@ class PayrollService
                 'frequency' => $data['frequency'],
                 'notes' => $data['notes'] ?? null,
             ]);
+
+            // Serialise PSI-residual seeding on the entity row — the
+            // same lock process() takes for its staleness check.
+            // Without it, two concurrent runs read the same
+            // reservation state before either payslip lands and both
+            // seed the full remainder.
+            DB::table('ifrs_entities')->where('id', $run->entity_id)->lockForUpdate()->first();
 
             // Seed a payslip for every active employee whose defaults
             // can be computed — salary staff anywhere, a psi_residual
@@ -353,6 +411,13 @@ class PayrollService
         $net = round($gross - $payg, 2);
 
         return DB::transaction(function () use ($run, $entity, $gross, $payg, $super, $net) {
+            // A psi_residual payslip was computed when it was seeded;
+            // the requirement may have moved since (another run
+            // processed, a run reversed, an invoice cancelled). Under
+            // the same entity lock as seeding, refuse one that now
+            // exceeds the remainder.
+            $this->assertPsiResidualsWithinRemainder($run, $entity);
+
             $wages = $this->account($entity, 'wages_expense');
             $superExpense = $this->accountOrCreate($entity, 'super_expense', Account::OPERATING_EXPENSE, 'Superannuation Expense');
             $paygAccount = $this->account($entity, 'payg_withholding');
