@@ -4,13 +4,8 @@
 @endphp
 
 <div class="bg-white rounded-lg shadow p-6">
-    <div class="flex justify-between items-center mb-4">
+    <div class="mb-4">
         <h2 class="text-lg font-semibold text-gray-800">Unbilled Time Entries</h2>
-        <label class="flex items-center gap-2 text-sm text-gray-600">
-            <input type="checkbox" id="selectAllEntries"
-                class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-            Select all
-        </label>
     </div>
 
     @if ($timeEntries->isEmpty())
@@ -20,10 +15,15 @@
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
-                        <th class="px-3 py-3 w-10"></th>
+                        <th class="px-3 py-3 w-10" title="Select all">
+                            <input type="checkbox" id="selectAllEntries"
+                                class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                title="Select all">
+                        </th>
                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Staff</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Client / Project</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Client / Project
+                        </th>
                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
                         <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase">Hours</th>
                         <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase">Rate</th>
@@ -39,18 +39,22 @@
                                     class="entry-checkbox rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                     {{ in_array($entry->id, old('time_entry_ids', [])) ? 'checked' : '' }}>
                             </td>
-                            <td class="px-3 py-3 text-sm text-gray-900 whitespace-nowrap">{{ $entry->entry_date?->format('d M Y') ?? '-' }}</td>
+                            <td class="px-3 py-3 text-sm text-gray-900 whitespace-nowrap">
+                                {{ $entry->entry_date?->format('d M Y') ?? '-' }}</td>
                             <td class="px-3 py-3 text-sm text-gray-900">{{ $entry->user?->name ?? '-' }}</td>
                             <td class="px-3 py-3 text-sm text-gray-900">
-                                {{ $entry->client?->name ?? $entry->project?->client?->name ?? '-' }}
+                                {{ $entry->client?->name ?? ($entry->project?->client?->name ?? '-') }}
                                 @if ($entry->project)
                                     <span class="text-gray-400">/</span> {{ $entry->project->name }}
                                 @endif
                             </td>
                             <td class="px-3 py-3 text-sm text-gray-900">{{ Str::limit($entry->description, 50) }}</td>
-                            <td class="px-3 py-3 text-sm text-right text-gray-900">{{ number_format($entry->hours, 2) }}</td>
-                            <td class="px-3 py-3 text-sm text-right text-gray-900">${{ number_format($entry->effective_rate, 2) }}</td>
-                            <td class="px-3 py-3 text-sm text-right font-medium text-gray-900">${{ number_format($entry->hours * $entry->effective_rate, 2) }}</td>
+                            <td class="px-3 py-3 text-sm text-right text-gray-900">{{ number_format($entry->hours, 2) }}
+                            </td>
+                            <td class="px-3 py-3 text-sm text-right text-gray-900">
+                                ${{ number_format($entry->effective_rate, 2) }}</td>
+                            <td class="px-3 py-3 text-sm text-right font-medium text-gray-900">
+                                ${{ number_format($entry->hours * $entry->effective_rate, 2) }}</td>
                         </tr>
                     @endforeach
                 </tbody>
@@ -77,8 +81,8 @@
 
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Due Date *</label>
-            <input type="date" name="due_date" value="{{ old('due_date', now()->addDays($dueDays)->toDateString()) }}"
-                required
+            <input type="date" name="due_date"
+                value="{{ old('due_date', now()->addDays($dueDays)->toDateString()) }}" required
                 class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 w-full">
             @error('due_date')
                 <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
