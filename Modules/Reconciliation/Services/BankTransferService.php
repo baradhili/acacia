@@ -106,6 +106,14 @@ class BankTransferService
         $moneyIn = $line->type === BankTransaction::TYPE_CREDIT;
 
         return DB::transaction(function () use ($line, $entity, $bankAccount, $counterpart, $amount, $date, $moneyIn, $notes) {
+            // Authoritative pending check under the line's row lock:
+            // a double-submit racing past the check above must not
+            // post a second journal for the same line.
+            $line = BankTransaction::whereKey($line->id)->lockForUpdate()->firstOrFail();
+            if ($line->status !== BankTransaction::STATUS_PENDING) {
+                throw new \InvalidArgumentException('Only a pending bank line can be recorded as a transfer.');
+            }
+
             $debitAccount = $moneyIn
                 ? $bankAccount
                 : ($counterpart ?? $this->ensureEquityAccount(self::FUNDS_WITHDRAWN_CODE, 'Funds Withdrawn', $entity));

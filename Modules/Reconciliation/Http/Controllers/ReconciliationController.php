@@ -158,10 +158,14 @@ class ReconciliationController extends Controller
         ]);
 
         try {
+            // Absent means external — a hand-crafted POST may omit the
+            // select entirely, and validated() drops absent keys.
+            $counterpart = $validated['counterpart_account_id'] ?? null;
+
             $this->transfers->record(
                 $transaction,
                 (int) $validated['bank_account_id'],
-                $validated['counterpart_account_id'] !== null && $validated['counterpart_account_id'] !== '' ? (int) $validated['counterpart_account_id'] : null,
+                $counterpart !== null && $counterpart !== '' ? (int) $counterpart : null,
                 $validated['notes'] ?? null,
             );
         } catch (\Throwable $e) {
