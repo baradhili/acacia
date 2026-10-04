@@ -255,6 +255,72 @@ class BankTransferTest extends TestCase
         $this->assertSame(0, BankTransaction::query()->whereNotNull('matched_transaction_id')->where('matched_transaction_type', 'ledger')->count());
     }
 
+    public function test_an_unmatched_line_records_again_without_double_posting(): void
+    {
+        $line = $this->bankLine(['amount' => 1500]);
+        $this->service->record($line, $this->operating->id, null);
+        $this->assertEqualsWithDelta(1500.0, $this->balance($this->operating), 0.001);
+
+        // Unmatch returns the line to pending; the journal — the real
+        // movement — stays. Recording again must re-match it, not
+        // post a second journal.
+        app(ReconciliationService::class)->unlinkTransaction($line->refresh());
+        $this->assertSame(BankTransaction::STATUS_PENDING, $line->refresh()->status);
+
+        $this->service->record($line->refresh(), $this->operating->id, null);
+
+        $this->assertTrue($line->refresh()->isMatched());
+        $this->assertEqualsWithDelta(1500.0, $this->balance($this->operating), 0.001);
+        $this->assertEqualsWithDelta(-1500.0, $this->balance($this->account(BankTransferService::FUNDS_INTRODUCED_CODE)), 0.001);
+    }
+
+    public function test_both_feed_sides_of_one_internal_transfer_share_one_journal(): void
+    {
+        // Two feeds, one internal move: the credit line on the target
+        // account's statement, the debit line on the source's.
+        $in = $this->bankLine(['amount' => 300, 'description' => 'Transfer in']);
+        $this->service->record($in, $this->operating->id, $this->savings->id);
+
+        // One side matched: only the OTHER side's leg stays listed for
+        // its own bank line to claim (transfers reconcile per leg).
+        $panel = app(ReconciliationService::class)->getUnreconciledBankMovements();
+        $this->assertCount(1, $panel);
+        $this->assertSame('Savings Account', $panel->first()['account']);
+
+        $out = $this->bankLine(['amount' => -300, 'type' => BankTransaction::TYPE_DEBIT, 'description' => 'Transfer out']);
+        $this->service->record($out, $this->savings->id, $this->operating->id);
+
+        // The second line claimed the SAME journal's other leg — no
+        // second Dr/Cr pair, cash moved exactly once.
+        $this->assertTrue($in->refresh()->isMatched());
+        $this->assertTrue($out->refresh()->isMatched());
+        $this->assertSame(
+            $in->refresh()->matched_transaction_type,
+            $out->refresh()->matched_transaction_type
+        );
+        $this->assertEqualsWithDelta(300.0, $this->balance($this->operating), 0.001);
+        $this->assertEqualsWithDelta(-300.0, $this->balance($this->savings), 0.001);
+        $this->assertCount(0, app(ReconciliationService::class)->getUnreconciledBankMovements());
+    }
+
+    public function test_split_transfers_still_post_their_own_journals(): void
+    {
+        // Payment-limit splits are separate real movements: equal
+        // amount and date must NOT attach the second line to the
+        // first journal, because each journal's bank leg is claimed
+        // by its own line the moment it posts.
+        $first = $this->bankLine(['amount' => 300, 'description' => 'Split 1']);
+        $second = $this->bankLine(['amount' => 300, 'description' => 'Split 2']);
+
+        $this->service->record($first, $this->operating->id, $this->savings->id);
+        $this->service->record($second, $this->operating->id, $this->savings->id);
+
+        $this->assertTrue($first->refresh()->isMatched());
+        $this->assertTrue($second->refresh()->isMatched());
+        $this->assertEqualsWithDelta(600.0, $this->balance($this->operating), 0.001);
+        $this->assertEqualsWithDelta(-600.0, $this->balance($this->savings), 0.001);
+    }
+
     public function test_the_match_screen_offers_the_transfer_card(): void
     {
         $line = $this->bankLine();

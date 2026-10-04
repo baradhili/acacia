@@ -425,16 +425,29 @@ class ReconciliationService
             // set of IFRS transaction ids: the transaction a matched
             // payment posted, or — for a direct 'ledger' link — the
             // transaction of whichever ledger row was linked (either
-            // leg counts).
+            // leg counts). Transfer journals (the XFER references
+            // BankTransferService posts) are the exception: they carry
+            // one bank leg per side's feed line, so they reconcile
+            // leg-by-leg — the linked leg only — leaving the other
+            // side's leg listed for its own bank line to claim.
             $matched = BankTransaction::matched()
                 ->whereNotNull('matched_transaction_type')
                 ->get(['matched_transaction_type', 'matched_transaction_id'])
                 ->groupBy('matched_transaction_type')
                 ->map(fn ($rows) => $rows->pluck('matched_transaction_id')->filter());
 
-            $reconciledTransactionIds = DB::table((new Ledger)->getTable())
+            $ledgerLinkedTransactionIds = DB::table((new Ledger)->getTable())
                 ->whereIn('id', $matched->get('ledger', collect()))
-                ->pluck('transaction_id')
+                ->pluck('transaction_id');
+
+            $transferTransactionIds = DB::table((new Transaction)->getTable())
+                ->whereIn('id', $ledgerLinkedTransactionIds)
+                ->whereNotNull('reference')
+                ->where('reference', 'like', 'XFER-%')
+                ->pluck('id');
+
+            $reconciledTransactionIds = $ledgerLinkedTransactionIds
+                ->diff($transferTransactionIds)
                 ->merge($this->tierOrEmpty(fn () => Payment::whereIn('id', $matched->get('payment', collect()))->pluck('ifrs_receipt_id')))
                 ->merge($this->tierOrEmpty(fn () => BillPayment::whereIn('id', $matched->get('bill_payment', collect()))->pluck('ifrs_payment_id')))
                 ->merge($this->tierOrEmpty(fn () => ReimbursementPayment::whereIn('id', $matched->get('reimbursement_payment', collect()))->pluck('ifrs_transaction_id')))
@@ -457,13 +470,21 @@ class ReconciliationService
                 ->keyBy('ifrs_transaction_id'));
 
             $rows = $movements
-                ->map(function ($movement) use ($accountNames, $transactions, $reconciledTransactionIds, $payments, $billPayments, $reimbursements) {
+                ->map(function ($movement) use ($accountNames, $transactions, $reconciledTransactionIds, $payments, $billPayments, $reimbursements, $transferTransactionIds, $matched) {
                     $transaction = $transactions->get($movement->transaction_id);
                     if (! $transaction) {
                         return null;
                     }
 
                     if ($reconciledTransactionIds->contains($movement->transaction_id)) {
+                        return null;
+                    }
+
+                    // Transfers reconcile per leg: the bank leg a
+                    // matched line claimed is gone, the other side's
+                    // leg stays listed for its own line.
+                    if ($transferTransactionIds->contains($movement->transaction_id)
+                        && $matched->get('ledger', collect())->contains((int) $movement->ledger_id)) {
                         return null;
                     }
 

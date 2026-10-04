@@ -27,7 +27,17 @@ payment-limit splits of one intended transfer each record their own
 line and journal — every transfer of a split batch keeps cash-in-bank
 correct, which is what the feature is for. The match deliberately
 teaches the counterparty rules nothing: a transfer journal is a
-one-off target.
+one-off target. Recording never double-posts: a line unmatches back
+to pending but its journal — the real movement — stays, so recording
+again re-matches the existing journal (and refuses if the accounts
+were changed rather than silently re-posting), and when both sides'
+statements feed the same internal transfer, the second line claims
+the first journal's other leg instead of posting a second Dr/Cr
+pair — payment-limit splits cannot collide with that, because each
+split's journal has its bank leg claimed by its own line the moment
+it posts. The unreconciled panel plays along: transfer journals
+reconcile leg-by-leg (one bank leg per side's feed line), while
+every other ledger link keeps its either-leg semantics.
 
 ### Added — bank vs books: the cash-basis gap on the reconciliation screen
 

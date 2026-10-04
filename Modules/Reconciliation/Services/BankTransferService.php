@@ -6,8 +6,10 @@ use App\Services\IfrsPosting;
 use App\Services\PeriodLockService;
 use Carbon\Carbon;
 use IFRS\Models\Account;
+use IFRS\Models\Balance;
 use IFRS\Models\Ledger;
 use IFRS\Models\LineItem;
+use IFRS\Models\Transaction;
 use IFRS\Scopes\EntityScope;
 use IFRS\Transactions\JournalEntry;
 use Illuminate\Support\Facades\DB;
@@ -114,66 +116,83 @@ class BankTransferService
                 throw new \InvalidArgumentException('Only a pending bank line can be recorded as a transfer.');
             }
 
-            $debitAccount = $moneyIn
-                ? $bankAccount
-                : ($counterpart ?? $this->ensureEquityAccount(self::FUNDS_WITHDRAWN_CODE, 'Funds Withdrawn', $entity));
-            $creditAccount = $moneyIn
-                ? ($counterpart ?? $this->ensureEquityAccount(self::FUNDS_INTRODUCED_CODE, 'Funds Introduced', $entity))
-                : $bankAccount;
+            // The journal this line needs may already be posted: its
+            // own (an unmatch returned the line to pending — the
+            // movement never left the books), or, for tracked-account
+            // pairs, the unclaimed leg of the journal the other side's
+            // feed line recorded. Never double-post either way.
+            $leg = $this->reusableTransferLeg($entity, $line, $bankAccount, $counterpart, $moneyIn, $amount, $date);
 
-            IfrsPosting::ensureReportingPeriod($date, $entity);
+            $journal = null;
+            if ($leg === null) {
+                $debitAccount = $moneyIn
+                    ? $bankAccount
+                    : ($counterpart ?? $this->ensureEquityAccount(self::FUNDS_WITHDRAWN_CODE, 'Funds Withdrawn', $entity));
+                $creditAccount = $moneyIn
+                    ? ($counterpart ?? $this->ensureEquityAccount(self::FUNDS_INTRODUCED_CODE, 'Funds Introduced', $entity))
+                    : $bankAccount;
 
-            $journal = new JournalEntry([
-                'transaction_date' => IfrsPosting::transactionDate($date, $entity),
-                'account_id' => $debitAccount->id,
-                'credited' => false,
-                'entity_id' => $entity->id,
-                'currency_id' => $entity->currency_id,
-                'narration' => $this->narration($line, $moneyIn, $bankAccount, $counterpart),
-                'reference' => 'XFER-'.$line->id,
-            ]);
-            $journal->addLineItem(LineItem::create([
-                'account_id' => $creditAccount->id,
-                'amount' => $amount,
-                'quantity' => 1,
-                'entity_id' => $entity->id,
-            ]));
-            $journal->post();
+                IfrsPosting::ensureReportingPeriod($date, $entity);
 
-            // The bank leg's ledger row is the match target — either
-            // leg would identify the transaction, but the bank side
-            // is the one that keeps the panel's labelling honest.
-            $bankLeg = Ledger::where('transaction_id', $journal->id)
-                ->where('post_account', $bankAccount->id)
-                ->orderBy('id')
-                ->first();
-            if ($bankLeg === null) {
-                throw new \InvalidArgumentException('The transfer journal posted without a bank leg — nothing to reconcile against.');
+                $journal = new JournalEntry([
+                    'transaction_date' => IfrsPosting::transactionDate($date, $entity),
+                    'account_id' => $debitAccount->id,
+                    'credited' => false,
+                    'entity_id' => $entity->id,
+                    'currency_id' => $entity->currency_id,
+                    'narration' => $this->narration($line, $moneyIn, $bankAccount, $counterpart),
+                    'reference' => 'XFER-'.$line->id,
+                ]);
+                $journal->addLineItem(LineItem::create([
+                    'account_id' => $creditAccount->id,
+                    'amount' => $amount,
+                    'quantity' => 1,
+                    'entity_id' => $entity->id,
+                ]));
+                $journal->post();
+
+                // The bank leg's ledger row is the match target —
+                // either leg would identify the transaction, but the
+                // bank side is the one that keeps the panel's
+                // labelling honest.
+                $leg = Ledger::where('transaction_id', $journal->id)
+                    ->where('post_account', $bankAccount->id)
+                    ->orderBy('id')
+                    ->first();
+                if ($leg === null) {
+                    throw new \InvalidArgumentException('The transfer journal posted without a bank leg — nothing to reconcile against.');
+                }
             }
 
-            $linkNotes = ($notes ?? 'Recorded as a bank transfer').' on '.now()->toDateTimeString();
+            $linkNotes = ($notes ?? ($journal !== null ? 'Recorded as a bank transfer' : 'Matched to the existing transfer journal'))
+                .' on '.now()->toDateTimeString();
             $line->update([
                 'status' => BankTransaction::STATUS_MATCHED,
-                'matched_transaction_id' => $bankLeg->id,
+                'matched_transaction_id' => $leg->id,
                 'matched_transaction_type' => 'ledger',
                 'matched_at' => now(),
                 'notes' => $line->notes ? $line->notes."\n".$linkNotes : $linkNotes,
             ]);
 
+            $details = $journal !== null
+                ? $this->narration($line, $moneyIn, $bankAccount, $counterpart)
+                : (string) Transaction::find($leg->transaction_id)?->narration;
+
             ReconciliationHistory::create([
                 'bank_transaction_id' => $line->id,
                 'action' => ReconciliationHistory::ACTION_MANUAL_MATCH,
                 'status' => ReconciliationHistory::STATUS_SUCCESS,
-                'linked_transaction_id' => $bankLeg->id,
+                'linked_transaction_id' => $leg->id,
                 'linked_transaction_type' => 'ledger',
-                'details' => $this->narration($line, $moneyIn, $bankAccount, $counterpart),
+                'details' => $details,
                 'notes' => $notes,
                 'user_id' => auth()->id(),
             ]);
 
             Log::info('Bank transfer recorded from reconciliation', [
                 'bank_transaction_id' => $line->id,
-                'transaction_id' => $journal->id,
+                'transaction_id' => $leg->transaction_id,
+                'reused_journal' => $journal === null,
                 'bank_account' => $bankAccount->code,
                 'counterpart' => $counterpart?->code ?? 'external',
                 'amount' => $amount,
@@ -181,6 +200,94 @@ class BankTransferService
 
             return $line;
         });
+    }
+
+    /**
+     * The bank leg this line should match to when the journal already
+     * exists, so the movement never posts twice:
+     *
+     * - This line's own journal (reference XFER-{line id}) — an
+     *   unmatch returned the line to pending but the movement never
+     *   left the books, so recording again re-matches, and refuses if
+     *   the accounts were changed rather than silently re-posting.
+     *
+     * - For tracked-account pairs, the unclaimed leg of the journal
+     *   the OTHER side's feed line recorded — same accounts, amount
+     *   and ±3 days, one bank leg per side, so a transfer feeding two
+     *   accounts' statements is one journal, not two. Payment-limit
+     *   splits cannot collide with this: each split's journal has its
+     *   bank leg claimed by its own line the moment it posts.
+     *
+     * There is no reversal path for XFER journals today (unmatching
+     * keeps the journal, correctly — the bank movement was real); a
+     * future one must clear the line's match alongside, or this reuse
+     * would re-match a reversed journal.
+     */
+    protected function reusableTransferLeg(
+        $entity,
+        BankTransaction $line,
+        Account $bankAccount,
+        ?Account $counterpart,
+        bool $moneyIn,
+        float $amount,
+        Carbon $date,
+    ): ?Ledger {
+        // The line's own journal, whatever accounts it used.
+        $ownTransactionId = Transaction::withoutGlobalScope(EntityScope::class)
+            ->where('entity_id', $entity->id)
+            ->where('reference', 'XFER-'.$line->id)
+            ->value('id');
+        if ($ownTransactionId !== null) {
+            $leg = Ledger::where('transaction_id', $ownTransactionId)
+                ->where('post_account', $bankAccount->id)
+                ->orderBy('id')
+                ->first();
+
+            if ($leg === null) {
+                throw new \InvalidArgumentException(
+                    'This line already posted a transfer journal (unmatching does not remove it) — match to its own accounts, or reverse the journal first.'
+                );
+            }
+
+            return $leg;
+        }
+
+        if ($counterpart === null) {
+            return null; // external deposits are genuinely repeatable
+        }
+
+        $claimed = BankTransaction::matched()
+            ->where('matched_transaction_type', 'ledger')
+            ->pluck('matched_transaction_id');
+
+        $candidates = DB::table((new Ledger)->getTable().' as l')
+            ->join((new Transaction)->getTable().' as t', 't.id', '=', 'l.transaction_id')
+            ->where('t.entity_id', $entity->id)
+            ->where('t.reference', 'like', 'XFER-%')
+            ->whereNull('t.deleted_at')
+            ->whereNull('l.deleted_at')
+            ->where('l.post_account', $bankAccount->id)
+            ->where('l.entry_type', $moneyIn ? Balance::DEBIT : Balance::CREDIT)
+            ->whereRaw('ABS(l.amount - ?) < 0.005', [$amount])
+            ->whereBetween('t.transaction_date', [
+                $date->copy()->subDays(3)->startOfDay(),
+                $date->copy()->addDays(3)->endOfDay(),
+            ])
+            ->whereNotIn('l.id', $claimed)
+            ->orderBy('t.transaction_date')
+            ->get(['l.id', 't.id as transaction_id']);
+
+        foreach ($candidates as $candidate) {
+            $hasCounterpartLeg = Ledger::where('transaction_id', $candidate->transaction_id)
+                ->where('post_account', $counterpart->id)
+                ->exists();
+
+            if ($hasCounterpartLeg) {
+                return Ledger::find($candidate->id);
+            }
+        }
+
+        return null;
     }
 
     /**
