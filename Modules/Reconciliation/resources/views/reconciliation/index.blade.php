@@ -107,7 +107,7 @@
                                         @endif
                                     </td>
                                     <td class="py-2 text-right {{ $feed['balance'] < 0 ? 'text-red-600' : 'text-gray-900' }}">
-                                        ${{ number_format($feed['balance'], 2) }}
+                                        {{ number_format($feed['balance'], 2) }} {{ $feed['currency'] }}
                                     </td>
                                 </tr>
                             @empty

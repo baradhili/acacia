@@ -241,6 +241,23 @@ class BankVsBooksTest extends TestCase
         $this->assertEquals(500.0, $check['books_total']);
     }
 
+    public function test_without_bank_accounts_the_feed_lists_but_never_gaps(): void
+    {
+        Account::where('entity_id', $this->entity->id)->where('account_type', Account::BANK)->delete();
+        $this->bankLine(['amount' => 1000]);
+
+        $check = $this->service->bankVsBooks();
+
+        $this->assertSame([], $check['books']);
+        $this->assertEquals(0.0, $check['books_total']);
+        $this->assertCount(1, $check['bank']);
+        $this->assertEquals(1000.0, $check['bank'][0]['balance']);
+        // A sum against no books is not a gap — it stays unavailable.
+        $this->assertNull($check['actual']);
+        $this->assertNull($check['gap']);
+        $this->assertNull($check['residual']);
+    }
+
     public function test_the_screen_shows_the_cash_check_card(): void
     {
         $this->postedPayment(500);
@@ -252,7 +269,7 @@ class BankVsBooksTest extends TestCase
             ->assertSee(__('reconciliation.cash_check.title'), false)
             ->assertSee('Operating Account')
             ->assertSee('$500.00', false)
-            ->assertSee('$1,000.00', false)
+            ->assertSee('1,000.00 AUD', false)
             ->assertSee('+$500.00', false)
             ->assertSee(__('reconciliation.cash_check.gap_bank_ahead'), false);
     }

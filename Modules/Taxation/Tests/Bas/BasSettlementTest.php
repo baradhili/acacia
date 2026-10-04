@@ -239,6 +239,11 @@ class BasSettlementTest extends TestCase
 
     public function test_the_position_stays_settled_through_the_coverage_to_bank_window(): void
     {
+        // A fixed clock: near a month's start the relative quarter end
+        // can sit closer than the mid-interval probe date, and the
+        // test's premise needs the bank date (today) beyond it.
+        $this->travelTo(Carbon::parse('2026-10-15 09:00'));
+
         $quarterEnd = now()->subMonth()->endOfMonth()->startOfDay();
         $this->collect(1000, $quarterEnd->copy()->subDays(10));
 
@@ -253,6 +258,8 @@ class BasSettlementTest extends TestCase
         $position = $this->service->position($midInterval);
         $this->assertEqualsWithDelta(0.0, $position['payable'], 0.001);
         $this->assertEqualsWithDelta(0.0, $position['net'], 0.001);
+
+        $this->travelBack();
     }
 
     public function test_shared_account_types_net_each_others_settlements(): void

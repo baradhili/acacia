@@ -559,7 +559,8 @@ class ReconciliationService
      * residual is left — matching tolerances, grossed-up amounts and
      * feed history predating the books. Lines in currencies other
      * than the entity's are listed but never netted against the
-     * books.
+     * books, and without bank accounts on the books there is nothing
+     * to compare: the feed lists alone and the gap stays null.
      *
      * @return array{
      *     currency: ?string,
@@ -608,7 +609,10 @@ class ReconciliationService
             ->values()
             ->all();
 
-        $comparable = $currencyCode !== null
+        // Nothing to compare when the ledger has no bank accounts:
+        // the feed's sum is a balance against nothing, and a gap
+        // against zero would be meaningless.
+        $comparable = $currencyCode !== null && $books !== []
             ? collect($bank)->firstWhere('currency', $currencyCode)
             : null;
 
