@@ -67,6 +67,10 @@ class InvoiceNotificationService
                 Notification::send($admin, new OverdueReminderNotification($invoice, $daysOverdue));
             }
 
+            // Same stamp the scheduled command writes, so its 3-day
+            // throttle holds whichever path sent the reminder.
+            $invoice->update(['last_reminder_sent_at' => now()]);
+
             Log::info('Overdue reminder notification sent', [
                 'invoice_id' => $invoice->id,
                 'invoice_number' => $invoice->invoice_number,

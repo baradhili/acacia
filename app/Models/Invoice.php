@@ -43,6 +43,7 @@ class Invoice extends Model
         'next_recurring_date',
         'sent_at',
         'viewed_at',
+        'last_reminder_sent_at',
     ];
 
     protected $casts = [
@@ -51,6 +52,7 @@ class Invoice extends Model
         'paid_at' => 'datetime',
         'sent_at' => 'datetime',
         'viewed_at' => 'datetime',
+        'last_reminder_sent_at' => 'datetime',
         'subtotal' => 'decimal:2',
         'tax_amount' => 'decimal:2',
         'discount_amount' => 'decimal:2',
@@ -573,6 +575,24 @@ class Invoice extends Model
     public function getFormattedTotalAttribute(): string
     {
         return config('australian.currency.symbol', 'A$').number_format($this->total, 2);
+    }
+
+    /**
+     * Australian-formatted amount still outstanding — what the overdue
+     * reminder mails as the amount to pay.
+     */
+    public function getFormattedAmountDueAttribute(): string
+    {
+        return config('australian.currency.symbol', 'A$').number_format($this->amount_due, 2);
+    }
+
+    /**
+     * Australian-formatted amount paid to date — the reminder's
+     * partial-progress line.
+     */
+    public function getFormattedAmountPaidAttribute(): string
+    {
+        return config('australian.currency.symbol', 'A$').number_format($this->amount_paid, 2);
     }
 
     /**

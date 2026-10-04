@@ -5,6 +5,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-04
 
+### Fixed — both scheduled client-email paths actually send again
+
+Two Sep 2026 docblock-pass finds, failing differently. The daily
+`notifications:overdue-reminders` run aborted on the first invoice
+past its --days filter: the 3-day re-send guard read
+`$invoice->notifications()`, a relation Invoice doesn't have, and the
+BadMethodCallException fired outside the send try/catch — nothing was
+ever sent. The reminders are mail-only (no database notification
+rows), so the throttle now stamps a new `last_reminder_sent_at` on the
+invoice at dispatch — set by the command and by
+InvoiceNotificationService alike, so the 3-day window holds whichever
+path sent — and dry-runs leave it untouched. The monthly
+`statements:send` run rendered `emails.client-statement`, a view that
+never shipped, so every per-client send failed, was logged and counted
+as skipped while the command still exited SUCCESS; the view now exists
+(statement period, opening/invoiced/paid/closing summary, running-
+balance activity table) and the mailable's stale `build()` — whose
+subject the framework silently overrode via `envelope()` — is gone.
+Also found on the same path: the reminder mail read a nonexistent
+`invoice_date` column and two nonexistent formatted-amount accessors,
+which would have crashed or blanked the rendered lines once the sends
+started working — `issue_date` and the `formatted_amount_due`/
+`formatted_amount_paid` accessors now exist, and the days-overdue
+count the command displays and passes to the notification is whole
+days, not diffInDays()' raw fractions.
+
 ### Changed — invoice status no longer styled like a button
 
 The invoice's status showed as a bold uppercase pill — on the PDF tax

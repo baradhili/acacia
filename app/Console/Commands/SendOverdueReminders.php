@@ -13,13 +13,11 @@ use Illuminate\Support\Facades\Notification;
  * Chases overdue invoices by email (daily 08:00,
  * overdue-reminders.log): for each Invoice::overdue() match at least
  * --days past due (default 1), mails the client and every admin an
- * OverdueReminderNotification (mail channel). Currently broken: the
- * intended 3-day re-send guard reads $invoice->notifications(), a
- * relation Invoice does not have, and the call sits before the send
- * try/catch and the dry-run branch — the first invoice past the
- * --days filter throws BadMethodCallException and aborts the run,
- * so no reminders go out at all until the guard is fixed
- * (todo-list).
+ * OverdueReminderNotification (mail channel — nothing lands in the
+ * notifications table), then stamps last_reminder_sent_at so the
+ * 3-day re-send throttle knows a reminder went out. Reminders are
+ * queued, so the stamp records dispatch time; a failed send throws
+ * before the stamp and the invoice stays eligible.
  */
 class SendOverdueReminders extends Command
 {
@@ -50,7 +48,9 @@ class SendOverdueReminders extends Command
         $skipped = 0;
 
         foreach ($overdueInvoices as $invoice) {
-            $daysOverdue = Carbon::parse($invoice->due_date)->diffInDays(now());
+            // Whole days — diffInDays() carries fractions, and the
+            // count is both displayed and passed to the notification.
+            $daysOverdue = (int) Carbon::parse($invoice->due_date)->diffInDays(now());
 
             if ($daysOverdue < $minDays) {
                 $this->line("Skipping invoice {$invoice->invoice_number} - only {$daysOverdue} days overdue (min: {$minDays})");
@@ -59,14 +59,11 @@ class SendOverdueReminders extends Command
                 continue;
             }
 
-            // Check if we should send based on frequency (every 3 days)
-            $lastReminderSent = $invoice->notifications()
-                ->where('type', OverdueReminderNotification::class)
-                ->latest()
-                ->first();
-
-            if ($lastReminderSent && $lastReminderSent->pivot->created_at->diffInDays(now()) < 3) {
-                $this->line("Skipping invoice {$invoice->invoice_number} - reminder sent recently");
+            // Re-send throttle (every 3 days). The reminders are mail
+            // only — no database notification rows to read back — so
+            // the command's own stamp is the record.
+            if ($invoice->last_reminder_sent_at && $invoice->last_reminder_sent_at->diffInDays(now()) < 3) {
+                $this->line("Skipping invoice {$invoice->invoice_number} - reminder sent {$invoice->last_reminder_sent_at->diffForHumans()}");
                 $skipped++;
 
                 continue;
@@ -86,6 +83,8 @@ class SendOverdueReminders extends Command
                     foreach ($admins as $admin) {
                         Notification::send($admin, new OverdueReminderNotification($invoice, $daysOverdue));
                     }
+
+                    $invoice->update(['last_reminder_sent_at' => now()]);
 
                     $this->info("Sent reminder for invoice {$invoice->invoice_number} ({$daysOverdue} days overdue)");
                     $sent++;

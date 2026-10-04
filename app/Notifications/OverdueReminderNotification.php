@@ -11,9 +11,9 @@ use Illuminate\Notifications\Notification;
 /**
  * Queued mail reminder for an overdue invoice, carrying the invoice
  * and its days-overdue count. Dispatched by the
- * notifications:overdue-reminders command (scheduled daily — its
- * intended 3-day re-send throttle is currently broken; see that
- * command) and by InvoiceNotificationService, each sending to the
+ * notifications:overdue-reminders command (scheduled daily, its
+ * 3-day re-send throttle stamping last_reminder_sent_at on the
+ * invoice) and by InvoiceNotificationService, each sending to the
  * invoice's client and to every admin-role user via the mail
  * channel only.
  */
@@ -39,7 +39,7 @@ class OverdueReminderNotification extends Notification implements ShouldQueue
             ->line("This is a friendly reminder that invoice {$this->invoice->invoice_number} for {$this->invoice->formatted_total} is overdue by {$this->daysOverdue} days.")
             ->line('**Invoice Details:**')
             ->line("- Invoice Number: {$this->invoice->invoice_number}")
-            ->line("- Invoice Date: {$this->invoice->invoice_date->format('d M Y')}")
+            ->line("- Invoice Date: {$this->invoice->issue_date->format('d M Y')}")
             ->line("- Due Date: {$this->invoice->due_date->format('d M Y')}")
             ->line("- Amount Due: {$this->invoice->formatted_amount_due}");
 
