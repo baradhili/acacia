@@ -4,19 +4,20 @@ namespace App\Notifications;
 
 use App\Models\Invoice;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 /**
- * Queued mail reminder for an overdue invoice, carrying the invoice
- * and its days-overdue count. Dispatched by the
+ * Mail reminder for an overdue invoice, carrying the invoice and its
+ * days-overdue count. Dispatched synchronously by the
  * notifications:overdue-reminders command (scheduled daily, its
  * 3-day re-send throttle stamping last_reminder_sent_at on the
- * invoice) to the invoice's client and to every admin-role user,
- * via the mail channel only.
+ * invoice) to the invoice's client and to every admin-role user, via
+ * the mail channel only — deliberately not queued, so a delivery
+ * failure throws inside the command's try/catch and the invoice is
+ * not stamped as reminded (the statements:send precedent).
  */
-class OverdueReminderNotification extends Notification implements ShouldQueue
+class OverdueReminderNotification extends Notification
 {
     use Queueable;
 

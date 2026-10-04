@@ -15,9 +15,11 @@ use Illuminate\Support\Facades\Notification;
  * --days past due (default 1), mails the client and every admin an
  * OverdueReminderNotification (mail channel — nothing lands in the
  * notifications table), then stamps last_reminder_sent_at so the
- * 3-day re-send throttle knows a reminder went out. Reminders are
- * queued, so the stamp records dispatch time; a failed send throws
- * before the stamp and the invoice stays eligible.
+ * 3-day re-send throttle knows a reminder went out. The sends are
+ * synchronous (the statements:send precedent), so the stamp lands
+ * only after delivery — a failed send throws before it and the
+ * invoice stays eligible; a client without email still throttles,
+ * because the admin copies count as the reminder going out.
  */
 class SendOverdueReminders extends Command
 {

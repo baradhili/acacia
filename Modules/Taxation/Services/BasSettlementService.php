@@ -36,9 +36,14 @@ use Modules\Taxation\Models\BasSettlement;
  * claiming late (the sub-$10k deferral) is simply settling at a later
  * date. The BAS report itself stays movement-based; settlements are
  * the balance-side action. Because a clearing journal is dated the
- * bank date (a month after the quarter it covers), a position as at a
- * covered date also nets in those journals — settled stays settled,
- * and only backdated postings made after the settlement resurface.
+ * bank date (a month after the quarter it covers), a position as at
+ * any earlier date nets those journals in — settled stays settled
+ * throughout the coverage-to-bank window, and before coverage the
+ * position clamps to nothing-to-settle (a recorded settlement
+ * covering a later date has already taken those balances); only
+ * backdated postings made after the settlement resurface. Types the
+ * accounts are shared between (PAYG instalment and income tax clear
+ * the same 2240) net each other's clearings too.
  *
  * Income tax settlements (instalments or assessed tax) also drive the
  * franking account: paying the ATO credits it (TC), a refund debits it
@@ -238,11 +243,18 @@ class BasSettlementService
     /**
      * The clearing journals' own legs (signed debit-positive movement)
      * on the settlement accounts, for non-reversed settlements whose
-     * as-at coverage runs through $asAt while their bank date — the
-     * date the journal carries — still falls after it. The legs are the
-     * exact amounts cleared, unlike the settlement row's whole-dollar
-     * labels, so a backdated posting made after the settlement shows
-     * through as a genuine residual rather than being swallowed.
+     * bank date — the date the journal carries — still falls after
+     * $asAt, throughout the whole coverage-to-bank window and before
+     * it: before coverage the subtraction overshoots and the per-side
+     * clamp leaves "nothing to settle", which is right — a recorded
+     * settlement already covering a later date has taken those
+     * balances with it. Types sharing the accounts (PAYG instalment
+     * and income tax both clear 2240) net together, so a settlement
+     * of the sibling type cannot be re-settled under this one. The
+     * legs are the exact amounts cleared, unlike the settlement row's
+     * whole-dollar labels, so a backdated posting made after the
+     * settlement shows through as a genuine residual rather than
+     * being swallowed.
      *
      * @param  array{payable: ?Account, receivable: ?Account}  $accounts
      * @return array{payable: float, receivable: float}
@@ -260,10 +272,9 @@ class BasSettlementService
 
         $transactionIds = BasSettlement::query()
             ->where('entity_id', $entity->id)
-            ->where('type', $type)
+            ->whereIn('type', $this->typesSharingAccounts($entity, $type, $accountIds))
             ->whereNull('reversed_at')
             ->whereNotNull('ifrs_transaction_id')
-            ->whereDate('as_at', '>=', $asAt->toDateString())
             ->whereDate('settled_at', '>', $asAt->toDateString())
             ->pluck('ifrs_transaction_id');
 
@@ -288,6 +299,39 @@ class BasSettlementService
             'payable' => $movement($accounts['payable']?->id),
             'receivable' => $movement($accounts['receivable']?->id),
         ];
+    }
+
+    /**
+     * The settlement types whose accounts intersect the given ones —
+     * normally just $type itself, plus the PAYG-instalment/income-tax
+     * pair, which accountsFor() maps to the same 2240 liability: a
+     * position on a shared account must net both siblings' clearings
+     * or the second type could settle what the first already paid.
+     *
+     * @param  list<int>  $accountIds
+     * @return list<string>
+     */
+    protected function typesSharingAccounts(Entity $entity, string $type, array $accountIds): array
+    {
+        $types = [$type];
+
+        foreach (BasSettlement::TYPES as $other) {
+            if ($other === $type) {
+                continue;
+            }
+
+            $otherAccounts = $this->accountsFor($other, $entity);
+            $otherIds = array_filter([
+                $otherAccounts['payable']?->id,
+                $otherAccounts['receivable']?->id,
+            ]);
+
+            if (array_intersect($accountIds, $otherIds) !== []) {
+                $types[] = $other;
+            }
+        }
+
+        return array_values(array_unique($types));
     }
 
     /**

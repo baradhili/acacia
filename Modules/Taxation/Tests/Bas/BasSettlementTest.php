@@ -237,6 +237,45 @@ class BasSettlementTest extends TestCase
         $this->assertEqualsWithDelta(250.0, $position['net'], 0.001);
     }
 
+    public function test_the_position_stays_settled_through_the_coverage_to_bank_window(): void
+    {
+        $quarterEnd = now()->subMonth()->endOfMonth()->startOfDay();
+        $this->collect(1000, $quarterEnd->copy()->subDays(10));
+
+        $this->settle(['as_at' => $quarterEnd->toDateString(), 'settled_at' => now()->toDateString()]);
+
+        // Between the covered quarter end and the bank date the
+        // clearing journal is still invisible to balanceAt — the
+        // position must not reshow the settled amount there either.
+        $midInterval = $quarterEnd->copy()->addDays(2);
+        $this->assertTrue($midInterval->lessThan(now()->endOfDay()));
+
+        $position = $this->service->position($midInterval);
+        $this->assertEqualsWithDelta(0.0, $position['payable'], 0.001);
+        $this->assertEqualsWithDelta(0.0, $position['net'], 0.001);
+    }
+
+    public function test_shared_account_types_net_each_others_settlements(): void
+    {
+        $quarterEnd = now()->subMonth()->endOfMonth()->startOfDay();
+        $this->postJournal(320, 2240, 1500, $quarterEnd->copy()->subDays(10), 'INSTALMENT');
+
+        $this->settle(['type' => BasSettlement::TYPE_PAYG_INSTALMENT, 'as_at' => $quarterEnd->toDateString(), 'settled_at' => now()->toDateString()]);
+
+        // Instalments and income tax clear the same 2240, so the
+        // instalment settlement's bank-dated journal must net into the
+        // income tax position too — or settling income tax would
+        // double-pay what the instalment already cleared.
+        $position = $this->service->position($quarterEnd, BasSettlement::TYPE_INCOME_TAX);
+        $this->assertEqualsWithDelta(0.0, $position['payable'], 0.001);
+        $this->assertEqualsWithDelta(0.0, $position['net'], 0.001);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('no unsettled income tax');
+
+        $this->settle(['type' => BasSettlement::TYPE_INCOME_TAX, 'as_at' => $quarterEnd->toDateString(), 'settled_at' => now()->toDateString()]);
+    }
+
     public function test_a_covered_position_refuses_to_settle_twice(): void
     {
         $quarterEnd = now()->subMonth()->endOfMonth()->startOfDay();
