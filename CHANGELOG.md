@@ -5,6 +5,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-04
 
+### Added — bank vs books: the cash-basis gap on the reconciliation screen
+
+A cash-basis system's bank accounts are its source of truth for cash,
+so the reconciliation screen now leads with the control that proves
+it: expected cash (every IFRS bank account's exact ledger balance —
+one row each when there are multiple bank accounts) beside actual
+bank balance (the running sum of every imported feed line, per
+currency — Wise's CSV carries no balances, and pending and ignored
+lines count too, because both really moved the bank), with the gap
+between them and its breakdown: bank lines not matched yet, book
+movements not on the statement, and the residual of timing and
+import-history differences. A fully matched feed closes the gap to
+zero. Lines in currencies other than the entity's list but never net
+against the books, and the card says plainly that the actual figure
+is only as complete as the import — a feed that starts after the
+account opened understates it.
+
 ### Changed — Sep 2026 dead-code pass resolved: everything deleted
 
 Five finds from the Sep 2026 docblock pass, each decided delete —

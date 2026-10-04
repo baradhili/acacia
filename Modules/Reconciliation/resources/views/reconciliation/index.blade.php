@@ -52,6 +52,117 @@
         </div>
     </div>
 
+    <div class="bg-white rounded-lg shadow p-6 mb-6">
+        <h2 class="text-lg font-semibold text-gray-800">{{ __('reconciliation.cash_check.title') }}</h2>
+        <p class="text-sm text-gray-500 mt-1 mb-4">{{ __('reconciliation.cash_check.intro') }}</p>
+
+        @if ($cashCheck['bank'] === [])
+            <p class="text-sm text-gray-500">{{ __('reconciliation.cash_check.no_feed') }}</p>
+        @endif
+        @if ($cashCheck['books'] === [])
+            <p class="text-sm text-gray-500">{{ __('reconciliation.cash_check.no_books') }}</p>
+        @endif
+
+        @if ($cashCheck['books'] !== [] || $cashCheck['bank'] !== [])
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                <div>
+                    <h3 class="text-sm font-semibold text-gray-700 mb-2">{{ __('reconciliation.cash_check.books_heading') }}</h3>
+                    <table class="w-full text-sm border-y border-gray-100">
+                        <tbody class="divide-y divide-gray-100">
+                            @foreach ($cashCheck['books'] as $account)
+                                <tr>
+                                    <td class="py-2 pr-4">
+                                        <span class="font-medium text-gray-700">{{ $account['code'] }}</span>
+                                        <span class="text-gray-500"> — {{ $account['name'] }}</span>
+                                    </td>
+                                    <td class="py-2 text-right {{ $account['balance'] < 0 ? 'text-red-600' : 'text-gray-900' }}">
+                                        ${{ number_format($account['balance'], 2) }}
+                                    </td>
+                                </tr>
+                            @endforeach
+                            <tr class="font-semibold">
+                                <td class="py-2 pr-4 text-gray-700">{{ __('reconciliation.cash_check.books_total') }}</td>
+                                <td class="py-2 text-right {{ $cashCheck['books_total'] < 0 ? 'text-red-600' : 'text-gray-900' }}">
+                                    ${{ number_format($cashCheck['books_total'], 2) }}
+                                    @if ($cashCheck['currency'])<span class="text-xs text-gray-400">{{ $cashCheck['currency'] }}</span>@endif
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div>
+                    <h3 class="text-sm font-semibold text-gray-700 mb-2">{{ __('reconciliation.cash_check.bank_heading') }}</h3>
+                    <table class="w-full text-sm border-y border-gray-100">
+                        <tbody class="divide-y divide-gray-100">
+                            @forelse ($cashCheck['bank'] as $feed)
+                                <tr>
+                                    <td class="py-2 pr-4">
+                                        <span class="font-medium text-gray-700">{{ $feed['currency'] }}</span>
+                                        <span class="block text-xs text-gray-400">
+                                            {{ __('reconciliation.cash_check.bank_lines', ['count' => $feed['lines'], 'date' => $feed['latest']?->format('d M Y') ?? '—']) }}
+                                        </span>
+                                        @if ($feed['currency'] !== $cashCheck['currency'])
+                                            <span class="block text-xs text-amber-600">{{ __('reconciliation.cash_check.not_compared', ['currency' => $cashCheck['currency'] ?? '?']) }}</span>
+                                        @endif
+                                    </td>
+                                    <td class="py-2 text-right {{ $feed['balance'] < 0 ? 'text-red-600' : 'text-gray-900' }}">
+                                        ${{ number_format($feed['balance'], 2) }}
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="2" class="py-2 text-gray-500">{{ __('reconciliation.cash_check.no_feed') }}</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        @endif
+
+        @if ($cashCheck['gap'] !== null)
+            @php
+                $gapOk = abs($cashCheck['gap']) < 0.005;
+                $gapDirection = $gapOk
+                    ? __('reconciliation.cash_check.gap_zero')
+                    : ($cashCheck['gap'] > 0
+                        ? __('reconciliation.cash_check.gap_bank_ahead')
+                        : __('reconciliation.cash_check.gap_books_ahead'));
+            @endphp
+            <div class="p-4 rounded-lg border {{ $gapOk ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200' }}">
+                <div class="flex items-baseline justify-between flex-wrap gap-2">
+                    <p class="text-sm font-semibold {{ $gapOk ? 'text-green-800' : 'text-amber-800' }}">
+                        {{ __('reconciliation.cash_check.gap_label') }}
+                    </p>
+                    <p class="text-xl font-bold {{ $cashCheck['gap'] > 0 ? 'text-green-700' : ($cashCheck['gap'] < 0 ? 'text-red-700' : 'text-green-700') }}">
+                        {{ $cashCheck['gap'] > 0 ? '+' : '' }}${{ number_format($cashCheck['gap'], 2) }}
+                        <span class="text-sm font-medium">{{ $gapDirection }}</span>
+                    </p>
+                </div>
+                <table class="w-full text-sm mt-3">
+                    <tbody>
+                        <tr>
+                            <td class="py-1 pr-4 text-gray-600">{{ __('reconciliation.cash_check.component_bank') }}</td>
+                            <td class="py-1 text-right text-gray-800">${{ number_format($cashCheck['bank_unmatched_net'], 2) }}</td>
+                        </tr>
+                        <tr>
+                            <td class="py-1 pr-4 text-gray-600">{{ __('reconciliation.cash_check.component_books') }}</td>
+                            <td class="py-1 text-right text-gray-800">${{ number_format($cashCheck['books_unmatched_net'], 2) }}</td>
+                        </tr>
+                        <tr>
+                            <td class="py-1 pr-4 text-gray-600">{{ __('reconciliation.cash_check.component_residual') }}</td>
+                            <td class="py-1 text-right text-gray-800">${{ number_format($cashCheck['residual'], 2) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p class="text-xs text-gray-500 mt-2">
+                    {{ __('reconciliation.cash_check.caveat', ['currency' => $cashCheck['currency'] ?? 'AUD']) }}
+                </p>
+            </div>
+        @endif
+    </div>
+
     <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
         <div class="px-4 py-3 border-b border-gray-200 flex justify-between items-center">
             <h2 class="text-lg font-semibold text-gray-800">Pending transactions</h2>

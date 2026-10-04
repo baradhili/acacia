@@ -28,6 +28,7 @@ class ReconciliationController extends Controller
             ->limit(25)
             ->get();
         $unreconciledLedger = $this->reconciliation->getUnreconciledBankMovements();
+        $cashCheck = $this->reconciliation->bankVsBooks();
 
         $stats = [
             'pending' => $pending->count(),
@@ -36,7 +37,7 @@ class ReconciliationController extends Controller
             'in_books' => $unreconciledLedger->count(),
         ];
 
-        return view('reconciliation.index', compact('pending', 'matched', 'unreconciledLedger', 'stats'));
+        return view('reconciliation.index', compact('pending', 'matched', 'unreconciledLedger', 'stats', 'cashCheck'));
     }
 
     public function import()
