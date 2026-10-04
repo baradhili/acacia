@@ -3,8 +3,12 @@
 namespace Modules\Reconciliation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Services\IfrsPosting;
+use IFRS\Models\Account;
+use IFRS\Scopes\EntityScope;
 use Illuminate\Http\Request;
 use Modules\Reconciliation\Models\BankTransaction;
+use Modules\Reconciliation\Services\BankTransferService;
 use Modules\Reconciliation\Services\ReconciliationService;
 
 /**
@@ -15,7 +19,10 @@ use Modules\Reconciliation\Services\ReconciliationService;
  */
 class ReconciliationController extends Controller
 {
-    public function __construct(private ReconciliationService $reconciliation) {}
+    public function __construct(
+        private ReconciliationService $reconciliation,
+        private BankTransferService $transfers,
+    ) {}
 
     public function index()
     {
@@ -119,7 +126,53 @@ class ReconciliationController extends Controller
             $search !== '' ? ['days' => 60, 'q' => $search] : ['days' => 14]
         );
 
-        return view('reconciliation.match', compact('transaction', 'candidates', 'search'));
+        // EntityScope cannot resolve an entity-less account, so the
+        // entity is filtered explicitly (the TaxReportController
+        // precedent) — no bank accounts to offer when there is no
+        // entity at all.
+        $entity = IfrsPosting::resolveEntity();
+        $bankAccounts = $entity !== null
+            ? Account::withoutGlobalScope(EntityScope::class)
+                ->where('entity_id', $entity->id)
+                ->where('account_type', Account::BANK)
+                ->orderBy('code')
+                ->get(['id', 'code', 'name'])
+            : collect();
+
+        return view('reconciliation.match', compact('transaction', 'candidates', 'search', 'bankAccounts'));
+    }
+
+    /**
+     * Record a pending bank line as your own money moving — between
+     * two bank accounts the books track, or in from / out to an
+     * account the books don't track. Posts the journal (bank pair or
+     * Funds Introduced/Withdrawn equity) and matches the line to it
+     * in one action. Payment-limit splits each record their own line.
+     */
+    public function storeTransfer(Request $request, BankTransaction $transaction)
+    {
+        $validated = $request->validate([
+            'bank_account_id' => ['required', 'integer', 'exists:ifrs_accounts,id'],
+            'counterpart_account_id' => ['nullable', 'integer', 'exists:ifrs_accounts,id', 'different:bank_account_id'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            $this->transfers->record(
+                $transaction,
+                (int) $validated['bank_account_id'],
+                $validated['counterpart_account_id'] !== null && $validated['counterpart_account_id'] !== '' ? (int) $validated['counterpart_account_id'] : null,
+                $validated['notes'] ?? null,
+            );
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->withInput()
+                ->with('error', $e->getMessage());
+        }
+
+        return redirect()->route('reconciliation.index')
+            ->with('success', 'Transfer posted and matched — the books now hold the movement.');
     }
 
     /**

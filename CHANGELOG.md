@@ -5,6 +5,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-04
 
+### Added — bank transfers and external funds movements, from the match screen
+
+The one movement the payment tiers never model — your own money
+moving — now has a first-class path, closing the gap that previously
+left transfers to be ignored (which never reconciled anything: the
+ignored line kept counting in the bank balance and the books never
+learned the money moved). The match screen offers "Record as a
+transfer or funds movement": pick the tracked bank account the line
+moves and the other side — another bank account in the books, or an
+account outside them. Between tracked accounts the journal is a
+Dr/Cr bank pair (total cash unchanged); against the outside world it
+is Funds Introduced / Funds Withdrawn equity (accounts 3500/3510,
+lazily created) — an injection or withdrawal is never income, so
+nothing touches revenue, expenses, GST or the BAS labels, and the
+company tax report's equity branch already carries such movements as
+a V05-explained non-assessable flow. The journal is dated the bank
+line's own date (period locks refuse a locked or closed date), the
+line matches to the journal's bank leg in the same action, and
+payment-limit splits of one intended transfer each record their own
+line and journal — every transfer of a split batch keeps cash-in-bank
+correct, which is what the feature is for. The match deliberately
+teaches the counterparty rules nothing: a transfer journal is a
+one-off target.
+
 ### Added — bank vs books: the cash-basis gap on the reconciliation screen
 
 A cash-basis system's bank accounts are its source of truth for cash,

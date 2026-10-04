@@ -129,6 +129,57 @@
         </div>
     </div>
 
+    <div class="bg-white rounded-lg shadow p-6 mb-6">
+        <h2 class="text-lg font-semibold text-gray-800 mb-1">{{ __('reconciliation.transfer.title') }}</h2>
+        <p class="text-sm text-gray-500 mb-4">
+            {{ __('reconciliation.transfer.intro') }}
+        </p>
+        <form action="{{ route('reconciliation.transfer', $transaction) }}" method="POST" class="flex flex-wrap items-end gap-3">
+            @csrf
+            <div>
+                <label for="bank_account_id" class="block text-sm font-medium text-gray-700 mb-1">
+                    {{ $transaction->type === \Modules\Reconciliation\Models\BankTransaction::TYPE_CREDIT
+                        ? __('reconciliation.transfer.account_in')
+                        : __('reconciliation.transfer.account_out') }}
+                </label>
+                <select name="bank_account_id" id="bank_account_id" required
+                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
+                    @foreach ($bankAccounts as $account)
+                        <option value="{{ $account->id }}">{{ $account->code }} — {{ $account->name }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label for="counterpart_account_id" class="block text-sm font-medium text-gray-700 mb-1">
+                    {{ $transaction->type === \Modules\Reconciliation\Models\BankTransaction::TYPE_CREDIT
+                        ? __('reconciliation.transfer.source')
+                        : __('reconciliation.transfer.destination') }}
+                </label>
+                <select name="counterpart_account_id" id="counterpart_account_id"
+                    class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
+                    <option value="">{{ __('reconciliation.transfer.external_option') }}</option>
+                    @foreach ($bankAccounts as $account)
+                        <option value="{{ $account->id }}">{{ $account->code }} — {{ $account->name }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="flex-1 min-w-[240px]">
+                <label for="transfer_notes" class="block text-sm font-medium text-gray-700 mb-1">
+                    {{ __('reconciliation.transfer.notes') }}
+                </label>
+                <input type="text" name="notes" id="transfer_notes" maxlength="500"
+                    placeholder="{{ __('reconciliation.transfer.notes_placeholder') }}"
+                    class="w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
+            </div>
+            <button type="submit"
+                class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700">
+                {{ __('reconciliation.transfer.submit') }}
+            </button>
+            @error('bank_account_id') <p class="text-xs text-red-600">{{ $message }}</p> @enderror
+            @error('counterpart_account_id') <p class="text-xs text-red-600">{{ $message }}</p> @enderror
+        </form>
+    </div>
+
     <div class="bg-white rounded-lg shadow p-6">
         <h2 class="text-lg font-semibold text-gray-800 mb-1">Match by id</h2>
         <p class="text-sm text-gray-500 mb-4">

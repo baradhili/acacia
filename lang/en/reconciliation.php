@@ -29,4 +29,18 @@ return [
         'caveat' => 'The actual balance is the running sum of every imported line, so it is only as complete as the import — a feed that starts after the account opened understates it, and a feed that covers only some of the bank accounts (the Wise feed against a multi-account chart, say) leaves the rest inside the gap\'s residual. Lines in other currencies are listed but never netted against the :currency books.',
     ],
 
+    'transfer' => [
+        'title' => 'Record as a transfer or funds movement',
+        'intro' => 'For your own money moving: between two bank accounts in the books (a bank-to-bank journal), or in from / out to an account the books don\'t track (funds introduced or withdrawn — an equity movement, never income, so nothing touches revenue, expenses or GST). Payment-limit splits each record their own line. The journal is dated the bank line\'s date and this line matches to it.',
+
+        'account_in' => 'Into bank account',
+        'account_out' => 'From bank account',
+        'source' => 'Source',
+        'destination' => 'Destination',
+        'external_option' => 'External account (not in the books)',
+        'notes' => 'Notes (optional)',
+        'notes_placeholder' => 'e.g. transfer to top up the account, split by payment limits',
+        'submit' => 'Post transfer and match',
+    ],
+
 ];

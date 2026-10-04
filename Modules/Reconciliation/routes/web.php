@@ -19,6 +19,7 @@ Route::middleware(['web', 'auth'])->group(function () {
     Route::post('/reconciliation/auto-match', [ModuleController::class, 'autoMatch'])->name('reconciliation.auto-match');
     Route::get('/reconciliation/transactions/{transaction}/match', [ModuleController::class, 'matchScreen'])->name('reconciliation.match');
     Route::post('/reconciliation/transactions/{transaction}/match', [ModuleController::class, 'storeMatch'])->name('reconciliation.match.store');
+    Route::post('/reconciliation/transactions/{transaction}/transfer', [ModuleController::class, 'storeTransfer'])->name('reconciliation.transfer');
     Route::post('/reconciliation/transactions/{transaction}/unmatch', [ModuleController::class, 'unmatch'])->name('reconciliation.unmatch');
     Route::post('/reconciliation/transactions/{transaction}/ignore', [ModuleController::class, 'ignore'])->name('reconciliation.ignore');
 });
