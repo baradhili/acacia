@@ -9,6 +9,7 @@ use Carbon\Carbon;
 use IFRS\Models\Account;
 use IFRS\Models\Currency;
 use IFRS\Models\Entity;
+use IFRS\Models\Ledger;
 use IFRS\Models\ReportingPeriod;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Modules\Reconciliation\Models\BankTransaction;
@@ -294,10 +295,12 @@ class BankTransferTest extends TestCase
         // second Dr/Cr pair, cash moved exactly once.
         $this->assertTrue($in->refresh()->isMatched());
         $this->assertTrue($out->refresh()->isMatched());
-        $this->assertSame(
-            $in->refresh()->matched_transaction_type,
-            $out->refresh()->matched_transaction_type
-        );
+        $inLeg = Ledger::find($in->refresh()->matched_transaction_id);
+        $outLeg = Ledger::find($out->refresh()->matched_transaction_id);
+        $this->assertSame($inLeg->transaction_id, $outLeg->transaction_id);
+        $this->assertNotSame($inLeg->id, $outLeg->id);
+        $this->assertSame($this->operating->id, $inLeg->post_account);
+        $this->assertSame($this->savings->id, $outLeg->post_account);
         $this->assertEqualsWithDelta(300.0, $this->balance($this->operating), 0.001);
         $this->assertEqualsWithDelta(-300.0, $this->balance($this->savings), 0.001);
         $this->assertCount(0, app(ReconciliationService::class)->getUnreconciledBankMovements());
