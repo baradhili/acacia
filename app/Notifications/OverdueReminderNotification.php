@@ -13,9 +13,8 @@ use Illuminate\Notifications\Notification;
  * and its days-overdue count. Dispatched by the
  * notifications:overdue-reminders command (scheduled daily, its
  * 3-day re-send throttle stamping last_reminder_sent_at on the
- * invoice) and by InvoiceNotificationService, each sending to the
- * invoice's client and to every admin-role user via the mail
- * channel only.
+ * invoice) to the invoice's client and to every admin-role user,
+ * via the mail channel only.
  */
 class OverdueReminderNotification extends Notification implements ShouldQueue
 {

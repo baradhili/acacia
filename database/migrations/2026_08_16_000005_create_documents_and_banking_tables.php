@@ -9,7 +9,9 @@ return new class extends Migration
     /**
      * Squashed final schema (2026-08-16): documents (polymorphic
      * attachments), bank transactions (incl. client_id), reconciliation
-     * history, audit logs, fiscal periods, and widget preferences.
+     * history, fiscal periods, and widget preferences. (The audit_logs
+     * table never had a writer — the audit pipeline goes to syslog —
+     * and was dropped in the 2026-10 dead-code pass.)
      */
     public function up(): void
     {
@@ -73,25 +75,6 @@ return new class extends Migration
             $table->index(['user_id', 'created_at']);
         });
 
-        Schema::create('audit_logs', function (Blueprint $table) {
-            $table->id();
-            $table->string('auditable_type'); // Model class
-            $table->unsignedBigInteger('auditable_id'); // Model ID
-            $table->string('action'); // created, updated, deleted
-            $table->foreignId('user_id')->nullable()->constrained('users')->onDelete('set null');
-            $table->string('user_name')->nullable();
-            $table->string('ip_address', 45)->nullable();
-            $table->string('user_agent')->nullable();
-            $table->json('old_values')->nullable();
-            $table->json('new_values')->nullable();
-            $table->json('changed_fields')->nullable();
-            $table->timestamp('created_at');
-
-            $table->index(['auditable_type', 'auditable_id']);
-            $table->index(['user_id', 'created_at']);
-            $table->index(['action', 'created_at']);
-        });
-
         Schema::create('fiscal_periods', function (Blueprint $table) {
             $table->id();
             $table->string('name');
@@ -131,7 +114,6 @@ return new class extends Migration
     {
         Schema::dropIfExists('widget_preferences');
         Schema::dropIfExists('fiscal_periods');
-        Schema::dropIfExists('audit_logs');
         Schema::dropIfExists('reconciliation_history');
         Schema::dropIfExists('bank_transactions');
         Schema::dropIfExists('documents');

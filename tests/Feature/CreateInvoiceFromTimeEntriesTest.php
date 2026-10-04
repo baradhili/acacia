@@ -9,7 +9,6 @@ use App\Models\Project;
 use App\Models\PurchaseOrder;
 use App\Models\TimeEntry;
 use App\Models\User;
-use App\Services\DashboardService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -386,17 +385,23 @@ class CreateInvoiceFromTimeEntriesTest extends TestCase
         $this->assertDatabaseCount('invoices', 0);
     }
 
-    public function test_dashboard_unbilled_time_widget_returns_real_dates(): void
+    public function test_invoicing_an_entry_removes_it_from_the_unbilled_pool(): void
     {
         $entry = $this->makeEntry();
 
-        $widget = (new DashboardService)->getUnbilledTimeWidget();
+        // The picker's unbilled pool: approved, billable, not on any
+        // invoice item (queried here directly since the JSON widget
+        // layer that used to expose it is gone).
+        $unbilled = fn () => TimeEntry::where('billable', true)
+            ->where('status', TimeEntry::STATUS_APPROVED)
+            ->whereDoesntHave('invoiceItem')
+            ->get();
 
-        $this->assertSame(1, $widget['count']);
-        $this->assertSame('2026-08-15', $widget['entries']->first()['date']);
-        $this->assertEquals(800, $widget['total_amount']);
+        $this->assertCount(1, $unbilled());
+        $this->assertSame('2026-08-15', $unbilled()->first()->entry_date->format('Y-m-d'));
+        $this->assertEquals(800, $unbilled()->first()->hours * $unbilled()->first()->rate);
 
-        // Once invoiced, the entry drops off the widget.
+        // Once invoiced, the entry drops off the pool.
         $invoice = new Invoice;
         $invoice->fill([
             'issue_date' => now()->toDateString(),
@@ -414,8 +419,7 @@ class CreateInvoiceFromTimeEntriesTest extends TestCase
         $item->time_entry_id = $entry->id;
         $item->save();
 
-        $widget = (new DashboardService)->getUnbilledTimeWidget();
-        $this->assertSame(0, $widget['count']);
+        $this->assertCount(0, $unbilled());
     }
 
     public function test_credit_note_create_from_invoice_view_renders(): void

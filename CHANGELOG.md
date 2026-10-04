@@ -5,6 +5,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-04
 
+### Changed — Sep 2026 dead-code pass resolved: everything deleted
+
+Five finds from the Sep 2026 docblock pass, each decided delete —
+nothing had a production caller, and git history retains all of it.
+The Vendor model (a mirror of Supplier's contact columns; no
+controller, route, relation or test ever referenced it — Supplier
+owns the whole AP flow), the unrouted Api\DashboardController and
+its DashboardService data layer (the only routed API is
+WidgetPreferenceController; the screen widgets query models
+directly, and the one test using the service for its unbilled-time
+assertions now queries TimeEntry itself), the unregistered
+QuickActionsWidget and WelcomeWidget with their views,
+InvoiceNotificationService with PaymentReceivedNotification (the
+scheduled command sends the same reminders directly; only the unit
+tests called the service) and the AuditLog model with its table
+(the live audit pipeline — AuditObserver → AuditService — writes
+the syslog channel by design and nothing ever persisted rows). The
+squashed schema no longer creates the vendors and audit_logs
+tables, and a drop migration clears both from existing installs so
+every database matches the squash. The surviving
+OverdueReminderNotification keeps its render coverage in the
+scheduled-commands test.
+
 ### Fixed — both scheduled client-email paths actually send again
 
 Two Sep 2026 docblock-pass finds, failing differently. The daily
@@ -14,9 +37,7 @@ past its --days filter: the 3-day re-send guard read
 BadMethodCallException fired outside the send try/catch — nothing was
 ever sent. The reminders are mail-only (no database notification
 rows), so the throttle now stamps a new `last_reminder_sent_at` on the
-invoice at dispatch — set by the command and by
-InvoiceNotificationService alike, so the 3-day window holds whichever
-path sent — and dry-runs leave it untouched. The monthly
+invoice at dispatch, and dry-runs leave it untouched. The monthly
 `statements:send` run rendered `emails.client-statement`, a view that
 never shipped, so every per-client send failed, was logged and counted
 as skipped while the command still exited SUCCESS; the view now exists

@@ -117,6 +117,20 @@ class ScheduledNotificationCommandsTest extends TestCase
         $this->assertNull($invoice->refresh()->last_reminder_sent_at);
     }
 
+    public function test_overdue_reminder_mail_renders_its_detail_lines(): void
+    {
+        $client = $this->createClient();
+        $invoice = $this->createInvoice($client, ['total' => 1000.00, 'subtotal' => 909.09, 'tax_amount' => 90.91]);
+
+        $rendered = (new OverdueReminderNotification($invoice, 5))->toMail($client)->render();
+
+        // The detail lines the mail carries — these read a column and
+        // two accessors that did not exist before the fix.
+        $this->assertStringContainsString("Invoice Number: {$invoice->invoice_number}", $rendered);
+        $this->assertStringContainsString('Invoice Date: '.$invoice->issue_date->format('d M Y'), $rendered);
+        $this->assertStringContainsString('Amount Due: A$1,000.00', $rendered);
+    }
+
     public function test_statements_send_renders_and_emails_the_statement(): void
     {
         Mail::fake();
