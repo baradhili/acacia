@@ -26,7 +26,7 @@ return [
         'component_books' => 'Book movements not on the statement',
         'component_residual' => 'Other timing differences',
 
-        'caveat' => 'The actual balance is the running sum of every imported line, so it is only as complete as the import — a feed that starts after the account opened understates it. Lines in other currencies are listed but never netted against the :currency books.',
+        'caveat' => 'The actual balance is the running sum of every imported line, so it is only as complete as the import — a feed that starts after the account opened understates it, and a feed that covers only some of the bank accounts (the Wise feed against a multi-account chart, say) leaves the rest inside the gap\'s residual. Lines in other currencies are listed but never netted against the :currency books.',
     ],
 
 ];

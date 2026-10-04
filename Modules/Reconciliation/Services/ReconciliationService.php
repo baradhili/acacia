@@ -594,16 +594,17 @@ class ReconciliationService
 
         // The bank side: the feed's implied running balance per
         // currency, with line count and latest date as the
-        // staleness cue.
+        // staleness cue. The count aliases as line_count — "lines"
+        // is a reserved word on MariaDB.
         $bank = BankTransaction::query()
             ->groupBy('currency')
             ->orderBy('currency')
-            ->selectRaw('currency, COUNT(*) as lines, SUM(amount) as balance, MAX(transaction_date) as latest')
+            ->selectRaw('currency, COUNT(*) as line_count, SUM(amount) as balance, MAX(transaction_date) as latest')
             ->get()
             ->map(fn ($row) => [
                 'currency' => $row->currency,
                 'balance' => round((float) $row->balance, 2),
-                'lines' => (int) $row->lines,
+                'lines' => (int) $row->line_count,
                 'latest' => $row->latest !== null ? Carbon::parse($row->latest) : null,
             ])
             ->values()
