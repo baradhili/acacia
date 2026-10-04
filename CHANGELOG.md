@@ -5,6 +5,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-04
 
+### Changed — invoice status no longer styled like a button
+
+The invoice's status showed as a bold uppercase pill — on the PDF tax
+invoice the client receives, where a filled rounded badge reads as a
+button and the workflow status ("Draft", "Sent") is internal state a
+legal document has no business showing, and on the invoice screen
+header beside the real buttons. The PDF no longer carries a status
+line at all (the amount due already tells the recipient what they
+need); the screen header shows a coloured dot and text instead of the
+filled pill, which cannot be mistaken for something clickable. The
+invoice list keeps its pill badges — that is the table idiom every
+screen uses.
+
 ### Fixed — settled BAS positions stay settled
 
 A settlement's clearing journal is dated the bank date — typically a

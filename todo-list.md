@@ -3,8 +3,6 @@
 Done items are archived in [CHANGELOG.md](CHANGELOG.md) — cleared from
 here once their changelog entry lands. Ordered by priority.
 
-- [ ] Fix: "status" on an invoice should not look like a button - and possibly doesn't even belong on the invoice
-
 - [ ] Fix: Two notification-path bugs found by the Sep 2026 docblock pass, failing differently: `notifications:overdue-reminders` throttles via `$invoice->notifications()`, a relation Invoice doesn't have — the BadMethodCallException fires outside the send try/catch (and before the dry-run branch), so the run aborts on the first invoice past the --days filter and sends nothing; `statements:send` renders `emails.client-statement`, a view that doesn't exist (only the invoice and payment-receipt email views ship) — every per-client send fails, is logged and counted as skipped, and the command still exits SUCCESS, so the only trace is in client-statements.log.
 
 - [ ] Fix: Dead code recorded as such by the Sep 2026 docblock pass — decide keep-or-delete: Vendor model (suppliers mirror, zero references), Api\DashboardController (JSON widget layer, unrouted), QuickActionsWidget/WelcomeWidget (unregistered), InvoiceNotificationService (only tests call it), AuditLog table rows (the observer writes syslog; nothing persists the table).

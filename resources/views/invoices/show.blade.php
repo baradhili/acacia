@@ -5,15 +5,23 @@
     <div class="mb-6 flex justify-between items-center">
         <div>
             <h1 class="text-2xl font-bold text-gray-800">Invoice {{ $invoice->invoice_number }}</h1>
-            <p class="text-gray-600">
-                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                    @if($invoice->status === 'paid') bg-green-100 text-green-800
-                    @elseif($invoice->status === 'overdue') bg-red-100 text-red-800
-                    @elseif($invoice->status === 'partially_paid') bg-yellow-100 text-yellow-800
-                    @else bg-gray-100 text-gray-800
-                    @endif">
-                    {{ ucfirst(str_replace('_', ' ', $invoice->status)) }}
-                </span>
+            @php
+                // A dot and coloured text — deliberately not a filled pill,
+                // which reads as a clickable button next to the real ones.
+                $statusDotColors = [
+                    'paid' => 'bg-green-600',
+                    'overdue' => 'bg-red-600',
+                    'partially_paid' => 'bg-yellow-500',
+                ];
+                $statusTextColors = [
+                    'paid' => 'text-green-700',
+                    'overdue' => 'text-red-700',
+                    'partially_paid' => 'text-yellow-700',
+                ];
+            @endphp
+            <p class="mt-1 flex items-center gap-1.5 text-sm font-medium {{ $statusTextColors[$invoice->status] ?? 'text-gray-500' }}">
+                <span class="inline-block size-2 rounded-full {{ $statusDotColors[$invoice->status] ?? 'bg-gray-400' }}"></span>
+                {{ ucfirst(str_replace('_', ' ', $invoice->status)) }}
             </p>
         </div>
         <div class="flex gap-2">
