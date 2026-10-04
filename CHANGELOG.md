@@ -37,7 +37,10 @@ past its --days filter: the 3-day re-send guard read
 BadMethodCallException fired outside the send try/catch — nothing was
 ever sent. The reminders are mail-only (no database notification
 rows), so the throttle now stamps a new `last_reminder_sent_at` on the
-invoice at dispatch, and dry-runs leave it untouched. The monthly
+invoice — after delivery, not dispatch: the reminder sends
+synchronously now (the statements:send precedent) instead of queued,
+so a failed send throws inside the command's try/catch and leaves the
+invoice eligible, and dry-runs leave the stamp untouched. The monthly
 `statements:send` run rendered `emails.client-statement`, a view that
 never shipped, so every per-client send failed, was logged and counted
 as skipped while the command still exited SUCCESS; the view now exists
@@ -70,17 +73,19 @@ screen uses.
 A settlement's clearing journal is dated the bank date — typically a
 month after the quarter it covers, the BAS lodgement lag — but the
 unsettled position is read from the accounts' balances at an as-at
-date, so a position queried at the covered quarter end (the
-settlements screen's default) could not see the journal and kept
-showing the just-paid amount as unsettled, inviting a second payment
-of the same position. Positions now net in the clearing journals of
-non-reversed settlements whose coverage runs through the as-at date
-while their bank date still falls after it, using the journals' own
-legs (the exact amounts cleared, unlike the settlement row's
-whole-dollar labels), so backdated postings made after a settlement
-resurface as a genuine residual instead of being swallowed — and
-`settle()` now refuses to settle a coverage that is already settled
-(the double-payment guard the balance read was missing). The GST
+date, so a position queried before that bank date could not see the
+journal and kept showing the just-paid amount as unsettled, inviting
+a second payment of the same position. Positions now net in the
+clearing journals of non-reversed settlements whose bank date falls
+after the as-at date, using the journals' own legs (the exact amounts
+cleared, unlike the settlement row's whole-dollar labels), so
+backdated postings made after a settlement resurface as a genuine
+residual instead of being swallowed, a date before a settlement's
+coverage clamps to nothing-to-settle (a recorded settlement covering
+a later date has already taken those balances), and `settle()`
+refuses to settle a coverage that is already settled — including
+across the PAYG-instalment/income-tax pair, which clears the same
+2240 account and therefore nets each other's settlements. The GST
 report's unlodged position and the dashboard widget read through the
 same method and pick up the fix.
 
