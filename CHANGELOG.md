@@ -3,6 +3,27 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] — 2026-10-04
+
+### Fixed — settled BAS positions stay settled
+
+A settlement's clearing journal is dated the bank date — typically a
+month after the quarter it covers, the BAS lodgement lag — but the
+unsettled position is read from the accounts' balances at an as-at
+date, so a position queried at the covered quarter end (the
+settlements screen's default) could not see the journal and kept
+showing the just-paid amount as unsettled, inviting a second payment
+of the same position. Positions now net in the clearing journals of
+non-reversed settlements whose coverage runs through the as-at date
+while their bank date still falls after it, using the journals' own
+legs (the exact amounts cleared, unlike the settlement row's
+whole-dollar labels), so backdated postings made after a settlement
+resurface as a genuine residual instead of being swallowed — and
+`settle()` now refuses to settle a coverage that is already settled
+(the double-payment guard the balance read was missing). The GST
+report's unlodged position and the dashboard widget read through the
+same method and pick up the fix.
+
 ## [Unreleased] — 2026-10-02
 
 ### Changed — BAS settlements lodge whole dollars, the conservative way

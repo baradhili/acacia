@@ -9,6 +9,7 @@ use App\Services\OpeningBalances;
 use App\Services\PeriodLockService;
 use Carbon\Carbon;
 use IFRS\Models\Account;
+use IFRS\Models\Balance;
 use IFRS\Models\Entity;
 use IFRS\Models\LineItem;
 use IFRS\Models\ReportingPeriod;
@@ -34,7 +35,10 @@ use Modules\Taxation\Models\BasSettlement;
  * carries the balances and balanceAt() reads the whole ledger), and
  * claiming late (the sub-$10k deferral) is simply settling at a later
  * date. The BAS report itself stays movement-based; settlements are
- * the balance-side action.
+ * the balance-side action. Because a clearing journal is dated the
+ * bank date (a month after the quarter it covers), a position as at a
+ * covered date also nets in those journals — settled stays settled,
+ * and only backdated postings made after the settlement resurface.
  *
  * Income tax settlements (instalments or assessed tax) also drive the
  * franking account: paying the ATO credits it (TC), a refund debits it
@@ -132,7 +136,8 @@ class BasSettlementService
     /**
      * The unsettled position at an as-at date for one settlement type:
      * the accounts' balances (balanceAt is debit-positive, so the
-     * payable credit balance is negated). Everything never settled to
+     * payable credit balance is negated), netted for settlements whose
+     * coverage runs through the date. Everything never settled to
      * date, across quarters and closed years.
      *
      * @return array{payable: float, receivable: float, net: float}
@@ -141,7 +146,7 @@ class BasSettlementService
     {
         $entity = IfrsPosting::resolveEntity();
 
-        return $this->positionFor($entity, $this->accountsFor($type, $entity), ($asAt ?? now())->copy()->endOfDay());
+        return $this->positionFor($entity, $this->accountsFor($type, $entity), ($asAt ?? now())->copy()->endOfDay(), $type);
     }
 
     /**
@@ -157,7 +162,7 @@ class BasSettlementService
 
         $positions = [];
         foreach (BasSettlement::TYPES as $type) {
-            $positions[$type] = $this->positionFor($entity, $this->accountsFor($type, $entity), $asAt);
+            $positions[$type] = $this->positionFor($entity, $this->accountsFor($type, $entity), $asAt, $type);
         }
 
         return $positions;
@@ -186,7 +191,8 @@ class BasSettlementService
         $carried = $this->positionFor(
             $entity,
             $this->accountsFor($type, $entity),
-            $fyStart->copy()->subDay()->endOfDay()
+            $fyStart->copy()->subDay()->endOfDay(),
+            $type,
         )['net'];
 
         if (abs($carried) < 0.005) {
@@ -207,16 +213,81 @@ class BasSettlementService
      * @param  array{payable: ?Account, receivable: ?Account}  $accounts
      * @return array{payable: float, receivable: float, net: float}
      */
-    protected function positionFor(Entity $entity, array $accounts, Carbon $asAt): array
+    protected function positionFor(Entity $entity, array $accounts, Carbon $asAt, ?string $type = null): array
     {
+        // Settlements covering through $asAt but bank-dated after it:
+        // their clearing journals are invisible to balanceAt($asAt), so
+        // their legs are netted in here — otherwise a settled quarter
+        // keeps showing as unsettled (the screen's default as-at is the
+        // quarter end, the bank date lags it) and invites a second
+        // payment of the same position.
+        $settled = $type !== null
+            ? $this->settledBeyondDate($entity, $type, $accounts, $asAt)
+            : ['payable' => 0.0, 'receivable' => 0.0];
+
         $payable = $accounts['payable']
-            ? max(0.0, -round(OpeningBalances::balanceAt($accounts['payable'], $entity, $asAt), 2))
+            ? max(0.0, -round(OpeningBalances::balanceAt($accounts['payable'], $entity, $asAt) + $settled['payable'], 2))
             : 0.0;
         $receivable = $accounts['receivable']
-            ? max(0.0, round(OpeningBalances::balanceAt($accounts['receivable'], $entity, $asAt), 2))
+            ? max(0.0, round(OpeningBalances::balanceAt($accounts['receivable'], $entity, $asAt) + $settled['receivable'], 2))
             : 0.0;
 
         return ['payable' => $payable, 'receivable' => $receivable, 'net' => round($payable - $receivable, 2)];
+    }
+
+    /**
+     * The clearing journals' own legs (signed debit-positive movement)
+     * on the settlement accounts, for non-reversed settlements whose
+     * as-at coverage runs through $asAt while their bank date — the
+     * date the journal carries — still falls after it. The legs are the
+     * exact amounts cleared, unlike the settlement row's whole-dollar
+     * labels, so a backdated posting made after the settlement shows
+     * through as a genuine residual rather than being swallowed.
+     *
+     * @param  array{payable: ?Account, receivable: ?Account}  $accounts
+     * @return array{payable: float, receivable: float}
+     */
+    protected function settledBeyondDate(Entity $entity, string $type, array $accounts, Carbon $asAt): array
+    {
+        $accountIds = array_values(array_unique(array_filter([
+            $accounts['payable']?->id,
+            $accounts['receivable']?->id,
+        ])));
+
+        if ($accountIds === []) {
+            return ['payable' => 0.0, 'receivable' => 0.0];
+        }
+
+        $transactionIds = BasSettlement::query()
+            ->where('entity_id', $entity->id)
+            ->where('type', $type)
+            ->whereNull('reversed_at')
+            ->whereNotNull('ifrs_transaction_id')
+            ->whereDate('as_at', '>=', $asAt->toDateString())
+            ->whereDate('settled_at', '>', $asAt->toDateString())
+            ->pluck('ifrs_transaction_id');
+
+        if ($transactionIds->isEmpty()) {
+            return ['payable' => 0.0, 'receivable' => 0.0];
+        }
+
+        $movementByAccount = DB::table('ifrs_ledgers')
+            ->whereIn('transaction_id', $transactionIds)
+            ->whereIn('post_account', $accountIds)
+            ->whereNull('deleted_at')
+            ->groupBy('post_account')
+            ->selectRaw("post_account,
+                SUM(CASE WHEN entry_type = '".Balance::CREDIT."' THEN -amount ELSE amount END) as movement")
+            ->pluck('movement', 'post_account');
+
+        $movement = fn (?int $accountId): float => $accountId === null
+            ? 0.0
+            : round((float) ($movementByAccount[$accountId] ?? 0), 2);
+
+        return [
+            'payable' => $movement($accounts['payable']?->id),
+            'receivable' => $movement($accounts['receivable']?->id),
+        ];
     }
 
     /**
@@ -268,7 +339,7 @@ class BasSettlementService
                 ->lockForUpdate()
                 ->first();
 
-            ['payable' => $payableRaw, 'receivable' => $receivableRaw, 'net' => $netRaw] = $this->positionFor($entity, $accounts, $asAt->copy()->endOfDay());
+            ['payable' => $payableRaw, 'receivable' => $receivableRaw, 'net' => $netRaw] = $this->positionFor($entity, $accounts, $asAt->copy()->endOfDay(), $type);
 
             if ($payableRaw < 0.005 && $receivableRaw < 0.005) {
                 throw new \InvalidArgumentException("There is no unsettled {$label} as at {$asAt->format('d M Y')}.");

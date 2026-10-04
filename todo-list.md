@@ -3,8 +3,6 @@
 Done items are archived in [CHANGELOG.md](CHANGELOG.md) — cleared from
 here once their changelog entry lands. Ordered by priority.
 
-- [ ] Fix: When BAS is settled the unsettled positions should match
-
 - [ ] Fix: "status" on an invoice should not look like a button - and possibly doesn't even belong on the invoice
 
 - [ ] Fix: Two notification-path bugs found by the Sep 2026 docblock pass, failing differently: `notifications:overdue-reminders` throttles via `$invoice->notifications()`, a relation Invoice doesn't have — the BadMethodCallException fires outside the send try/catch (and before the dry-run branch), so the run aborts on the first invoice past the --days filter and sends nothing; `statements:send` renders `emails.client-statement`, a view that doesn't exist (only the invoice and payment-receipt email views ship) — every per-client send fails, is logged and counted as skipped, and the command still exits SUCCESS, so the only trace is in client-statements.log.

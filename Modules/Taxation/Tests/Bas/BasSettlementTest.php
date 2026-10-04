@@ -192,6 +192,66 @@ class BasSettlementTest extends TestCase
         $this->assertEqualsWithDelta(600.0, $position['net'], 0.001);
     }
 
+    public function test_a_settled_position_netts_the_bank_dated_clearing_journal(): void
+    {
+        // The lodgement lag: the quarter ends, the ATO payment lands a
+        // month later — and the position as at the covered quarter end
+        // (the screen's default as-at) must not keep showing the paid
+        // amount as unsettled.
+        $quarterEnd = now()->subMonth()->endOfMonth()->startOfDay();
+        $this->collect(1000, $quarterEnd->copy()->subDays(10));
+        $this->paid(400, $quarterEnd->copy()->subDays(10));
+
+        $this->settle(['as_at' => $quarterEnd->toDateString(), 'settled_at' => now()->toDateString()]);
+
+        $position = $this->service->position($quarterEnd);
+        $this->assertEqualsWithDelta(0.0, $position['payable'], 0.001);
+        $this->assertEqualsWithDelta(0.0, $position['receivable'], 0.001);
+        $this->assertEqualsWithDelta(0.0, $position['net'], 0.001);
+
+        // The screen's positions card reads the same zero, not the
+        // settled balances its balanceAt() cannot see.
+        $positions = $this->service->positions($quarterEnd);
+        $this->assertEqualsWithDelta(0.0, $positions['gst']['net'], 0.001);
+
+        $this->actingAs($this->admin())
+            ->get('/bas-settlements?as_at='.$quarterEnd->toDateString())
+            ->assertOk()
+            ->assertSee('nothing to settle');
+    }
+
+    public function test_backdated_postings_after_a_settlement_resurface_as_residual(): void
+    {
+        $quarterEnd = now()->subMonth()->endOfMonth()->startOfDay();
+        $this->collect(1000, $quarterEnd->copy()->subDays(10));
+
+        $this->settle(['as_at' => $quarterEnd->toDateString(), 'settled_at' => now()->toDateString()]);
+
+        // A GST leg backdated into the covered quarter, posted after the
+        // settlement was recorded: genuinely unsettled, so it shows —
+        // the netting must swallow only what was actually cleared.
+        $this->collect(250, $quarterEnd->copy()->subDays(5), 'BACKDATED');
+
+        $position = $this->service->position($quarterEnd);
+        $this->assertEqualsWithDelta(250.0, $position['payable'], 0.001);
+        $this->assertEqualsWithDelta(250.0, $position['net'], 0.001);
+    }
+
+    public function test_a_covered_position_refuses_to_settle_twice(): void
+    {
+        $quarterEnd = now()->subMonth()->endOfMonth()->startOfDay();
+        $this->collect(1000, $quarterEnd->copy()->subDays(10));
+
+        $this->settle(['as_at' => $quarterEnd->toDateString(), 'settled_at' => now()->toDateString()]);
+
+        // Settling the same coverage again would double-pay the ATO —
+        // the position at the covered date is already netted to nil.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('no unsettled GST');
+
+        $this->settle(['as_at' => $quarterEnd->toDateString(), 'settled_at' => now()->toDateString()]);
+    }
+
     public function test_paying_the_ato_clears_both_accounts(): void
     {
         $this->collect(1000);
