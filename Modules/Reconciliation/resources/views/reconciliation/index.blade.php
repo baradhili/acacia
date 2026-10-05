@@ -18,7 +18,7 @@
                 </button>
             </form>
             <a href="{{ route('reconciliation.import') }}"
-                class="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm">Import CSV</a>
+                class="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm">{{ __('reconciliation.import.submit') }}</a>
         </div>
     </div>
 
