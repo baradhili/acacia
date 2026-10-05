@@ -180,6 +180,54 @@
         </form>
     </div>
 
+    @if ($payableAccounts->isNotEmpty())
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-1">{{ __('reconciliation.settlement.title') }}</h2>
+            <p class="text-sm text-gray-500 mb-4">
+                {{ __('reconciliation.settlement.intro') }}
+            </p>
+            <form action="{{ route('reconciliation.settle-payroll', $transaction) }}" method="POST" class="flex flex-wrap items-end gap-3">
+                @csrf
+                <div>
+                    <label for="payable_account_id" class="block text-sm font-medium text-gray-700 mb-1">
+                        {{ __('reconciliation.settlement.payable_account') }}
+                    </label>
+                    <select name="payable_account_id" id="payable_account_id" required
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
+                        @foreach ($payableAccounts as $account)
+                            <option value="{{ $account->id }}">{{ $account->code }} — {{ $account->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label for="settlement_bank_account_id" class="block text-sm font-medium text-gray-700 mb-1">
+                        {{ __('reconciliation.settlement.bank_account') }}
+                    </label>
+                    <select name="bank_account_id" id="settlement_bank_account_id" required
+                        class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
+                        @foreach ($bankAccounts as $account)
+                            <option value="{{ $account->id }}">{{ $account->code }} — {{ $account->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="flex-1 min-w-[240px]">
+                    <label for="settlement_notes" class="block text-sm font-medium text-gray-700 mb-1">
+                        {{ __('reconciliation.settlement.notes') }}
+                    </label>
+                    <input type="text" name="notes" id="settlement_notes" maxlength="500"
+                        placeholder="{{ __('reconciliation.settlement.notes_placeholder') }}"
+                        class="w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <button type="submit"
+                    class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700">
+                    {{ __('reconciliation.settlement.submit') }}
+                </button>
+                @error('payable_account_id') <p class="text-xs text-red-600">{{ $message }}</p> @enderror
+                @error('bank_account_id') <p class="text-xs text-red-600">{{ $message }}</p> @enderror
+            </form>
+        </div>
+    @endif
+
     <div class="bg-white rounded-lg shadow p-6">
         <h2 class="text-lg font-semibold text-gray-800 mb-1">Match by id</h2>
         <p class="text-sm text-gray-500 mb-4">

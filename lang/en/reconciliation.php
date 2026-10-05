@@ -62,4 +62,16 @@ return [
         'submit' => 'Post transfer and match',
     ],
 
+    'settlement' => [
+        'title' => 'Record as a payroll liability payment',
+        'intro' => 'For the money that leaves the bank after a pay run: the super or PAYG-withholding payment that settles what the run\'s accrual journals credited but never paid. A combined BAS payment nets the whole quarter on the BAS settlement screen instead. The journal (Dr liability / Cr bank) is dated the bank line\'s date and this line matches to it.',
+
+        'bank_account' => 'From bank account',
+        'payable_account' => 'Liability settled',
+        'notes' => 'Notes (optional)',
+        'notes_placeholder' => 'e.g. September quarter super for run 1',
+        'submit' => 'Post settlement and match',
+        'posted' => 'Settlement posted and matched — the books now hold the movement.',
+    ],
+
 ];

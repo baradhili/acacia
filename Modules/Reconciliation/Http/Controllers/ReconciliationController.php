@@ -9,6 +9,7 @@ use IFRS\Scopes\EntityScope;
 use Illuminate\Http\Request;
 use Modules\Reconciliation\Models\BankTransaction;
 use Modules\Reconciliation\Services\BankTransferService;
+use Modules\Reconciliation\Services\PayrollLiabilityService;
 use Modules\Reconciliation\Services\ReconciliationService;
 use Modules\Reconciliation\Services\StatementImportService;
 
@@ -24,6 +25,7 @@ class ReconciliationController extends Controller
         private ReconciliationService $reconciliation,
         private BankTransferService $transfers,
         private StatementImportService $statementImport,
+        private PayrollLiabilityService $payrollLiabilities,
     ) {}
 
     public function index()
@@ -158,7 +160,47 @@ class ReconciliationController extends Controller
                 ->get(['id', 'code', 'name'])
             : collect();
 
-        return view('reconciliation.match', compact('transaction', 'candidates', 'search', 'bankAccounts'));
+        // Settle-a-liability card: payroll's statutory payables, and
+        // only for money-out lines (empty when Payroll is disabled —
+        // the card hides with it).
+        $payableAccounts = $entity !== null && $transaction->type === BankTransaction::TYPE_DEBIT
+            ? $this->payrollLiabilities->settlablePayables($entity)
+            : collect();
+
+        return view('reconciliation.match', compact('transaction', 'candidates', 'search', 'bankAccounts', 'payableAccounts'));
+    }
+
+    /**
+     * Record a pending money-out bank line as the settlement of a
+     * payroll liability (PAYG withholding or super payable): posts
+     * Dr payable / Cr bank dated the line's date and matches the line
+     * to the journal's bank leg — the books learn the payment the
+     * accrual journals never held.
+     */
+    public function storeSettlement(Request $request, BankTransaction $transaction)
+    {
+        $validated = $request->validate([
+            'bank_account_id' => ['required', 'integer', 'exists:ifrs_accounts,id'],
+            'payable_account_id' => ['required', 'integer', 'exists:ifrs_accounts,id'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            $this->payrollLiabilities->settle(
+                $transaction,
+                (int) $validated['bank_account_id'],
+                (int) $validated['payable_account_id'],
+                $validated['notes'] ?? null,
+            );
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->withInput()
+                ->with('error', $e->getMessage());
+        }
+
+        return redirect()->route('reconciliation.index')
+            ->with('success', __('reconciliation.settlement.posted'));
     }
 
     /**

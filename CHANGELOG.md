@@ -28,6 +28,27 @@ screen strings moved into the translator, and three consistently
 faked fixtures (CSV, MT940 and XML of one sample period) cover
 detection, per-format field mapping and the cross-format dedupe.
 
+### Added — payroll liability settlements from the match screen
+
+The payments that leave the bank after a pay run — the super
+contribution to the fund, the PAYG withholding to the ATO — had no
+book movement to reconcile against: the run's PAYROLL-*-SUP/ACC
+journals credit the payables but never touch the bank, so their bank
+lines could never be matched (and super payable had no settlement
+path anywhere — PAYG had only the whole-quarter BAS settlement). The
+match screen now offers "Record as a payroll liability payment" for
+money-out lines: it posts Dr PAYG withholding / super payable
+(the payroll module's configured statutory accounts — wages payable
+is deliberately excluded, the run's PAY journal already records the
+net leaving the bank) / Cr bank, dated the bank line's own date with
+the usual period-lock guards, and matches the line to the journal's
+bank leg — the liability and the bank-vs-books gap close together.
+One line, one journal (re-recording after an unmatch re-matches,
+never double-posts), a crafted account id outside the configured
+payables refuses, and a combined BAS payment still belongs on the BAS
+settlement screen, whose balance-based position simply settles less
+afterward — the two paths cannot double-clear.
+
 ### Fixed — README drift in the reconciliation sections
 
 The Bank Reconciliation section still advertised the removed Wise
