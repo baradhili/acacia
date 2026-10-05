@@ -49,6 +49,28 @@ payables refuses, and a combined BAS payment still belongs on the BAS
 settlement screen, whose balance-based position simply settles less
 afterward — the two paths cannot double-clear.
 
+### Fixed — Account Schedule showed other accounts' amounts, and missed main-account legs
+
+The IFRS Account Schedule was built from line items, not the ledger,
+in two breaking ways. It summed every line item of each listed
+transaction, so one account's schedule carried the other accounts'
+legs — a payroll accrual (Dr wages expense / Cr PAYG withholding /
+Cr wages payable) showed the whole item side (net wages plus
+withholding, super included when the super journal landed the same
+way) on the PAYG schedule, where only the withholding belongs. And a
+journal's main-account leg is never a line item, so transactions
+where the scheduled account was only the main account were missed
+entirely while every card's balancing debit side was invisible. The
+schedule is now ledger-based and scoped to the account's own
+movement, like its account-statement twin: each card carries the
+account's own debit/credit in that transaction, the summary totals
+and net movement are the account's own, and the card's line-items
+table shows every posted leg — the package posts each line item as
+its own main/item pair, so the main account now appears beside every
+leg it balances. (Two transactions on Wages Payable for a pay run
+remains correct: the accrual credit and the net-pay debit net to
+zero.)
+
 ### Fixed — README drift in the reconciliation sections
 
 The Bank Reconciliation section still advertised the removed Wise

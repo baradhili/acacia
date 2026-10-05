@@ -10,7 +10,6 @@ use Carbon\Carbon;
 use IFRS\Models\Account;
 use IFRS\Models\Balance;
 use IFRS\Models\Ledger;
-use IFRS\Models\LineItem;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -145,49 +144,65 @@ class LedgerReportController extends Controller
         if ($accountId) {
             $account = Account::findOrFail($accountId);
 
-            // Get all journal entries with line items for this account in date range.
-            // NOTE: the IFRS Transaction date column is `transaction_date`
-            // (not `date`), and debit/credit is determined by the line item's
-            // `credited` boolean (false = debit, true = credit) — there is no
-            // `type` column and `LineItem::DEBIT`/`::CREDIT` do not exist.
-            $lineItems = LineItem::where('account_id', $accountId)
-                ->whereHas('transaction', function ($query) use ($startDate, $endDate) {
-                    $query->whereBetween('transaction_date', [$startDate, $endDate]);
-                })
-                ->with(['transaction', 'transaction.lineItems'])
+            // Ledger legs, not line items: the schedule must be scoped to
+            // this account's OWN movement. The old line-item query summed
+            // every line item of each transaction, leaking the other
+            // accounts' legs into this account's totals (a payroll accrual
+            // showed the whole item side, wages and withholding included,
+            // on the PAYG schedule), and it never saw a journal's
+            // main-account leg — the IFRS main account is carried on the
+            // transaction, not as a line item — so transactions where the
+            // account was only the main account were missed entirely and
+            // the journal cards lost their balancing side. The ledger
+            // holds every posted leg, main accounts included.
+            $entries = Ledger::where('post_account', $account->id)
+                ->whereBetween('posting_date', [$startDate, $endDate])
+                ->with('transaction')
+                ->orderBy('posting_date')
+                ->orderBy('id')
                 ->get();
 
-            // Group by transaction (sorting by a related column in SQL would
-            // need a join; sort the grouped collection instead)
-            $groupedByTransaction = $lineItems->groupBy('transaction_id')
-                ->sortBy(fn ($items) => $items->first()->transaction->transaction_date);
+            $ownByTransaction = $entries->groupBy('transaction_id');
+
+            // Every leg of each listed transaction, for the card's
+            // full-journal view.
+            $legsByTransaction = Ledger::whereIn('transaction_id', $ownByTransaction->keys())
+                ->orderBy('id')
+                ->get()
+                ->groupBy('transaction_id');
+
+            $accountNames = $accounts->keyBy('id');
 
             $scheduleLines = collect();
             $totalDebit = 0;
             $totalCredit = 0;
 
-            foreach ($groupedByTransaction as $transactionId => $items) {
-                $transaction = $items->first()->transaction;
+            foreach ($ownByTransaction->sortBy(fn ($rows) => $rows->first()->posting_date) as $transactionId => $own) {
+                $transaction = $own->first()->transaction;
 
-                // Get all line items for this transaction
-                $allItems = $transaction->lineItems ?? collect();
+                $debit = (float) $own->where('entry_type', Balance::DEBIT)->sum('amount');
+                $credit = (float) $own->where('entry_type', Balance::CREDIT)->sum('amount');
 
-                // credited=false -> debit, credited=true -> credit
-                $debitTotal = $allItems->where('credited', false)->sum('amount');
-                $creditTotal = $allItems->where('credited', true)->sum('amount');
-
-                $totalDebit += $debitTotal;
-                $totalCredit += $creditTotal;
+                $totalDebit += $debit;
+                $totalCredit += $credit;
 
                 $scheduleLines->push([
-                    'date' => Carbon::parse($transaction->transaction_date),
+                    'date' => Carbon::parse($transaction->transaction_date ?? $own->first()->posting_date),
                     'transaction_id' => $transactionId,
                     'transaction_type' => class_basename($transaction),
                     'narration' => $transaction->narration ?? '',
                     'reference' => $transaction->reference ?? '',
-                    'line_items' => $allItems,
-                    'debit' => $debitTotal,
-                    'credit' => $creditTotal,
+                    'line_items' => ($legsByTransaction[$transactionId] ?? collect())->map(function ($leg) use ($accountNames) {
+                        $legAccount = $accountNames[$leg->post_account] ?? null;
+
+                        return [
+                            'account' => ($legAccount?->code ?? '?').' - '.($legAccount?->name ?? 'Unknown'),
+                            'debit' => $leg->entry_type === Balance::DEBIT ? (float) $leg->amount : 0.0,
+                            'credit' => $leg->entry_type === Balance::CREDIT ? (float) $leg->amount : 0.0,
+                        ];
+                    })->values(),
+                    'debit' => $debit,
+                    'credit' => $credit,
                 ]);
             }
 
