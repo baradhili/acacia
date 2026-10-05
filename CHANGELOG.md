@@ -3,6 +3,38 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] — 2026-10-05
+
+### Added — multi-format bank statement import (Wise CSV, MT940, camt.053)
+
+The reconciliation import screen now takes any Wise statement
+download of an account, not just CSV. The format is detected from
+the file's content and handed to the right parser: the two CSV
+layouts unchanged, a new MT940 parser for the SWIFT statement Wise
+emits (TRANSFER ids riding on the :61: continuation lines, currency
+taken from the :60F: opening balance), and a camt.053 parser for the
+ISO 20022 XML report (namespace-agnostic across camt revisions so
+old and new bank exports both parse, booked entries only, the
+counterparty from the transaction details with Wise's "Received
+money from … / Sent money to …" prose as fallback). All three
+formats are exports of the same movements, so every row keeps
+source "wise" and the TRANSFER-… id as its identity: importing the
+same period in a second format skips as duplicates instead of
+duplicating. The feed's invariants carry over unchanged — debits
+store negative, zero-amount and undated rows are skipped. The
+upload accepts .csv/.txt/.xml/.mt940/.camt/.sta (the extension pins
+the family; those suffixes have no MIME type to guess), the touched
+screen strings moved into the translator, and three consistently
+faked fixtures (CSV, MT940 and XML of one sample period) cover
+detection, per-format field mapping and the cross-format dedupe.
+
+### Fixed — README drift in the reconciliation sections
+
+The Bank Reconciliation section still advertised the removed Wise
+API sync (`reconcile:wise`) and the auto-create behaviours retired
+Sep 2026, and the automation list's cron inventory carried the same
+removed sync. Both now describe what ships.
+
 ## [Unreleased] — 2026-10-04
 
 ### Added — bank transfers and external funds movements, from the match screen

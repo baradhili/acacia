@@ -27,7 +27,9 @@ use Modules\Reconciliation\Models\ReconciliationHistory;
 
 /**
  * Bank reconciliation against the Wise statement import: the CSV
- * import (both Wise layouts), the auto-matcher — a strict pass
+ * import (both Wise layouts; MT940 and camt.053 files are parsed by
+ * the statement parsers and enter through StatementImportService),
+ * the auto-matcher — a strict pass
  * pairing bank lines with unreconciled bank-account ledger movements
  * by reference/amount/date inside the tolerances, then a learned
  * pass using the counterparty rules an earlier match taught — the

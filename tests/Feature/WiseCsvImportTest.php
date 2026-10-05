@@ -230,7 +230,7 @@ class WiseCsvImportTest extends TestCase
         $user = User::factory()->create();
 
         $response = $this->actingAs($user)->post(route('reconciliation.process-import'), [
-            'wise_csv' => UploadedFile::fake()->createWithContent(
+            'statement' => UploadedFile::fake()->createWithContent(
                 'transaction-history.csv',
                 file_get_contents($this->historyFixture())
             ),
@@ -247,7 +247,7 @@ class WiseCsvImportTest extends TestCase
         $user = User::factory()->create();
 
         $response = $this->actingAs($user)->post(route('reconciliation.process-import'), [
-            'wise_csv' => UploadedFile::fake()->createWithContent('export.csv', "a,b\n1,2\n"),
+            'statement' => UploadedFile::fake()->createWithContent('export.csv', "a,b\n1,2\n"),
         ]);
 
         $response->assertSessionHas('error');
@@ -259,7 +259,7 @@ class WiseCsvImportTest extends TestCase
         $user = User::factory()->create();
 
         $this->actingAs($user)->post(route('reconciliation.process-import'), [])
-            ->assertSessionHasErrors('wise_csv');
+            ->assertSessionHasErrors('statement');
     }
 
     public function test_reconciliation_index_lists_pending_transactions(): void

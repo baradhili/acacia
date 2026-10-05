@@ -1,8 +1,8 @@
 <?php
 
-// Reconciliation screen strings added with the bank-vs-books cash
-// check (Oct 2026). en is the complete base; en_AU overrides only
-// keys that differ in Australian English — none here.
+// Reconciliation screen strings: the bank-vs-books cash check and the
+// statement import screen (Oct 2026). en is the complete base; en_AU
+// overrides only keys that differ in Australian English — none here.
 return [
 
     'cash_check' => [
@@ -27,6 +27,25 @@ return [
         'component_residual' => 'Other timing differences',
 
         'caveat' => 'The actual balance is the running sum of every imported line, so it is only as complete as the import — a feed that starts after the account opened understates it, and a feed that covers only some of the bank accounts (the Wise feed against a multi-account chart, say) leaves the rest inside the gap\'s residual. Lines in other currencies are listed but never netted against the :currency books.',
+    ],
+
+    'import' => [
+        'title' => 'Import bank statement',
+        'back' => 'Back to reconciliation',
+        'heading' => 'Upload statement file',
+        'upload_label' => 'Upload a file',
+        'drop_hint' => 'or drag and drop',
+        'file_hint' => 'Wise CSV export, MT940 or camt.053 XML — files up to 10MB, format detected automatically',
+        'formats_title' => 'Accepted formats',
+        'formats_body' => 'Any Wise statement download of this account: the transactions CSV export (transaction-history.csv or the older statement export), the MT940 statement, or the camt.053 XML report. Already-imported rows and non-completed movements (e.g. refunds) are skipped automatically, so re-uploading the same file — or the same period in a different format — is safe.',
+        'cancel' => 'Cancel',
+        'submit' => 'Import statement',
+
+        'imported' => 'Imported :count statement lines (:format)',
+        'skipped' => ', skipped :count (already imported or not completed movements)',
+        'first_issue' => '. First issue: :issue',
+        'error_unreadable' => 'Cannot open file',
+        'error_unrecognised' => 'Unrecognised statement format — export a statement from Wise (CSV, MT940 or camt.053 XML) and try again.',
     ],
 
     'transfer' => [

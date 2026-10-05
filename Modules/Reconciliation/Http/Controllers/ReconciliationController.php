@@ -10,18 +10,20 @@ use Illuminate\Http\Request;
 use Modules\Reconciliation\Models\BankTransaction;
 use Modules\Reconciliation\Services\BankTransferService;
 use Modules\Reconciliation\Services\ReconciliationService;
+use Modules\Reconciliation\Services\StatementImportService;
 
 /**
- * Bank reconciliation: bank statement rows (imported from a Wise CSV
- * export — transaction-history.csv or the older statement download)
- * are matched against invoices, payments, bills and ledger entries.
- * The Wise API sync was removed: the CSV upload is the only feed.
+ * Bank reconciliation: bank statement rows (imported from a Wise
+ * statement download — CSV, MT940 or camt.053 XML, auto-detected) are
+ * matched against invoices, payments, bills and ledger entries.
+ * The Wise API sync was removed: the statement upload is the only feed.
  */
 class ReconciliationController extends Controller
 {
     public function __construct(
         private ReconciliationService $reconciliation,
         private BankTransferService $transfers,
+        private StatementImportService $statementImport,
     ) {}
 
     public function index()
@@ -52,24 +54,41 @@ class ReconciliationController extends Controller
         return view('reconciliation.import');
     }
 
+    /**
+     * Import an uploaded statement. The format is detected from the
+     * content, so the upload only pins the extension to the family the
+     * feed produces (.mt940 / .camt / .sta are not MIME types Laravel
+     * can guess).
+     */
     public function processImport(Request $request)
     {
         $request->validate([
-            'wise_csv' => 'required|file|mimes:csv,txt|max:10240',
+            'statement' => 'required|file|max:10240|extensions:csv,txt,xml,mt940,camt,sta',
         ]);
 
-        $result = $this->reconciliation->importFromCsv($request->file('wise_csv')->getRealPath());
+        $result = $this->statementImport->import($request->file('statement')->getRealPath());
 
         if (isset($result['error'])) {
-            return back()->with('error', $result['error']);
+            // The CSV legacy path returns prose; the multi-format paths
+            // return codes the translator knows.
+            $error = match ($result['error']) {
+                StatementImportService::ERR_UNREADABLE => __('reconciliation.import.error_unreadable'),
+                StatementImportService::ERR_UNRECOGNISED => __('reconciliation.import.error_unrecognised'),
+                default => $result['error'],
+            };
+
+            return back()->with('error', $error);
         }
 
-        $message = "Imported {$result['imported']} transactions";
+        $message = __('reconciliation.import.imported', [
+            'count' => $result['imported'],
+            'format' => $result['format'],
+        ]);
         if ($result['skipped'] > 0) {
-            $message .= ", skipped {$result['skipped']} (already imported or not completed movements)";
+            $message .= __('reconciliation.import.skipped', ['count' => $result['skipped']]);
         }
         if (! empty($result['errors'])) {
-            $message .= '. First issue: '.$result['errors'][0];
+            $message .= __('reconciliation.import.first_issue', ['issue' => $result['errors'][0]]);
         }
 
         return redirect()->route('reconciliation.index')->with('success', $message.'.');
