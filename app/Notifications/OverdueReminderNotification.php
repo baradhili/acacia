@@ -10,12 +10,12 @@ use Illuminate\Notifications\Notification;
 /**
  * Mail reminder for an overdue invoice, carrying the invoice and its
  * days-overdue count. Dispatched synchronously by the
- * notifications:overdue-reminders command (scheduled daily, its
- * 3-day re-send throttle stamping last_reminder_sent_at on the
- * invoice) to the invoice's client and to every admin-role user, via
- * the mail channel only — deliberately not queued, so a delivery
- * failure throws inside the command's try/catch and the invoice is
- * not stamped as reminded (the statements:send precedent).
+ * notifications:overdue-reminders command (scheduled daily) to the
+ * invoice's client and to every admin-role user via the mail channel
+ * only — deliberately not queued, so a delivery failure throws
+ * inside the command's per-recipient catch and the already-notified
+ * recipients keep their throttle stamp (the statements:send
+ * precedent). Notifiable models route by their email attribute.
  */
 class OverdueReminderNotification extends Notification
 {

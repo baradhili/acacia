@@ -14,12 +14,13 @@ use Illuminate\Support\Facades\Notification;
  * overdue-reminders.log): for each Invoice::overdue() match at least
  * --days past due (default 1), mails the client and every admin an
  * OverdueReminderNotification (mail channel — nothing lands in the
- * notifications table), then stamps last_reminder_sent_at so the
- * 3-day re-send throttle knows a reminder went out. The sends are
- * synchronous (the statements:send precedent), so the stamp lands
- * only after delivery — a failed send throws before it and the
- * invoice stays eligible; a client without email still throttles,
- * because the admin copies count as the reminder going out.
+ * notifications table). Each recipient sends on its own: one address
+ * failing never discards the recipients already notified, and the
+ * 3-day throttle's last_reminder_sent_at stamp lands only once at
+ * least one recipient actually received the reminder — nobody
+ * notified means not stamped. The sends are synchronous (the
+ * statements:send precedent), so delivery failures throw where they
+ * are caught, and dry-runs stamp nothing.
  */
 class SendOverdueReminders extends Command
 {
@@ -48,6 +49,7 @@ class SendOverdueReminders extends Command
 
         $sent = 0;
         $skipped = 0;
+        $failed = 0;
 
         foreach ($overdueInvoices as $invoice) {
             // Whole days — diffInDays() carries fractions, and the
@@ -74,29 +76,47 @@ class SendOverdueReminders extends Command
             if ($dryRun) {
                 $this->warn("Would send reminder for invoice {$invoice->invoice_number} to {$invoice->client->email}");
             } else {
-                try {
-                    // Send to client
-                    if ($invoice->client && $invoice->client->email) {
-                        Notification::send($invoice->client, new OverdueReminderNotification($invoice, $daysOverdue));
-                    }
+                // Per-recipient sends: one address failing must not
+                // discard the recipients already notified — the stamp
+                // below holds the throttle for them, so tomorrow's
+                // retry re-attempts only what failed.
+                $delivered = 0;
+                $failedRecipients = 0;
 
-                    // Also send to admin users
-                    $admins = User::role('admin')->get();
-                    foreach ($admins as $admin) {
-                        Notification::send($admin, new OverdueReminderNotification($invoice, $daysOverdue));
+                $send = function ($recipient, string $label) use ($invoice, $daysOverdue, &$delivered, &$failedRecipients): void {
+                    try {
+                        Notification::send($recipient, new OverdueReminderNotification($invoice, $daysOverdue));
+                        $delivered++;
+                    } catch (\Exception $e) {
+                        $failedRecipients++;
+                        $this->error("Failed to send reminder for invoice {$invoice->invoice_number} to {$label}: {$e->getMessage()}");
                     }
+                };
 
+                if ($invoice->client && $invoice->client->email) {
+                    $send($invoice->client, $invoice->client->email);
+                }
+
+                foreach (User::role('admin')->get() as $admin) {
+                    $send($admin, $admin->email ?? 'admin #'.$admin->id);
+                }
+
+                // The stamp means a reminder went out: only actual
+                // deliveries set it, and it never marks an invoice
+                // reminded when nobody was sent one.
+                if ($delivered > 0) {
                     $invoice->update(['last_reminder_sent_at' => now()]);
 
-                    $this->info("Sent reminder for invoice {$invoice->invoice_number} ({$daysOverdue} days overdue)");
+                    $this->info("Sent reminder for invoice {$invoice->invoice_number} ({$daysOverdue} days overdue) to {$delivered} recipient(s)".($failedRecipients > 0 ? ", {$failedRecipients} failed" : ''));
                     $sent++;
-                } catch (\Exception $e) {
-                    $this->error("Failed to send reminder for invoice {$invoice->invoice_number}: {$e->getMessage()}");
+                } else {
+                    $this->error("Reminder for invoice {$invoice->invoice_number} reached no recipient".($failedRecipients > 0 ? " — {$failedRecipients} send(s) failed" : ' — no client email and no admin users'));
+                    $failed++;
                 }
             }
         }
 
-        $this->info("Done. Sent: {$sent}, Skipped: {$skipped}");
+        $this->info("Done. Sent: {$sent}, Skipped: {$skipped}".($failed > 0 ? ", Failed: {$failed}" : ''));
 
         return Command::SUCCESS;
     }

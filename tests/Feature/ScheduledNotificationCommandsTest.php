@@ -131,6 +131,54 @@ class ScheduledNotificationCommandsTest extends TestCase
         $this->assertStringContainsString('Amount Due: A$1,000.00', $rendered);
     }
 
+    public function test_a_client_reminder_routes_and_renders_for_the_mail_channel(): void
+    {
+        $client = $this->createClient();
+        $invoice = $this->createInvoice($client);
+        $notification = new OverdueReminderNotification($invoice, 5);
+
+        // The exact routing call MailChannel dereferences at delivery
+        // — this was undefined before Client gained Notifiable, so
+        // every real (unfaked) client send crashed before reaching
+        // the mailer.
+        $this->assertSame($client->email, $client->routeNotificationFor('mail', $notification));
+
+        // And the message itself renders, addressed by that route.
+        $message = $notification->toMail($client);
+        $this->assertStringContainsString("invoice {$invoice->invoice_number}", (string) $message->render());
+    }
+
+    public function test_a_reminder_reaching_no_recipient_never_stamps(): void
+    {
+        Notification::fake();
+
+        // No client email and no admin users: nothing was sent, so
+        // nothing may be recorded as reminded.
+        $invoice = $this->createInvoice($this->createClient(['email' => null]));
+
+        $this->artisan('notifications:overdue-reminders')
+            ->expectsOutputToContain('reached no recipient')
+            ->assertSuccessful();
+
+        Notification::assertNothingSent();
+        $this->assertNull($invoice->refresh()->last_reminder_sent_at);
+    }
+
+    public function test_an_admin_only_send_stamps_the_throttle(): void
+    {
+        Notification::fake();
+
+        $invoice = $this->createInvoice($this->createClient(['email' => null]));
+        $admin = tap(User::factory()->create())->assignRole('admin');
+
+        $this->artisan('notifications:overdue-reminders')
+            ->expectsOutputToContain('to 1 recipient(s)')
+            ->assertSuccessful();
+
+        Notification::assertSentTo($admin, OverdueReminderNotification::class);
+        $this->assertNotNull($invoice->refresh()->last_reminder_sent_at);
+    }
+
     public function test_statements_send_renders_and_emails_the_statement(): void
     {
         Mail::fake();

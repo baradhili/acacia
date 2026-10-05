@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -8,15 +9,20 @@ use Illuminate\Support\Facades\Schema;
  * squashed schema: vendors (a mirror of suppliers no controller,
  * route, relation or test ever referenced) and audit_logs (the audit
  * pipeline writes the syslog channel; nothing ever persisted rows).
- * Existing installs still carry both from the squash — this clears
- * them so every database matches the squashed schema again.
+ * Existing installs still carry both from the squash. Each drops
+ * only when empty — both were writerless, so a non-empty table means
+ * someone used it manually, and deleting live rows is its owner's
+ * decision, not this migration's.
  */
 return new class extends Migration
 {
     public function up(): void
     {
-        Schema::dropIfExists('vendors');
-        Schema::dropIfExists('audit_logs');
+        foreach (['vendors', 'audit_logs'] as $table) {
+            if (Schema::hasTable($table) && DB::table($table)->count() === 0) {
+                Schema::dropIfExists($table);
+            }
+        }
     }
 
     public function down(): void

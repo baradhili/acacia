@@ -51,10 +51,12 @@ lines count too, because both really moved the bank), with the gap
 between them and its breakdown: bank lines not matched yet, book
 movements not on the statement, and the residual of timing and
 import-history differences. A fully matched feed closes the gap to
-zero. Lines in currencies other than the entity's list but never net
-against the books, and the card says plainly that the actual figure
-is only as complete as the import — a feed that starts after the
-account opened understates it.
+zero. Feed lines in a currency other than the entity's appear in the
+balance list but never enter the comparison — nothing about them is
+added to or subtracted from the books' figures, so a foreign-currency
+balance cannot distort the gap — and the card says plainly that the
+actual figure is only as complete as the import — a feed that starts
+after the account opened understates it.
 
 ### Changed — Sep 2026 dead-code pass resolved: everything deleted
 
@@ -74,8 +76,10 @@ tests called the service) and the AuditLog model with its table
 (the live audit pipeline — AuditObserver → AuditService — writes
 the syslog channel by design and nothing ever persisted rows). The
 squashed schema no longer creates the vendors and audit_logs
-tables, and a drop migration clears both from existing installs so
-every database matches the squash. The surviving
+tables, and a drop migration clears both from existing installs —
+each only when the table is empty, since both were writerless and a
+populated one means someone used it manually; deleting those rows is
+its owner's decision, not a migration's. The surviving
 OverdueReminderNotification keeps its render coverage in the
 scheduled-commands test.
 
@@ -88,10 +92,15 @@ past its --days filter: the 3-day re-send guard read
 BadMethodCallException fired outside the send try/catch — nothing was
 ever sent. The reminders are mail-only (no database notification
 rows), so the throttle now stamps a new `last_reminder_sent_at` on the
-invoice — after delivery, not dispatch: the reminder sends
-synchronously now (the statements:send precedent) instead of queued,
-so a failed send throws inside the command's try/catch and leaves the
-invoice eligible, and dry-runs leave the stamp untouched. The monthly
+invoice — only once a recipient actually received the reminder: sends
+are synchronous (the statements:send precedent) and per-recipient, so
+one address failing never discards the recipients already notified
+(the stamp holds their throttle for the retry), an invoice that
+reached nobody (no client email, no admins) is never stamped as
+reminded, and dry-runs stamp nothing. Client sends also route for
+real now: Client lacked the Notifiable trait, so the mail channel's
+routing call — previously never reached — would have crashed every
+real client delivery. The monthly
 `statements:send` run rendered `emails.client-statement`, a view that
 never shipped, so every per-client send failed, was logged and counted
 as skipped while the command still exited SUCCESS; the view now exists
