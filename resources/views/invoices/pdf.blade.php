@@ -126,18 +126,6 @@
             font-size: 14px;
             border-top: 2px solid #333;
         }
-        .status {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 10px;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-        .status-paid { background: #d1fae5; color: #065f46; }
-        .status-sent { background: #dbeafe; color: #1e40af; }
-        .status-draft { background: #f3f4f6; color: #374151; }
-        .status-overdue { background: #fee2e2; color: #991b1b; }
         .footer {
             margin-top: 40px;
             padding-top: 20px;
@@ -200,12 +188,6 @@
                 <div class="invoice-meta" style="margin-top: 20px;">
                     <p><strong>Issue Date:</strong> {{ $invoice->issue_date->format('d M Y') }}</p>
                     <p><strong>Due Date:</strong> {{ $invoice->due_date?->format('d M Y') ?? 'On Receipt' }}</p>
-                    <p>
-                        <strong>Status:</strong> 
-                        <span class="status status-{{ $invoice->status }}">
-                            {{ ucfirst(str_replace('_', ' ', $invoice->status)) }}
-                        </span>
-                    </p>
                 </div>
             </div>
         </div>

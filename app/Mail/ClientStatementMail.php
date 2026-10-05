@@ -45,14 +45,4 @@ class ClientStatementMail extends Mailable
             ],
         );
     }
-
-    public function build(): self
-    {
-        return $this->subject("Your Statement for {$this->statementData['period_label']}")
-            ->view('emails.client-statement')
-            ->with([
-                'client' => $this->client,
-                'statement' => $this->statementData,
-            ]);
-    }
 }

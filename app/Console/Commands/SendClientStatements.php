@@ -16,13 +16,8 @@ use Illuminate\Support\Facades\Mail;
  * balance via ClientStatementService, or one --client; --month
  * picks the period (default the current month end). Clients without
  * an email are skipped and per-client send failures are logged and
- * counted, never fatal — which is currently every send: the
- * mailable renders emails.client-statement, a view that does not
- * exist (todo-list), so a run exits SUCCESS with all clients
- * counted as skipped and the failures only in the log. --dry-run
- * prints the balance summary instead of sending (dry-runs are
- * unaffected by the missing view). No sent-record is kept — a
- * manual re-run re-emails.
+ * counted, never fatal. --dry-run prints the balance summary instead
+ * of sending. No sent-record is kept — a manual re-run re-emails.
  */
 class SendClientStatements extends Command
 {

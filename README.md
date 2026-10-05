@@ -474,7 +474,7 @@ Add the following to your server's crontab:
 
 ### Key Models
 
-- `Contact` (morphs to IFRS `Entity`) — implemented as `Client`, `Supplier`, `Vendor`
+- `Contact` (morphs to IFRS `Entity`) — implemented as `Client`, `Supplier`
 - `Project`
 - `PurchaseOrder`
 - `TimeEntry`

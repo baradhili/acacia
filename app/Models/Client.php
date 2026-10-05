@@ -9,18 +9,21 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Notifications\Notifiable;
 
 /**
  * A client of the firm — parent of its projects, invoices, payments
  * and credit notes, with accessors aggregating AR aging, overdue and
- * available credit. Soft-deleted; ABN stored as bare digits and
- * formatted 2-3-3-3; three postal addresses collapse via
- * same_as_billing. Estimates belong to the Proposals module's own
- * model — the core keeps no client→estimate relation.
+ * available credit. Notifiable so the scheduled reminder commands can
+ * mail the client directly (the mail channel's routeNotificationFor
+ * falls back to the email attribute, like User). Soft-deleted; ABN
+ * stored as bare digits and formatted 2-3-3-3; three postal addresses
+ * collapse via same_as_billing. Estimates belong to the Proposals
+ * module's own model — the core keeps no client→estimate relation.
  */
 class Client extends Model
 {
-    use HasCustomFields, HasFactory, SoftDeletes;
+    use HasCustomFields, HasFactory, Notifiable, SoftDeletes;
 
     protected $fillable = [
         'name',

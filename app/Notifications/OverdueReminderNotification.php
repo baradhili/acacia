@@ -4,20 +4,20 @@ namespace App\Notifications;
 
 use App\Models\Invoice;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 /**
- * Queued mail reminder for an overdue invoice, carrying the invoice
- * and its days-overdue count. Dispatched by the
- * notifications:overdue-reminders command (scheduled daily — its
- * intended 3-day re-send throttle is currently broken; see that
- * command) and by InvoiceNotificationService, each sending to the
- * invoice's client and to every admin-role user via the mail
- * channel only.
+ * Mail reminder for an overdue invoice, carrying the invoice and its
+ * days-overdue count. Dispatched synchronously by the
+ * notifications:overdue-reminders command (scheduled daily) to the
+ * invoice's client and to every admin-role user via the mail channel
+ * only — deliberately not queued, so a delivery failure throws
+ * inside the command's per-recipient catch and the already-notified
+ * recipients keep their throttle stamp (the statements:send
+ * precedent). Notifiable models route by their email attribute.
  */
-class OverdueReminderNotification extends Notification implements ShouldQueue
+class OverdueReminderNotification extends Notification
 {
     use Queueable;
 
@@ -39,7 +39,7 @@ class OverdueReminderNotification extends Notification implements ShouldQueue
             ->line("This is a friendly reminder that invoice {$this->invoice->invoice_number} for {$this->invoice->formatted_total} is overdue by {$this->daysOverdue} days.")
             ->line('**Invoice Details:**')
             ->line("- Invoice Number: {$this->invoice->invoice_number}")
-            ->line("- Invoice Date: {$this->invoice->invoice_date->format('d M Y')}")
+            ->line("- Invoice Date: {$this->invoice->issue_date->format('d M Y')}")
             ->line("- Due Date: {$this->invoice->due_date->format('d M Y')}")
             ->line("- Amount Due: {$this->invoice->formatted_amount_due}");
 

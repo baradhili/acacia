@@ -11,6 +11,7 @@ use App\Models\ReimbursementPayment;
 use App\Models\Supplier;
 use App\Services\FiscalYearService;
 use App\Services\IfrsPosting;
+use App\Services\OpeningBalances;
 use Carbon\Carbon;
 use IFRS\Models\Account;
 use IFRS\Models\Balance;
@@ -31,12 +32,15 @@ use Modules\Reconciliation\Models\ReconciliationHistory;
  * by reference/amount/date inside the tolerances, then a learned
  * pass using the counterparty rules an earlier match taught — the
  * unreconciled-movements panel (the book side: ledger movements no
- * matched line accounts for), and the maintenance actions (ignore and
- * restore, manual match and unmatch, each history-logged). Creating
- * what a line pays for happens on the Match screen, never
- * automatically — the auto-create service methods were retired Sep
- * 2026 per maintainer decision. The import stores debits negative;
- * every amount comparison or categorisation works in magnitudes.
+ * matched line accounts for), the bank-vs-books cash check (the
+ * gap between the feed's implied balance and the ledger's bank
+ * accounts, with its components), and the maintenance actions
+ * (ignore and restore, manual match and unmatch, each
+ * history-logged). Creating what a line pays for happens on the
+ * Match screen, never automatically — the auto-create service
+ * methods were retired Sep 2026 per maintainer decision. The import
+ * stores debits negative; every amount comparison or categorisation
+ * works in magnitudes.
  */
 class ReconciliationService
 {
@@ -421,16 +425,29 @@ class ReconciliationService
             // set of IFRS transaction ids: the transaction a matched
             // payment posted, or — for a direct 'ledger' link — the
             // transaction of whichever ledger row was linked (either
-            // leg counts).
+            // leg counts). Transfer journals (the XFER references
+            // BankTransferService posts) are the exception: they carry
+            // one bank leg per side's feed line, so they reconcile
+            // leg-by-leg — the linked leg only — leaving the other
+            // side's leg listed for its own bank line to claim.
             $matched = BankTransaction::matched()
                 ->whereNotNull('matched_transaction_type')
                 ->get(['matched_transaction_type', 'matched_transaction_id'])
                 ->groupBy('matched_transaction_type')
                 ->map(fn ($rows) => $rows->pluck('matched_transaction_id')->filter());
 
-            $reconciledTransactionIds = DB::table((new Ledger)->getTable())
+            $ledgerLinkedTransactionIds = DB::table((new Ledger)->getTable())
                 ->whereIn('id', $matched->get('ledger', collect()))
-                ->pluck('transaction_id')
+                ->pluck('transaction_id');
+
+            $transferTransactionIds = DB::table((new Transaction)->getTable())
+                ->whereIn('id', $ledgerLinkedTransactionIds)
+                ->whereNotNull('reference')
+                ->where('reference', 'like', 'XFER-%')
+                ->pluck('id');
+
+            $reconciledTransactionIds = $ledgerLinkedTransactionIds
+                ->diff($transferTransactionIds)
                 ->merge($this->tierOrEmpty(fn () => Payment::whereIn('id', $matched->get('payment', collect()))->pluck('ifrs_receipt_id')))
                 ->merge($this->tierOrEmpty(fn () => BillPayment::whereIn('id', $matched->get('bill_payment', collect()))->pluck('ifrs_payment_id')))
                 ->merge($this->tierOrEmpty(fn () => ReimbursementPayment::whereIn('id', $matched->get('reimbursement_payment', collect()))->pluck('ifrs_transaction_id')))
@@ -453,13 +470,21 @@ class ReconciliationService
                 ->keyBy('ifrs_transaction_id'));
 
             $rows = $movements
-                ->map(function ($movement) use ($accountNames, $transactions, $reconciledTransactionIds, $payments, $billPayments, $reimbursements) {
+                ->map(function ($movement) use ($accountNames, $transactions, $reconciledTransactionIds, $payments, $billPayments, $reimbursements, $transferTransactionIds, $matched) {
                     $transaction = $transactions->get($movement->transaction_id);
                     if (! $transaction) {
                         return null;
                     }
 
                     if ($reconciledTransactionIds->contains($movement->transaction_id)) {
+                        return null;
+                    }
+
+                    // Transfers reconcile per leg: the bank leg a
+                    // matched line claimed is gone, the other side's
+                    // leg stays listed for its own line.
+                    if ($transferTransactionIds->contains($movement->transaction_id)
+                        && $matched->get('ledger', collect())->contains((int) $movement->ledger_id)) {
                         return null;
                     }
 
@@ -539,6 +564,107 @@ class ReconciliationService
 
             return collect();
         }
+    }
+
+    /**
+     * The cash-basis control the screen leads with: what the books say
+     * the bank holds — every IFRS BANK account's balance, the
+     * expected cash — against what the imported feed implies the bank
+     * actually holds. Wise's CSV carries no balances, so the actual
+     * side is the running sum of every imported line (all statuses:
+     * pending and ignored lines moved the bank too), per currency —
+     * the figure is only as good as the import's history. The gap
+     * comes with its two usual components, the bank lines nothing has
+     * matched yet and the book movements no bank line accounts for
+     * (getUnreconciledBankMovements, FY-bounded), plus whatever
+     * residual is left — matching tolerances, grossed-up amounts and
+     * feed history predating the books. Lines in currencies other
+     * than the entity's are listed but never netted against the
+     * books, and without bank accounts on the books there is nothing
+     * to compare: the feed lists alone and the gap stays null.
+     *
+     * @return array{
+     *     currency: ?string,
+     *     books: list<array{code: string, name: string, balance: float}>,
+     *     books_total: float,
+     *     bank: list<array{currency: string, balance: float, lines: int, latest: ?Carbon}>,
+     *     actual: ?float,
+     *     gap: ?float,
+     *     bank_unmatched_net: float,
+     *     books_unmatched_net: float,
+     *     residual: ?float,
+     * }
+     */
+    public function bankVsBooks(): array
+    {
+        $entity = IfrsPosting::resolveEntity();
+        $currencyCode = $entity?->currency?->currency_code;
+
+        // The books side: each bank account's exact as-at balance
+        // (opening snapshot in force plus ledger movement, the same
+        // basis as the trial balance).
+        $books = [];
+        $booksTotal = 0.0;
+        if ($entity !== null) {
+            foreach (Account::where('account_type', Account::BANK)->orderBy('code')->get() as $account) {
+                $balance = round(OpeningBalances::balanceAt($account, $entity, now()), 2);
+                $books[] = ['code' => $account->code, 'name' => $account->name, 'balance' => $balance];
+                $booksTotal = round($booksTotal + $balance, 2);
+            }
+        }
+
+        // The bank side: the feed's implied running balance per
+        // currency, with line count and latest date as the
+        // staleness cue. The count aliases as line_count — "lines"
+        // is a reserved word on MariaDB.
+        $bank = BankTransaction::query()
+            ->groupBy('currency')
+            ->orderBy('currency')
+            ->selectRaw('currency, COUNT(*) as line_count, SUM(amount) as balance, MAX(transaction_date) as latest')
+            ->get()
+            ->map(fn ($row) => [
+                'currency' => $row->currency,
+                'balance' => round((float) $row->balance, 2),
+                'lines' => (int) $row->line_count,
+                'latest' => $row->latest !== null ? Carbon::parse($row->latest) : null,
+            ])
+            ->values()
+            ->all();
+
+        // Nothing to compare when the ledger has no bank accounts:
+        // the feed's sum is a balance against nothing, and a gap
+        // against zero would be meaningless.
+        $comparable = $currencyCode !== null && $books !== []
+            ? collect($bank)->firstWhere('currency', $currencyCode)
+            : null;
+
+        $actual = $comparable !== null ? $comparable['balance'] : null;
+        $gap = $actual !== null ? round($actual - $booksTotal, 2) : null;
+
+        // The components: bank movements the matching has not tied to
+        // the books yet (pending and ignored alike — both really
+        // moved the bank), and book movements still waiting for their
+        // bank line. gap ≈ the first minus the second; the residual is
+        // what is left over.
+        $bankUnmatchedNet = $currencyCode !== null
+            ? round((float) BankTransaction::query()
+                ->whereIn('status', [BankTransaction::STATUS_PENDING, BankTransaction::STATUS_IGNORED])
+                ->where('currency', $currencyCode)
+                ->sum('amount'), 2)
+            : 0.0;
+        $booksUnmatchedNet = round((float) $this->getUnreconciledBankMovements()->sum('amount'), 2);
+
+        return [
+            'currency' => $currencyCode,
+            'books' => $books,
+            'books_total' => $booksTotal,
+            'bank' => $bank,
+            'actual' => $actual,
+            'gap' => $gap,
+            'bank_unmatched_net' => $bankUnmatchedNet,
+            'books_unmatched_net' => $booksUnmatchedNet,
+            'residual' => $gap !== null ? round($gap - ($bankUnmatchedNet - $booksUnmatchedNet), 2) : null,
+        ];
     }
 
     /**

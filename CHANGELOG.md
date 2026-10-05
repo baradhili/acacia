@@ -3,6 +3,152 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] — 2026-10-04
+
+### Added — bank transfers and external funds movements, from the match screen
+
+The one movement the payment tiers never model — your own money
+moving — now has a first-class path, closing the gap that previously
+left transfers to be ignored (which never reconciled anything: the
+ignored line kept counting in the bank balance and the books never
+learned the money moved). The match screen offers "Record as a
+transfer or funds movement": pick the tracked bank account the line
+moves and the other side — another bank account in the books, or an
+account outside them. Between tracked accounts the journal is a
+Dr/Cr bank pair (total cash unchanged); against the outside world it
+is Funds Introduced / Funds Withdrawn equity (accounts 3500/3510,
+lazily created) — an injection or withdrawal is never income, so
+nothing touches revenue, expenses, GST or the BAS labels, and the
+company tax report's equity branch already carries such movements as
+a V05-explained non-assessable flow. The journal is dated the bank
+line's own date (period locks refuse a locked or closed date), the
+line matches to the journal's bank leg in the same action, and
+payment-limit splits of one intended transfer each record their own
+line and journal — every transfer of a split batch keeps cash-in-bank
+correct, which is what the feature is for. The match deliberately
+teaches the counterparty rules nothing: a transfer journal is a
+one-off target. Recording never double-posts: a line unmatches back
+to pending but its journal — the real movement — stays, so recording
+again re-matches the existing journal (and refuses if the accounts
+were changed rather than silently re-posting), and when both sides'
+statements feed the same internal transfer, the second line claims
+the first journal's other leg instead of posting a second Dr/Cr
+pair — payment-limit splits cannot collide with that, because each
+split's journal has its bank leg claimed by its own line the moment
+it posts. The unreconciled panel plays along: transfer journals
+reconcile leg-by-leg (one bank leg per side's feed line), while
+every other ledger link keeps its either-leg semantics.
+
+### Added — bank vs books: the cash-basis gap on the reconciliation screen
+
+A cash-basis system's bank accounts are its source of truth for cash,
+so the reconciliation screen now leads with the control that proves
+it: expected cash (every IFRS bank account's exact ledger balance —
+one row each when there are multiple bank accounts) beside actual
+bank balance (the running sum of every imported feed line, per
+currency — Wise's CSV carries no balances, and pending and ignored
+lines count too, because both really moved the bank), with the gap
+between them and its breakdown: bank lines not matched yet, book
+movements not on the statement, and the residual of timing and
+import-history differences. A fully matched feed closes the gap to
+zero. Feed lines in a currency other than the entity's appear in the
+balance list but never enter the comparison — nothing about them is
+added to or subtracted from the books' figures, so a foreign-currency
+balance cannot distort the gap — and the card says plainly that the
+actual figure is only as complete as the import — a feed that starts
+after the account opened understates it.
+
+### Changed — Sep 2026 dead-code pass resolved: everything deleted
+
+Five finds from the Sep 2026 docblock pass, each decided delete —
+nothing had a production caller, and git history retains all of it.
+The Vendor model (a mirror of Supplier's contact columns; no
+controller, route, relation or test ever referenced it — Supplier
+owns the whole AP flow), the unrouted Api\DashboardController and
+its DashboardService data layer (the only routed API is
+WidgetPreferenceController; the screen widgets query models
+directly, and the one test using the service for its unbilled-time
+assertions now queries TimeEntry itself), the unregistered
+QuickActionsWidget and WelcomeWidget with their views,
+InvoiceNotificationService with PaymentReceivedNotification (the
+scheduled command sends the same reminders directly; only the unit
+tests called the service) and the AuditLog model with its table
+(the live audit pipeline — AuditObserver → AuditService — writes
+the syslog channel by design and nothing ever persisted rows). The
+squashed schema no longer creates the vendors and audit_logs
+tables, and a drop migration clears both from existing installs —
+each only when the table is empty, since both were writerless and a
+populated one means someone used it manually; deleting those rows is
+its owner's decision, not a migration's. The surviving
+OverdueReminderNotification keeps its render coverage in the
+scheduled-commands test.
+
+### Fixed — both scheduled client-email paths actually send again
+
+Two Sep 2026 docblock-pass finds, failing differently. The daily
+`notifications:overdue-reminders` run aborted on the first invoice
+past its --days filter: the 3-day re-send guard read
+`$invoice->notifications()`, a relation Invoice doesn't have, and the
+BadMethodCallException fired outside the send try/catch — nothing was
+ever sent. The reminders are mail-only (no database notification
+rows), so the throttle now stamps a new `last_reminder_sent_at` on the
+invoice — only once a recipient actually received the reminder: sends
+are synchronous (the statements:send precedent) and per-recipient, so
+one address failing never discards the recipients already notified
+(the stamp holds their throttle for the retry), an invoice that
+reached nobody (no client email, no admins) is never stamped as
+reminded, and dry-runs stamp nothing. Client sends also route for
+real now: Client lacked the Notifiable trait, so the mail channel's
+routing call — previously never reached — would have crashed every
+real client delivery. The monthly
+`statements:send` run rendered `emails.client-statement`, a view that
+never shipped, so every per-client send failed, was logged and counted
+as skipped while the command still exited SUCCESS; the view now exists
+(statement period, opening/invoiced/paid/closing summary, running-
+balance activity table) and the mailable's stale `build()` — whose
+subject the framework silently overrode via `envelope()` — is gone.
+Also found on the same path: the reminder mail read a nonexistent
+`invoice_date` column and two nonexistent formatted-amount accessors,
+which would have crashed or blanked the rendered lines once the sends
+started working — `issue_date` and the `formatted_amount_due`/
+`formatted_amount_paid` accessors now exist, and the days-overdue
+count the command displays and passes to the notification is whole
+days, not diffInDays()' raw fractions.
+
+### Changed — invoice status no longer styled like a button
+
+The invoice's status showed as a bold uppercase pill — on the PDF tax
+invoice the client receives, where a filled rounded badge reads as a
+button and the workflow status ("Draft", "Sent") is internal state a
+legal document has no business showing, and on the invoice screen
+header beside the real buttons. The PDF no longer carries a status
+line at all (the amount due already tells the recipient what they
+need); the screen header shows a coloured dot and text instead of the
+filled pill, which cannot be mistaken for something clickable. The
+invoice list keeps its pill badges — that is the table idiom every
+screen uses.
+
+### Fixed — settled BAS positions stay settled
+
+A settlement's clearing journal is dated the bank date — typically a
+month after the quarter it covers, the BAS lodgement lag — but the
+unsettled position is read from the accounts' balances at an as-at
+date, so a position queried before that bank date could not see the
+journal and kept showing the just-paid amount as unsettled, inviting
+a second payment of the same position. Positions now net in the
+clearing journals of non-reversed settlements whose bank date falls
+after the as-at date, using the journals' own legs (the exact amounts
+cleared, unlike the settlement row's whole-dollar labels), so
+backdated postings made after a settlement resurface as a genuine
+residual instead of being swallowed, a date before a settlement's
+coverage clamps to nothing-to-settle (a recorded settlement covering
+a later date has already taken those balances), and `settle()`
+refuses to settle a coverage that is already settled — including
+across the PAYG-instalment/income-tax pair, which clears the same
+2240 account and therefore nets each other's settlements. The GST
+report's unlodged position and the dashboard widget read through the
+same method and pick up the fix.
+
 ## [Unreleased] — 2026-10-02
 
 ### Changed — BAS settlements lodge whole dollars, the conservative way

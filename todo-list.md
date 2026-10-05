@@ -3,13 +3,6 @@
 Done items are archived in [CHANGELOG.md](CHANGELOG.md) — cleared from
 here once their changelog entry lands. Ordered by priority.
 
-- [ ] Fix: When BAS is settled the unsettled positions should match
-
-- [ ] 
-- [ ] Fix: Two notification-path bugs found by the Sep 2026 docblock pass, failing differently: `notifications:overdue-reminders` throttles via `$invoice->notifications()`, a relation Invoice doesn't have — the BadMethodCallException fires outside the send try/catch (and before the dry-run branch), so the run aborts on the first invoice past the --days filter and sends nothing; `statements:send` renders `emails.client-statement`, a view that doesn't exist (only the invoice and payment-receipt email views ship) — every per-client send fails, is logged and counted as skipped, and the command still exits SUCCESS, so the only trace is in client-statements.log.
-
-- [ ] Fix: Dead code recorded as such by the Sep 2026 docblock pass — decide keep-or-delete: Vendor model (suppliers mirror, zero references), Api\DashboardController (JSON widget layer, unrouted), QuickActionsWidget/WelcomeWidget (unregistered), InvoiceNotificationService (only tests call it), AuditLog table rows (the observer writes syslog; nothing persists the table).
-
 - [ ] Bring the remaining resource_mgr concepts into Acacia — services (Sep 2026, core `services`) and the skills library (Sep 2026, Modules/Skills) are across; the resourcing/allocation layer is what's left, plus the "what-if" concept to allow multiple attempts at solving situations until one is acceptable (upstream has no solver either — its README asks for "fancy algorithms" like controlled annealing, so that part is a new Acacia design, not a port). Resource identity anchors on the Payroll Employee/payee, the precedent Skills and Resumes already set; real FKs per Acacia convention (upstream's allocation rows are deliberately FK-free). Reference: [baradhili/resource_mgr](https://github.com/baradhili/resource_mgr) — concepts still to port: resources with contracts/leave/skills, base FTE availability, public holidays, demands/demand requests/forecast demands, point-in-time allocations (Proposed/Committed, Manual/Imported) where de-allocating returns demand to the unmet pool. Queued pieces, roughly in build order:
   
   - [ ] Project/tasks first, expanded the same way we did with proposals: a task/work-breakdown concept between estimate lines and time entries — module-owned models, guarded state machine, derived values, service-linked lines carrying estimated effort (hours) and required skills (reuse `service_skill`), attached to Project and optionally Estimate. Upstream works "from resource management rather than project tasks"; Acacia needs the task layer so demand and allocations have something finer than a whole project to attach to.
@@ -24,6 +17,7 @@ here once their changelog entry lands. Ordered by priority.
 - [ ] Ability to have multiple un-related company entities with separate everything on same system - do we do this by user associations or by landing domain? Justify why it cannot be one user to one or more entities?
 
 - [ ] 
+
 - [ ] Modules per company (builds on the multi-entity item above).
 
 - [ ] WAIT! - Lets think about client portal need for future - Remove the "client" role concept from the app — audit RoleSeeder's roles list, any `client` role checks/assignments and portal-client user handling; user accounts should be staff-side only (admin/accountant/staff). (Sep 2026, requested while making all users show as payroll payees — the payroll UserObserver currently skips client-role users defensively, so this unpays that workaround.)
