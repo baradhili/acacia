@@ -71,6 +71,11 @@ leg it balances. (Two transactions on Wages Payable for a pay run
 remains correct: the accrual credit and the net-pay debit net to
 zero.)
 
+### Fixed — suppliers index ordered by name
+
+The suppliers list arrived in insertion order; it is alphabetical by
+name now — the list is a lookup surface, not a recency feed.
+
 ### Fixed — README drift in the reconciliation sections
 
 The Bank Reconciliation section still advertised the removed Wise
