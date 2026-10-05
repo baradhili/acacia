@@ -80,13 +80,13 @@ class ScheduledNotificationCommandsTest extends TestCase
         $this->artisan('notifications:overdue-reminders')
             ->expectsOutputToContain("Skipping invoice {$invoice->invoice_number}")
             ->assertSuccessful();
-        Notification::assertSentTo($client, OverdueReminderNotification::class, 1);
+        Notification::assertSentToTimes($client, OverdueReminderNotification::class, 1);
 
         // Past the 3-day window the reminder goes out again.
         $this->travel(4)->days();
 
         $this->artisan('notifications:overdue-reminders')->assertSuccessful();
-        Notification::assertSentTo($client, OverdueReminderNotification::class, 2);
+        Notification::assertSentToTimes($client, OverdueReminderNotification::class, 2);
     }
 
     public function test_overdue_reminders_dry_run_never_sends_or_stamps(): void
