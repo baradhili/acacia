@@ -3,6 +3,8 @@
 Done items are archived in [CHANGELOG.md](CHANGELOG.md) — cleared from
 here once their changelog entry lands. Ordered by priority.
 
+- [ ] CodeRabbit pass over the bank-import branch before pushing (Oct 2026: the free-tier quota ran out mid-review) — the multi-format import had its three rounds, but the payroll-liability settlement, account-schedule rescope and suppliers-ordering commits are unreviewed; re-run `coderabbit review --agent --base main`, fix critical/major first.
+
 - [ ] Bring the remaining resource_mgr concepts into Acacia — services (Sep 2026, core `services`) and the skills library (Sep 2026, Modules/Skills) are across; the resourcing/allocation layer is what's left, plus the "what-if" concept to allow multiple attempts at solving situations until one is acceptable (upstream has no solver either — its README asks for "fancy algorithms" like controlled annealing, so that part is a new Acacia design, not a port). Resource identity anchors on the Payroll Employee/payee, the precedent Skills and Resumes already set; real FKs per Acacia convention (upstream's allocation rows are deliberately FK-free). Reference: [baradhili/resource_mgr](https://github.com/baradhili/resource_mgr) — concepts still to port: resources with contracts/leave/skills, base FTE availability, public holidays, demands/demand requests/forecast demands, point-in-time allocations (Proposed/Committed, Manual/Imported) where de-allocating returns demand to the unmet pool. Queued pieces, roughly in build order:
   
   - [ ] Project/tasks first, expanded the same way we did with proposals: a task/work-breakdown concept between estimate lines and time entries — module-owned models, guarded state machine, derived values, service-linked lines carrying estimated effort (hours) and required skills (reuse `service_skill`), attached to Project and optionally Estimate. Upstream works "from resource management rather than project tasks"; Acacia needs the task layer so demand and allocations have something finer than a whole project to attach to.
@@ -15,8 +17,6 @@ here once their changelog entry lands. Ordered by priority.
   - [ ] What-if step 4 — automated attempts (the NP-hard core): generate multiple candidate allocation attempts per scenario via local search / simulated annealing with restarts (multi-skill resource-constrained scheduling is NP-hard — [MDPI Algorithms, MSRCPSP](https://www.mdpi.com/1999-4893/19/9/738)); each attempt persisted with its score and compared, iterate until one is acceptable, then commit flips that attempt's allocations Proposed→Committed. Solver runs bounded (time/iteration caps, queued job) — never an unbounded loop.
 
 - [ ] Ability to have multiple un-related company entities with separate everything on same system - do we do this by user associations or by landing domain? Justify why it cannot be one user to one or more entities?
-
-- [ ] 
 
 - [ ] Modules per company (builds on the multi-entity item above).
 
@@ -38,6 +38,10 @@ here once their changelog entry lands. Ordered by priority.
   - [ ] Branded PDF export: one-click, print-ready, logo + accent colour (ProposalForge's 2×-DPI html2canvas/jsPDF approach vs the Resumes LuaLaTeX precedent).
   - [ ] Delay until Client portal - Client acceptance portal: tokenised share link where the client reads the proposal, toggles optional lines with totals recalculating, and accepts with a typed/drawn e-signature that locks the document (propsly); the signature feeds the existing accepted state. Oct 2026 laraestimate review: its whole read+toggle flow runs on a bare capability URL (UUID primary key, unauthenticated route, per-estimate `allows_to_select_items` switch + per-item `obligatory` flag — maps straight onto our optional lines), so this piece needs the client-portal go/no-go, not the portal itself; and when built, gate the link properly (optional password + expiry) — laraestimate has both as columns but never enforces them anywhere.
   - [ ] Delay until Client portal - Engagement tracking on sent proposals: open/view notifications and per-section read analytics (propsly's tracking and engagement scores).
+
+- [ ] Capture statement balances from the MT940/camt.053 imports (Oct 2026 multi-format work): the parsers already read the opening/closing balance fields (Wise's :60F:/:62F: and OPBD/CLBD) but discard them, and bankVsBooks still derives the actual side as the running sum of every imported line — only as good as the feed's history. Storing per-statement balances would make the cash check's actual side exact and surface feed-history gaps the running sum hides.
+
+- [ ] Reconciliation index copy still says CSV-only — the intro ("Import your bank's transaction CSV export…") and the empty state ("import a CSV export to bring in new bank movements") predate the Oct 2026 multi-format import; reword through the translator (the import screen's strings are already converted).
 
 - [ ] Larascan deploy-time residue — the scan is baseline-free as of Sep 2026 (every code finding fixed; the FK mass-assignment sweep made ownership explicit across 29 models). What's left only resolves at deploy: php.ini posture (`allow_url_fopen=Off`, `expose_php=Off`), and the localhost env infos (APP_URL, session-secure) clear with the production .env. The `verification.notice` signed-route finding is a known scanner false positive — revisit if larascan ever fixes its route heuristic.
 
