@@ -62,11 +62,9 @@ class Camt053StatementParser
             return null;
         }
 
-        $statementId = $this->text($xpath, "//*[local-name()='Stmt']/*[local-name()='Id']");
-
         $header = [
-            'statement_id' => $statementId,
-            'external_account' => $this->text($xpath, "//*[local-name()='Stmt']/*[local-name()='Acct']/*[local-name()='Id']/*[local-name()='Othr']/*[local-name()='Id']"),
+            'statement_id' => null,
+            'external_account' => null,
             'currency' => null,
             'opening_date' => null,
             'opening_balance' => null,
@@ -74,39 +72,50 @@ class Camt053StatementParser
             'closing_balance' => null,
         ];
 
-        // The OPBD/CLBD balances: CRDT is a balance held (positive),
-        // DBIT an overdrawn one (negative). Multiple Stmt blocks each
-        // carry their own — the last one wins for the anchor this
-        // feeds; per-account statements are a Wise-per-account reality.
-        $balances = $xpath->query("//*[local-name()='Stmt']/*[local-name()='Bal']");
-        if ($balances !== false) {
-            foreach ($balances as $balance) {
-                /** @var DOMElement $balance */
-                $code = $this->text($xpath, "./*[local-name()='Tp']/*[local-name()='CdOrPrtry']/*[local-name()='Cd']", $balance);
-                if (! in_array($code, ['OPBD', 'CLBD'], true)) {
-                    continue;
+        // The header anchors the cash check, so it may only be built
+        // from a file that describes exactly one statement: a
+        // multi-Stmt message (several accounts or periods) would mix
+        // ids and balances from different statements into one anchor.
+        // Its entries still import as rows — only the anchor declines.
+        $stmtBlocks = $xpath->query("//*[local-name()='BkToCstmrStmt']/*[local-name()='Stmt']");
+        if ($stmtBlocks !== false && $stmtBlocks->length === 1 && $stmtBlocks->item(0) instanceof DOMElement) {
+            $stmt = $stmtBlocks->item(0);
+
+            $header['statement_id'] = $this->text($xpath, "./*[local-name()='Id']", $stmt);
+            $header['external_account'] = $this->text($xpath, "./*[local-name()='Acct']/*[local-name()='Id']/*[local-name()='Othr']/*[local-name()='Id']", $stmt);
+
+            // The OPBD/CLBD balances: CRDT is a balance held (positive),
+            // DBIT an overdrawn one (negative).
+            $balances = $xpath->query("./*[local-name()='Bal']", $stmt);
+            if ($balances !== false) {
+                foreach ($balances as $balance) {
+                    /** @var DOMElement $balance */
+                    $code = $this->text($xpath, "./*[local-name()='Tp']/*[local-name()='CdOrPrtry']/*[local-name()='Cd']", $balance);
+                    if (! in_array($code, ['OPBD', 'CLBD'], true)) {
+                        continue;
+                    }
+
+                    $amountNode = $xpath->query("./*[local-name()='Amt']", $balance)?->item(0);
+                    if (! $amountNode instanceof DOMElement) {
+                        continue;
+                    }
+
+                    $dateText = $this->text($xpath, "./*[local-name()='Dt']/*[local-name()='DtTm']", $balance)
+                        ?? $this->text($xpath, "./*[local-name()='Dt']/*[local-name()='Dt']", $balance);
+                    $signed = $this->text($xpath, "./*[local-name()='CdtDbtInd']", $balance) !== 'DBIT'
+                        ? (float) $amountNode->textContent
+                        : -(float) $amountNode->textContent;
+
+                    if ($code === 'OPBD') {
+                        $header['opening_date'] = $dateText !== null ? $this->balanceDate($dateText) : null;
+                        $header['opening_balance'] = $signed;
+                    } else {
+                        $header['closing_date'] = $dateText !== null ? $this->balanceDate($dateText) : null;
+                        $header['closing_balance'] = $signed;
+                    }
+
+                    $header['currency'] = $header['currency'] ?? ($amountNode->getAttribute('Ccy') ?: null);
                 }
-
-                $amountNode = $xpath->query("./*[local-name()='Amt']", $balance)?->item(0);
-                if (! $amountNode instanceof DOMElement) {
-                    continue;
-                }
-
-                $dateText = $this->text($xpath, "./*[local-name()='Dt']/*[local-name()='DtTm']", $balance)
-                    ?? $this->text($xpath, "./*[local-name()='Dt']/*[local-name()='Dt']", $balance);
-                $signed = $this->text($xpath, "./*[local-name()='CdtDbtInd']", $balance) !== 'DBIT'
-                    ? (float) $amountNode->textContent
-                    : -(float) $amountNode->textContent;
-
-                if ($code === 'OPBD') {
-                    $header['opening_date'] = $dateText !== null ? Carbon::parse($dateText) : null;
-                    $header['opening_balance'] = $signed;
-                } else {
-                    $header['closing_date'] = $dateText !== null ? Carbon::parse($dateText) : null;
-                    $header['closing_balance'] = $signed;
-                }
-
-                $header['currency'] = $header['currency'] ?? ($amountNode->getAttribute('Ccy') ?: null);
             }
         }
 
@@ -129,9 +138,16 @@ class Camt053StatementParser
             $amount = (float) $amountNode->textContent;
             $isCredit = $this->text($xpath, "./*[local-name()='CdtDbtInd']", $entry) !== 'DBIT';
 
+            // The fallback prefix is the entry's OWN Stmt Id — a
+            // multi-statement message must not fold its entries into
+            // one prefix, and entries of different statements in
+            // different files must never collide on the same
+            // deterministic id.
+            $entryStatementId = $this->text($xpath, "ancestor::*[local-name()='Stmt'][1]/*[local-name()='Id']", $entry);
+
             $sourceId = $this->text($xpath, "./*[local-name()='BkTxCd']/*[local-name()='Prtry']/*[local-name()='Cd']", $entry)
                 ?? $this->text($xpath, ".//*[local-name()='TxId']", $entry)
-                ?? ($statementId ?? 'CAMT053').'-'.$sequence;
+                ?? ($entryStatementId ?? 'CAMT053').'-'.$sequence;
 
             $description = $this->text($xpath, "./*[local-name()='AddtlNtryInf']", $entry);
 
@@ -192,6 +208,26 @@ class Camt053StatementParser
         $text = trim($nodes->item(0)->textContent);
 
         return $text !== '' ? $text : null;
+    }
+
+    /**
+     * A balance date, normalised to the inclusive date the balance
+     * covers. Wise stamps its OPBD/CLBD DtTm at midnight on the day
+     * AFTER the covered period (the exclusive bound — closing
+     * "2026-10-06T00:00" is end of 05 Oct), so a midnight date-time
+     * steps back one second to the day it actually closes; a bare
+     * date or a date-time with a real time of day is already the
+     * inclusive date and stands.
+     */
+    protected function balanceDate(string $raw): Carbon
+    {
+        $date = Carbon::parse($raw);
+
+        if (str_contains($raw, 'T') && $date->format('H:i:s') === '00:00:00') {
+            return $date->subSecond();
+        }
+
+        return $date;
     }
 
     /**

@@ -291,11 +291,76 @@ class StatementImportFormatsTest extends TestCase
         $this->assertEquals('SAMPLE-700254819-20261005', $statement->statement_id);
         $this->assertEquals('700254819', $statement->external_account);
         $this->assertEquals(45000.00, (float) $statement->opening_balance);
-        // camt.053 dates the balances at the period's date-time bounds
-        // (01-10 opening, 06-10 00:00 closing — end of 05-10).
-        $this->assertEquals('2026-10-01', $statement->opening_date->format('Y-m-d'));
         $this->assertEquals(60203.80, (float) $statement->closing_balance);
-        $this->assertEquals('2026-10-06', $statement->closing_date->format('Y-m-d'));
+        // Wise stamps the balance DtTm at midnight on the day after the
+        // covered period (the exclusive bound) — normalised to the
+        // inclusive date: 01-10T00:00 opens, 06-10T00:00 closes 05-10.
+        $this->assertEquals('2026-09-30', $statement->opening_date->format('Y-m-d'));
+        $this->assertEquals('2026-10-05', $statement->closing_date->format('Y-m-d'));
+    }
+
+    public function test_a_multi_statement_camt_file_imports_rows_but_stores_no_anchor(): void
+    {
+        // Two Stmt blocks (several accounts or periods in one message):
+        // the entries still import, but mixing their ids and balances
+        // into one anchor would be wrong, so none is stored. The
+        // second entry carries no bank transaction code — its fallback
+        // id must take its prefix from its OWN statement, not fold
+        // into the other's.
+        $content = '<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.10">
+    <BkToCstmrStmt>
+        <Stmt><Id>FIRST</Id>
+            <Bal><Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp><Amt Ccy="AUD">100.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><DtTm>2026-10-01T00:00:00+08:00</DtTm></Dt></Bal>
+            <Ntry><Amt Ccy="AUD">10.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><Sts><Cd>BOOK</Cd></Sts><BookgDt><DtTm>2026-09-30T09:00:00+08:00</DtTm></BookgDt><BkTxCd><Prtry><Cd>TRANSFER-9000000001</Cd></Prtry></BkTxCd></Ntry>
+        </Stmt>
+        <Stmt><Id>SECOND</Id>
+            <Bal><Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp><Amt Ccy="AUD">200.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><DtTm>2026-10-02T00:00:00+08:00</DtTm></Dt></Bal>
+            <Ntry><Amt Ccy="AUD">20.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><Sts><Cd>BOOK</Cd></Sts><BookgDt><DtTm>2026-10-01T09:00:00+08:00</DtTm></BookgDt></Ntry>
+        </Stmt>
+    </BkToCstmrStmt>
+</Document>';
+        $temp = tempnam(sys_get_temp_dir(), 'camt_').'.xml';
+        file_put_contents($temp, $content);
+
+        try {
+            $result = $this->service->import($temp);
+
+            $this->assertEquals(2, $result['imported']);
+            $this->assertNotNull(BankTransaction::where('source_id', 'TRANSFER-9000000001')->first());
+            $this->assertNotNull(BankTransaction::where('source_id', 'SECOND-2')->first());
+            $this->assertEquals(0, BankStatement::count());
+        } finally {
+            unlink($temp);
+        }
+    }
+
+    public function test_mt940_trailing_decimal_separator_amounts_parse(): void
+    {
+        // Spec-legal zero-decimal amounts end in a bare separator
+        // (:60F:C261001AUD1000, — other banks' flavour).
+        $content = "{1:F01TESTBYYAXXX0000000000}{2:I940TESTN}{4:\n"
+            .":20:TEST/26/4\n:25:100200300\n:60F:C261001AUD1000,\n"
+            .":61:261005C10,FTRFNONREF\nTRANSFER-2210887642\n"
+            .":62F:C261005AUD1010,\n-}\n";
+        $temp = tempnam(sys_get_temp_dir(), 'mt940_').'.txt';
+        file_put_contents($temp, $content);
+
+        try {
+            $result = $this->service->import($temp);
+
+            $this->assertEquals(1, $result['imported']);
+            $transaction = BankTransaction::where('source_id', 'TRANSFER-2210887642')->first();
+            $this->assertNotNull($transaction);
+            $this->assertEquals(10.0, (float) $transaction->amount);
+
+            $statement = BankStatement::first();
+            $this->assertNotNull($statement);
+            $this->assertEquals(1000.0, (float) $statement->opening_balance);
+            $this->assertEquals(1010.0, (float) $statement->closing_balance);
+        } finally {
+            unlink($temp);
+        }
     }
 
     public function test_reimporting_a_statement_does_not_duplicate_the_anchor(): void

@@ -63,14 +63,14 @@ class Mt940StatementParser
                 $statementId = trim($m[1]) ?: null;
             } elseif (preg_match('/^:25:([0-9A-Z]+)$/', $line, $m)) {
                 $externalAccount = $m[1];
-            } elseif (preg_match('/^:60[FM]:(C|D)(\d{6})([A-Z]{3})([0-9]+(?:[.,][0-9]+)?)$/', $line, $m)) {
+            } elseif (preg_match('/^:60[FM]:(C|D)(\d{6})([A-Z]{3})([0-9]+(?:[.,][0-9]*)?)$/', $line, $m)) {
                 $currency = $m[3];
                 $opening = [
                     'date' => $this->balanceDate($m[2]),
                     // C = in credit (the bank owes the balance), D = overdrawn.
                     'balance' => ($m[1] === 'C' ? 1 : -1) * (float) str_replace(',', '.', $m[4]),
                 ];
-            } elseif (preg_match('/^:62[FM]:(C|D)(\d{6})([A-Z]{3})([0-9]+(?:[.,][0-9]+)?)$/', $line, $m)) {
+            } elseif (preg_match('/^:62[FM]:(C|D)(\d{6})([A-Z]{3})([0-9]+(?:[.,][0-9]*)?)$/', $line, $m)) {
                 $currency = $currency ?? $m[3];
                 $closing = [
                     'date' => $this->balanceDate($m[2]),
@@ -113,7 +113,7 @@ class Mt940StatementParser
         };
 
         foreach ($lines as $line) {
-            if (preg_match('/^:61:(\d{6})(?:\d{4})?(C|D|RC|RD)[A-Z]?([0-9]+(?:[.,][0-9]+)?)(.*)$/', $line, $m)) {
+            if (preg_match('/^:61:(\d{6})(?:\d{4})?(C|D|RC|RD)[A-Z]?([0-9]+(?:[.,][0-9]*)?)(.*)$/', $line, $m)) {
                 $flush();
 
                 // A two-digit year with a pivot at 1970: statements in
