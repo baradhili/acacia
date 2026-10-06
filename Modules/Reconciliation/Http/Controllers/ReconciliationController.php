@@ -8,6 +8,7 @@ use IFRS\Models\Account;
 use IFRS\Scopes\EntityScope;
 use Illuminate\Http\Request;
 use Modules\Reconciliation\Models\BankTransaction;
+use Modules\Reconciliation\Services\BankChargeService;
 use Modules\Reconciliation\Services\BankTransferService;
 use Modules\Reconciliation\Services\PayrollLiabilityService;
 use Modules\Reconciliation\Services\ReconciliationService;
@@ -26,6 +27,7 @@ class ReconciliationController extends Controller
         private BankTransferService $transfers,
         private StatementImportService $statementImport,
         private PayrollLiabilityService $payrollLiabilities,
+        private BankChargeService $bankCharges,
     ) {}
 
     public function index()
@@ -205,6 +207,37 @@ class ReconciliationController extends Controller
 
         return redirect()->route('reconciliation.index')
             ->with('success', __('reconciliation.settlement.posted'));
+    }
+
+    /**
+     * Record a pending bank line as the bank's own charge: interest
+     * earned (money-in — Dr bank / Cr interest income) or fees charged
+     * (money-out — Dr bank fees / Cr bank), dated the line's date and
+     * matched to the journal's bank leg. Income and expense, never the
+     * equity the transfer card would book.
+     */
+    public function storeBankCharge(Request $request, BankTransaction $transaction)
+    {
+        $validated = $request->validate([
+            'bank_account_id' => ['required', 'integer', 'exists:ifrs_accounts,id'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            $this->bankCharges->record(
+                $transaction,
+                (int) $validated['bank_account_id'],
+                $validated['notes'] ?? null,
+            );
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->withInput()
+                ->with('error', $e->getMessage());
+        }
+
+        return redirect()->route('reconciliation.index')
+            ->with('success', __('reconciliation.interest_fees.posted'));
     }
 
     /**

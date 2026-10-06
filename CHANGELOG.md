@@ -5,6 +5,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-06
 
+### Added — bank interest and fees from the match screen
+
+The bank's own charges had no book path: an interest credit or a fee
+debit on the statement could only be shoehorned through the transfer
+card as Funds Introduced/Withdrawn equity — the wrong class for
+income and expense. The match screen now offers "Record as bank
+interest earned" for money-in lines (Dr bank / Cr interest income,
+the seeded 4510) and "Record as bank fees" for money-out lines (Dr
+bank fees / Cr bank, the account lazily created on existing charts),
+dated the line's own date with the period-lock guards and matched to
+the journal's bank leg. Idempotent re-record after an unmatch, the
+settled guard conventions, and — one cash source — the families
+classify by their counterpart accounts everywhere: interest lands as
+revenue and fees as expenses in the cash flow card, the P&L trend
+and the company tax report alike.
+
 ### Added — payroll liability refunds from the match screen
 
 Money coming back from the ATO or a super fund — an over-remitted

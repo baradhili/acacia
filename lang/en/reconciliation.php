@@ -55,6 +55,20 @@ return [
         'error_unrecognised' => 'Unrecognised statement format — export a statement from Wise (CSV, MT940 or camt.053 XML) and try again.',
     ],
 
+    'interest_fees' => [
+        'fee_title' => 'Record as bank fees',
+        'fee_intro' => 'The bank\'s own charges — account-keeping and transaction fees. The journal (Dr bank fees / Cr bank) is dated the bank line\'s date and this line matches to it: an expense, never the equity the transfer card would book.',
+        'interest_title' => 'Record as bank interest earned',
+        'interest_intro' => 'Interest the bank pays on the account. The journal (Dr bank / Cr interest income) is dated the bank line\'s date and this line matches to it: income, never the equity the transfer card would book.',
+        'fee_bank_account' => 'From bank account',
+        'interest_bank_account' => 'Into bank account',
+        'notes' => 'Notes (optional)',
+        'notes_placeholder' => 'e.g. monthly account-keeping fee',
+        'fee_submit' => 'Post fees and match',
+        'interest_submit' => 'Post interest and match',
+        'posted' => 'Bank charge posted and matched — the books now hold the movement.',
+    ],
+
     'transfer' => [
         'title' => 'Record as a transfer or funds movement',
         'intro' => 'For your own money moving: between two bank accounts in the books (a bank-to-bank journal), or in from / out to an account the books don\'t track (funds introduced or withdrawn — an equity movement, never income, so nothing touches revenue, expenses or GST). Payment-limit splits each record their own line. The journal is dated the bank line\'s date and this line matches to it.',
