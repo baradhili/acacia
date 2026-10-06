@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "@shopify/draggable": "^1.2.1",
-    "gridstack": "^13.0.2",
+    "gridstack": "^14.0.0",
     "sortablejs": "^1.15.7"
   }
 }
