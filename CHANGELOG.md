@@ -5,6 +5,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-06
 
+### Fixed — the HSBC account joined the books; the transfers reclassified to what they always were
+
+The 69,560.89 "Final bus transfer" was never funds introduced — it
+was the business's own money moving from HSBC Australia (89,560.89 at
+1 July), a second business bank the books never tracked, into Wise;
+four ignored $5,000 lines (31 Jul – 10 Aug) were the same shuffle
+(89,560.89 − 20,000 − 69,560.89 = 0 — the final transfer emptied
+HSBC). The books now tell that story: 330 joined the chart as HSBC
+Australia with its true 30 June opening of 89,560.89; the Wise
+opening corrected from the fictional 119,805.00 to the real
+30,244.11 (total opening bank unchanged at 119,805.00 — the equity
+backing never moved, because the money existed all along, just in
+the unlisted account); XFER-30 reclassified from Funds Introduced to
+an internal transfer (Dr 3500 / Cr HSBC, JN01/0096 — Funds
+Introduced returns to zero); the four $5,000 lines restored from
+ignored and recorded as HSBC→Wise internal transfers, matched to
+their feed lines; and the superseded 310 zeroed by a correction in
+the consolidation family (JN01/0101). Every cash view now shows the
+truth: the 69,560.89 is gone from the cash flow card's inflows
+(83,201.53 → 13,640.64), from Financing in the cash flow statement
+(69,560.89 → 0.00), and from the P&L — internal transfers net to
+nothing everywhere, exactly as they should. The cash check's gap
+shrank from −97,416.65 to −27,855.76 — the remainder is Wise's real
+opening the imported feed history never sees. The FY2026 opening row
+(119,805.00 at 30 June 2025) was left as lodged — restating a closed
+year is a separate decision.
+
 ### Fixed — the books' bank movements consolidated onto the one real account
 
 The real bank is the Wise account, but the books had drifted into a
