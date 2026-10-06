@@ -5,6 +5,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-06
 
+### Fixed — the cash flow statement's tables had no column headers
+
+Each activity table (operating, investing, financing) now carries a
+labelled header row — Activity and Amount, right-aligned to match the
+figures — instead of bare two-column rows. Internal bank-to-bank
+transfers are regression-tested to move no net cash: the indirect
+statement reads revenue, expense, working-capital, non-current and
+equity accounts only, so a transfer between the books' own bank
+accounts touches nothing it reads (verified live: the report's net
+cash ties to the bank ledger movement to the cent).
+
 ### Changed — one cash source everywhere: the P&L trend and the company tax report read the bank ledger
 
 The P&L trend and the company tax report's Item 6/7 now read the
