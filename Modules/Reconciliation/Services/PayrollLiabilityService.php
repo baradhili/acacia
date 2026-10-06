@@ -18,15 +18,19 @@ use Modules\Reconciliation\Models\BankTransaction;
 use Modules\Reconciliation\Models\ReconciliationHistory;
 
 /**
- * Records the settlement of a payroll liability from the bank feed:
- * the super or PAYG-withholding payment that leaves the bank after a
- * pay run posted its accruals. The pay run's ACC/SUP journals credit
- * the payables but never touch the bank, so until the settlement
- * posts, the bank line has no book movement to reconcile against —
- * the "cannot match on PAYROLL-*-SUP/-ACC" gap. Settling here posts
- * Dr payable / Cr bank dated the line's own date (period locks refuse
- * a locked or closed date) and matches the line to the journal's bank
- * leg, clearing the liability and the bank-vs-books gap together.
+ * Records the settlement — or the refund — of a payroll liability
+ * from the bank feed. Settlement: the super or PAYG-withholding
+ * payment that leaves the bank after a pay run posted its accruals.
+ * Refund: the ATO or super-fund money coming BACK (an over-remitted
+ * instalment), the mirror Dr bank / Cr payable — never Funds
+ * Introduced equity, which is where the transfer card would put it.
+ * The pay run's ACC/SUP journals credit the payables but never touch
+ * the bank, so until the settlement or refund posts, the bank line
+ * has no book movement to reconcile against — the "cannot match on
+ * PAYROLL-*-SUP/-ACC" gap. Both paths post dated the line's own date
+ * (period locks refuse a locked or closed date) and match the line to
+ * the journal's bank leg, clearing the liability and the bank-vs-books
+ * gap together.
  *
  * The payable candidates are the payroll module's configured statutory
  * accounts (PAYG withholding, super payable), resolved per entity —
@@ -90,8 +94,44 @@ class PayrollLiabilityService
      */
     public function settle(BankTransaction $line, int $bankAccountId, int $payableAccountId, ?string $notes = null): BankTransaction
     {
+        if ($line->type !== BankTransaction::TYPE_DEBIT) {
+            throw new \InvalidArgumentException('Only a money-out line can settle a payroll liability — record money coming back from the ATO or a fund as a payroll liability refund.');
+        }
+
+        return $this->record($line, $bankAccountId, $payableAccountId, $notes, refund: false);
+    }
+
+    /**
+     * Post the refund behind a pending bank credit line and match the
+     * line to it — the ATO or super-fund returning an over-remitted
+     * amount: Dr $bankAccountId / Cr $payableAccountId (one of
+     * settlablePayables), dated the line's date. The mirror of
+     * settle(); money that comes back against a payroll liability is
+     * never Funds Introduced equity, where the transfer card would put
+     * it. Throws InvalidArgumentException with a user-ready message on
+     * any refusal; nothing posts on refusal.
+     */
+    public function refund(BankTransaction $line, int $bankAccountId, int $payableAccountId, ?string $notes = null): BankTransaction
+    {
+        if ($line->type !== BankTransaction::TYPE_CREDIT) {
+            throw new \InvalidArgumentException('Only a money-in line can be a payroll liability refund — money paying a liability is a settlement.');
+        }
+
+        return $this->record($line, $bankAccountId, $payableAccountId, $notes, refund: true);
+    }
+
+    /**
+     * The shared settlement/refund body: guards, the journal (Dr
+     * payable / Cr bank settling, or Dr bank / Cr payable refunding),
+     * the line's match to the journal's bank leg, and the history and
+     * log rows. Reuse keyed on the same PAYSET-{line id} reference, so
+     * re-recording after an unmatch re-matches the one true journal
+     * whichever direction it was posted in.
+     */
+    private function record(BankTransaction $line, int $bankAccountId, int $payableAccountId, ?string $notes, bool $refund): BankTransaction
+    {
         if ($line->status !== BankTransaction::STATUS_PENDING) {
-            throw new \InvalidArgumentException('Only a pending bank line can settle a payroll liability.');
+            throw new \InvalidArgumentException('Only a pending bank line can record a payroll liability settlement or refund.');
         }
 
         $entity = IfrsPosting::resolveEntity();
@@ -99,14 +139,10 @@ class PayrollLiabilityService
             throw new \InvalidArgumentException('No IFRS entity is configured.');
         }
 
-        if ($line->type !== BankTransaction::TYPE_DEBIT) {
-            throw new \InvalidArgumentException('Only a money-out line can settle a payroll liability — a refund from the ATO or a fund is a funds movement, not a settlement.');
-        }
-
         if ($line->currency !== $entity->currency?->currency_code) {
             throw new \InvalidArgumentException(
                 "The line is in {$line->currency} but the books are kept in ".($entity->currency?->currency_code ?? '?')
-                .' — settlement journals only post in the entity\'s currency.'
+                .' — payroll liability journals only post in the entity\'s currency.'
             );
         }
 
@@ -137,7 +173,7 @@ class PayrollLiabilityService
         $date = Carbon::parse($line->transaction_date)->startOfDay();
         $this->assertDatePostable($date);
 
-        return DB::transaction(function () use ($line, $entity, $bankAccount, $payable, $amount, $date, $notes) {
+        return DB::transaction(function () use ($line, $entity, $bankAccount, $payable, $amount, $date, $notes, $refund) {
             // Authoritative pending check under the line's row lock: a
             // double-submit racing past the check above must not post
             // a second journal for the same line.
@@ -152,23 +188,29 @@ class PayrollLiabilityService
             // never double-post.
             $leg = $this->existingSettlementLeg($entity, $line, $bankAccount);
 
+            $narration = $refund
+                ? "Payroll liability refund — {$payable->name} received into {$bankAccount->name}"
+                : "Payroll liability payment — {$payable->name} settled from {$bankAccount->name}";
+
             $journal = null;
             if ($leg === null) {
                 IfrsPosting::ensureReportingPeriod($date, $entity);
 
+                // Settling: Dr payable (main) / Cr bank. Refunding: the
+                // mirror — Dr bank (main) / Cr payable.
                 $journal = new JournalEntry([
                     'transaction_date' => IfrsPosting::transactionDate($date, $entity),
-                    'account_id' => $payable->id,
+                    'account_id' => $refund ? $bankAccount->id : $payable->id,
                     'credited' => false,
                     'entity_id' => $entity->id,
-                    // Carried explicitly: the main account is not the
-                    // bank, so the default would not resolve.
+                    // Carried explicitly: a non-bank main account would
+                    // not default the currency.
                     'currency_id' => $entity->currency_id,
-                    'narration' => "Payroll liability payment — {$payable->name} settled from {$bankAccount->name}",
+                    'narration' => $narration,
                     'reference' => self::REFERENCE_PREFIX.$line->id,
                 ]);
                 $journal->addLineItem(LineItem::create([
-                    'account_id' => $bankAccount->id,
+                    'account_id' => $refund ? $payable->id : $bankAccount->id,
                     'amount' => $amount,
                     'quantity' => 1,
                     'entity_id' => $entity->id,
@@ -184,7 +226,9 @@ class PayrollLiabilityService
                 }
             }
 
-            $linkNotes = ($notes ?? ($journal !== null ? 'Recorded as a payroll liability payment' : 'Matched to the existing settlement journal'))
+            $linkNotes = ($notes ?? ($journal !== null
+                ? ($refund ? 'Recorded as a payroll liability refund' : 'Recorded as a payroll liability payment')
+                : 'Matched to the existing settlement journal'))
                 .' on '.now()->toDateTimeString();
             $line->update([
                 'status' => BankTransaction::STATUS_MATCHED,
@@ -195,7 +239,7 @@ class PayrollLiabilityService
             ]);
 
             $details = $journal !== null
-                ? "Payroll liability payment — {$payable->name} settled from {$bankAccount->name}"
+                ? $narration
                 : (string) Transaction::find($leg->transaction_id)?->narration;
 
             ReconciliationHistory::create([
@@ -216,6 +260,7 @@ class PayrollLiabilityService
                 'bank_account' => $bankAccount->code,
                 'payable' => $payable->code,
                 'amount' => $amount,
+                'refund' => $refund,
             ]);
 
             return $line;

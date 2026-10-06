@@ -279,7 +279,7 @@ class PayrollLiabilitySettlementTest extends TestCase
         $this->assertEqualsWithDelta(-456.0, $this->balance($this->operating), 0.001);
     }
 
-    public function test_the_match_screen_offers_the_settlement_card_for_debits_only(): void
+    public function test_the_match_screen_offers_the_right_card_per_direction(): void
     {
         $debit = $this->bankLine();
 
@@ -287,10 +287,10 @@ class PayrollLiabilitySettlementTest extends TestCase
             ->get(route('reconciliation.match', $debit))
             ->assertOk()
             ->assertSee(__('reconciliation.settlement.title'), false)
+            ->assertDontSee(__('reconciliation.settlement.refund_title'), false)
             ->assertSee('2220 — Superannuation Payable');
 
-        // Money-in lines never see the card — settling pays a
-        // liability, a refund is something else.
+        // Money-in lines get the refund variant of the card.
         $credit = BankTransaction::create([
             'source' => BankTransaction::SOURCE_WISE,
             'source_id' => 'WISE-'.uniqid(),
@@ -304,7 +304,135 @@ class PayrollLiabilitySettlementTest extends TestCase
         $this->actingAs($this->user)
             ->get(route('reconciliation.match', $credit))
             ->assertOk()
+            ->assertSee(__('reconciliation.settlement.refund_title'), false)
             ->assertDontSee(__('reconciliation.settlement.title'), false);
+    }
+
+    public function test_refunding_an_over_remittance_restores_the_payable_and_matches(): void
+    {
+        $line = BankTransaction::create([
+            'source' => BankTransaction::SOURCE_WISE,
+            'source_id' => 'WISE-'.uniqid(),
+            'description' => 'Received money from AUSTRALIAN TAXATION OFFICE',
+            'amount' => 1000.00,
+            'currency' => 'AUD',
+            'type' => BankTransaction::TYPE_CREDIT,
+            'transaction_date' => Carbon::parse('2026-10-01'),
+            'status' => BankTransaction::STATUS_PENDING,
+        ]);
+
+        $this->service->refund($line, $this->operating->id, $this->paygPayable->id, 'over-remitted Q1');
+
+        $line->refresh();
+        $this->assertTrue($line->isMatched());
+        $this->assertSame('ledger', $line->matched_transaction_type);
+
+        // Dr Bank / Cr PAYG payable: the over-remittance comes back and
+        // the liability is restored.
+        $this->assertEqualsWithDelta(1000.0, $this->balance($this->operating), 0.001);
+        $this->assertEqualsWithDelta(-1000.0, $this->balance($this->paygPayable), 0.001);
+
+        $leg = Ledger::find($line->matched_transaction_id);
+        $this->assertSame($this->operating->id, $leg->post_account);
+
+        $check = app(ReconciliationService::class)->bankVsBooks();
+        $this->assertEqualsWithDelta(0.0, $check['gap'], 0.001);
+
+        $this->assertDatabaseHas('reconciliation_history', [
+            'bank_transaction_id' => $line->id,
+            'action' => ReconciliationHistory::ACTION_MANUAL_MATCH,
+            'status' => ReconciliationHistory::STATUS_SUCCESS,
+        ]);
+    }
+
+    public function test_refund_refusals(): void
+    {
+        // A money-out line is a settlement, never a refund.
+        try {
+            $this->service->refund($this->bankLine(), $this->operating->id, $this->paygPayable->id);
+            $this->fail('A money-out line should refuse the refund path.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('money-in', $e->getMessage());
+        }
+
+        // And the mirror: a money-in line cannot settle.
+        $credit = BankTransaction::create([
+            'source' => BankTransaction::SOURCE_WISE,
+            'source_id' => 'WISE-'.uniqid(),
+            'description' => 'Refund',
+            'amount' => 100.00,
+            'currency' => 'AUD',
+            'type' => BankTransaction::TYPE_CREDIT,
+            'transaction_date' => Carbon::parse('2026-10-01'),
+            'status' => BankTransaction::STATUS_PENDING,
+        ]);
+        try {
+            $this->service->settle($credit, $this->operating->id, $this->paygPayable->id);
+            $this->fail('A money-in line should refuse the settle path.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('money-out', $e->getMessage());
+        }
+
+        // A crafted id outside the configured payables never posts.
+        try {
+            $this->service->refund($credit, $this->operating->id, $this->wagesPayable->id);
+            $this->fail('A non-settleable account should refuse.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('payroll liability account', $e->getMessage());
+        }
+
+        $this->assertEqualsWithDelta(0.0, $this->balance($this->operating), 0.001);
+    }
+
+    public function test_an_unmatched_refund_line_records_again_without_double_posting(): void
+    {
+        $line = BankTransaction::create([
+            'source' => BankTransaction::SOURCE_WISE,
+            'source_id' => 'WISE-'.uniqid(),
+            'description' => 'Refund',
+            'amount' => 500.00,
+            'currency' => 'AUD',
+            'type' => BankTransaction::TYPE_CREDIT,
+            'transaction_date' => Carbon::parse('2026-10-01'),
+            'status' => BankTransaction::STATUS_PENDING,
+        ]);
+        $this->service->refund($line, $this->operating->id, $this->superPayable->id);
+
+        app(ReconciliationService::class)->unlinkTransaction($line->refresh());
+        $this->assertSame(BankTransaction::STATUS_PENDING, $line->refresh()->status);
+
+        $this->service->refund($line->refresh(), $this->operating->id, $this->superPayable->id);
+
+        $this->assertTrue($line->refresh()->isMatched());
+        $this->assertEqualsWithDelta(500.0, $this->balance($this->operating), 0.001);
+        $this->assertEqualsWithDelta(-500.0, $this->balance($this->superPayable), 0.001);
+    }
+
+    public function test_a_refund_posts_via_http(): void
+    {
+        $line = BankTransaction::create([
+            'source' => BankTransaction::SOURCE_WISE,
+            'source_id' => 'WISE-'.uniqid(),
+            'description' => 'Received money from AUSTRALIAN TAXATION OFFICE',
+            'amount' => 750.00,
+            'currency' => 'AUD',
+            'type' => BankTransaction::TYPE_CREDIT,
+            'transaction_date' => Carbon::parse('2026-10-01'),
+            'status' => BankTransaction::STATUS_PENDING,
+        ]);
+
+        $this->actingAs($this->user)
+            ->post(route('reconciliation.settle-payroll', $line), [
+                'bank_account_id' => $this->operating->id,
+                'payable_account_id' => $this->paygPayable->id,
+                'notes' => 'over-remitted Q1',
+            ])
+            ->assertRedirect(route('reconciliation.index'))
+            ->assertSessionHas('success');
+
+        $this->assertTrue($line->refresh()->isMatched());
+        $this->assertEqualsWithDelta(750.0, $this->balance($this->operating), 0.001);
+        $this->assertEqualsWithDelta(-750.0, $this->balance($this->paygPayable), 0.001);
     }
 
     public function test_the_settlement_posts_via_http(): void

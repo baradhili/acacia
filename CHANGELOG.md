@@ -5,6 +5,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-06
 
+### Added — payroll liability refunds from the match screen
+
+Money coming back from the ATO or a super fund — an over-remitted
+instalment returned — had no book path: the transfer card's only
+answer was Funds Introduced equity, the wrong class for a tax refund.
+The match screen's payroll card now covers money-in lines with its
+mirror action: Dr bank / Cr the payroll payable, dated the line's own
+date with the usual period-lock guards, matching the line to the
+journal's bank leg and restoring the liability. Same guards and
+idempotent re-record as the settlement path (a crafted account id
+outside the configured payables refuses; re-recording after an
+unmatch re-matches the one true journal, whichever direction it was
+posted in), and the refund nets inside the payroll bank families the
+cash flow card and P&L trend already read.
+
 ### Fixed — the cash flow statement's tables had no column headers
 
 Each activity table (operating, investing, financing) now carries a

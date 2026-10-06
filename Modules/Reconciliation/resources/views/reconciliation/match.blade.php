@@ -182,9 +182,17 @@
 
     @if ($payableAccounts->isNotEmpty())
         <div class="bg-white rounded-lg shadow p-6 mb-6">
-            <h2 class="text-lg font-semibold text-gray-800 mb-1">{{ __('reconciliation.settlement.title') }}</h2>
+            <h2 class="text-lg font-semibold text-gray-800 mb-1">{{
+                $transaction->type === \Modules\Reconciliation\Models\BankTransaction::TYPE_DEBIT
+                    ? __('reconciliation.settlement.title')
+                    : __('reconciliation.settlement.refund_title')
+            }}</h2>
             <p class="text-sm text-gray-500 mb-4">
-                {{ __('reconciliation.settlement.intro') }}
+                {{
+                    $transaction->type === \Modules\Reconciliation\Models\BankTransaction::TYPE_DEBIT
+                        ? __('reconciliation.settlement.intro')
+                        : __('reconciliation.settlement.refund_intro')
+                }}
             </p>
             <form action="{{ route('reconciliation.settle-payroll', $transaction) }}" method="POST" class="flex flex-wrap items-end gap-3">
                 @csrf
@@ -201,7 +209,11 @@
                 </div>
                 <div>
                     <label for="settlement_bank_account_id" class="block text-sm font-medium text-gray-700 mb-1">
-                        {{ __('reconciliation.settlement.bank_account') }}
+                        {{
+                            $transaction->type === \Modules\Reconciliation\Models\BankTransaction::TYPE_DEBIT
+                                ? __('reconciliation.settlement.bank_account')
+                                : __('reconciliation.settlement.refund_bank_account')
+                        }}
                     </label>
                     <select name="bank_account_id" id="settlement_bank_account_id" required
                         class="rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
@@ -220,7 +232,11 @@
                 </div>
                 <button type="submit"
                     class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700">
-                    {{ __('reconciliation.settlement.submit') }}
+                    {{
+                        $transaction->type === \Modules\Reconciliation\Models\BankTransaction::TYPE_DEBIT
+                            ? __('reconciliation.settlement.submit')
+                            : __('reconciliation.settlement.refund_submit')
+                    }}
                 </button>
                 @error('payable_account_id') <p class="text-xs text-red-600">{{ $message }}</p> @enderror
                 @error('bank_account_id') <p class="text-xs text-red-600">{{ $message }}</p> @enderror

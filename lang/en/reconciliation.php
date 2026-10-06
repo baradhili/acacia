@@ -79,6 +79,11 @@ return [
         'notes_placeholder' => 'e.g. September quarter super for run 1',
         'submit' => 'Post settlement and match',
         'posted' => 'Settlement posted and matched — the books now hold the movement.',
+
+        'refund_title' => 'Record as a payroll liability refund',
+        'refund_intro' => 'For money coming back from the ATO or a super fund — an over-remitted instalment returned. The journal (Dr bank / Cr the liability) is dated the bank line\'s date and this line matches to it, restoring the liability — never Funds Introduced equity.',
+        'refund_bank_account' => 'Into bank account',
+        'refund_submit' => 'Post refund and match',
     ],
 
 ];

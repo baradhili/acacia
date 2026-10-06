@@ -160,10 +160,10 @@ class ReconciliationController extends Controller
                 ->get(['id', 'code', 'name'])
             : collect();
 
-        // Settle-a-liability card: payroll's statutory payables, and
-        // only for money-out lines (empty when Payroll is disabled —
-        // the card hides with it).
-        $payableAccounts = $entity !== null && $transaction->type === BankTransaction::TYPE_DEBIT
+        // Settle-or-refund-a-liability card: payroll's statutory
+        // payables, for money-out and money-in lines alike (empty when
+        // Payroll is disabled — the card hides with it).
+        $payableAccounts = $entity !== null
             ? $this->payrollLiabilities->settlablePayables($entity)
             : collect();
 
@@ -171,11 +171,13 @@ class ReconciliationController extends Controller
     }
 
     /**
-     * Record a pending money-out bank line as the settlement of a
-     * payroll liability (PAYG withholding or super payable): posts
-     * Dr payable / Cr bank dated the line's date and matches the line
-     * to the journal's bank leg — the books learn the payment the
-     * accrual journals never held.
+     * Record a pending bank line against a payroll liability (PAYG
+     * withholding or super payable): money-out settles it (Dr payable
+     * / Cr bank), money-in refunds it — the ATO or a fund returning an
+     * over-remitted amount (Dr bank / Cr payable, never Funds
+     * Introduced equity). Dated the line's date, matched to the
+     * journal's bank leg — the books learn the movement the accrual
+     * journals never held.
      */
     public function storeSettlement(Request $request, BankTransaction $transaction)
     {
@@ -186,7 +188,9 @@ class ReconciliationController extends Controller
         ]);
 
         try {
-            $this->payrollLiabilities->settle(
+            $recorder = $transaction->type === BankTransaction::TYPE_CREDIT ? 'refund' : 'settle';
+
+            $this->payrollLiabilities->{$recorder}(
                 $transaction,
                 (int) $validated['bank_account_id'],
                 (int) $validated['payable_account_id'],
