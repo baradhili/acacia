@@ -187,7 +187,9 @@ class LedgerReportController extends Controller
                 $totalCredit += $credit;
 
                 $scheduleLines->push([
-                    'date' => Carbon::parse($transaction->transaction_date ?? $own->first()->posting_date),
+                    // The legs were selected by posting_date — the card
+                    // shows that date, never the transaction's own.
+                    'date' => Carbon::parse($own->first()->posting_date),
                     'transaction_id' => $transactionId,
                     'transaction_type' => class_basename($transaction),
                     'narration' => $transaction->narration ?? '',

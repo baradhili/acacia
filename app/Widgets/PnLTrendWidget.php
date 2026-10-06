@@ -68,10 +68,14 @@ class PnLTrendWidget extends AbstractWidget
                 ->whereNull('t.deleted_at')
                 ->where(fn ($query) => $query
                     ->where('t.reference', 'like', 'PAYROLL-%-PAY')
+                    ->orWhere('t.reference', 'like', 'PAYROLL-%-REV')
                     ->orWhere('t.reference', 'like', 'PAYSET-%')
                     ->orWhere('t.reference', 'like', 'BAS-SETT-PAYG-%'))
                 ->get(['t.reference', 'l.posting_date', 'l.entry_type', 'l.amount'])
-                ->groupBy(fn ($row) => preg_replace('/-REV$/', '', $row->reference));
+                // A run's PAY journal and its REV mirror share the
+                // PAYROLL-{id} family, so a reversed run nets to no
+                // payroll cash at all.
+                ->groupBy(fn ($row) => preg_replace('/-(PAY|REV)$/', '', $row->reference));
 
             foreach ($families as $rows) {
                 $net = round((float) $rows->sum(
@@ -96,7 +100,11 @@ class PnLTrendWidget extends AbstractWidget
                 ->whereBetween('payment_date', [$monthStart, $monthEnd])
                 ->sum('amount');
 
+            // Employee captures are excluded — the company's cash leaves
+            // at the reimbursement, which $reimbursementsByMonth already
+            // counts; both legs would double the expense.
             $expenses = (float) BillPayment::where('status', BillPayment::STATUS_COMPLETED)
+                ->where('payment_method', '!=', BillPayment::METHOD_EMPLOYEE_REIMBURSEMENT)
                 ->whereBetween('payment_date', [$monthStart, $monthEnd])
                 ->sum('amount');
             $expenses += $reimbursementsByMonth->get($monthKey, 0.0);

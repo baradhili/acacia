@@ -407,6 +407,30 @@ class BasSettlementTest extends TestCase
         $this->settle();
     }
 
+    public function test_the_boundary_flip_posts_a_balanced_journal_with_no_bank_movement(): void
+    {
+        // Exact net +0.20 but the labels refund $1 (floor(100.40)=100,
+        // ceil(100.20)=101): the pay-shaped journal cannot carry a
+        // debit bank leg, so no bank movement posts — and the rounding
+        // leg must derive from that (0.20), never from the negative
+        // rounded net (1.20 would leave the journal unbalanced).
+        $this->collect(100.40);
+        $this->paid(100.20);
+        $bankBefore = $this->balance($this->bank);
+
+        $settlement = $this->settle();
+
+        $this->assertSame(BasSettlement::DIRECTION_REFUND, $settlement->direction);
+        $this->assertEqualsWithDelta(0.0, $settlement->bank_amount, 0.001);
+
+        // The tax accounts clear exactly, the cents land in rounding,
+        // and the bank never moved.
+        $this->assertEqualsWithDelta(0.0, $this->balance($this->gstPayable), 0.001);
+        $this->assertEqualsWithDelta(0.0, $this->balance($this->gstReceivable), 0.001);
+        $this->assertEqualsWithDelta(-0.20, $this->balance($this->account(4530)), 0.001);
+        $this->assertEqualsWithDelta($bankBefore, $this->balance($this->bank), 0.001);
+    }
+
     public function test_the_settlement_lists_one_movement_the_bank_line_can_match(): void
     {
         $this->collect(1000.75);

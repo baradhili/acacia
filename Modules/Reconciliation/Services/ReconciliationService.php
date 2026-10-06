@@ -644,6 +644,7 @@ class ReconciliationService
         // word on MariaDB.
         $anchors = BankStatement::query()
             ->whereNotNull('closing_balance')
+            ->whereNotNull('closing_date')
             ->orderByDesc('closing_date')
             ->get()
             ->groupBy('currency');

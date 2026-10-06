@@ -3,6 +3,7 @@
 namespace Modules\Reconciliation\Services;
 
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Modules\Reconciliation\Models\BankStatement;
 use Modules\Reconciliation\Models\BankTransaction;
 use Modules\Reconciliation\Services\StatementParsers\Camt053StatementParser;
@@ -103,63 +104,68 @@ class StatementImportService
             return ['error' => self::ERR_UNRECOGNISED];
         }
 
-        $this->storeStatement($statement, $format);
+        // One statement, one transaction: a row insert failing midway
+        // rolls the anchor back with the rows — no half-imported
+        // statement.
+        return DB::transaction(function () use ($rows, $format, $statement) {
+            $this->storeStatement($statement, $format);
 
-        $imported = 0;
-        $skipped = 0;
-        $errors = [];
+            $imported = 0;
+            $skipped = 0;
+            $errors = [];
 
-        foreach ($rows as $row) {
-            $sourceId = (string) ($row['source_id'] ?? '');
+            foreach ($rows as $row) {
+                $sourceId = (string) ($row['source_id'] ?? '');
 
-            if ($row['transaction_date'] === null) {
-                $skipped++;
-                $errors[] = ($sourceId ?: 'entry').': skipped (no usable date)';
+                if ($row['transaction_date'] === null) {
+                    $skipped++;
+                    $errors[] = ($sourceId ?: 'entry').': skipped (no usable date)';
 
-                continue;
+                    continue;
+                }
+
+                if (abs((float) $row['amount']) < 0.005) {
+                    $skipped++;
+                    $errors[] = ($sourceId ?: 'entry').': skipped (zero amount)';
+
+                    continue;
+                }
+
+                $existing = BankTransaction::query()
+                    ->where('source', BankTransaction::SOURCE_WISE)
+                    ->where('source_id', $sourceId)
+                    ->first();
+                if ($existing !== null) {
+                    $skipped++;
+
+                    continue;
+                }
+
+                BankTransaction::create([
+                    'source' => BankTransaction::SOURCE_WISE,
+                    'source_id' => $sourceId,
+                    'reference' => $row['reference'],
+                    'description' => $row['description'],
+                    'amount' => $row['amount'],
+                    'currency' => $row['currency'] ?? 'AUD',
+                    'type' => $row['type'],
+                    'transaction_date' => $row['transaction_date'],
+                    'created_at_source' => $row['created_at_source'] ?? null,
+                    'merchant_name' => $row['merchant_name'] ?? null,
+                    'payer_name' => $row['payer_name'] ?? null,
+                    'payee_name' => $row['payee_name'] ?? null,
+                    'status' => BankTransaction::STATUS_PENDING,
+                ]);
+                $imported++;
             }
 
-            if (abs((float) $row['amount']) < 0.005) {
-                $skipped++;
-                $errors[] = ($sourceId ?: 'entry').': skipped (zero amount)';
-
-                continue;
-            }
-
-            $existing = BankTransaction::query()
-                ->where('source', BankTransaction::SOURCE_WISE)
-                ->where('source_id', $sourceId)
-                ->first();
-            if ($existing !== null) {
-                $skipped++;
-
-                continue;
-            }
-
-            BankTransaction::create([
-                'source' => BankTransaction::SOURCE_WISE,
-                'source_id' => $sourceId,
-                'reference' => $row['reference'],
-                'description' => $row['description'],
-                'amount' => $row['amount'],
-                'currency' => $row['currency'] ?? 'AUD',
-                'type' => $row['type'],
-                'transaction_date' => $row['transaction_date'],
-                'created_at_source' => $row['created_at_source'] ?? null,
-                'merchant_name' => $row['merchant_name'] ?? null,
-                'payer_name' => $row['payer_name'] ?? null,
-                'payee_name' => $row['payee_name'] ?? null,
-                'status' => BankTransaction::STATUS_PENDING,
-            ]);
-            $imported++;
-        }
-
-        return [
-            'imported' => $imported,
-            'skipped' => $skipped,
-            'errors' => $errors,
-            'format' => $format,
-        ];
+            return [
+                'imported' => $imported,
+                'skipped' => $skipped,
+                'errors' => $errors,
+                'format' => $format,
+            ];
+        });
     }
 
     /**

@@ -42,15 +42,15 @@ class RecentInvoicesWidgetTest extends TestCase
 
         $html = $this->actingAs($user)->get('/dashboard')->getContent();
 
-        // The paid row: green number link and the tick with its label.
+        // The paid row: green number link and the tick with its
+        // screen-reader text.
         $this->assertStringContainsString(
             '<a href="'.route('invoices.show', $paid->id).'" class="text-green-700 hover:text-green-800 font-medium">',
             $html,
         );
-        $this->assertStringContainsString('title="'.__('widgets.recent_invoices.paid').'"', $html);
 
-        // Only the paid row carries the tick.
-        $this->assertSame(1, substr_count($html, 'aria-label="'.__('widgets.recent_invoices.paid').'"'));
+        // Only the paid row carries the tick (its sr-only text).
+        $this->assertSame(1, substr_count($html, '<span class="sr-only">'.__('widgets.recent_invoices.paid').'</span>'));
 
         // The unpaid row stays the plain blue link, unticked.
         $this->assertStringContainsString(

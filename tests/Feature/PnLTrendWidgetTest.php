@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\BillPayment;
+use App\Models\Supplier;
 use App\Models\User;
 use App\Services\IfrsPosting;
 use App\Widgets\PnLTrendWidget;
@@ -167,5 +169,41 @@ class PnLTrendWidgetTest extends TestCase
     protected function account(int $code): Account
     {
         return Account::where('entity_id', $this->entity->id)->where('code', $code)->firstOrFail();
+    }
+
+    public function test_a_reversed_run_nets_to_no_payroll_cash(): void
+    {
+        // The net-pay journal and its REV mirror share the
+        // PAYROLL-{id} family — an undone run leaves no payroll cash
+        // in the trend.
+        $this->postJournal($this->bank, true, [[$this->wagesPayable, 2946]], 'PAYROLL-9-PAY', '2026-10-01');
+        $this->postJournal($this->bank, false, [[$this->wagesPayable, 2946]], 'PAYROLL-9-REV', '2026-10-01');
+
+        $data = app(PnLTrendWidget::class)->run()->getData();
+        $october = collect($data['months'])->firstWhere('month', '2026-10');
+
+        $this->assertEqualsWithDelta(0.0, (float) $october['expenses'], 0.001);
+    }
+
+    public function test_employee_captures_count_once_at_their_reimbursement(): void
+    {
+        $user = User::factory()->create();
+        $supplier = Supplier::factory()->create();
+
+        // A completed employee capture: the company's cash has not
+        // left — it must not count as an expense here.
+        BillPayment::createWithUniqueNumber([
+            'supplier_id' => $supplier->id,
+            'paid_by' => $user->id,
+            'amount' => 100.00,
+            'payment_date' => '2026-10-01',
+            'payment_method' => BillPayment::METHOD_EMPLOYEE_REIMBURSEMENT,
+            'status' => BillPayment::STATUS_COMPLETED,
+        ]);
+
+        $data = app(PnLTrendWidget::class)->run()->getData();
+        $october = collect($data['months'])->firstWhere('month', '2026-10');
+
+        $this->assertEqualsWithDelta(0.0, (float) $october['expenses'], 0.001);
     }
 }

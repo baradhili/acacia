@@ -51,22 +51,23 @@ class PrepaymentController extends Controller
             $message = $count > 0
                 ? "Posted {$count} amortisation month(s)."
                 : 'Nothing was due — the schedule is up to date (or awaiting future months).';
+
             return redirect()->route('prepayments.show', $prepayment)->with('success', $message);
         } catch (\Throwable $e) {
             return redirect()->route('prepayments.show', $prepayment)
-                ->with('error', 'Amortisation failed: ' . $e->getMessage());
+                ->with('error', 'Amortisation failed: '.$e->getMessage());
         }
     }
 
     public function reverseAmortisation(Request $request, PrepaymentAmortisation $amortisation)
     {
         $reversalId = PrepaymentService::reverseAmortisation($amortisation);
-        if (!$reversalId) {
+        if (! $reversalId) {
             return back()->with('error', 'Only posted, unreversed entries can be reversed.');
         }
 
         return redirect()->route('prepayments.show', $amortisation->prepayment_id)
-            ->with('success', 'Reversed the amortisation entry for ' . $amortisation->period_date->format('M Y') . '.');
+            ->with('success', 'Reversed the amortisation entry for '.$amortisation->period_date->format('M Y').'.');
     }
 
     /**

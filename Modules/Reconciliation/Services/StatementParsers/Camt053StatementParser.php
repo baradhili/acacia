@@ -47,7 +47,9 @@ class Camt053StatementParser
     public function parse(string $content): ?array
     {
         $document = new DOMDocument;
-        if (! @$document->loadXML($content)) {
+        // Uploaded XML is untrusted: no network entity resolution, and
+        // a doctype (the XXE vector) refuses the file outright.
+        if (! @$document->loadXML($content, LIBXML_NONET) || $document->doctype !== null) {
             return null;
         }
 

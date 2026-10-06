@@ -445,6 +445,13 @@ class BasSettlementService
                 $type,
             );
 
+            // The bank movement actually posted: the pay shape omits the
+            // bank leg entirely on the sub-dollar boundary flip (labels
+            // refund, ledger pays — the figure nets into rounding), so
+            // the record shows no bank movement rather than a refund
+            // that never touched the bank.
+            $bankAmount = $journalDirection === BasSettlement::DIRECTION_PAY && $net < 0 ? 0.0 : abs($net);
+
             $settlement = BasSettlement::create([
                 'entity_id' => $entity->id,
                 'type' => $type,
@@ -453,7 +460,7 @@ class BasSettlementService
                 'gst_payable' => $payable,
                 'gst_receivable' => $receivable,
                 'net_amount' => $net,
-                'bank_amount' => abs($net),
+                'bank_amount' => $bankAmount,
                 'direction' => $direction,
                 'ifrs_transaction_id' => $journal->id,
                 'ifrs_rounding_transaction_id' => $roundingJournal?->id,
@@ -461,7 +468,7 @@ class BasSettlementService
                 'notes' => $data['notes'] ?? null,
             ]);
 
-            if (in_array($type, BasSettlement::INCOME_TAX_TYPES, true) && abs($net) >= 0.005
+            if (in_array($type, BasSettlement::INCOME_TAX_TYPES, true) && abs($net) >= 0.005 && $bankAmount >= 0.005
                 && class_exists(FrankingAccountEntry::class)) {
                 $this->recordFrankingEntry($settlement, $journal, $entity);
             }
@@ -699,7 +706,12 @@ class BasSettlementService
                 $legs[] = [$bank, $roundedNet];
             }
 
-            $rounding = round($exactNet - $roundedNet, 2);
+            // Rounding derives from the bank movement actually posted:
+            // on the sub-dollar boundary flip the label refund posts no
+            // bank leg, and deriving from the negative rounded net
+            // would credit rounding with money that never left — an
+            // unbalanced journal and an over-cleared payable.
+            $rounding = round($exactNet - max($roundedNet, 0.0), 2);
             if ($rounding >= 0.005) {
                 $legs[] = [$this->ensureRoundingAccount($entity), $rounding];
             }
