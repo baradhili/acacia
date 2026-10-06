@@ -5,6 +5,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-06
 
+### Fixed — the cash flow card now reads the bank accounts' own ledger
+
+The dashboard's Cash Flow card built its flows from the payment
+subledgers, so every movement that settles through a journal was
+invisible to it: the BAS payment to the ATO, super and PAYG
+settlements, dividends, funds introduced or withdrawn — money that
+really left or arrived, not showing. The card now reads the bank
+accounts' ledger legs directly — every posted movement that actually
+hit the bank, whatever posted it — and keeps the same numbers the
+subledgers produced for the flows they could see (regression-tested
+to the cent). Internal transfers between the books' own bank
+accounts move no total cash and are excluded on both sides (a
+transfer against an external account keeps its one bank leg — the
+money genuinely arrived or left), and a reference family nets across
+its reversals so an abandoned settle/reverse round contributes
+nothing instead of inflating both flows.
+
 ### Fixed — the P&L trend ignored payroll and reimbursements
 
 The dashboard's P&L trend built its expense side from the supplier
