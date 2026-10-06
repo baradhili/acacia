@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-06
 
+### Changed — the recent invoices widget marks paid invoices
+
+Paid invoices on the dashboard's Recent Invoices widget now show a
+green tick beside their number, with the number link itself in green
+— the working queue reads at a glance which rows are done, the way
+the invoices screen's green Paid pill already signals it.
+
 ### Fixed — BAS payments could not be reconciled: one bank line, two book legs
 
 A BAS settlement posted its bank movement as two journals — the
