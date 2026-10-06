@@ -26,16 +26,25 @@ use Illuminate\Support\Collection;
 class Camt053StatementParser
 {
     /**
-     * Parse a camt.053 payload into normalised statement rows.
+     * Parse a camt.053 payload into normalised statement rows plus the
+     * statement header with its OPBD/CLBD balances (captured for the
+     * balance store that anchors the cash check).
      *
-     * @return Collection<int, array{
-     *     source_id: ?string, reference: ?string, description: ?string,
-     *     amount: float, currency: string, type: string,
-     *     transaction_date: ?Carbon, created_at_source: ?Carbon,
-     *     merchant_name: ?string, payer_name: ?string, payee_name: ?string,
-     * }>|null null when the XML is not a camt.053 statement
+     * @return array{
+     *     statement: array{
+     *         statement_id: ?string, external_account: ?string, currency: ?string,
+     *         opening_date: ?Carbon, opening_balance: ?float,
+     *         closing_date: ?Carbon, closing_balance: ?float,
+     *     },
+     *     rows: Collection<int, array{
+     *         source_id: ?string, reference: ?string, description: ?string,
+     *         amount: float, currency: string, type: string,
+     *         transaction_date: ?Carbon, created_at_source: ?Carbon,
+     *         merchant_name: ?string, payer_name: ?string, payee_name: ?string,
+     *     }>,
+     * }|null null when the XML is not a camt.053 statement
      */
-    public function parse(string $content): ?Collection
+    public function parse(string $content): ?array
     {
         $document = new DOMDocument;
         if (! @$document->loadXML($content)) {
@@ -53,7 +62,53 @@ class Camt053StatementParser
             return null;
         }
 
-        $statementId = $this->text($xpath, "//*[local-name()='Stmt']/*[local-name()='Id']") ?? 'CAMT053';
+        $statementId = $this->text($xpath, "//*[local-name()='Stmt']/*[local-name()='Id']");
+
+        $header = [
+            'statement_id' => $statementId,
+            'external_account' => $this->text($xpath, "//*[local-name()='Stmt']/*[local-name()='Acct']/*[local-name()='Id']/*[local-name()='Othr']/*[local-name()='Id']"),
+            'currency' => null,
+            'opening_date' => null,
+            'opening_balance' => null,
+            'closing_date' => null,
+            'closing_balance' => null,
+        ];
+
+        // The OPBD/CLBD balances: CRDT is a balance held (positive),
+        // DBIT an overdrawn one (negative). Multiple Stmt blocks each
+        // carry their own — the last one wins for the anchor this
+        // feeds; per-account statements are a Wise-per-account reality.
+        $balances = $xpath->query("//*[local-name()='Stmt']/*[local-name()='Bal']");
+        if ($balances !== false) {
+            foreach ($balances as $balance) {
+                /** @var DOMElement $balance */
+                $code = $this->text($xpath, "./*[local-name()='Tp']/*[local-name()='CdOrPrtry']/*[local-name()='Cd']", $balance);
+                if (! in_array($code, ['OPBD', 'CLBD'], true)) {
+                    continue;
+                }
+
+                $amountNode = $xpath->query("./*[local-name()='Amt']", $balance)?->item(0);
+                if (! $amountNode instanceof DOMElement) {
+                    continue;
+                }
+
+                $dateText = $this->text($xpath, "./*[local-name()='Dt']/*[local-name()='DtTm']", $balance)
+                    ?? $this->text($xpath, "./*[local-name()='Dt']/*[local-name()='Dt']", $balance);
+                $signed = $this->text($xpath, "./*[local-name()='CdtDbtInd']", $balance) !== 'DBIT'
+                    ? (float) $amountNode->textContent
+                    : -(float) $amountNode->textContent;
+
+                if ($code === 'OPBD') {
+                    $header['opening_date'] = $dateText !== null ? Carbon::parse($dateText) : null;
+                    $header['opening_balance'] = $signed;
+                } else {
+                    $header['closing_date'] = $dateText !== null ? Carbon::parse($dateText) : null;
+                    $header['closing_balance'] = $signed;
+                }
+
+                $header['currency'] = $header['currency'] ?? ($amountNode->getAttribute('Ccy') ?: null);
+            }
+        }
 
         $rows = collect();
         $sequence = 0;
@@ -76,7 +131,7 @@ class Camt053StatementParser
 
             $sourceId = $this->text($xpath, "./*[local-name()='BkTxCd']/*[local-name()='Prtry']/*[local-name()='Cd']", $entry)
                 ?? $this->text($xpath, ".//*[local-name()='TxId']", $entry)
-                ?? $statementId.'-'.$sequence;
+                ?? ($statementId ?? 'CAMT053').'-'.$sequence;
 
             $description = $this->text($xpath, "./*[local-name()='AddtlNtryInf']", $entry);
 
@@ -116,7 +171,10 @@ class Camt053StatementParser
             ]);
         }
 
-        return $rows->values();
+        return [
+            'statement' => $header,
+            'rows' => $rows->values(),
+        ];
     }
 
     /**

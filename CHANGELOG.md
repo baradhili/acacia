@@ -3,6 +3,36 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] — 2026-10-06
+
+### Added — statement balances anchor the bank-vs-books cash check
+
+The MT940 and camt.053 imports now capture what those formats
+actually carry and the CSV does not: the statement header and its
+opening/closing balances, stored per statement id (re-importing
+refreshes the anchor instead of duplicating it; the Wise CSV
+layouts carry no balances and store nothing). The cash check's
+actual side is no longer forced to the running sum of imported
+lines — it is the latest stored closing balance plus every imported
+line dated after it, exact however shallow the line history: a feed
+that starts after the account opened, or whose older lines were
+never imported, no longer understates the bank. Each feed row on
+the screen now states its basis ("MT940 statement balance, closed
+05 Oct 2026, + 2 later lines", or an amber "running sum of imported
+lines — no statement balances imported"), so a feed-history gap is
+visible instead of baked into the figure, and a currency known only
+from a statement still lists — the closing balance is the actual
+side even when every line deduped away. The gap's residual absorbs
+the feed-history correction, which is what it was for.
+
+### Changed — reconciliation copy through the translator, format-neutral
+
+The index screen's intro and empty-state strings still said a CSV
+export and were hard-coded; both now read for any of the three
+formats and live in the translator with the rest of the screen's
+strings (the cash-check caveat and no-feed lines were reworded for
+the balance basis in the same pass).
+
 ## [Unreleased] — 2026-10-05
 
 ### Added — multi-format bank statement import (Wise CSV, MT940, camt.053)

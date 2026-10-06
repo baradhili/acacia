@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Modules\Reconciliation\Models\BankStatement;
 use Modules\Reconciliation\Models\BankTransaction;
 use Modules\Reconciliation\Services\StatementImportService;
 use Tests\TestCase;
@@ -257,6 +258,70 @@ class StatementImportFormatsTest extends TestCase
         $this->assertEquals(0, $third['imported']);
         $this->assertEquals(5, $third['skipped']);
         $this->assertEquals(5, BankTransaction::count());
+    }
+
+    // ============================================================
+    // Statement balances — the cash-check anchor
+    // ============================================================
+
+    public function test_mt940_import_stores_the_statement_balances(): void
+    {
+        $this->service->import($this->fixture('mt940'));
+
+        $statement = BankStatement::first();
+        $this->assertNotNull($statement);
+        $this->assertEquals(BankTransaction::SOURCE_WISE, $statement->source);
+        $this->assertEquals('MT940', $statement->format);
+        $this->assertEquals('700254819/26/1', $statement->statement_id);
+        $this->assertEquals('700254819', $statement->external_account);
+        $this->assertEquals('AUD', $statement->currency);
+        $this->assertEquals(45000.00, (float) $statement->opening_balance);
+        $this->assertEquals('2026-09-30', $statement->opening_date->format('Y-m-d'));
+        $this->assertEquals(60203.80, (float) $statement->closing_balance);
+        $this->assertEquals('2026-10-05', $statement->closing_date->format('Y-m-d'));
+    }
+
+    public function test_camt053_import_stores_the_statement_balances(): void
+    {
+        $this->service->import($this->fixture('xml'));
+
+        $statement = BankStatement::first();
+        $this->assertNotNull($statement);
+        $this->assertEquals('CAMT.053', $statement->format);
+        $this->assertEquals('SAMPLE-700254819-20261005', $statement->statement_id);
+        $this->assertEquals('700254819', $statement->external_account);
+        $this->assertEquals(45000.00, (float) $statement->opening_balance);
+        // camt.053 dates the balances at the period's date-time bounds
+        // (01-10 opening, 06-10 00:00 closing — end of 05-10).
+        $this->assertEquals('2026-10-01', $statement->opening_date->format('Y-m-d'));
+        $this->assertEquals(60203.80, (float) $statement->closing_balance);
+        $this->assertEquals('2026-10-06', $statement->closing_date->format('Y-m-d'));
+    }
+
+    public function test_reimporting_a_statement_does_not_duplicate_the_anchor(): void
+    {
+        $this->service->import($this->fixture('mt940'));
+        $this->service->import($this->fixture('mt940'));
+
+        $this->assertEquals(1, BankStatement::count());
+    }
+
+    public function test_the_same_period_in_another_format_adds_its_own_anchor(): void
+    {
+        $this->service->import($this->fixture('mt940'));
+        $this->service->import($this->fixture('xml'));
+
+        // Two statement ids, same balances — the anchor pick between
+        // them is by closing date and lands on either harmlessly.
+        $this->assertEquals(2, BankStatement::count());
+        $this->assertEquals(1, BankStatement::distinct('closing_balance')->count('closing_balance'));
+    }
+
+    public function test_csv_imports_store_no_statement_balances(): void
+    {
+        $this->service->import($this->fixture('csv'));
+
+        $this->assertEquals(0, BankStatement::count());
     }
 
     // ============================================================

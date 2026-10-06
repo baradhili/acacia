@@ -5,6 +5,11 @@
 // overrides only keys that differ in Australian English — none here.
 return [
 
+    'index' => [
+        'intro' => 'Import a bank statement — CSV, MT940 or camt.053 XML, the format is detected automatically — then match each movement against invoices, payments and bills.',
+        'empty_pending' => 'Nothing pending — import a statement to bring in new bank movements.',
+    ],
+
     'cash_check' => [
         'title' => 'Cash basis check — bank vs books',
         'intro' => 'This is a cash-basis system: the bank accounts are the books\' source of truth for cash. The gap below compares what the imported feed says the bank actually holds against what the ledger says it should hold.',
@@ -13,8 +18,10 @@ return [
         'books_total' => 'Total expected cash',
         'bank_heading' => 'Actual bank balance (the feed)',
         'bank_lines' => ':count lines, latest :date',
+        'bank_basis_statement' => ':format statement balance, closed :date, + :count later line(s)',
+        'bank_basis_running' => 'running sum of imported lines — no statement balances imported',
         'not_compared' => 'not compared — books are :currency',
-        'no_feed' => 'No statement imported yet — import the bank\'s CSV export to compare the actual balance.',
+        'no_feed' => 'No statement imported yet — import a statement (CSV, MT940 or camt.053 XML) to compare the actual balance.',
         'no_books' => 'No bank accounts in the ledger — nothing to compare the feed against.',
 
         'gap_label' => 'Gap (bank minus books)',
@@ -26,7 +33,7 @@ return [
         'component_books' => 'Book movements not on the statement',
         'component_residual' => 'Other timing differences',
 
-        'caveat' => 'The actual balance is the running sum of every imported line, so it is only as complete as the import — a feed that starts after the account opened understates it, and a feed that covers only some of the bank accounts (the Wise feed against a multi-account chart, say) leaves the rest inside the gap\'s residual. Lines in other currencies are listed but never netted against the :currency books.',
+        'caveat' => 'The actual balance comes from the latest imported statement balance (its closing balance plus any later lines) when the feed carries one — MT940 and camt.053 do — and otherwise from the running sum of every imported line, which is only as complete as the import: a feed that starts after the account opened understates it, and a feed that covers only some of the bank accounts (the Wise feed against a multi-account chart, say) leaves the rest inside the gap\'s residual. Lines in other currencies are listed but never netted against the :currency books.',
     ],
 
     'import' => [

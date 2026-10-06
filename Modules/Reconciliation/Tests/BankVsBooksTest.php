@@ -14,6 +14,7 @@ use IFRS\Models\LineItem;
 use IFRS\Models\ReportingPeriod;
 use IFRS\Transactions\JournalEntry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Modules\Reconciliation\Models\BankStatement;
 use Modules\Reconciliation\Models\BankTransaction;
 use Modules\Reconciliation\Services\ReconciliationService;
 use Tests\TestCase;
@@ -21,12 +22,13 @@ use Tests\TestCase;
 /**
  * The cash-basis control on the reconciliation screen: the gap
  * between what the imported feed implies the bank actually holds
- * (the running sum of every line, all statuses, per currency) and
- * what the ledger's bank accounts — one row each, multiple bank
- * accounts included — say it should hold, with the gap's components:
- * bank lines not matched yet, book movements not on the statement,
- * and the residual. Lines in other currencies list but never net
- * against the AUD books.
+ * (a stored statement balance plus later lines when the import
+ * carried one — MT940/camt.053 do; else the running sum of every
+ * line, all statuses, per currency) and what the ledger's bank
+ * accounts — one row each, multiple bank accounts included — say it
+ * should hold, with the gap's components: bank lines not matched yet,
+ * book movements not on the statement, and the residual. Lines in
+ * other currencies list but never net against the AUD books.
  */
 class BankVsBooksTest extends TestCase
 {
@@ -272,5 +274,100 @@ class BankVsBooksTest extends TestCase
             ->assertSee('1,000.00 AUD', false)
             ->assertSee('+$500.00', false)
             ->assertSee(__('reconciliation.cash_check.gap_bank_ahead'), false);
+    }
+
+    // ============================================================
+    // Statement-balance anchors (MT940/camt.053 imports)
+    // ============================================================
+
+    protected function anchor(array $attributes = []): BankStatement
+    {
+        return BankStatement::create(array_merge([
+            'source' => BankTransaction::SOURCE_WISE,
+            'format' => 'MT940',
+            'statement_id' => 'STMT-'.uniqid(),
+            'currency' => 'AUD',
+            'opening_date' => '2026-08-31',
+            'opening_balance' => 500.00,
+            'closing_date' => '2026-09-05',
+            'closing_balance' => 60203.80,
+        ], $attributes));
+    }
+
+    public function test_a_statement_balance_anchors_the_actual_side(): void
+    {
+        $this->postedPayment(60203.80);
+        $this->anchor();
+
+        // Lines dated before the anchor's closing date are already
+        // inside its balance — the running sum's history stops mattering.
+        $this->bankLine(['amount' => -300, 'transaction_date' => '2026-09-02']);
+        $this->bankLine(['amount' => 100, 'transaction_date' => '2026-09-03']);
+
+        $check = $this->service->bankVsBooks();
+
+        $feed = collect($check['bank'])->firstWhere('currency', 'AUD');
+        $this->assertSame('statement', $feed['basis']);
+        $this->assertEquals(60203.80, $feed['balance']);
+        $this->assertSame(0, $feed['anchor']['later_lines']);
+        $this->assertEquals(60203.80, $check['actual']);
+        $this->assertEquals(0.0, $check['gap']);
+    }
+
+    public function test_lines_after_the_statement_add_to_the_anchored_balance(): void
+    {
+        $this->postedPayment(2000);
+        $this->anchor(['closing_date' => '2026-09-01', 'closing_balance' => 500.00]);
+
+        // After the closing date: adds. Before it: inside the balance.
+        $this->bankLine(['amount' => 1500, 'transaction_date' => '2026-09-10']);
+        $this->bankLine(['amount' => -100, 'transaction_date' => '2026-08-20']);
+
+        $check = $this->service->bankVsBooks();
+
+        $feed = collect($check['bank'])->firstWhere('currency', 'AUD');
+        $this->assertSame('statement', $feed['basis']);
+        $this->assertEquals(2000.00, $feed['balance']);
+        $this->assertSame(1, $feed['anchor']['later_lines']);
+        $this->assertEquals(0.0, $check['gap']);
+    }
+
+    public function test_the_latest_statement_wins_the_anchor(): void
+    {
+        $this->anchor(['statement_id' => 'OLD', 'closing_date' => '2026-08-31', 'closing_balance' => 100.00]);
+        $this->anchor(['statement_id' => 'NEW', 'closing_date' => '2026-09-05', 'closing_balance' => 60203.80]);
+
+        $check = $this->service->bankVsBooks();
+
+        $feed = collect($check['bank'])->firstWhere('currency', 'AUD');
+        $this->assertEquals(60203.80, $feed['balance']);
+        $this->assertEquals('2026-09-05', $feed['anchor']['date']->format('Y-m-d'));
+    }
+
+    public function test_without_a_statement_the_running_sum_stands(): void
+    {
+        $this->bankLine(['amount' => 1000]);
+
+        $check = $this->service->bankVsBooks();
+
+        $feed = collect($check['bank'])->firstWhere('currency', 'AUD');
+        $this->assertSame('running', $feed['basis']);
+        $this->assertNull($feed['anchor']);
+        $this->assertEquals(1000.0, $feed['balance']);
+    }
+
+    public function test_the_screen_states_which_basis_the_actual_side_is_on(): void
+    {
+        $this->postedPayment(500);
+        $this->anchor();
+
+        $this->actingAs($this->user)
+            ->get('/reconciliation')
+            ->assertOk()
+            ->assertSee(__('reconciliation.cash_check.bank_basis_statement', [
+                'format' => 'MT940',
+                'date' => '05 Sep 2026',
+                'count' => 0,
+            ]), false);
     }
 }

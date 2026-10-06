@@ -21,6 +21,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Modules\Reconciliation\Models\BankStatement;
 use Modules\Reconciliation\Models\BankTransaction;
 use Modules\Reconciliation\Models\ReconciliationCounterpartyRule;
 use Modules\Reconciliation\Models\ReconciliationHistory;
@@ -35,8 +36,10 @@ use Modules\Reconciliation\Models\ReconciliationHistory;
  * pass using the counterparty rules an earlier match taught — the
  * unreconciled-movements panel (the book side: ledger movements no
  * matched line accounts for), the bank-vs-books cash check (the
- * gap between the feed's implied balance and the ledger's bank
- * accounts, with its components), and the maintenance actions
+ * gap between the feed's implied balance — anchored on a stored
+ * statement balance when the import carried one, else the running
+ * sum of imported lines — and the ledger's bank accounts, with its
+ * components), and the maintenance actions
  * (ignore and restore, manual match and unmatch, each
  * history-logged). Creating what a line pays for happens on the
  * Match screen, never automatically — the auto-create service
@@ -572,24 +575,29 @@ class ReconciliationService
      * The cash-basis control the screen leads with: what the books say
      * the bank holds — every IFRS BANK account's balance, the
      * expected cash — against what the imported feed implies the bank
-     * actually holds. Wise's CSV carries no balances, so the actual
-     * side is the running sum of every imported line (all statuses:
-     * pending and ignored lines moved the bank too), per currency —
-     * the figure is only as good as the import's history. The gap
+     * actually holds. When a stored statement balance anchors the
+     * currency (the MT940/camt.053 imports carry opening/closing
+     * balances; Wise's CSV does not), the actual side is that closing
+     * balance plus every imported line dated after it — exact however
+     * shallow the line history. Otherwise the running sum of every
+     * imported line stands in (all statuses: pending and ignored lines
+     * moved the bank too), per currency — only as good as the import's
+     * history, and each bank row says which basis it is on. The gap
      * comes with its two usual components, the bank lines nothing has
      * matched yet and the book movements no bank line accounts for
      * (getUnreconciledBankMovements, FY-bounded), plus whatever
-     * residual is left — matching tolerances, grossed-up amounts and
-     * feed history predating the books. Lines in currencies other
-     * than the entity's are listed but never netted against the
-     * books, and without bank accounts on the books there is nothing
-     * to compare: the feed lists alone and the gap stays null.
+     * residual is left — matching tolerances, grossed-up amounts and,
+     * on the anchored basis, whatever feed history the running sum
+     * never contained. Lines in currencies other than the entity's
+     * are listed but never netted against the books, and without bank
+     * accounts on the books there is nothing to compare: the feed
+     * lists alone and the gap stays null.
      *
      * @return array{
      *     currency: ?string,
      *     books: list<array{code: string, name: string, balance: float}>,
      *     books_total: float,
-     *     bank: list<array{currency: string, balance: float, lines: int, latest: ?Carbon}>,
+     *     bank: list<array{currency: string, balance: float, lines: int, latest: ?Carbon, basis: string, anchor: ?array{date: Carbon, format: string, later_lines: int}}>,
      *     actual: ?float,
      *     gap: ?float,
      *     bank_unmatched_net: float,
@@ -615,22 +623,70 @@ class ReconciliationService
             }
         }
 
-        // The bank side: the feed's implied running balance per
-        // currency, with line count and latest date as the
-        // staleness cue. The count aliases as line_count — "lines"
-        // is a reserved word on MariaDB.
-        $bank = BankTransaction::query()
+        // The bank side, per currency: the balance the feed implies,
+        // with line count and latest date as the staleness cue. A
+        // stored statement balance (the MT940/camt.053 imports carry
+        // them) anchors it — closing balance plus every imported line
+        // dated after it, exact regardless of how far back the line
+        // history reaches. Without one the running sum of every line
+        // stands in, only as good as the import's history; the basis
+        // says which, so a feed-history gap is visible rather than
+        // baked into the figure. A currency known only from a
+        // statement anchor still lists (every line deduped away, or
+        // none imported yet): its closing balance is the actual side.
+        // The count aliases as line_count — "lines" is a reserved
+        // word on MariaDB.
+        $anchors = BankStatement::query()
+            ->whereNotNull('closing_balance')
+            ->orderByDesc('closing_date')
+            ->get()
+            ->groupBy('currency');
+
+        $lineRows = BankTransaction::query()
             ->groupBy('currency')
             ->orderBy('currency')
             ->selectRaw('currency, COUNT(*) as line_count, SUM(amount) as balance, MAX(transaction_date) as latest')
-            ->get()
-            ->map(fn ($row) => [
-                'currency' => $row->currency,
-                'balance' => round((float) $row->balance, 2),
-                'lines' => (int) $row->line_count,
-                'latest' => $row->latest !== null ? Carbon::parse($row->latest) : null,
-            ])
+            ->get();
+
+        $bank = $lineRows->pluck('currency')
+            ->merge($anchors->keys())
+            ->unique()
+            ->sort()
             ->values()
+            ->map(function (string $currency) use ($lineRows, $anchors) {
+                $row = $lineRows->firstWhere('currency', $currency);
+                $bank = [
+                    'currency' => $currency,
+                    'balance' => $row !== null ? round((float) $row->balance, 2) : 0.0,
+                    'lines' => $row !== null ? (int) $row->line_count : 0,
+                    'latest' => $row !== null && $row->latest !== null ? Carbon::parse($row->latest) : null,
+                    'basis' => 'running',
+                    'anchor' => null,
+                ];
+
+                $anchor = $anchors->get($currency)?->first();
+                if ($anchor === null) {
+                    return $bank;
+                }
+
+                // Lines dated after the anchor's closing date are the
+                // movements the statement cannot know about; earlier
+                // lines are already inside its closing balance.
+                $later = BankTransaction::query()
+                    ->where('currency', $currency)
+                    ->whereDate('transaction_date', '>', $anchor->closing_date->toDateString())
+                    ->get(['amount']);
+
+                $bank['balance'] = round((float) $anchor->closing_balance + $later->sum('amount'), 2);
+                $bank['basis'] = 'statement';
+                $bank['anchor'] = [
+                    'date' => $anchor->closing_date,
+                    'format' => $anchor->format,
+                    'later_lines' => $later->count(),
+                ];
+
+                return $bank;
+            })
             ->all();
 
         // Nothing to compare when the ledger has no bank accounts:

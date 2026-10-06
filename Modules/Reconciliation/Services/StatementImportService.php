@@ -3,6 +3,7 @@
 namespace Modules\Reconciliation\Services;
 
 use Illuminate\Support\Collection;
+use Modules\Reconciliation\Models\BankStatement;
 use Modules\Reconciliation\Models\BankTransaction;
 use Modules\Reconciliation\Services\StatementParsers\Camt053StatementParser;
 use Modules\Reconciliation\Services\StatementParsers\Mt940StatementParser;
@@ -17,6 +18,13 @@ use Modules\Reconciliation\Services\StatementParsers\Mt940StatementParser;
  * them, so importing the same period in a second format skips as
  * duplicates instead of duplicating), debits store negative, and rows
  * without a usable date or with a zero amount are skipped as noise.
+ *
+ * Statements that carry balances (MT940, camt.053) also store their
+ * header — opening/closing balance and dates — keyed on the
+ * statement's own id, so re-importing refreshes the anchor instead of
+ * duplicating it. The Wise CSV layouts carry no balances and store
+ * nothing: the cash check's actual side stays the running sum until a
+ * balanced format lands.
  */
 class StatementImportService
 {
@@ -55,11 +63,18 @@ class StatementImportService
         }
 
         if (str_starts_with(ltrim($content), '<')) {
-            return $this->importRows($this->camt053->parse($content), self::FORMAT_CAMT);
+            $parsed = $this->camt053->parse($content);
+            if ($parsed === null) {
+                return ['error' => self::ERR_UNRECOGNISED];
+            }
+
+            return $this->importRows($parsed['rows'], self::FORMAT_CAMT, $parsed['statement']);
         }
 
         if (str_contains($content, ':61:')) {
-            return $this->importRows($this->mt940->parse($content), self::FORMAT_MT940);
+            $parsed = $this->mt940->parse($content);
+
+            return $this->importRows($parsed['rows'], self::FORMAT_MT940, $parsed['statement']);
         }
 
         $result = $this->reconciliation->importFromCsv($filePath);
@@ -79,13 +94,16 @@ class StatementImportService
      * (not movements, the CSV feed's rule too).
      *
      * @param  Collection<int, array>|null  $rows
+     * @param  array|null  $statement  the parsed statement header, stored when it carries balances
      * @return array{imported: int, skipped: int, errors: string[], format: string}|array{error: string}
      */
-    private function importRows($rows, string $format): array
+    private function importRows($rows, string $format, ?array $statement = null): array
     {
         if ($rows === null) {
             return ['error' => self::ERR_UNRECOGNISED];
         }
+
+        $this->storeStatement($statement, $format);
 
         $imported = 0;
         $skipped = 0;
@@ -142,5 +160,38 @@ class StatementImportService
             'errors' => $errors,
             'format' => $format,
         ];
+    }
+
+    /**
+     * Store a parsed statement header as the cash-check anchor. Headers
+     * without an id or without any balance carry nothing to anchor and
+     * are dropped; keyed on (source, statement id) so re-importing
+     * refreshes the balances instead of duplicating the row.
+     */
+    private function storeStatement(?array $statement, string $format): void
+    {
+        if ($statement === null || ($statement['statement_id'] ?? null) === null) {
+            return;
+        }
+
+        if ($statement['opening_balance'] === null && $statement['closing_balance'] === null) {
+            return;
+        }
+
+        BankStatement::updateOrCreate(
+            [
+                'source' => BankTransaction::SOURCE_WISE,
+                'statement_id' => $statement['statement_id'],
+            ],
+            [
+                'format' => $format,
+                'external_account' => $statement['external_account'] ?? null,
+                'currency' => $statement['currency'] ?? null,
+                'opening_date' => $statement['opening_date'] ?? null,
+                'closing_date' => $statement['closing_date'] ?? null,
+                'opening_balance' => $statement['opening_balance'] ?? null,
+                'closing_balance' => $statement['closing_balance'] ?? null,
+            ],
+        );
     }
 }
