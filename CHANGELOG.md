@@ -5,6 +5,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-06
 
+### Fixed — the books' bank movements consolidated onto the one real account
+
+The real bank is the Wise account, but the books had drifted into a
+fictional split: every payment-driven posting path targets code 320
+("Operating"), while the chart's "Wise Business Account" (310) carried
+the opening balances and the match-screen records. One consolidation
+journal (XFER-CONSOLIDATE-310, an internal pair every cash view
+excludes) folded 310's 185,538.69 onto 320; 320 now wears the Wise
+name and holds the total (195,601.00), 310 is zeroed and marked
+superseded, and no posting path changes — future payments, payroll
+and settlements all land on the one real account. XFER-30 keeps its
+funds-introduced classification (the statement shows the money
+arriving from Bret Watson personally, outside the books' banks). The
+consolidation's two legs appear as a net-zero pair in the
+unreconciled panel — the per-leg transfer rule listing both sides of
+an internal move — and the missing XFER reversal path is queued so
+future corrections need no hand-posted journal.
+
 ### Added — bank interest and fees from the match screen
 
 The bank's own charges had no book path: an interest credit or a fee
