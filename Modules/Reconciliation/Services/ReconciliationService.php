@@ -366,9 +366,11 @@ class ReconciliationService
      * A movement is reconciled when a matched bank line links to its
      * payment, or (for direct postings) to either leg of its ledger
      * transaction. A posting and its reversal share the transaction
-     * reference (the payment number), so once both are unreconciled
-     * they net to zero on the bank account and drop out together — only
-     * book entries with a bank impact remain. Only movements inside the
+     * reference (the payment number; the -REV suffix reversal flows
+     * append is stripped for the pairing), so once both are
+     * unreconciled they net to zero on the bank account and drop out
+     * together — only book entries with a bank impact remain. Only
+     * movements inside the
      * open financial year are listed; closed years are history.
      * Payment tiers whose table is unavailable (migration pending)
      * degrade individually — their movements still list, labelled by
@@ -540,18 +542,22 @@ class ReconciliationService
                         // to it; null for direct postings and reversals.
                         'source_type' => $sourceType,
                         'source_id' => $sourceId,
-                        // Postings and their reversals share the reference;
-                        // used only to net pairs, stripped before returning.
+                        // Postings and their reversals share the reference
+                        // (reversals append -REV — BAS settlements,
+                        // payroll runs strip it here so the pair nets);
+                        // used only to net pairs, stripped before
+                        // returning.
                         '_net_key' => $transaction->reference !== null && $transaction->reference !== ''
-                            ? $transaction->reference
+                            ? preg_replace('/-REV$/', '', $transaction->reference)
                             : 'txn-'.$movement->transaction_id,
                     ];
                 })
                 ->filter();
 
-            // A posting and its reversal share the transaction reference,
-            // so group by (bank account, reference) and drop what nets to
-            // nothing: no bank impact, nothing to reconcile.
+            // A posting and its reversal share the transaction reference
+            // (a reversal's -REV suffix aside), so group by (bank
+            // account, reference) and drop what nets to nothing: no bank
+            // impact, nothing to reconcile.
             $nettedOut = $rows
                 ->groupBy(fn ($row) => $row['account'].'|'.$row['_net_key'])
                 ->filter(fn ($group) => abs($group->sum('amount')) < 0.005)

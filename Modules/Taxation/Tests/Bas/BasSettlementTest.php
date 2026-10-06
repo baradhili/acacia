@@ -10,9 +10,11 @@ use Carbon\Carbon;
 use Database\Seeders\IFRSSeeder;
 use IFRS\Models\Account;
 use IFRS\Models\Entity;
+use IFRS\Models\Ledger;
 use IFRS\Models\LineItem;
 use IFRS\Transactions\JournalEntry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Modules\Reconciliation\Services\ReconciliationService;
 use Modules\Taxation\Models\BasSettlement;
 use Modules\Taxation\Services\BasSettlementService;
 use Spatie\Permission\Models\Role;
@@ -366,7 +368,14 @@ class BasSettlementTest extends TestCase
         $this->assertEqualsWithDelta(0.0, $this->balance($this->gstPayable), 0.001);
         $this->assertEqualsWithDelta(0.0, $this->balance($this->gstReceivable), 0.001);
         $this->assertEqualsWithDelta(-1.35, $this->balance($this->account(4530)), 0.001);
-        $this->assertNotNull($settlement->ifrs_rounding_transaction_id);
+        // The rounding lives INSIDE the clearing journal now: one
+        // transaction, one bank leg at the lodged figure.
+        $this->assertNull($settlement->ifrs_rounding_transaction_id);
+        $bankLegs = Ledger::where('transaction_id', $settlement->ifrs_transaction_id)
+            ->where('post_account', $this->bank->id)
+            ->get();
+        $this->assertCount(1, $bankLegs);
+        $this->assertEqualsWithDelta(599.0, (float) $bankLegs->first()->amount, 0.001);
     }
 
     public function test_a_rounded_refund_also_clears_to_rounding(): void
@@ -396,6 +405,44 @@ class BasSettlementTest extends TestCase
         $this->expectExceptionMessage('Only cents remain unsettled');
 
         $this->settle();
+    }
+
+    public function test_the_settlement_lists_one_movement_the_bank_line_can_match(): void
+    {
+        $this->collect(1000.75);
+        $this->paid(400.40);
+
+        $settlement = $this->settle();
+
+        // The reconciliation panel sees exactly one book movement for
+        // the settlement — the lodged figure, money out — so the bank's
+        // statement line pairs with it one-to-one, tolerance-clean.
+        // (The pre-fold shape listed a second +cents rounding leg no
+        // bank line could ever claim. The fixtures' own bank movements
+        // stay listed — only the settlement's rows are asserted.)
+        $rows = app(ReconciliationService::class)->getUnreconciledBankMovements()
+            ->filter(fn ($row) => str_starts_with((string) $row['reference'], 'BAS-SETT'));
+
+        $this->assertCount(1, $rows);
+        $this->assertEqualsWithDelta(-599.0, (float) $rows->first()['amount'], 0.001);
+        $this->assertSame((int) $settlement->ifrs_transaction_id, $rows->first()['transaction_id']);
+    }
+
+    public function test_a_reversed_settlement_pair_nets_out_of_the_reconciliation_panel(): void
+    {
+        $this->collect(1000.75);
+        $this->paid(400.40);
+
+        $settlement = $this->settle();
+        $this->service->reverse($settlement);
+
+        // The reversal appends -REV to the reference; the panel's
+        // netting strips it, so the dead pair drops out instead of
+        // listing both sides forever.
+        $rows = app(ReconciliationService::class)->getUnreconciledBankMovements()
+            ->filter(fn ($row) => str_starts_with((string) $row['reference'], 'BAS-SETT'));
+
+        $this->assertCount(0, $rows);
     }
 
     public function test_refuses_when_there_is_nothing_to_settle(): void

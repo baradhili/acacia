@@ -5,6 +5,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-06
 
+### Fixed — BAS payments could not be reconciled: one bank line, two book legs
+
+A BAS settlement posted its bank movement as two journals — the
+clearing journal at the exact net plus a sub-$2 rounding journal —
+while the bank only ever sees the one lodged whole-dollar payment
+(the exact case: a 3,606.00 ATO payment against −3,606.64 and +0.64
+book legs). No single book movement equalled the statement line, and
+the cents leg could never be claimed by anything, so the gap never
+closed. Paying settlements now fold the rounding into the clearing
+journal: the tax accounts still clear at their exact balances, GST
+Rounding still absorbs the sub-$2 difference, and the bank moves
+exactly the lodged figure in one leg — the movement the statement
+line matches one-to-one. (Refunds keep the second rounding journal:
+their rounding credit cannot sit among a refund's debit legs.)
+
+The unreconciled-movements panel also nets a posting and its
+reversal again: reversal flows append "-REV" to the reference (BAS
+settlements, payroll runs), which broke the shared-reference netting
+the panel documents — abandoned settle/reverse rounds stayed listed
+as both sides forever. The netting strips the suffix, so dead pairs
+drop out. Existing settlements posted in the old shape reverse and
+re-settle into the new one through the screens.
+
 ### Added — statement balances anchor the bank-vs-books cash check
 
 The MT940 and camt.053 imports now capture what those formats
