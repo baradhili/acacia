@@ -5,6 +5,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-06
 
+### Changed — one cash source everywhere: the P&L trend and the company tax report read the bank ledger
+
+The P&L trend and the company tax report's Item 6/7 now read the
+same source as the cash flow card — the bank accounts' ledger legs —
+instead of the payment subledgers, so every cash figure in the app
+agrees by construction: an unposted payment row can no longer appear
+in one view and not another, and journal-settled receipts (GST-repair
+rounds, manual journals) count everywhere they actually moved money.
+Families net per reference across reversals; each family is
+classified by what its counterpart legs post to — revenue accounts
+make revenue, expense accounts make expenses, employee reimbursements
+and the payroll bank families (net pay, super and PAYG-withholding
+settlements) make expenses, and funds movements, GST and income-tax
+settlements, dividends and capital purchases move cash without being
+P&L. On the company tax report this lands the cash paid on payroll on
+the salary labels (net pay and withholding settlements on the wages
+label, super settlements on the superannuation label — its stale "no
+payroll ledger" note replaced), closing the blind spot where
+salaries never reached Item 6; the movement filter switched from
+"transaction's main account is a bank" to "any leg on a bank", the
+V05/V06 bank-flow cross-checks now read the same netted families (an
+abandoned settle/reverse round no longer counts as flow on both
+sides), and V11/V12's wording follows.
+
 ### Fixed — the cash flow card now reads the bank accounts' own ledger
 
 The dashboard's Cash Flow card built its flows from the payment

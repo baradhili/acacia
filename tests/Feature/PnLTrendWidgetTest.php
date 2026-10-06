@@ -73,6 +73,8 @@ class PnLTrendWidgetTest extends TestCase
             ['Wages Payable', Account::CURRENT_LIABILITY, 2235],
             ['Salaries & Wages', Account::OPERATING_EXPENSE, 5100],
             ['Superannuation Expense', Account::OPERATING_EXPENSE, 5150],
+            ['Consulting Revenue', Account::OPERATING_REVENUE, 4100],
+            ['Funds Introduced', Account::EQUITY, 3500],
         ] as [$name, $type, $code]) {
             $account = Account::create([
                 'name' => $name,
@@ -204,6 +206,24 @@ class PnLTrendWidgetTest extends TestCase
         $data = app(PnLTrendWidget::class)->run()->getData();
         $october = collect($data['months'])->firstWhere('month', '2026-10');
 
+        $this->assertEqualsWithDelta(0.0, (float) $october['expenses'], 0.001);
+    }
+
+    public function test_revenue_is_receipts_not_funds_or_settlements(): void
+    {
+        // A client receipt: revenue.
+        $this->postJournal($this->bank, false, [[$this->account(4100), 1500]], 'PAY-2026-0099', '2026-10-02');
+
+        // Funds introduced (external transfer): cash in, never income.
+        $this->postJournal($this->bank, false, [[$this->account(3500), 10000]], 'XFER-901', '2026-10-02');
+
+        // The BAS GST settlement: cash out, never an expense.
+        $this->postJournal($this->paygPayable, false, [[$this->bank, 3606]], 'BAS-SETT-GST-20260930', '2026-10-02');
+
+        $data = app(PnLTrendWidget::class)->run()->getData();
+        $october = collect($data['months'])->firstWhere('month', '2026-10');
+
+        $this->assertEqualsWithDelta(1500.0, (float) $october['revenue'], 0.001);
         $this->assertEqualsWithDelta(0.0, (float) $october['expenses'], 0.001);
     }
 }

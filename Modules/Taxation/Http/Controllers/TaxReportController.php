@@ -560,12 +560,16 @@ class TaxReportController extends Controller
      * Company tax return 2026 (NAT 0656).
      *
      * Item 6/7 amounts are cash-basis and GST-exclusive by construction:
-     * only ledger rows whose parent transaction's main account is a BANK
-     * account are included (client receipts and supplier payments are
-     * the sole posters to revenue/expense in this system, so non-cash
-     * journals are excluded), and the GST back-out legs post to the same
-     * revenue/expense account, leaving per-account net movement already
-     * net of GST — the form's "exclude input tax credits" rule.
+     * only ledger rows of transactions that touch a BANK account by any
+     * leg are included (the same source as the cash flow card — client
+     * receipts, supplier payments, reimbursements, settlements; non-cash
+     * journals never reach a bank and drop out), and the GST back-out
+     * legs post to the same revenue/expense account, leaving per-account
+     * net movement already net of GST — the form's "exclude input tax
+     * credits" rule. Payroll's expense legs live in accrual journals
+     * that never touch the bank, so the cash paid on payroll — net-pay
+     * journals plus the super / PAYG-withholding settlements — enters
+     * through its bank-leg families instead, on the salary labels.
      *
      * Raw DB queries are used because the package's EntityScope cannot
      * resolve background contexts; entity_id is therefore filtered
@@ -593,17 +597,26 @@ class TaxReportController extends Controller
         $movementTypes = [...$revenueTypes, ...$expenseTypes, Account::NON_CURRENT_ASSET, Account::EQUITY];
 
         // Per-account net movement for the year through bank-settled
-        // transactions (the transaction's main account must be a BANK).
-        // Year-end closing entries are never trading activity — excluded
-        // by reference prefix (belt-and-braces: their main account is
-        // Retained Earnings, so the bank filter already drops them).
+        // transactions — any leg on a BANK account qualifies (the cash
+        // flow card's source). Year-end closing entries are never
+        // trading activity — excluded by reference prefix.
+        $bankLegExists = function ($query) use ($entity) {
+            $query->selectRaw('1')
+                ->from('ifrs_ledgers as bl')
+                ->join('ifrs_accounts as ba', 'ba.id', '=', 'bl.post_account')
+                ->whereColumn('bl.transaction_id', 't.id')
+                ->where('ba.entity_id', $entity->id)
+                ->where('ba.account_type', Account::BANK)
+                ->whereNull('bl.deleted_at')
+                ->limit(1);
+        };
+
         $accountMovements = DB::table('ifrs_ledgers as l')
             ->join('ifrs_transactions as t', 't.id', '=', 'l.transaction_id')
             ->join('ifrs_accounts as a', 'a.id', '=', 'l.post_account')
-            ->join('ifrs_accounts as bank', 'bank.id', '=', 't.account_id')
             ->where('a.entity_id', $entity->id)
             ->whereIn('a.account_type', $movementTypes)
-            ->where('bank.account_type', Account::BANK)
+            ->whereExists($bankLegExists)
             ->whereBetween('l.posting_date', [$fyStart, $fyEndDate])
             ->whereNull('l.deleted_at')
             ->whereNull('t.deleted_at')
@@ -621,11 +634,10 @@ class TaxReportController extends Controller
         $auditByAccount = [];
         DB::table('ifrs_ledgers as l')
             ->join('ifrs_transactions as t', 't.id', '=', 'l.transaction_id')
-            ->join('ifrs_accounts as bank', 'bank.id', '=', 't.account_id')
             ->join('ifrs_accounts as a', 'a.id', '=', 'l.post_account')
             ->where('a.entity_id', $entity->id)
             ->whereIn('a.account_type', $movementTypes)
-            ->where('bank.account_type', Account::BANK)
+            ->whereExists($bankLegExists)
             ->whereBetween('l.posting_date', [$fyStart, $fyEndDate])
             ->whereNull('l.deleted_at')
             ->whereNull('t.deleted_at')
@@ -639,16 +651,42 @@ class TaxReportController extends Controller
                 }
             });
 
-        // Bank flows for the cash cross-checks (V05/V06).
-        $bankFlows = DB::table('ifrs_ledgers as l')
+        // Bank flows for the cash cross-checks (V05/V06): the same
+        // netted families the cash-flow card reads — an undone movement
+        // and its -REV mirror contribute their surviving net (raw legs
+        // would count both sides of an abandoned round as flow), and an
+        // internal transfer between the books' own bank accounts moves
+        // no external cash on either side.
+        $bankFlowLegs = DB::table('ifrs_ledgers as l')
+            ->join('ifrs_transactions as t', 't.id', '=', 'l.transaction_id')
             ->join('ifrs_accounts as a', 'a.id', '=', 'l.post_account')
             ->where('a.entity_id', $entity->id)
             ->where('a.account_type', Account::BANK)
             ->whereBetween('l.posting_date', [$fyStart, $fyEndDate])
             ->whereNull('l.deleted_at')
-            ->selectRaw("SUM(CASE WHEN l.entry_type = 'D' THEN l.amount ELSE 0 END) as inflows,
-                SUM(CASE WHEN l.entry_type = 'C' THEN l.amount ELSE 0 END) as outflows")
-            ->first();
+            ->whereNull('t.deleted_at')
+            ->get(['t.id as transaction_id', 't.reference', 'l.post_account', 'l.entry_type', 'l.amount']);
+        $internalTransferTxns = $bankFlowLegs
+            ->filter(fn ($leg) => str_starts_with((string) $leg->reference, 'XFER-'))
+            ->groupBy('transaction_id')
+            ->filter(fn ($group) => $group->pluck('post_account')->unique()->count() > 1)
+            ->keys();
+        $bankIn = 0.0;
+        $bankOut = 0.0;
+        $bankFlowLegs->reject(fn ($leg) => $internalTransferTxns->contains($leg->transaction_id))
+            ->groupBy(fn ($leg) => $leg->reference !== null && $leg->reference !== ''
+                ? preg_replace('/-REV$/', '', $leg->reference)
+                : 'txn-'.$leg->transaction_id)
+            ->each(function ($rows) use (&$bankIn, &$bankOut) {
+                $net = round((float) $rows->sum(
+                    fn ($row) => $row->entry_type === Balance::DEBIT ? $row->amount : -$row->amount
+                ), 2);
+                if (abs($net) < 0.005) {
+                    return;
+                }
+                $net > 0 ? $bankIn += $net : $bankOut += -$net;
+            });
+        $bankFlows = (object) ['inflows' => round($bankIn, 2), 'outflows' => round($bankOut, 2)];
 
         // GST collected/paid from the Vat account ledger legs, netted
         // per account role (see ledgerGst()). Shared with the GST/BAS
@@ -768,6 +806,82 @@ class TaxReportController extends Controller
             }
         }
 
+        // The cash paid on payroll — net-pay journals plus the super /
+        // PAYG-withholding settlements — enters Item 6 on the same
+        // source as every other figure: bank ledger legs netted per
+        // reference family (an undone settlement and its -REV mirror
+        // contribute their surviving net). The accrual journals post
+        // against liabilities and never touch a bank, so no account
+        // movement above can carry them; the families land on the
+        // salary labels, super settlements on the superannuation
+        // label (they clear the super payable).
+        $salaryLabel = $expenseAccountMap[(int) ($salaryAccounts[0] ?? 0)] ?? $config['fallback']['expense'];
+        $superLabel = $config['superannuation_expense_label'] ?? 'D';
+        $superPayableCode = (int) config('payroll.accounts.super_payable', 0);
+        $superTxnIds = $superPayableCode > 0
+            ? DB::table('ifrs_ledgers as l')
+                ->join('ifrs_accounts as a', 'a.id', '=', 'l.post_account')
+                ->where('a.entity_id', $entity->id)
+                ->where('a.code', $superPayableCode)
+                ->whereNull('l.deleted_at')
+                ->pluck('l.transaction_id')
+            : collect();
+
+        $payrollByLabel = [];
+        $payrollTxnsByLabel = [];
+        DB::table('ifrs_ledgers as l')
+            ->join('ifrs_transactions as t', 't.id', '=', 'l.transaction_id')
+            ->join('ifrs_accounts as bank', 'bank.id', '=', 'l.post_account')
+            ->where('bank.entity_id', $entity->id)
+            ->where('bank.account_type', Account::BANK)
+            ->whereBetween('l.posting_date', [$fyStart, $fyEndDate])
+            ->whereNull('l.deleted_at')
+            ->whereNull('t.deleted_at')
+            ->where(fn ($q) => $q
+                ->where('t.reference', 'like', 'PAYROLL-%-PAY')
+                ->orWhere('t.reference', 'like', 'PAYROLL-%-REV')
+                ->orWhere('t.reference', 'like', 'PAYSET-%')
+                ->orWhere('t.reference', 'like', 'BAS-SETT-PAYG-%'))
+            ->get(['t.id as transaction_id', 't.reference', 'l.entry_type', 'l.amount'])
+            ->groupBy(fn ($leg) => preg_replace('/-(PAY|REV)$/', '', (string) $leg->reference))
+            ->each(function ($rows) use (&$payrollByLabel, &$payrollTxnsByLabel, $salaryLabel, $superLabel, $superTxnIds) {
+                // Out is credit: the family nets to cash paid.
+                $net = round((float) $rows->sum(
+                    fn ($row) => $row->entry_type === Balance::CREDIT ? -$row->amount : $row->amount
+                ), 2);
+
+                if (abs($net) < 0.005) {
+                    return;
+                }
+
+                $isSuper = $rows->pluck('transaction_id')->intersect($superTxnIds)->isNotEmpty();
+                $label = $isSuper ? $superLabel : $salaryLabel;
+                $payrollByLabel[$label] = ($payrollByLabel[$label] ?? 0) - $net;
+                $payrollTxnsByLabel[$label] = array_merge(
+                    $payrollTxnsByLabel[$label] ?? [],
+                    $rows->pluck('transaction_id')->all(),
+                );
+            });
+
+        foreach ($payrollByLabel as $label => $net) {
+            $expenseRows[$label]['amount'] += $net;
+            $expenseRows[$label]['sourced'] = true;
+            $expenseRows[$label]['accounts'][] = [
+                'code' => '—',
+                'name' => 'Cash paid on payroll (net pay and settlements)',
+                'amount' => round($net),
+            ];
+            $expenseRows[$label]['transaction_ids'] = array_merge(
+                $expenseRows[$label]['transaction_ids'],
+                $payrollTxnsByLabel[$label],
+            );
+            // Wages cash only — the information label is salary and
+            // wages; super cash belongs to its own Item 6 label.
+            if ($label !== $superLabel) {
+                $salaryTotal += $net;
+            }
+        }
+
         // Round each label to whole dollars, then derive totals from the
         // rounded labels so V01–V04 hold exactly (spec V08).
         foreach ($incomeRows as $label => &$row) {
@@ -839,10 +953,9 @@ class TaxReportController extends Controller
         $nonCashRows = DB::table('ifrs_ledgers as l')
             ->join('ifrs_transactions as t', 't.id', '=', 'l.transaction_id')
             ->join('ifrs_accounts as a', 'a.id', '=', 'l.post_account')
-            ->join('ifrs_accounts as main', 'main.id', '=', 't.account_id')
             ->where('a.entity_id', $entity->id)
             ->whereIn('a.account_type', [...$revenueTypes, ...$expenseTypes])
-            ->where('main.account_type', '!=', Account::BANK)
+            ->whereNotExists($bankLegExists)
             ->whereBetween('l.posting_date', [$fyStart, $fyEndDate])
             ->whereNull('l.deleted_at')
             ->whereNull('t.deleted_at')
@@ -920,9 +1033,9 @@ class TaxReportController extends Controller
         $addValidation('V10', 'Every amount traces to IFRS transactions or a declared nil label', true,
             'Non-zero labels carry source transaction ids in the CSV export; nil labels are declared in config.');
         $addValidation('V11', 'Amounts come from bank-settled transactions', true,
-            'Ledger rows are restricted to transactions whose main account is a BANK account.');
+            'Ledger rows are restricted to transactions touching a BANK account by any leg — the same source as the cash flow card — with payroll carried by its bank-leg families (net pay and super/PAYG settlements).');
         $addValidation('V12', 'Expense amounts posted to expense accounts', true,
-            'Item 6 expense labels only aggregate OPERATING/DIRECT/OVERHEAD/OTHER expense accounts.');
+            'Item 6 expense labels aggregate OPERATING/DIRECT/OVERHEAD/OTHER expense accounts, plus the payroll bank-leg families on the salary labels.');
         $hasVats = DB::table('ifrs_vats')
             ->where('entity_id', $entity->id)
             ->whereNotNull('account_id')
