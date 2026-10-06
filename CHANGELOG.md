@@ -5,6 +5,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-06
 
+### Fixed — the P&L trend ignored payroll and reimbursements
+
+The dashboard's P&L trend built its expense side from the supplier
+payment subledger alone, so the dominant cost of a professional
+services firm never appeared: payroll posts its journals against
+liabilities and no bank-settled expense figure can see it. The trend
+now counts the cash actually paid on payroll — the bank legs of the
+net-pay journals (PAYROLL-*-PAY) and the super / PAYG-withholding
+settlements (PAYSET-*, BAS-SETT-PAYG-*), in the month the money left
+the bank, with abandoned settle/reverse rounds netting to nothing —
+plus employee reimbursements in their payment month. Accrued but
+unpaid withholding stays out until it settles, keeping the trend
+strictly cash-basis like its revenue side. (The company tax report's
+Item 6 has the same structural blind spot for payroll salaries — its
+bank-settled filter cannot see the accrual journals — flagged
+separately for its own fix.)
+
 ### Changed — the recent invoices widget marks paid invoices
 
 Paid invoices on the dashboard's Recent Invoices widget now show a
