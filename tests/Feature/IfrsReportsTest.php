@@ -10,7 +10,9 @@ use Carbon\Carbon;
 use IFRS\Models\Account;
 use IFRS\Models\Currency;
 use IFRS\Models\Entity;
+use IFRS\Models\LineItem;
 use IFRS\Models\ReportingPeriod;
+use IFRS\Transactions\JournalEntry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -207,5 +209,108 @@ class IfrsReportsTest extends TestCase
 
         $this->assertEquals(Bill::STATUS_PAID, $bill->status);
         $this->assertNotNull($bill->paid_at);
+    }
+
+    // ============================================================
+    // Account Schedule scoping — the ledger is the truth, not line
+    // items (a journal's main-account leg is never a line item)
+    // ============================================================
+
+    /**
+     * Post a payroll-shaped journal the PayrollService way: the main
+     * account takes one side, the legs the other.
+     */
+    protected function postPayrollJournal(Account $main, bool $credited, array $legs, string $reference): void
+    {
+        $journal = new JournalEntry([
+            'transaction_date' => Carbon::now()->toDateString(),
+            'account_id' => $main->id,
+            'credited' => $credited,
+            'entity_id' => $this->entity->id,
+            'currency_id' => $this->entity->currency_id,
+            'narration' => 'Payroll — test run',
+            'reference' => $reference,
+        ]);
+
+        foreach ($legs as [$account, $amount]) {
+            $line = LineItem::create([
+                'account_id' => $account->id,
+                'amount' => $amount,
+                'quantity' => 1,
+                'entity_id' => $this->entity->id,
+            ]);
+            $journal->addLineItem($line);
+        }
+
+        $journal->post();
+    }
+
+    public function test_account_schedule_is_scoped_to_the_accounts_own_movement(): void
+    {
+        [$wages, $payg, $wagesPayable] = [
+            Account::create(['name' => 'Salaries & Wages', 'account_type' => Account::OPERATING_EXPENSE, 'code' => 5100, 'currency_id' => $this->entity->currency_id, 'entity_id' => $this->entity->id]),
+            Account::create(['name' => 'PAYG Withholding Payable', 'account_type' => Account::CURRENT_LIABILITY, 'code' => 2210, 'currency_id' => $this->entity->currency_id, 'entity_id' => $this->entity->id]),
+            Account::create(['name' => 'Wages Payable', 'account_type' => Account::CURRENT_LIABILITY, 'code' => 2235, 'currency_id' => $this->entity->currency_id, 'entity_id' => $this->entity->id]),
+        ];
+
+        // Accrual: Dr wages 1,000 / Cr PAYG 200 / Cr wages payable 800 —
+        // the shape that used to show the whole item side (1,000) on the
+        // wages-payable schedule.
+        $this->postPayrollJournal($wages, false, [[$payg, 200], [$wagesPayable, 800]], 'PAYROLL-9-ACC');
+
+        $response = $this->actingAs($this->user)
+            ->get(route('reports.account-schedule', [
+                'account_id' => $wagesPayable->id,
+                'start_date' => now()->startOfMonth()->toDateString(),
+                'end_date' => now()->endOfMonth()->toDateString(),
+            ]));
+
+        $schedule = $response->viewData('scheduleData');
+
+        // The account's own movement only — the PAYG leg (200) and the
+        // expense main leg (1,000) never leak into the totals.
+        $this->assertEquals(0.0, (float) $schedule['total_debit']);
+        $this->assertEquals(800.0, (float) $schedule['total_credit']);
+
+        $card = collect($schedule['lines'])->firstWhere('reference', 'PAYROLL-9-ACC');
+        $this->assertNotNull($card);
+        $this->assertEquals(0.0, (float) $card['debit']);
+        $this->assertEquals(800.0, (float) $card['credit']);
+
+        // The card shows the complete journal. The package posts each
+        // line item as its own main/item pair (Dr wages / Cr the item),
+        // so the main account — invisible to the old line-item query —
+        // now appears beside every leg it balances.
+        $legs = collect($card['line_items']);
+        $this->assertTrue($legs->contains(fn ($leg) => $leg['account'] === '5100 - Salaries & Wages' && (float) $leg['debit'] === 800.0));
+        $this->assertTrue($legs->contains(fn ($leg) => $leg['account'] === '2235 - Wages Payable' && (float) $leg['credit'] === 800.0));
+        $this->assertTrue($legs->contains(fn ($leg) => $leg['account'] === '2210 - PAYG Withholding Payable' && (float) $leg['credit'] === 200.0));
+    }
+
+    public function test_account_schedule_lists_transactions_where_the_account_is_the_main_leg(): void
+    {
+        [$wagesPayable, $bank] = [
+            Account::create(['name' => 'Wages Payable', 'account_type' => Account::CURRENT_LIABILITY, 'code' => 2235, 'currency_id' => $this->entity->currency_id, 'entity_id' => $this->entity->id]),
+            Account::create(['name' => 'Operating Account', 'account_type' => Account::BANK, 'code' => 320, 'currency_id' => $this->entity->currency_id, 'entity_id' => $this->entity->id]),
+        ];
+
+        // Net pay: Dr wages payable (the MAIN account) / Cr bank — the
+        // old line-item query missed this transaction entirely, because
+        // the main-account leg is never a line item.
+        $this->postPayrollJournal($wagesPayable, false, [[$bank, 800]], 'PAYROLL-9-PAY');
+
+        $response = $this->actingAs($this->user)
+            ->get(route('reports.account-schedule', [
+                'account_id' => $wagesPayable->id,
+                'start_date' => now()->startOfMonth()->toDateString(),
+                'end_date' => now()->endOfMonth()->toDateString(),
+            ]));
+
+        $schedule = $response->viewData('scheduleData');
+
+        $card = collect($schedule['lines'])->firstWhere('reference', 'PAYROLL-9-PAY');
+        $this->assertNotNull($card);
+        $this->assertEquals(800.0, (float) $card['debit']);
+        $this->assertEquals(0.0, (float) $card['credit']);
     }
 }

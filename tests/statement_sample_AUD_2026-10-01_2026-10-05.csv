@@ -1,0 +1,6 @@
+"TransferWise ID",Date,"Date Time",Amount,Currency,Description,"Payment Reference","Running Balance","Exchange From","Exchange To","Exchange Rate","Payer Name","Payee Name","Payee Account Number",Merchant,"Card Last Four Digits","Card Holder Full Name",Attachment,Note,"Total fees","Exchange To Amount","Transaction Type","Transaction Details Type"
+TRANSFER-2210887642,05-10-2026,"05-10-2026 09:14:22.108",41250.75,AUD,"Received money from Northwind Consulting with reference Final milestone","Final milestone",60203.80,,,,"Northwind Consulting",,,,,,,,0.00,,CREDIT,DEPOSIT
+TRANSFER-2210063120,02-10-2026,"02-10-2026 10:41:05.512",-2894.10,AUD,"Sent money to AUSTRALIAN TAXATION OFFICE","BAS Q1",18953.05,,,,,"AUSTRALIAN TAXATION OFFICE","(75556) 99012345678",,,,,,0.00,,DEBIT,TRANSFER
+TRANSFER-2210041188,01-10-2026,"01-10-2026 14:22:31.007",-156.80,AUD,"Sent money to Alex Morgan",reimbursements,21847.15,,,,,"Alex Morgan","1234567",,,,,,0.00,,DEBIT,TRANSFER
+TRANSFER-2210038775,01-10-2026,"01-10-2026 13:58:44.926",-19875.60,AUD,"Sent money to Alex Morgan",Pay,22003.95,,,,,"Alex Morgan","1234567",,,,,,0.00,,DEBIT,TRANSFER
+TRANSFER-2210035119,01-10-2026,"01-10-2026 11:20:18.344",-3120.45,AUD,"Sent money to SAMPLE SUPERANNUATION FUND",,41879.55,,,,,"SAMPLE SUPERANNUATION FUND","(78519) 5551234",,,,,,0.00,,DEBIT,TRANSFER

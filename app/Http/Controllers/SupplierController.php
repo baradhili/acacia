@@ -16,9 +16,15 @@ use Illuminate\Support\Facades\Validator;
  */
 class SupplierController extends Controller
 {
+    /**
+     * Alphabetical by name — the list is a lookup surface, not a
+     * recency feed.
+     */
     public function index()
     {
-        $suppliers = Supplier::withCount('documents')->paginate(15);
+        $suppliers = Supplier::withCount('documents')
+            ->orderBy('name')
+            ->paginate(15);
 
         return view('suppliers.index', compact('suppliers'));
     }

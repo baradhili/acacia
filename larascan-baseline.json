@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "generated_at": "2026-10-07T05:08:02+00:00",
+  "findings": [
+    {
+      "check": "dependencies.npm-audit",
+      "file": null,
+      "message": "concurrently >=9.2.3 — Vulnerability in concurrently",
+      "severity": "critical",
+      "count": 1
+    },
+    {
+      "check": "dependencies.npm-audit",
+      "file": null,
+      "message": "shell-quote 1.8.4 - 1.10.0 — shell-quote: `quote()` command injection via a line terminator in a token after a `{ comment }` token",
+      "severity": "critical",
+      "count": 1
+    }
+  ]
+}

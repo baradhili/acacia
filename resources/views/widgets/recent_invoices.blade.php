@@ -20,9 +20,21 @@
                     @foreach($invoices->take(5) as $invoice)
                     <tr class="border-t border-gray-100">
                         <td class="py-2">
-                            <a href="{{ route('invoices.show', $invoice['id']) }}" class="text-blue-600 hover:text-blue-800">
-                                {{ $invoice['invoice_number'] }}
-                            </a>
+                            @if ($invoice['status'] === \App\Models\Invoice::STATUS_PAID)
+                                <a href="{{ route('invoices.show', $invoice['id']) }}" class="text-green-700 hover:text-green-800 font-medium">
+                                    {{ $invoice['invoice_number'] }}
+                                </a>
+                                <span class="inline-flex align-middle text-green-600" title="{{ __('widgets.recent_invoices.paid') }}">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                    <span class="sr-only">{{ __('widgets.recent_invoices.paid') }}</span>
+                                </span>
+                            @else
+                                <a href="{{ route('invoices.show', $invoice['id']) }}" class="text-blue-600 hover:text-blue-800">
+                                    {{ $invoice['invoice_number'] }}
+                                </a>
+                            @endif
                         </td>
                         <td class="py-2">{{ $invoice['client_name'] }}</td>
                         <td class="py-2 text-right">${{ $invoice['total_formatted'] }}</td>

@@ -16,8 +16,6 @@ here once their changelog entry lands. Ordered by priority.
 
 - [ ] Ability to have multiple un-related company entities with separate everything on same system - do we do this by user associations or by landing domain? Justify why it cannot be one user to one or more entities?
 
-- [ ] 
-
 - [ ] Modules per company (builds on the multi-entity item above).
 
 - [ ] WAIT! - Lets think about client portal need for future - Remove the "client" role concept from the app — audit RoleSeeder's roles list, any `client` role checks/assignments and portal-client user handling; user accounts should be staff-side only (admin/accountant/staff). (Sep 2026, requested while making all users show as payroll payees — the payroll UserObserver currently skips client-role users defensively, so this unpays that workaround.)
@@ -30,14 +28,16 @@ here once their changelog entry lands. Ordered by priority.
 
 - [ ] CRM follow-ups from the Sep 2026 module: email/calendar integrations, per-owner targets.
 
-- [ ] Proposal management — flesh the Proposals module (Sep 2026 extraction of estimates) into a full proposal builder. Reference products: [ProposalForge](https://github.com/ICodingStack/ProposalForge) (smart builder, pricing packages, live preview, PDF export) and [propsly](https://github.com/Old-G/propsly) (block editor, e-signature, tracking). Queued pieces, roughly in build order:
+- [ ] Proposal management — flesh the Proposals module (Sep 2026 extraction of estimates) into a full proposal builder. Reference products: [ProposalForge](https://github.com/ICodingStack/ProposalForge) (smart builder, pricing packages, live preview, PDF export), [propsly](https://github.com/Old-G/propsly) (block editor, e-signature, tracking) and [laraestimate](https://github.com/TiagoSilvaPereira/laraestimate) (Oct 2026 review: client-togglable pricing on tokenised public links; Laravel 7 EOL full app, not a package — concepts only, nothing to vendor). Queued pieces, roughly in build order:
   
   - [ ] Structured proposal documents on top of the estimate lines: cover/intro, scope, deliverables and timeline sections; content variables (`{{client.name}}`, `{{estimate.total}}`, …) resolved at render time (propsly's variable model).
-  - [ ] Delay until CLient portal - Good/Better/Best pricing packages: present the existing optional lines as tiered packages the client chooses between, with a recommended tier (ProposalForge's Basic/Standard/Premium); the chosen package drives the invoice conversion.
-  - [ ] elay until CLient portal - Live split preview while editing: a client-facing preview pane updating in real time beside the form (ProposalForge's Live Split Preview; Alpine on the existing create/edit forms).
+  - [ ] Delay until Client portal - Good/Better/Best pricing packages: present the existing optional lines as tiered packages the client chooses between, with a recommended tier (ProposalForge's Basic/Standard/Premium); the chosen package drives the invoice conversion.
+  - [ ] Delay until Client portal - Live split preview while editing: a client-facing preview pane updating in real time beside the form (ProposalForge's Live Split Preview; Alpine on the existing create/edit forms).
   - [ ] Branded PDF export: one-click, print-ready, logo + accent colour (ProposalForge's 2×-DPI html2canvas/jsPDF approach vs the Resumes LuaLaTeX precedent).
-  - [ ] elay until CLient portal - Client acceptance portal: tokenised share link where the client reads the proposal, toggles optional lines with totals recalculating, and accepts with a typed/drawn e-signature that locks the document (propsly); the signature feeds the existing accepted state.
-  - [ ] elay until CLient portal - Engagement tracking on sent proposals: open/view notifications and per-section read analytics (propsly's tracking and engagement scores).
+  - [ ] Delay until Client portal - Client acceptance portal: tokenised share link where the client reads the proposal, toggles optional lines with totals recalculating, and accepts with a typed/drawn e-signature that locks the document (propsly); the signature feeds the existing accepted state. Oct 2026 laraestimate review: its whole read+toggle flow runs on a bare capability URL (UUID primary key, unauthenticated route, per-estimate `allows_to_select_items` switch + per-item `obligatory` flag — maps straight onto our optional lines), so this piece needs the client-portal go/no-go, not the portal itself; and when built, gate the link properly (optional password + expiry) — laraestimate has both as columns but never enforces them anywhere.
+  - [ ] Delay until Client portal - Engagement tracking on sent proposals: open/view notifications and per-section read analytics (propsly's tracking and engagement scores).
+
+- [ ] BankTransferService has no XFER reversal path: an internal transfer journal recorded wrong (wrong accounts or amount) can be unmatch-then-nothing — there is no mirror flow to undo it, only a hand-posted manual journal (the Oct 2026 310→320 consolidation was posted by hand for exactly this class of correction). A reverse() mirroring IfrsPosting::reverseTransaction, clearing any linked bank line's match with it, is the missing piece.
 
 - [ ] Larascan deploy-time residue — the scan is baseline-free as of Sep 2026 (every code finding fixed; the FK mass-assignment sweep made ownership explicit across 29 models). What's left only resolves at deploy: php.ini posture (`allow_url_fopen=Off`, `expose_php=Off`), and the localhost env infos (APP_URL, session-secure) clear with the production .env. The `verification.notice` signed-route finding is a known scanner false positive — revisit if larascan ever fixes its route heuristic.
 

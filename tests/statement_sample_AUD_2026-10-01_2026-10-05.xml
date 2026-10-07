@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.10">
+    <BkToCstmrStmt>
+        <GrpHdr>
+            <MsgId>SAMPLE-MSG-20261005-01</MsgId>
+            <CreDtTm>2026-10-05T08:01:32.500434477Z</CreDtTm>
+        </GrpHdr>
+        <Stmt>
+            <Id>SAMPLE-700254819-20261005</Id>
+            <CreDtTm>2026-10-05T08:01:32.500434477Z</CreDtTm>
+            <FrToDt>
+                <FrDtTm>2026-10-01T00:00:00+08:00</FrDtTm>
+                <ToDtTm>2026-10-06T00:00:00+08:00</ToDtTm>
+            </FrToDt>
+            <Acct>
+                <Id>
+                                <Othr>
+                                    <Id>700254819</Id>
+                                    <SchmeNm>
+                                            <Cd>BBAN</Cd>
+                                    </SchmeNm>
+                                    <Issr>Wise Australia Pty Ltd.</Issr>
+                                </Othr>
+                </Id>
+                <Ccy>AUD</Ccy>
+                <Ownr>
+                    <Nm>Sample Trading Pty Ltd</Nm>
+                    <PstlAdr><AdrTp><Cd>ADDR</Cd></AdrTp><PstCd>6000</PstCd><TwnNm>PERTH</TwnNm><CtrySubDvsn>WA</CtrySubDvsn><AdrLine>42 Example Street</AdrLine></PstlAdr>
+                    <Id>
+                            <OrgId>
+                                <Othr>
+                                    <Id>12345678901</Id>
+                                    <SchmeNm>
+                                        <Cd>COID</Cd>
+                                    </SchmeNm>
+                                </Othr>
+                            </OrgId>
+                    </Id>
+                </Ownr>
+                <Svcr>
+                    <FinInstnId>
+                        <Nm>Wise Australia Pty Ltd.</Nm>
+                        <PstlAdr><AdrTp><Cd>ADDR</Cd></AdrTp><PstCd>NSW 2000</PstCd><TwnNm>Sydney</TwnNm><AdrLine>Level 3, 100 Market Street</AdrLine></PstlAdr>
+                    </FinInstnId>
+                </Svcr>
+            </Acct>
+            <Bal>
+                <Tp>
+                    <CdOrPrtry>
+                        <Cd>CLBD</Cd>
+                    </CdOrPrtry>
+                </Tp>
+                <Amt Ccy="AUD">60203.80</Amt>
+                <CdtDbtInd>CRDT</CdtDbtInd>
+                <Dt>
+                    <DtTm>2026-10-06T00:00:00+08:00</DtTm>
+                </Dt>
+            </Bal>
+            <Bal>
+                <Tp>
+                    <CdOrPrtry>
+                        <Cd>OPBD</Cd>
+                    </CdOrPrtry>
+                </Tp>
+                <Amt Ccy="AUD">45000.00</Amt>
+                <CdtDbtInd>CRDT</CdtDbtInd>
+                <Dt>
+                    <DtTm>2026-10-01T00:00:00+08:00</DtTm>
+                </Dt>
+            </Bal>
+            <TxsSummry>
+                <TtlNtries>
+                    <NbOfNtries>5</NbOfNtries>
+                    <Sum>15203.80</Sum>
+                    <TtlNetNtry>
+                        <Amt>15203.80</Amt>
+                        <CdtDbtInd>CRDT</CdtDbtInd>
+                    </TtlNetNtry>
+                </TtlNtries>
+                <TtlCdtNtries>
+                    <NbOfNtries>1</NbOfNtries>
+                    <Sum>41250.75</Sum>
+                </TtlCdtNtries>
+                <TtlDbtNtries>
+                    <NbOfNtries>4</NbOfNtries>
+                    <Sum>-26046.95</Sum>
+                </TtlDbtNtries>
+            </TxsSummry>
+            <Ntry>
+                <NtryRef>Final milestone</NtryRef>
+                <Amt Ccy="AUD">41250.75</Amt>
+                <CdtDbtInd>CRDT</CdtDbtInd>
+                <Sts>
+                    <Cd>BOOK</Cd>
+                </Sts>
+                <BookgDt>
+                    <DtTm>2026-10-05T09:14:22.108457+08:00</DtTm>
+                </BookgDt>
+                <BkTxCd>
+                    <Prtry>
+                        <Cd>TRANSFER-2210887642</Cd>
+                    </Prtry>
+                </BkTxCd>
+                <AddtlNtryInf>Received money from Northwind Consulting with reference Final milestone</AddtlNtryInf>
+            </Ntry>
+            <Ntry>
+                <NtryRef>BAS Q1</NtryRef>
+                <Amt Ccy="AUD">2894.10</Amt>
+                <CdtDbtInd>DBIT</CdtDbtInd>
+                <Sts>
+                    <Cd>BOOK</Cd>
+                </Sts>
+                <BookgDt>
+                    <DtTm>2026-10-02T10:41:05.512532+08:00</DtTm>
+                </BookgDt>
+                <BkTxCd>
+                    <Prtry>
+                        <Cd>TRANSFER-2210063120</Cd>
+                    </Prtry>
+                </BkTxCd>
+                    <NtryDtls>
+                        <TxDtls>
+                            <RltdPties>
+                                    <Cdtr>
+                                        <Pty>
+                                            <Nm>AUSTRALIAN TAXATION OFFICE</Nm>
+                                        </Pty>
+                                    </Cdtr>
+                                        <CdtrAcct>
+                                            <Id>
+                                                <Othr>
+                                                    <Id>(75556) 99012345678</Id>
+                                                </Othr>
+                                            </Id>
+                                        </CdtrAcct>
+                            </RltdPties>
+                        </TxDtls>
+                    </NtryDtls>
+                <AddtlNtryInf>Sent money to AUSTRALIAN TAXATION OFFICE</AddtlNtryInf>
+            </Ntry>
+            <Ntry>
+                <NtryRef>reimbursements</NtryRef>
+                <Amt Ccy="AUD">156.80</Amt>
+                <CdtDbtInd>DBIT</CdtDbtInd>
+                <Sts>
+                    <Cd>BOOK</Cd>
+                </Sts>
+                <BookgDt>
+                    <DtTm>2026-10-01T14:22:31.007599+08:00</DtTm>
+                </BookgDt>
+                <BkTxCd>
+                    <Prtry>
+                        <Cd>TRANSFER-2210041188</Cd>
+                    </Prtry>
+                </BkTxCd>
+                    <NtryDtls>
+                        <TxDtls>
+                            <RltdPties>
+                                    <Cdtr>
+                                        <Pty>
+                                            <Nm>Alex Morgan</Nm>
+                                        </Pty>
+                                    </Cdtr>
+                                        <CdtrAcct>
+                                            <Id>
+                                                <Othr>
+                                                    <Id>1234567</Id>
+                                                </Othr>
+                                            </Id>
+                                        </CdtrAcct>
+                            </RltdPties>
+                        </TxDtls>
+                    </NtryDtls>
+                <AddtlNtryInf>Sent money to Alex Morgan</AddtlNtryInf>
+            </Ntry>
+            <Ntry>
+                <NtryRef>Pay</NtryRef>
+                <Amt Ccy="AUD">19875.60</Amt>
+                <CdtDbtInd>DBIT</CdtDbtInd>
+                <Sts>
+                    <Cd>BOOK</Cd>
+                </Sts>
+                <BookgDt>
+                    <DtTm>2026-10-01T13:58:44.926828+08:00</DtTm>
+                </BookgDt>
+                <BkTxCd>
+                    <Prtry>
+                        <Cd>TRANSFER-2210038775</Cd>
+                    </Prtry>
+                </BkTxCd>
+                    <NtryDtls>
+                        <TxDtls>
+                            <RltdPties>
+                                    <Cdtr>
+                                        <Pty>
+                                            <Nm>Alex Morgan</Nm>
+                                        </Pty>
+                                    </Cdtr>
+                                        <CdtrAcct>
+                                            <Id>
+                                                <Othr>
+                                                    <Id>1234567</Id>
+                                                </Othr>
+                                            </Id>
+                                        </CdtrAcct>
+                            </RltdPties>
+                        </TxDtls>
+                    </NtryDtls>
+                <AddtlNtryInf>Sent money to Alex Morgan</AddtlNtryInf>
+            </Ntry>
+            <Ntry>
+                <Amt Ccy="AUD">3120.45</Amt>
+                <CdtDbtInd>DBIT</CdtDbtInd>
+                <Sts>
+                    <Cd>BOOK</Cd>
+                </Sts>
+                <BookgDt>
+                    <DtTm>2026-10-01T11:20:18.344702+08:00</DtTm>
+                </BookgDt>
+                <BkTxCd>
+                    <Prtry>
+                        <Cd>TRANSFER-2210035119</Cd>
+                    </Prtry>
+                </BkTxCd>
+                    <NtryDtls>
+                        <TxDtls>
+                            <RltdPties>
+                                    <Cdtr>
+                                        <Pty>
+                                            <Nm>SAMPLE SUPERANNUATION FUND</Nm>
+                                        </Pty>
+                                    </Cdtr>
+                                        <CdtrAcct>
+                                            <Id>
+                                                <Othr>
+                                                    <Id>(78519) 5551234</Id>
+                                                </Othr>
+                                            </Id>
+                                        </CdtrAcct>
+                            </RltdPties>
+                        </TxDtls>
+                    </NtryDtls>
+                <AddtlNtryInf>Sent money to SAMPLE SUPERANNUATION FUND</AddtlNtryInf>
+            </Ntry>
+        </Stmt>
+    </BkToCstmrStmt>
+</Document>

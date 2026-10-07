@@ -3,6 +3,308 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] — 2026-10-06
+
+### Added — the Transaction Ledger Register: every posting, where it went, and its documents
+
+An admin-only audit view over the whole books: one row per posted
+ledger leg — the transaction's reference first, then date, type, the
+account the leg posted to, the debit/credit split and narration —
+with links to the attached documents and a CSV export carrying the
+same rows (documents as name + download URL). Documents resolve two
+hops: the record whose number the reference carries (payments, bill
+payments, reimbursement payments, invoices, bills, purchase orders)
+and, through the allocation tables, everything a payment settled —
+an invoice's or bill's PDF surfaces on the payment that paid it, so
+a supplier-payment row shows the bills' documents (live: 62 legs
+linked documents before the hop, 290 after). The debit and credit
+columns each total the movement and must agree with each other.
+Blank date filters mean all time. Route, nav item and CSV export
+are role-gated to admin.
+
+### Fixed — the HSBC account joined the books; the transfers reclassified to what they always were
+
+The 69,560.89 "Final bus transfer" was never funds introduced — it
+was the business's own money moving from HSBC Australia (89,560.89 at
+1 July), a second business bank the books never tracked, into Wise;
+four ignored $5,000 lines (31 Jul – 10 Aug) were the same shuffle
+(89,560.89 − 20,000 − 69,560.89 = 0 — the final transfer emptied
+HSBC). The books now tell that story: 330 joined the chart as HSBC
+Australia with its true 30 June opening of 89,560.89; the Wise
+opening corrected from the fictional 119,805.00 to the real
+30,244.11 (total opening bank unchanged at 119,805.00 — the equity
+backing never moved, because the money existed all along, just in
+the unlisted account); XFER-30 reclassified from Funds Introduced to
+an internal transfer (Dr 3500 / Cr HSBC, JN01/0096 — Funds
+Introduced returns to zero); the four $5,000 lines restored from
+ignored and recorded as HSBC→Wise internal transfers, matched to
+their feed lines; and the superseded 310 zeroed by a correction in
+the consolidation family (JN01/0101). Every cash view now shows the
+truth: the 69,560.89 is gone from the cash flow card's inflows
+(83,201.53 → 13,640.64), from Financing in the cash flow statement
+(69,560.89 → 0.00), and from the P&L — internal transfers net to
+nothing everywhere, exactly as they should. The cash check's gap
+shrank from −97,416.65 to −27,855.76 — the remainder is Wise's real
+opening the imported feed history never sees. The FY2026 opening row
+(119,805.00 at 30 June 2025) was left as lodged — restating a closed
+year is a separate decision.
+
+### Fixed — the books' bank movements consolidated onto the one real account
+
+The real bank is the Wise account, but the books had drifted into a
+fictional split: every payment-driven posting path targets code 320
+("Operating"), while the chart's "Wise Business Account" (310) carried
+the opening balances and the match-screen records. One consolidation
+journal (XFER-CONSOLIDATE-310, an internal pair every cash view
+excludes) folded 310's 185,538.69 onto 320; 320 now wears the Wise
+name and holds the total (195,601.00), 310 is zeroed and marked
+superseded, and no posting path changes — future payments, payroll
+and settlements all land on the one real account. XFER-30 keeps its
+funds-introduced classification (the statement shows the money
+arriving from Bret Watson personally, outside the books' banks). The
+consolidation's two legs appear as a net-zero pair in the
+unreconciled panel — the per-leg transfer rule listing both sides of
+an internal move — and the missing XFER reversal path is queued so
+future corrections need no hand-posted journal.
+
+### Added — bank interest and fees from the match screen
+
+The bank's own charges had no book path: an interest credit or a fee
+debit on the statement could only be shoehorned through the transfer
+card as Funds Introduced/Withdrawn equity — the wrong class for
+income and expense. The match screen now offers "Record as bank
+interest earned" for money-in lines (Dr bank / Cr interest income,
+the seeded 4510) and "Record as bank fees" for money-out lines (Dr
+bank fees / Cr bank, the account lazily created on existing charts),
+dated the line's own date with the period-lock guards and matched to
+the journal's bank leg. Idempotent re-record after an unmatch, the
+settled guard conventions, and — one cash source — the families
+classify by their counterpart accounts everywhere: interest lands as
+revenue and fees as expenses in the cash flow card, the P&L trend
+and the company tax report alike.
+
+### Added — payroll liability refunds from the match screen
+
+Money coming back from the ATO or a super fund — an over-remitted
+instalment returned — had no book path: the transfer card's only
+answer was Funds Introduced equity, the wrong class for a tax refund.
+The match screen's payroll card now covers money-in lines with its
+mirror action: Dr bank / Cr the payroll payable, dated the line's own
+date with the usual period-lock guards, matching the line to the
+journal's bank leg and restoring the liability. Same guards and
+idempotent re-record as the settlement path (a crafted account id
+outside the configured payables refuses; re-recording after an
+unmatch re-matches the one true journal, whichever direction it was
+posted in), and the refund nets inside the payroll bank families the
+cash flow card and P&L trend already read.
+
+### Fixed — the cash flow statement's tables had no column headers
+
+Each activity table (operating, investing, financing) now carries a
+labelled header row — Activity and Amount, right-aligned to match the
+figures — instead of bare two-column rows. Internal bank-to-bank
+transfers are regression-tested to move no net cash: the indirect
+statement reads revenue, expense, working-capital, non-current and
+equity accounts only, so a transfer between the books' own bank
+accounts touches nothing it reads (verified live: the report's net
+cash ties to the bank ledger movement to the cent).
+
+### Changed — one cash source everywhere: the P&L trend and the company tax report read the bank ledger
+
+The P&L trend and the company tax report's Item 6/7 now read the
+same source as the cash flow card — the bank accounts' ledger legs —
+instead of the payment subledgers, so every cash figure in the app
+agrees by construction: an unposted payment row can no longer appear
+in one view and not another, and journal-settled receipts (GST-repair
+rounds, manual journals) count everywhere they actually moved money.
+Families net per reference across reversals; each family is
+classified by what its counterpart legs post to — revenue accounts
+make revenue, expense accounts make expenses, employee reimbursements
+and the payroll bank families (net pay, super and PAYG-withholding
+settlements) make expenses, and funds movements, GST and income-tax
+settlements, dividends and capital purchases move cash without being
+P&L. On the company tax report this lands the cash paid on payroll on
+the salary labels (net pay and withholding settlements on the wages
+label, super settlements on the superannuation label — its stale "no
+payroll ledger" note replaced), closing the blind spot where
+salaries never reached Item 6; the movement filter switched from
+"transaction's main account is a bank" to "any leg on a bank", the
+V05/V06 bank-flow cross-checks now read the same netted families (an
+abandoned settle/reverse round no longer counts as flow on both
+sides), and V11/V12's wording follows.
+
+### Fixed — the cash flow card now reads the bank accounts' own ledger
+
+The dashboard's Cash Flow card built its flows from the payment
+subledgers, so every movement that settles through a journal was
+invisible to it: the BAS payment to the ATO, super and PAYG
+settlements, dividends, funds introduced or withdrawn — money that
+really left or arrived, not showing. The card now reads the bank
+accounts' ledger legs directly — every posted movement that actually
+hit the bank, whatever posted it — and keeps the same numbers the
+subledgers produced for the flows they could see (regression-tested
+to the cent). Internal transfers between the books' own bank
+accounts move no total cash and are excluded on both sides (a
+transfer against an external account keeps its one bank leg — the
+money genuinely arrived or left), and a reference family nets across
+its reversals so an abandoned settle/reverse round contributes
+nothing instead of inflating both flows.
+
+### Fixed — the P&L trend ignored payroll and reimbursements
+
+The dashboard's P&L trend built its expense side from the supplier
+payment subledger alone, so the dominant cost of a professional
+services firm never appeared: payroll posts its journals against
+liabilities and no bank-settled expense figure can see it. The trend
+now counts the cash actually paid on payroll — the bank legs of the
+net-pay journals (PAYROLL-*-PAY) and the super / PAYG-withholding
+settlements (PAYSET-*, BAS-SETT-PAYG-*), in the month the money left
+the bank, with abandoned settle/reverse rounds netting to nothing —
+plus employee reimbursements in their payment month. Accrued but
+unpaid withholding stays out until it settles, keeping the trend
+strictly cash-basis like its revenue side. (The company tax report's
+Item 6 has the same structural blind spot for payroll salaries — its
+bank-settled filter cannot see the accrual journals — flagged
+separately for its own fix.)
+
+### Changed — the recent invoices widget marks paid invoices
+
+Paid invoices on the dashboard's Recent Invoices widget now show a
+green tick beside their number, with the number link itself in green
+— the working queue reads at a glance which rows are done, the way
+the invoices screen's green Paid pill already signals it.
+
+### Fixed — BAS payments could not be reconciled: one bank line, two book legs
+
+A BAS settlement posted its bank movement as two journals — the
+clearing journal at the exact net plus a sub-$2 rounding journal —
+while the bank only ever sees the one lodged whole-dollar payment
+(the exact case: a 3,606.00 ATO payment against −3,606.64 and +0.64
+book legs). No single book movement equalled the statement line, and
+the cents leg could never be claimed by anything, so the gap never
+closed. Paying settlements now fold the rounding into the clearing
+journal: the tax accounts still clear at their exact balances, GST
+Rounding still absorbs the sub-$2 difference, and the bank moves
+exactly the lodged figure in one leg — the movement the statement
+line matches one-to-one. (Refunds keep the second rounding journal:
+their rounding credit cannot sit among a refund's debit legs.)
+
+The unreconciled-movements panel also nets a posting and its
+reversal again: reversal flows append "-REV" to the reference (BAS
+settlements, payroll runs), which broke the shared-reference netting
+the panel documents — abandoned settle/reverse rounds stayed listed
+as both sides forever. The netting strips the suffix, so dead pairs
+drop out. Existing settlements posted in the old shape reverse and
+re-settle into the new one through the screens.
+
+### Added — statement balances anchor the bank-vs-books cash check
+
+The MT940 and camt.053 imports now capture what those formats
+actually carry and the CSV does not: the statement header and its
+opening/closing balances, stored per statement id (re-importing
+refreshes the anchor instead of duplicating it; the Wise CSV
+layouts carry no balances and store nothing). The cash check's
+actual side is no longer forced to the running sum of imported
+lines — it is the latest stored closing balance plus every imported
+line dated after it, exact however shallow the line history: a feed
+that starts after the account opened, or whose older lines were
+never imported, no longer understates the bank. Each feed row on
+the screen now states its basis ("MT940 statement balance, closed
+05 Oct 2026, + 2 later lines", or an amber "running sum of imported
+lines — no statement balances imported"), so a feed-history gap is
+visible instead of baked into the figure, and a currency known only
+from a statement still lists — the closing balance is the actual
+side even when every line deduped away. The gap's residual absorbs
+the feed-history correction, which is what it was for.
+
+### Changed — reconciliation copy through the translator, format-neutral
+
+The index screen's intro and empty-state strings still said a CSV
+export and were hard-coded; both now read for any of the three
+formats and live in the translator with the rest of the screen's
+strings (the cash-check caveat and no-feed lines were reworded for
+the balance basis in the same pass).
+
+## [Unreleased] — 2026-10-05
+
+### Added — multi-format bank statement import (Wise CSV, MT940, camt.053)
+
+The reconciliation import screen now takes any Wise statement
+download of an account, not just CSV. The format is detected from
+the file's content and handed to the right parser: the two CSV
+layouts unchanged, a new MT940 parser for the SWIFT statement Wise
+emits (TRANSFER ids riding on the :61: continuation lines, currency
+taken from the :60F: opening balance), and a camt.053 parser for the
+ISO 20022 XML report (namespace-agnostic across camt revisions so
+old and new bank exports both parse, booked entries only, the
+counterparty from the transaction details with Wise's "Received
+money from … / Sent money to …" prose as fallback). All three
+formats are exports of the same movements, so every row keeps
+source "wise" and the TRANSFER-… id as its identity: importing the
+same period in a second format skips as duplicates instead of
+duplicating. The feed's invariants carry over unchanged — debits
+store negative, zero-amount and undated rows are skipped. The
+upload accepts .csv/.txt/.xml/.mt940/.camt/.sta (the extension pins
+the family; those suffixes have no MIME type to guess), the touched
+screen strings moved into the translator, and three consistently
+faked fixtures (CSV, MT940 and XML of one sample period) cover
+detection, per-format field mapping and the cross-format dedupe.
+
+### Added — payroll liability settlements from the match screen
+
+The payments that leave the bank after a pay run — the super
+contribution to the fund, the PAYG withholding to the ATO — had no
+book movement to reconcile against: the run's PAYROLL-*-SUP/ACC
+journals credit the payables but never touch the bank, so their bank
+lines could never be matched (and super payable had no settlement
+path anywhere — PAYG had only the whole-quarter BAS settlement). The
+match screen now offers "Record as a payroll liability payment" for
+money-out lines: it posts Dr PAYG withholding / super payable
+(the payroll module's configured statutory accounts — wages payable
+is deliberately excluded, the run's PAY journal already records the
+net leaving the bank) / Cr bank, dated the bank line's own date with
+the usual period-lock guards, and matches the line to the journal's
+bank leg — the liability and the bank-vs-books gap close together.
+One line, one journal (re-recording after an unmatch re-matches,
+never double-posts), a crafted account id outside the configured
+payables refuses, and a combined BAS payment still belongs on the BAS
+settlement screen, whose balance-based position simply settles less
+afterward — the two paths cannot double-clear.
+
+### Fixed — Account Schedule showed other accounts' amounts, and missed main-account legs
+
+The IFRS Account Schedule was built from line items, not the ledger,
+in two breaking ways. It summed every line item of each listed
+transaction, so one account's schedule carried the other accounts'
+legs — a payroll accrual (Dr wages expense / Cr PAYG withholding /
+Cr wages payable) showed the whole item side (net wages plus
+withholding, super included when the super journal landed the same
+way) on the PAYG schedule, where only the withholding belongs. And a
+journal's main-account leg is never a line item, so transactions
+where the scheduled account was only the main account were missed
+entirely while every card's balancing debit side was invisible. The
+schedule is now ledger-based and scoped to the account's own
+movement, like its account-statement twin: each card carries the
+account's own debit/credit in that transaction, the summary totals
+and net movement are the account's own, and the card's line-items
+table shows every posted leg — the package posts each line item as
+its own main/item pair, so the main account now appears beside every
+leg it balances. (Two transactions on Wages Payable for a pay run
+remains correct: the accrual credit and the net-pay debit net to
+zero.)
+
+### Fixed — suppliers index ordered by name
+
+The suppliers list arrived in insertion order; it is alphabetical by
+name now — the list is a lookup surface, not a recency feed.
+
+### Fixed — README drift in the reconciliation sections
+
+The Bank Reconciliation section still advertised the removed Wise
+API sync (`reconcile:wise`) and the auto-create behaviours retired
+Sep 2026, and the automation list's cron inventory carried the same
+removed sync. Both now describe what ships.
+
 ## [Unreleased] — 2026-10-04
 
 ### Added — bank transfers and external funds movements, from the match screen

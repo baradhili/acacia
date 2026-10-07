@@ -111,6 +111,7 @@ return [
         'empty' => 'No recent invoices',
         'invoice' => 'Invoice',
         'due' => 'Due',
+        'paid' => 'Paid',
     ],
 
     'recent_payments' => [
