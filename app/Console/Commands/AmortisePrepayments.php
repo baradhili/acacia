@@ -6,6 +6,7 @@ use App\Models\Prepayment;
 use App\Services\PrepaymentService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Post the monthly amortisation entries for prepaid service contracts
@@ -39,6 +40,7 @@ class AmortisePrepayments extends Command
         $prepayments = $query->get();
         if ($prepayments->isEmpty()) {
             $this->info('No prepayments are due for amortisation.');
+
             return Command::SUCCESS;
         }
 
@@ -60,7 +62,7 @@ class AmortisePrepayments extends Command
             } catch (\Throwable $e) {
                 $failed++;
                 $this->error("FAILED {$label} — {$e->getMessage()}");
-                \Illuminate\Support\Facades\Log::error('Prepayment amortisation failed', [
+                Log::error('Prepayment amortisation failed', [
                     'prepayment_id' => $prepayment->id,
                     'error' => $e->getMessage(),
                     'exception' => get_class($e),

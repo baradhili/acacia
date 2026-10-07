@@ -211,11 +211,9 @@ Running Acacia in a production environment and need guaranteed response times, c
 
 ### Bank Reconciliation — Wise
 
-- **CSV Import:** Upload Wise statement, auto-match to IFRS transactions
-- **API Sync:** Scheduled daily pull via `reconcile:wise` command
-- Match logic: reference → amount + date (tolerance window)
-- Auto-create missing cash receipts (credit) or purchases (debit)
-- One-click link to existing IFRS transaction
+- **Statement Import:** Upload a Wise statement — CSV export (both layouts), MT940 or camt.053 XML; the format is detected automatically, and the same period imported in two formats dedupes instead of duplicating. MT940/camt.053 statement balances anchor the cash check's actual side exactly
+- Match logic: reference → amount + date (tolerance window), plus learned counterparty rules
+- One-click link to existing IFRS transaction; record transfers / funds movements and payroll liability settlements (super, PAYG withholding) from the match screen
 - "Ignore" action for non-business transactions
 - Reconciliation dashboard with matched/unmatched counts
 - Multi-currency Wise balances supported
@@ -252,7 +250,7 @@ Built on IFRS reports, extended with project/PO reports. The IFRS statements and
 
 ### Automation
 
-- Daily cron: Wise API sync, overdue invoice detection, recurring invoices, prepayment amortisation
+- Daily cron: overdue invoice detection, recurring invoices, prepayment amortisation
 - Email notifications: invoice sent/viewed, payment received, PO budget threshold, overdue reminders
 - Scheduled monthly client statements
 - Optional webhooks for invoice paid / payment received

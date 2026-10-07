@@ -36,7 +36,7 @@ class CloseFiscalYear extends Command
         if ($periods->isEmpty()) {
             $this->info("No periods found for year {$year}. Creating monthly periods...");
 
-            if (!$dryRun) {
+            if (! $dryRun) {
                 $periods = collect(FiscalPeriod::createMonthlyPeriodsForYear($year, $startMonth));
             }
         }

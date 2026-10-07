@@ -344,11 +344,17 @@ class BasSettlementService
      * the ATO rounds down and owed BY the ATO rounds up, and the net
      * is those rounded labels subtracted — the arithmetic the BAS
      * form itself performs, matching the lodged payment to the cent.
-     * The ATO carries nothing over, so the clearing journal still
-     * clears the tax accounts at their exact ledger balances and a
-     * second, sub-$2 rounding journal moves the difference between
-     * the exact and rounded nets into GST Rounding — the cents never
-     * linger on the tax accounts.
+     * The ATO carries nothing over, so the clearing journal clears
+     * the tax accounts at their exact ledger balances, moves the bank
+     * at the ROUNDED net — the figure actually lodged, in one leg —
+     * and credits GST Rounding with the sub-$2 difference between the
+     * exact and rounded nets: the cents never linger on the tax
+     * accounts, and the bank movement equals the statement line the
+     * reconciliation will match against. A refund keeps its rounding
+     * as the second, sub-$2 journal (its rounding credit cannot sit
+     * among a refund's debit legs); an exact-offset boundary flip of
+     * under a dollar nets into rounding — the next settlement
+     * self-corrects, cents never lodge alone.
      *
      * @param  array{as_at: mixed, settled_at: mixed, type?: string, reference?: ?string, notes?: ?string}  $data
      */
@@ -407,33 +413,44 @@ class BasSettlementService
             // The clearing journal follows the ledger's own net — the
             // rounded labels can flip its sign at a boundary, and the
             // journal's shape must stay coherent with the exact
-            // balances it clears. The rounding journal then moves the
-            // bank to the rounded figure, and the record documents
-            // the lodged labels and their net.
+            // balances it clears. The record documents the lodged
+            // labels and their net.
             $journalDirection = $netRaw >= 0 ? BasSettlement::DIRECTION_PAY : BasSettlement::DIRECTION_REFUND;
             $direction = $net >= 0 ? BasSettlement::DIRECTION_PAY : BasSettlement::DIRECTION_REFUND;
 
-            // The clearing journal at the ledger's exact balances —
-            // the tax accounts clear in full, never carrying cents.
+            // One journal, one bank leg at the lodged figure when
+            // paying: the tax accounts clear in full at their exact
+            // balances, GST Rounding absorbs the sub-$2 difference,
+            // and the bank movement equals what the statement line
+            // will show. A refund cannot fold its rounding in (the
+            // journal shape posts every line item opposite the main
+            // account, and a refund's rounding credit would have to
+            // sit among debit legs), so it keeps the second, sub-$2
+            // rounding journal beside its clearing journal.
+            $rounding = round(abs($netRaw - $net), 2);
+            $roundingJournal = $rounding >= 0.005 && $journalDirection === BasSettlement::DIRECTION_REFUND
+                ? $this->postRoundingJournal($entity, $rounding, $settledAt, $asAt, $type)
+                : null;
+
             $journal = $this->postSettlementJournal(
                 $entity,
                 $accounts,
                 $payableRaw,
                 $receivableRaw,
                 $netRaw,
+                $net,
                 $journalDirection,
                 $settledAt,
                 $asAt,
                 $type,
             );
 
-            // The rounding adjustment when the rounded net differs
-            // from the exact one: the bank moves |$net| across both
-            // journals combined.
-            $rounding = round(abs($netRaw - $net), 2);
-            $roundingJournal = $rounding >= 0.005
-                ? $this->postRoundingJournal($entity, $rounding, $direction, $settledAt, $asAt, $type)
-                : null;
+            // The bank movement actually posted: the pay shape omits the
+            // bank leg entirely on the sub-dollar boundary flip (labels
+            // refund, ledger pays — the figure nets into rounding), so
+            // the record shows no bank movement rather than a refund
+            // that never touched the bank.
+            $bankAmount = $journalDirection === BasSettlement::DIRECTION_PAY && $net < 0 ? 0.0 : abs($net);
 
             $settlement = BasSettlement::create([
                 'entity_id' => $entity->id,
@@ -443,7 +460,7 @@ class BasSettlementService
                 'gst_payable' => $payable,
                 'gst_receivable' => $receivable,
                 'net_amount' => $net,
-                'bank_amount' => abs($net),
+                'bank_amount' => $bankAmount,
                 'direction' => $direction,
                 'ifrs_transaction_id' => $journal->id,
                 'ifrs_rounding_transaction_id' => $roundingJournal?->id,
@@ -451,7 +468,7 @@ class BasSettlementService
                 'notes' => $data['notes'] ?? null,
             ]);
 
-            if (in_array($type, BasSettlement::INCOME_TAX_TYPES, true) && abs($net) >= 0.005
+            if (in_array($type, BasSettlement::INCOME_TAX_TYPES, true) && abs($net) >= 0.005 && $bankAmount >= 0.005
                 && class_exists(FrankingAccountEntry::class)) {
                 $this->recordFrankingEntry($settlement, $journal, $entity);
             }
@@ -634,11 +651,19 @@ class BasSettlementService
     }
 
     /**
-     * Post the clearing journal — the DividendService::postJournal
-     * recipe with two lines: the main account takes one side alone
-     * (pay: Dr the payable; refund: Cr the receivable — the same
-     * account for the single-liability types) and the remaining
-     * clearing/bank legs take the other.
+     * Post the clearing journal — one journal, one bank leg: the main
+     * account takes one side alone (pay: Dr the payable; refund: Cr the
+     * receivable — the same account for the single-liability types) and
+     * the remaining legs take the other — clear the other tax account
+     * at its exact balance, move the bank at the ROUNDED net (the
+     * lodged figure the statement line will reconcile against, exactly
+     * and alone), and credit GST Rounding with the sub-$2 difference
+     * between the exact and rounded nets. Zero legs drop out (an exact
+     * offset posts no bank movement; whole-dollar figures post no
+     * rounding). The conservative pair makes the rounded net always at
+     * most the exact one, so the rounding credit is always >= 0 — on
+     * the sub-dollar boundary flip (labels refund, ledger pays) the
+     * difference simply nets into rounding instead of the bank.
      *
      * @param  array{payable: ?Account, receivable: ?Account}  $accounts
      */
@@ -647,7 +672,8 @@ class BasSettlementService
         array $accounts,
         float $payable,
         float $receivable,
-        float $net,
+        float $exactNet,
+        float $roundedNet,
         string $direction,
         Carbon $settledAt,
         Carbon $asAt,
@@ -664,22 +690,36 @@ class BasSettlementService
             ? [$accounts['payable'], false]
             : [$accounts['receivable'], true];
 
-        // The opposite-side legs: clear the other GST account and move
-        // the net amount to/from the bank. Zero legs drop out (e.g. an
-        // exact offset posts no bank movement).
+        // The opposite-side legs. Line items post opposite the main
+        // account, so a pay-direction label refund (the boundary flip)
+        // cannot carry a debit bank item — its sub-dollar figure nets
+        // into the rounding credit instead. Paying folds the rounding
+        // in (all legs are credits beside a debited main); a refund
+        // keeps the bank at its exact figure and posts its rounding
+        // credit as the separate sub-$2 journal.
         $legs = [];
         if ($direction === BasSettlement::DIRECTION_PAY) {
             if ($receivable > 0 && $accounts['receivable']) {
                 $legs[] = [$accounts['receivable'], $receivable];
             }
-            if ($net > 0) {
-                $legs[] = [$bank, $net];
+            if ($roundedNet > 0) {
+                $legs[] = [$bank, $roundedNet];
+            }
+
+            // Rounding derives from the bank movement actually posted:
+            // on the sub-dollar boundary flip the label refund posts no
+            // bank leg, and deriving from the negative rounded net
+            // would credit rounding with money that never left — an
+            // unbalanced journal and an over-cleared payable.
+            $rounding = round($exactNet - max($roundedNet, 0.0), 2);
+            if ($rounding >= 0.005) {
+                $legs[] = [$this->ensureRoundingAccount($entity), $rounding];
             }
         } else {
             if ($payable > 0 && $accounts['payable']) {
                 $legs[] = [$accounts['payable'], $payable];
             }
-            $legs[] = [$bank, abs($net)];
+            $legs[] = [$bank, abs($exactNet)];
         }
 
         IfrsPosting::ensureReportingPeriod($settledAt, $entity);
@@ -715,19 +755,20 @@ class BasSettlementService
     }
 
     /**
-     * The rounding adjustment beside the clearing journal: the tax
-     * accounts cleared at their exact balances and the clearing
-     * journal moved the bank at that exact net, but the bank must
-     * move the whole-dollar BAS net — which under the conservative
-     * pair (owed-to down, owed-by up) is always at most the exact
-     * one. The sub-$2 difference therefore always tops the bank back
+     * The refund-only rounding adjustment beside the clearing journal:
+     * the tax accounts cleared at their exact balances and the clearing
+     * journal moved the bank at that exact net, but the bank must move
+     * the whole-dollar BAS net — which under the conservative pair
+     * (owed-to down, owed-by up) is always at least the exact one on a
+     * refund. The sub-$2 difference therefore always tops the bank back
      * up to the rounded figure and credits GST Rounding: Dr Bank /
-     * Cr Rounding, both directions.
+     * Cr Rounding. (Paying folds this into its clearing journal — one
+     * bank leg at the lodged figure; a refund's rounding credit cannot
+     * sit among its debit legs.)
      */
     protected function postRoundingJournal(
         Entity $entity,
         float $rounding,
-        string $direction,
         Carbon $settledAt,
         Carbon $asAt,
         string $type,

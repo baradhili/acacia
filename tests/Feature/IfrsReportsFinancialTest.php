@@ -233,6 +233,59 @@ class IfrsReportsFinancialTest extends TestCase
         $response->assertSee('Net Cash Movement');
     }
 
+    public function test_cash_flow_columns_are_labelled(): void
+    {
+        $this->postExpense(110);
+
+        $this->get(route('reports.cash-flow'))
+            ->assertStatus(200)
+            ->assertSee(__('reports.cash_flow.activity'))
+            ->assertSee(__('reports.cash_flow.amount'));
+    }
+
+    public function test_an_internal_bank_transfer_never_moves_net_cash(): void
+    {
+        // Two of the books' own bank accounts: shuffling between them
+        // is not cash flow, and the indirect statement must prove it —
+        // the transfer touches only bank accounts, which no section
+        // reads.
+        $savings = Account::create([
+            'name' => 'Savings Account',
+            'account_type' => Account::BANK,
+            'code' => 321,
+            'currency_id' => $this->currency->id,
+            'entity_id' => $this->entity->id,
+        ]);
+
+        $this->postExpense(110);
+        $before = $this->get(route('reports.cash-flow'))->viewData('lines');
+
+        $transfer = new JournalEntry([
+            'transaction_date' => Carbon::now(),
+            'account_id' => $savings->id,
+            'credited' => false,
+            'entity_id' => $this->entity->id,
+            'currency_id' => $this->currency->id,
+            'narration' => 'Bank transfer — Operating to Savings',
+            'reference' => 'XFER-9901',
+        ]);
+        $transfer->addLineItem(LineItem::create([
+            'account_id' => $this->bank->id,
+            'amount' => 2000.0,
+            'quantity' => 1,
+            'entity_id' => $this->entity->id,
+        ]));
+        $transfer->post();
+
+        $after = $this->get(route('reports.cash-flow'))->viewData('lines');
+
+        $this->assertEquals(
+            $before['statement']['netCash'],
+            $after['statement']['netCash'],
+            'An internal bank-to-bank transfer must not move net cash.'
+        );
+    }
+
     public function test_cash_flow_breaks_the_profit_line_down_and_itemises_movements(): void
     {
         $receivable = Account::create([

@@ -34,6 +34,12 @@
             <div>
                 <h3 class="text-lg font-semibold text-gray-800 mb-2">Operating Activities</h3>
                 <table class="report-table">
+                    <thead>
+                        <tr>
+                            <th>{{ __('reports.cash_flow.activity') }}</th>
+                            <th class="text-right">{{ __('reports.cash_flow.amount') }}</th>
+                        </tr>
+                    </thead>
                     <tbody>
                         @if(isset($lines['statement']['operating']))
                             @foreach($lines['statement']['operating'] as $item)
@@ -62,6 +68,12 @@
             <div>
                 <h3 class="text-lg font-semibold text-gray-800 mb-2">Investing Activities</h3>
                 <table class="report-table">
+                    <thead>
+                        <tr>
+                            <th>{{ __('reports.cash_flow.activity') }}</th>
+                            <th class="text-right">{{ __('reports.cash_flow.amount') }}</th>
+                        </tr>
+                    </thead>
                     <tbody>
                         @if(isset($lines['statement']['investing']))
                             @foreach($lines['statement']['investing'] as $item)
@@ -90,6 +102,12 @@
             <div>
                 <h3 class="text-lg font-semibold text-gray-800 mb-2">Financing Activities</h3>
                 <table class="report-table">
+                    <thead>
+                        <tr>
+                            <th>{{ __('reports.cash_flow.activity') }}</th>
+                            <th class="text-right">{{ __('reports.cash_flow.amount') }}</th>
+                        </tr>
+                    </thead>
                     <tbody>
                         @if(isset($lines['statement']['financing']))
                             @foreach($lines['statement']['financing'] as $item)

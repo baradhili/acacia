@@ -260,6 +260,78 @@ class CompanyTaxReportTest extends TestCase
         $response->assertSee('Bank outflows 1485 vs expected 1485');
     }
 
+    public function test_company_tax_carries_the_cash_paid_on_payroll(): void
+    {
+        $account = function (string $name, string $type, int $code) {
+            return Account::create([
+                'name' => $name,
+                'account_type' => $type,
+                'code' => $code,
+                'currency_id' => $this->entity->currency_id,
+                'entity_id' => $this->entity->id,
+            ]);
+        };
+        $account('Salaries & Wages', Account::OPERATING_EXPENSE, 5100);
+        $payg = $account('PAYG Withholding Payable', Account::CURRENT_LIABILITY, 2210);
+        $superPayable = $account('Superannuation Payable', Account::CURRENT_LIABILITY, 2220);
+        $wagesPayable = $account('Wages Payable', Account::CURRENT_LIABILITY, 2235);
+
+        $post = function (Account $main, bool $credited, array $legs, string $reference, string $date): void {
+            IfrsPosting::ensureReportingPeriod($date, $this->entity);
+
+            $journal = new JournalEntry([
+                'transaction_date' => Carbon::parse($date),
+                'account_id' => $main->id,
+                'credited' => $credited,
+                'entity_id' => $this->entity->id,
+                'currency_id' => $this->entity->currency_id,
+                'narration' => 'Payroll fixture '.$reference,
+                'reference' => $reference,
+            ]);
+            foreach ($legs as [$legAccount, $amount]) {
+                $journal->addLineItem(LineItem::create([
+                    'account_id' => $legAccount->id,
+                    'amount' => $amount,
+                    'quantity' => 1,
+                    'entity_id' => $this->entity->id,
+                ]));
+            }
+            $journal->post();
+        };
+
+        // The run's accrual journals never touch the bank — they must
+        // not count.
+        $post(Account::where('entity_id', $this->entity->id)->where('code', 5100)->firstOrFail(), false, [[$payg, 854], [$wagesPayable, 2946]], 'PAYROLL-9-ACC', '2026-03-31');
+        // Net pay leaves the bank.
+        $post($this->bank, true, [[$wagesPayable, 2946]], 'PAYROLL-9-PAY', '2026-04-01');
+        // Super settlement (clears the super payable) and withholding
+        // settlement (BAS PAYG).
+        $post($superPayable, false, [[$this->bank, 456]], 'PAYSET-77', '2026-04-02');
+        $post($payg, false, [[$this->bank, 854]], 'BAS-SETT-PAYG-20260331', '2026-04-28');
+        // An abandoned settlement round reversed back — nothing.
+        $post($payg, false, [[$this->bank, 100]], 'BAS-SETT-PAYG-20260331-OLD', '2026-04-29');
+        $post($this->bank, false, [[$payg, 100]], 'BAS-SETT-PAYG-20260331-OLD-REV', '2026-04-29');
+
+        $response = $this->actingAs($this->user)
+            ->get(route('reports.company-tax', ['fy' => 2026]));
+
+        $response->assertStatus(200);
+
+        // Wages cash (net 2,946 + withholding 854) on the salary label
+        // 6-S; super cash (456) on 6-D; the accruals and the abandoned
+        // round never appear. Total 6-Q = 4,256.
+        $response->assertSee('Cash paid on payroll');
+        $response->assertSee('$3,800');
+        $response->assertSee('Superannuation expenses');
+        $response->assertSee('$456');
+        $response->assertSee('$4,256');
+
+        // V06 ties: every payroll outflow is now an expense.
+        // V06 ties: every payroll outflow is an expense, the abandoned
+        // round nets to nothing on both sides.
+        $response->assertSee('Bank outflows 4256 vs expected 4256');
+    }
+
     public function test_company_tax_warns_on_missing_abn_tfn(): void
     {
         config(['australian.abn' => '', 'australian.tfn' => '']);

@@ -4,20 +4,30 @@ namespace App\Http\Controllers;
 
 use App\Exports\AccountStatementExport;
 use App\Http\Controllers\Concerns\ResolvesReportingContext;
+use App\Models\Bill;
+use App\Models\BillPayment;
+use App\Models\BillPaymentAllocation;
+use App\Models\Document;
+use App\Models\Invoice;
+use App\Models\Payment;
+use App\Models\PaymentAllocation;
+use App\Models\PurchaseOrder;
+use App\Models\ReimbursementPayment;
 use App\Services\OpeningBalances;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use IFRS\Models\Account;
 use IFRS\Models\Balance;
 use IFRS\Models\Ledger;
-use IFRS\Models\LineItem;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
 
 /**
  * IFRS ledger introspection: the per-account statement (running
- * balance from the ledger legs, PDF/Excel exports) and the account
- * schedule of transactions that touched an account.
+ * balance from the ledger legs, PDF/Excel exports), the account
+ * schedule of transactions that touched an account, and the
+ * transaction ledger register — every posted leg across all accounts
+ * with document links, for auditing the books end to end.
  */
 class LedgerReportController extends Controller
 {
@@ -145,49 +155,67 @@ class LedgerReportController extends Controller
         if ($accountId) {
             $account = Account::findOrFail($accountId);
 
-            // Get all journal entries with line items for this account in date range.
-            // NOTE: the IFRS Transaction date column is `transaction_date`
-            // (not `date`), and debit/credit is determined by the line item's
-            // `credited` boolean (false = debit, true = credit) — there is no
-            // `type` column and `LineItem::DEBIT`/`::CREDIT` do not exist.
-            $lineItems = LineItem::where('account_id', $accountId)
-                ->whereHas('transaction', function ($query) use ($startDate, $endDate) {
-                    $query->whereBetween('transaction_date', [$startDate, $endDate]);
-                })
-                ->with(['transaction', 'transaction.lineItems'])
+            // Ledger legs, not line items: the schedule must be scoped to
+            // this account's OWN movement. The old line-item query summed
+            // every line item of each transaction, leaking the other
+            // accounts' legs into this account's totals (a payroll accrual
+            // showed the whole item side, wages and withholding included,
+            // on the PAYG schedule), and it never saw a journal's
+            // main-account leg — the IFRS main account is carried on the
+            // transaction, not as a line item — so transactions where the
+            // account was only the main account were missed entirely and
+            // the journal cards lost their balancing side. The ledger
+            // holds every posted leg, main accounts included.
+            $entries = Ledger::where('post_account', $account->id)
+                ->whereBetween('posting_date', [$startDate, $endDate])
+                ->with('transaction')
+                ->orderBy('posting_date')
+                ->orderBy('id')
                 ->get();
 
-            // Group by transaction (sorting by a related column in SQL would
-            // need a join; sort the grouped collection instead)
-            $groupedByTransaction = $lineItems->groupBy('transaction_id')
-                ->sortBy(fn ($items) => $items->first()->transaction->transaction_date);
+            $ownByTransaction = $entries->groupBy('transaction_id');
+
+            // Every leg of each listed transaction, for the card's
+            // full-journal view.
+            $legsByTransaction = Ledger::whereIn('transaction_id', $ownByTransaction->keys())
+                ->orderBy('id')
+                ->get()
+                ->groupBy('transaction_id');
+
+            $accountNames = $accounts->keyBy('id');
 
             $scheduleLines = collect();
             $totalDebit = 0;
             $totalCredit = 0;
 
-            foreach ($groupedByTransaction as $transactionId => $items) {
-                $transaction = $items->first()->transaction;
+            foreach ($ownByTransaction->sortBy(fn ($rows) => $rows->first()->posting_date) as $transactionId => $own) {
+                $transaction = $own->first()->transaction;
 
-                // Get all line items for this transaction
-                $allItems = $transaction->lineItems ?? collect();
+                $debit = (float) $own->where('entry_type', Balance::DEBIT)->sum('amount');
+                $credit = (float) $own->where('entry_type', Balance::CREDIT)->sum('amount');
 
-                // credited=false -> debit, credited=true -> credit
-                $debitTotal = $allItems->where('credited', false)->sum('amount');
-                $creditTotal = $allItems->where('credited', true)->sum('amount');
-
-                $totalDebit += $debitTotal;
-                $totalCredit += $creditTotal;
+                $totalDebit += $debit;
+                $totalCredit += $credit;
 
                 $scheduleLines->push([
-                    'date' => Carbon::parse($transaction->transaction_date),
+                    // The legs were selected by posting_date — the card
+                    // shows that date, never the transaction's own.
+                    'date' => Carbon::parse($own->first()->posting_date),
                     'transaction_id' => $transactionId,
                     'transaction_type' => class_basename($transaction),
                     'narration' => $transaction->narration ?? '',
                     'reference' => $transaction->reference ?? '',
-                    'line_items' => $allItems,
-                    'debit' => $debitTotal,
-                    'credit' => $creditTotal,
+                    'line_items' => ($legsByTransaction[$transactionId] ?? collect())->map(function ($leg) use ($accountNames) {
+                        $legAccount = $accountNames[$leg->post_account] ?? null;
+
+                        return [
+                            'account' => ($legAccount?->code ?? '?').' - '.($legAccount?->name ?? 'Unknown'),
+                            'debit' => $leg->entry_type === Balance::DEBIT ? (float) $leg->amount : 0.0,
+                            'credit' => $leg->entry_type === Balance::CREDIT ? (float) $leg->amount : 0.0,
+                        ];
+                    })->values(),
+                    'debit' => $debit,
+                    'credit' => $credit,
                 ]);
             }
 
@@ -283,5 +311,219 @@ class LedgerReportController extends Controller
         $filename = "Account_Statement_{$account->code}_{$startDate->format('Ymd')}_{$endDate->format('Ymd')}.xlsx";
 
         return Excel::download($export, $filename);
+    }
+
+    /**
+     * IFRS Transaction Ledger Register: every posted ledger leg with
+     * the transaction's reference first, the account the leg posted
+     * to, the debit/credit split and links to any documents attached
+     * to the transaction's source record. One row per ledger leg, so
+     * a multi-leg journal appears once per account it touches — the
+     * debit and credit columns each sum to the period's total
+     * movement and must agree with each other.
+     */
+    protected function buildTransactionRegister(?Carbon $startDate, ?Carbon $endDate): array
+    {
+        $accounts = Account::orderBy('code')
+            ->get(['id', 'code', 'name'])
+            ->keyBy('id');
+
+        $entries = Ledger::query()
+            ->when($startDate, fn ($query, $date) => $query->where('posting_date', '>=', $date))
+            ->when($endDate, fn ($query, $date) => $query->where('posting_date', '<=', $date))
+            ->with('transaction')
+            ->orderBy('posting_date')
+            ->orderBy('id')
+            ->get();
+
+        $documentsByReference = $this->documentsByReference();
+
+        $rows = collect();
+        $totalDebit = 0.0;
+        $totalCredit = 0.0;
+
+        foreach ($entries as $entry) {
+            $transaction = $entry->transaction;
+            $reference = $transaction->reference ?? '';
+            $account = $accounts[$entry->post_account] ?? null;
+            $isDebit = $entry->entry_type === Balance::DEBIT;
+            $debit = $isDebit ? (float) $entry->amount : 0.0;
+            $credit = $isDebit ? 0.0 : (float) $entry->amount;
+
+            $totalDebit += $debit;
+            $totalCredit += $credit;
+
+            $rows->push([
+                'reference' => $reference,
+                'date' => Carbon::parse($entry->posting_date),
+                'type' => config('ifrs.transactions')[$transaction->transaction_type ?? ''] ?? $transaction->transaction_type ?? '',
+                'account_code' => $account?->code ?? '?',
+                'account_name' => $account?->name ?? __('reports.transaction_register.unknown_account'),
+                'debit' => $debit,
+                'credit' => $credit,
+                'narration' => $transaction->narration ?? '',
+                'documents' => $documentsByReference[$reference] ?? collect(),
+            ]);
+        }
+
+        return [
+            'rows' => $rows,
+            'total_debit' => round($totalDebit, 2),
+            'total_credit' => round($totalCredit, 2),
+        ];
+    }
+
+    /**
+     * Documents keyed by the transaction reference they belong to.
+     * The first hop is direct: the document's owner is the record
+     * whose number the posting paths write into the reference —
+     * payments, bill payments, reimbursement payments, invoices,
+     * bills and purchase orders all carry their own attachments.
+     * The second hop follows the allocations — payments settle
+     * invoices and bill payments settle bills, and the document often
+     * hangs off the invoice or bill rather than the payment, so a
+     * payment's reference also links the documents of everything it
+     * settled. Owners without a number, and documents on
+     * non-transaction owners (clients, suppliers), have no reference
+     * to match and stay out of the register.
+     */
+    protected function documentsByReference()
+    {
+        $owners = [
+            Payment::class => 'payment_number',
+            BillPayment::class => 'payment_number',
+            ReimbursementPayment::class => 'payment_number',
+            Invoice::class => 'invoice_number',
+            Bill::class => 'bill_number',
+            PurchaseOrder::class => 'po_number',
+        ];
+
+        $numberByOwner = [];
+        foreach ($owners as $class => $column) {
+            foreach ($class::query()->pluck($column, 'id') as $id => $number) {
+                if ($number !== null && $number !== '') {
+                    $numberByOwner[$class.'|'.$id] = $number;
+                }
+            }
+        }
+
+        $documentsByOwner = Document::query()
+            ->whereIn('documentable_type', array_keys($owners))
+            ->get()
+            ->groupBy(fn ($document) => $document->documentable_type.'|'.$document->documentable_id);
+
+        // Payer owner key => settled owner keys: the allocation tables
+        // say which invoices/bills each payment/bill payment settled.
+        $settledOwners = [];
+        foreach (PaymentAllocation::query()->get(['payment_id', 'invoice_id']) as $link) {
+            $settledOwners[Payment::class.'|'.$link->payment_id][] = Invoice::class.'|'.$link->invoice_id;
+        }
+        foreach (BillPaymentAllocation::query()->get(['bill_payment_id', 'bill_id']) as $link) {
+            $settledOwners[BillPayment::class.'|'.$link->bill_payment_id][] = Bill::class.'|'.$link->bill_id;
+        }
+
+        // Keying each reference's list by document id keeps it
+        // duplicate-free — a settled invoice's document shows on the
+        // invoice's own rows and on the payment's, never twice on one.
+        $byReference = [];
+        foreach ($documentsByOwner as $ownerKey => $documents) {
+            $reference = $numberByOwner[$ownerKey] ?? null;
+            if ($reference !== null) {
+                foreach ($documents as $document) {
+                    $byReference[$reference][$document->id] = $document;
+                }
+            }
+        }
+        foreach ($settledOwners as $payerKey => $settledKeys) {
+            $payerReference = $numberByOwner[$payerKey] ?? null;
+            if ($payerReference === null) {
+                continue;
+            }
+            foreach ($settledKeys as $settledKey) {
+                foreach ($documentsByOwner[$settledKey] ?? [] as $document) {
+                    $byReference[$payerReference][$document->id] = $document;
+                }
+            }
+        }
+
+        return collect($byReference)->map(fn ($documents) => collect($documents));
+    }
+
+    /**
+     * The register's optional date window: null means unbounded — the
+     * register defaults to the whole ledger, not the current month,
+     * because it exists to audit everything.
+     */
+    protected function registerDateRange(Request $request): array
+    {
+        $startDate = $request->get('start_date') ? Carbon::parse($request->start_date)->startOfDay() : null;
+        $endDate = $request->get('end_date') ? Carbon::parse($request->end_date)->endOfDay() : null;
+
+        return [$startDate, $endDate];
+    }
+
+    /**
+     * IFRS Transaction Ledger Register screen (admin-only route).
+     */
+    public function transactionRegister(Request $request)
+    {
+        [$startDate, $endDate] = $this->registerDateRange($request);
+        $register = $this->buildTransactionRegister($startDate, $endDate);
+
+        return view('reports.transaction-register', [
+            'rows' => $register['rows'],
+            'totalDebit' => $register['total_debit'],
+            'totalCredit' => $register['total_credit'],
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+        ]);
+    }
+
+    /**
+     * Export the Transaction Ledger Register to CSV — the same rows
+     * the screen shows, each document as "name absolute-url".
+     */
+    public function exportTransactionRegisterCsv(Request $request)
+    {
+        [$startDate, $endDate] = $this->registerDateRange($request);
+        $register = $this->buildTransactionRegister($startDate, $endDate);
+
+        $keys = 'reports.transaction_register';
+        $rows = [[
+            __("{$keys}.reference"),
+            __("{$keys}.date"),
+            __("{$keys}.type"),
+            __("{$keys}.account"),
+            __("{$keys}.debit"),
+            __("{$keys}.credit"),
+            __("{$keys}.narration"),
+            __("{$keys}.documents"),
+        ]];
+
+        foreach ($register['rows'] as $row) {
+            $rows[] = [
+                $row['reference'],
+                $row['date']->format('Y-m-d'),
+                $row['type'],
+                $row['account_code'].' - '.$row['account_name'],
+                number_format($row['debit'], 2, '.', ''),
+                number_format($row['credit'], 2, '.', ''),
+                $row['narration'],
+                $row['documents']
+                    ->map(fn ($document) => $document->name.' '.route('documents.download', $document))
+                    ->implode(' | '),
+            ];
+        }
+
+        $scope = collect([$startDate?->format('Ymd'), $endDate?->format('Ymd')])->filter()->implode('-');
+        $filename = 'Transaction-Ledger-Register'.($scope !== '' ? "_{$scope}" : '').'.csv';
+
+        return response()->streamDownload(function () use ($rows) {
+            $out = fopen('php://output', 'w');
+            foreach ($rows as $row) {
+                fputcsv($out, $row);
+            }
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv']);
     }
 }

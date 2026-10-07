@@ -123,13 +123,13 @@
                                                 @foreach($line['line_items'] as $item)
                                                     <tr>
                                                         <td class="px-3 py-2 text-gray-900">
-                                                            {{ $item->account->code ?? 'N/A' }} - {{ $item->account->name ?? 'N/A' }}
+                                                            {{ $item['account'] }}
                                                         </td>
                                                         <td class="px-3 py-2 text-red-600 text-right">
-                                                            {{ $item->type == 'debit' ? '$' . number_format($item->amount, 2) : '-' }}
+                                                            {{ $item['debit'] ? '$' . number_format($item['debit'], 2) : '-' }}
                                                         </td>
                                                         <td class="px-3 py-2 text-green-600 text-right">
-                                                            {{ $item->type == 'credit' ? '$' . number_format($item->amount, 2) : '-' }}
+                                                            {{ $item['credit'] ? '$' . number_format($item['credit'], 2) : '-' }}
                                                         </td>
                                                     </tr>
                                                 @endforeach

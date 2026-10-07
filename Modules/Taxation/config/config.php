@@ -60,7 +60,7 @@ return [
         'B' => ['name' => 'Foreign resident withholding expenses', 'accounts' => [], 'note' => 'Not applicable — resident company'],
         'A' => ['name' => 'Cost of sales', 'accounts' => [], 'note' => 'No trading stock accounts — services entity'],
         'C' => ['name' => 'Contractor, sub-contractor and commission expenses', 'accounts' => [5110]],
-        'D' => ['name' => 'Superannuation expenses', 'accounts' => [], 'note' => 'No payroll/superannuation ledger in this system'],
+        'D' => ['name' => 'Superannuation expenses', 'accounts' => [], 'note' => 'The cash paid on super — the super settlements that cleared the super payable'],
         'E' => ['name' => 'Bad debts', 'accounts' => [8100]],
         'F' => ['name' => 'Lease expenses within Australia', 'accounts' => []],
         'I' => ['name' => 'Lease expenses overseas', 'accounts' => [], 'note' => 'Not applicable'],
@@ -121,6 +121,10 @@ return [
 
     // Information label D — Total salary and wage expenses (gross cash paid).
     'salary_expense_accounts' => [5100, 5120],
+
+    // Item 6 label carrying the cash paid on super (the settlements
+    // that cleared the payroll super payable).
+    'superannuation_expense_label' => 'D',
 
     // Labels J/K — Franked/unfranked dividends paid (equity contra account).
     'dividends_paid_account' => 3400,

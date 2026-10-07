@@ -6,7 +6,7 @@
         <div>
             <h1 class="text-2xl font-bold text-gray-800">Bank Reconciliation</h1>
             <p class="text-sm text-gray-500 mt-1">
-                Import your bank's transaction CSV export, then match each movement against invoices, payments and bills.
+                {{ __('reconciliation.index.intro') }}
             </p>
         </div>
         <div class="flex gap-2">
@@ -18,7 +18,7 @@
                 </button>
             </form>
             <a href="{{ route('reconciliation.import') }}"
-                class="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm">Import CSV</a>
+                class="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 text-sm">{{ __('reconciliation.import.submit') }}</a>
         </div>
     </div>
 
@@ -102,6 +102,19 @@
                                         <span class="block text-xs text-gray-400">
                                             {{ __('reconciliation.cash_check.bank_lines', ['count' => $feed['lines'], 'date' => $feed['latest']?->format('d M Y') ?? '—']) }}
                                         </span>
+                                        @if ($feed['basis'] === 'statement' && $feed['anchor'])
+                                            <span class="block text-xs text-gray-400">
+                                                {{ __('reconciliation.cash_check.bank_basis_statement', [
+                                                    'format' => $feed['anchor']['format'],
+                                                    'date' => $feed['anchor']['date']->format('d M Y'),
+                                                    'count' => $feed['anchor']['later_lines'],
+                                                ]) }}
+                                            </span>
+                                        @else
+                                            <span class="block text-xs text-amber-600">
+                                                {{ __('reconciliation.cash_check.bank_basis_running') }}
+                                            </span>
+                                        @endif
                                         @if ($feed['currency'] !== $cashCheck['currency'])
                                             <span class="block text-xs text-amber-600">{{ __('reconciliation.cash_check.not_compared', ['currency' => $cashCheck['currency'] ?? '?']) }}</span>
                                         @endif
@@ -203,7 +216,7 @@
                     @empty
                         <tr>
                             <td colspan="6" class="px-4 py-6 text-sm text-gray-500">
-                                Nothing pending — import a CSV export to bring in new bank movements.
+                                {{ __('reconciliation.index.empty_pending') }}
                             </td>
                         </tr>
                     @endforelse

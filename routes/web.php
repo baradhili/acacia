@@ -250,6 +250,13 @@ Route::middleware('auth')->group(function () {
         Route::get('/reports/export/account-statement/excel', [LedgerReportController::class, 'exportAccountStatementExcel'])->name('reports.export.account-statement.excel');
         Route::get('/reports/prepayment-schedule', [BusinessReportController::class, 'prepaymentSchedule'])->name('reports.prepayment-schedule');
         Route::get('/reports/export/prepayment-schedule/pdf', [BusinessReportController::class, 'exportPrepaymentSchedulePdf'])->name('reports.export.prepayment-schedule.pdf');
+
+        // Transaction Ledger Register — the full-books audit view;
+        // admin-only (the nav item is role-gated to match).
+        Route::middleware('role:admin')->group(function () {
+            Route::get('/reports/transaction-register', [LedgerReportController::class, 'transactionRegister'])->name('reports.transaction-register');
+            Route::get('/reports/export/transaction-register/csv', [LedgerReportController::class, 'exportTransactionRegisterCsv'])->name('reports.export.transaction-register.csv');
+        });
     });
 
     // The GST/BAS/company-tax reports moved to Modules/Taxation (its

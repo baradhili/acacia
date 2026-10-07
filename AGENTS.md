@@ -46,16 +46,25 @@ php artisan module:migrate Resumes                # run one module's migrations
 - **Security scan** (`php artisan larascan`, dev-only `baspa/larascan`)
   before committing, alongside Pint — its dependency checks wrap
   `composer audit`/`npm audit`, so lockfile changes are covered too.
-  There is **no baseline**: every finding is live, and findings at or
-  above high severity (config `fail_on`) fail the run and CI. The
-  standing residue on a dev checkout is known and environment-shaped —
-  the APP_ENV/APP_URL localhost items and the session-secure item are
-  info-severity by design (they self-downgrade outside production and
-  resolve with the production .env plus `TRUSTED_PROXIES`);
-  `allow_url_fopen`/`expose_php` are host php.ini settings; and
-  `auth.signed-routes-verify` flagging `verification.notice` is a
-  scanner false positive (the prompt page must not be signed — the
-  verify route itself is). Anything **new**: triage like CodeRabbit
+  Findings at or above high severity (config `fail_on`) fail the run
+  and CI. The baseline file `larascan-baseline.json` (repo root)
+  holds the **only** accepted findings: the npm shell-quote critical
+  (GHSA-pqg4-53mv; `concurrently` pins `shell-quote 1.9.0` exactly and
+  no release ships the fixed 1.11+ — dev-only tooling, deliberately
+  not overridden). When a `concurrently` release ships the fix,
+  `npm audit` goes clean and the baseline entries come out — never
+  `larascan:baseline` over the file wholesale or the residue hides.
+  The standing residue on a dev checkout is known and
+  environment-shaped — the APP_ENV/APP_URL localhost items and the
+  session-secure item are info-severity by design (they self-downgrade
+  outside production and resolve with the production .env plus
+  `TRUSTED_PROXIES`); `allow_url_fopen`/`expose_php` are host php.ini
+  settings; `auth.signed-routes-verify` flagging `verification.notice`
+  is a scanner false positive (the prompt page must not be signed —
+  the verify route itself is); and `auth.registration-rate-limit`
+  flags `reports/transaction-register*` because the URI contains the
+  substring "register" — admin-only report routes, not registration.
+  Anything **new**: triage like CodeRabbit
   output — the scanner is pattern-based; its checks match middleware
   by class-name keywords (hence `SecureHeaders`), don't parse
   attribute-based `#[Fillable]` (User uses it — keep ownership FKs out
