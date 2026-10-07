@@ -22,6 +22,8 @@ here once their changelog entry lands. Ordered by priority.
 
 - [ ] cucumber tests via behat — plan reviewed and refreshed 2026-09-28: .zcode/plans/behat-migration-plan.md (scope renewal with maintainer is the first step; suite has grown to 55 feature files + the Modules suite since the original approval).
 
+- [ ] Expand backups to allow using a SFTP path
+
 - [ ] Freeform dashboard resize: drag handles/heights beyond the column-span cycling the layout management ships (Sep 2026) — gridstack is already in package.json if this lands.
 
 - [ ] property rental management module - the company is a landlord
@@ -37,10 +39,9 @@ here once their changelog entry lands. Ordered by priority.
   - [ ] Delay until Client portal - Client acceptance portal: tokenised share link where the client reads the proposal, toggles optional lines with totals recalculating, and accepts with a typed/drawn e-signature that locks the document (propsly); the signature feeds the existing accepted state. Oct 2026 laraestimate review: its whole read+toggle flow runs on a bare capability URL (UUID primary key, unauthenticated route, per-estimate `allows_to_select_items` switch + per-item `obligatory` flag — maps straight onto our optional lines), so this piece needs the client-portal go/no-go, not the portal itself; and when built, gate the link properly (optional password + expiry) — laraestimate has both as columns but never enforces them anywhere.
   - [ ] Delay until Client portal - Engagement tracking on sent proposals: open/view notifications and per-section read analytics (propsly's tracking and engagement scores).
 
+- [x] improve backups based on Taobackup philosophy
 
-- [ ] BankTransferService has no XFER reversal path: an internal transfer journal recorded wrong (wrong accounts or amount) can be unmatch-then-nothing — there is no mirror flow to undo it, only a hand-posted manual journal (the Oct 2026 310→320 consolidation was posted by hand for exactly this class of correction). A reverse() mirroring IfrsPosting::reverseTransaction, clearing any linked bank line's match with it, is the missing piece.
-
-- [ ] Larascan deploy-time residue — Sep 2026 fixed every code finding; Oct 2026 baselined the eight residue checks (localhost env items, php.ini posture pair, the `verification.notice` and transaction-register false positives) so scans run clean — see AGENTS.md's scan notes for the per-item rationale and the matcher semantics (new occurrences still surface). Deploy checklist: production .env (APP_URL, `TRUSTED_PROXIES`, session-secure) and php.ini (`allow_url_fopen=Off`, `expose_php=Off`), then strip the matching baseline entries; if larascan ever fixes its route heuristics, the two false-positive entries come out too.
+- [x] Larascan deploy-time residue — Sep 2026 fixed every code finding; Oct 2026 baselined the eight residue checks (localhost env items, php.ini posture pair, the `verification.notice` and transaction-register false positives) so scans run clean — see AGENTS.md's scan notes for the per-item rationale and the matcher semantics (new occurrences still surface). Deploy checklist: production .env (APP_URL, `TRUSTED_PROXIES`, session-secure) and php.ini (`allow_url_fopen=Off`, `expose_php=Off`), then strip the matching baseline entries; if larascan ever fixes its route heuristics, the two false-positive entries come out too.
 
 - [ ] https://docs.markwhen.com/ might be good to integrate into projects section - but only once we have a client module and a real project module
 

@@ -42,6 +42,7 @@ class ReconciliationController extends Controller
             ->get();
         $unreconciledLedger = $this->reconciliation->getUnreconciledBankMovements();
         $cashCheck = $this->reconciliation->bankVsBooks();
+        $reversibleTransfers = $this->transfers->reversibleJournals();
 
         $stats = [
             'pending' => $pending->count(),
@@ -50,7 +51,7 @@ class ReconciliationController extends Controller
             'in_books' => $unreconciledLedger->count(),
         ];
 
-        return view('reconciliation.index', compact('pending', 'matched', 'unreconciledLedger', 'stats', 'cashCheck'));
+        return view('reconciliation.index', compact('pending', 'matched', 'unreconciledLedger', 'stats', 'cashCheck', 'reversibleTransfers'));
     }
 
     public function import()
@@ -284,6 +285,35 @@ class ReconciliationController extends Controller
 
         return redirect()->route('reconciliation.index')
             ->with('success', 'Transfer posted and matched — the books now hold the movement.');
+    }
+
+    /**
+     * Reverse a posted transfer journal from the
+     * unreconciled-movements panel: the mirrored -REV journal undoes
+     * the movement in the books and every bank line matched to either
+     * of its legs returns to pending, so a transfer recorded wrong
+     * (wrong accounts or amount) can be re-recorded correctly — the
+     * undo unmatching alone never provided, since unmatch keeps the
+     * journal deliberately.
+     */
+    public function reverseTransfer(Request $request)
+    {
+        $validated = $request->validate([
+            'journal_id' => ['required', 'integer'],
+        ]);
+
+        try {
+            $this->transfers->reverse((int) $validated['journal_id']);
+        } catch (\InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', __('reconciliation.action_failed'));
+        }
+
+        return redirect()->route('reconciliation.index')
+            ->with('success', __('reconciliation.transfer.reversed'));
     }
 
     /**

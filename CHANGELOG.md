@@ -5,6 +5,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-07
 
+### Added — transfer journal reversal (the XFER undo path)
+
+A bank transfer recorded wrong (wrong accounts, wrong amount) could be
+unmatched but never undone: unmatching deliberately keeps the journal
+(the bank movement was real), so the wrong entry sat in the books
+until someone hand-posted a correcting journal — exactly what the Oct
+2026 310→320 consolidation had to do. `BankTransferService::reverse()`
+now mirrors `IfrsPosting::reverseTransaction`: a `-REV` mirror journal
+(same date, every leg flipped) so the pair nets to zero per bank
+account everywhere references pair postings with reversals (the
+unreconciled-movements panel, the cash-flow widgets), and every bank
+line matched to either leg — both feed sides of an internal transfer
+included — returns to pending through the logged unmatch flow, ready
+for the corrected re-record. Guards refuse a non-transfer journal, a
+journal already reversed (a second mirror would resurrect the
+movement, checked again under the journal's row lock), and a date the
+period locks have since closed. Re-recording after a reversal posts a
+fresh, suffixed journal (`XFER-{line}-2`, …) and the reuse logic never
+offers a spent journal or its mirror again. Surfaced as a Reverse
+action on the reconciliation screen's unreconciled-movements panel,
+where an unmatched wrong journal sits.
+
 ### Added — backups rebuilt on spatie/laravel-backup, covering the Tao of Backup
 
 The homegrown `backup:create` (separate db dump + files tar.gz, local

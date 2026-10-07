@@ -243,6 +243,7 @@
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Origin</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Counterparty</th>
                         <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                        <th class="px-4 py-3"></th>
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">
@@ -273,10 +274,20 @@
                             <td class="px-4 py-3 text-sm text-right whitespace-nowrap {{ $movement['amount'] < 0 ? 'text-red-600' : 'text-green-700' }}">
                                 {{ $movement['amount'] < 0 ? '-' : '' }}${{ number_format(abs($movement['amount']), 2) }}
                             </td>
+                            <td class="px-4 py-3 text-right whitespace-nowrap">
+                                @if (($reversibleTransfers[$movement['transaction_id']] ?? null) !== null)
+                                    <form action="{{ route('reconciliation.transfers.reverse') }}" method="POST" class="inline"
+                                        onsubmit="return confirm('{{ __('reconciliation.transfer.reverse_confirm') }}');">
+                                        @csrf
+                                        <input type="hidden" name="journal_id" value="{{ $movement['transaction_id'] }}">
+                                        <button class="text-gray-500 hover:text-red-600 text-sm font-medium">{{ __('reconciliation.transfer.reverse') }}</button>
+                                    </form>
+                                @endif
+                            </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="px-4 py-6 text-sm text-gray-500">
+                            <td colspan="7" class="px-4 py-6 text-sm text-gray-500">
                                 Every movement in the books is matched to a bank line.
                             </td>
                         </tr>

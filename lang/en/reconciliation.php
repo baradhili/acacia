@@ -88,6 +88,14 @@ return [
         'notes' => 'Notes (optional)',
         'notes_placeholder' => 'e.g. transfer to top up the account, split by payment limits',
         'submit' => 'Post transfer and match',
+
+        // Reversing a posted transfer journal from the
+        // unreconciled-movements panel (wrong accounts or amount):
+        // the -REV mirror undoes the books side, the matched bank
+        // line returns to pending for the corrected re-record.
+        'reverse' => 'Reverse',
+        'reverse_confirm' => 'Reverse this transfer journal? A mirror entry undoes it in the books, and any bank line matched to it returns to pending so the movement can be recorded again.',
+        'reversed' => 'Transfer journal reversed — the books no longer hold the movement; the bank line is pending again.',
     ],
 
     'settlement' => [

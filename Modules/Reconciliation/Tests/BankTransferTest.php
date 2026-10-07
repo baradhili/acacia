@@ -11,6 +11,7 @@ use IFRS\Models\Currency;
 use IFRS\Models\Entity;
 use IFRS\Models\Ledger;
 use IFRS\Models\ReportingPeriod;
+use IFRS\Models\Transaction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Modules\Reconciliation\Models\BankTransaction;
 use Modules\Reconciliation\Models\ReconciliationHistory;
@@ -346,5 +347,179 @@ class BankTransferTest extends TestCase
 
         $this->assertTrue($line->refresh()->isMatched());
         $this->assertEqualsWithDelta(1500.0, $this->balance($this->operating), 0.001);
+    }
+
+    public function test_a_wrong_transfer_journal_can_be_reversed(): void
+    {
+        $line = $this->bankLine(['amount' => 1500]);
+        $this->service->record($line, $this->operating->id, null);
+        $journal = Transaction::find(Ledger::find($line->refresh()->matched_transaction_id)->transaction_id);
+
+        // Reversing while the line is still matched clears the match
+        // alongside — no line stays reconciled to an undone journal.
+        $reversalId = $this->service->reverse($journal->id, 'wrong account');
+
+        $line->refresh();
+        $this->assertSame(BankTransaction::STATUS_PENDING, $line->status);
+        $this->assertNull($line->matched_transaction_id);
+        $this->assertDatabaseHas('reconciliation_history', [
+            'bank_transaction_id' => $line->id,
+            'action' => ReconciliationHistory::ACTION_UNMATCH,
+            'status' => ReconciliationHistory::STATUS_SUCCESS,
+        ]);
+
+        // The movement left the books entirely: bank and equity back
+        // to zero, and the gap returns to the pre-record state (the
+        // bank line is simply unmatched money again).
+        $this->assertEqualsWithDelta(0.0, $this->balance($this->operating), 0.001);
+        $this->assertEqualsWithDelta(0.0, $this->balance($this->account(BankTransferService::FUNDS_INTRODUCED_CODE)), 0.001);
+        $check = app(ReconciliationService::class)->bankVsBooks();
+        $this->assertEqualsWithDelta(0.0, $check['books_total'], 0.001);
+        $this->assertEqualsWithDelta(1500.0, $check['gap'], 0.001);
+        $this->assertEqualsWithDelta(0.0, $check['residual'], 0.001);
+
+        // The mirror carries the -REV reference and the original's own
+        // date, so the pair nets to nothing per bank account and the
+        // unreconciled panel self-cleans.
+        $reversal = Transaction::find($reversalId);
+        $this->assertSame('XFER-'.$line->id.'-REV', $reversal->reference);
+        $this->assertSame(
+            Carbon::parse($journal->transaction_date)->toDateString(),
+            Carbon::parse($reversal->transaction_date)->toDateString(),
+        );
+        $this->assertCount(0, app(ReconciliationService::class)->getUnreconciledBankMovements());
+    }
+
+    public function test_a_reversed_transfer_re_records_fresh_without_reusing_the_spent_journal(): void
+    {
+        $line = $this->bankLine(['amount' => 1500]);
+
+        // Wrong side first: recorded against savings, should have
+        // been operating.
+        $this->service->record($line, $this->savings->id, null);
+        $spentJournalId = Ledger::find($line->refresh()->matched_transaction_id)->transaction_id;
+        $this->service->reverse($spentJournalId);
+
+        $this->service->record($line->refresh(), $this->operating->id, null);
+
+        // The re-record matched a NEW journal (suffixed past the spent
+        // reference), not the reversed original's leg.
+        $line->refresh();
+        $this->assertTrue($line->isMatched());
+        $newJournal = Transaction::find(Ledger::find($line->matched_transaction_id)->transaction_id);
+        $this->assertNotSame($spentJournalId, $newJournal->id);
+        $this->assertSame('XFER-'.$line->id.'-2', $newJournal->reference);
+
+        // The books hold exactly the corrected movement.
+        $this->assertEqualsWithDelta(1500.0, $this->balance($this->operating), 0.001);
+        $this->assertEqualsWithDelta(0.0, $this->balance($this->savings), 0.001);
+        $this->assertCount(0, app(ReconciliationService::class)->getUnreconciledBankMovements());
+    }
+
+    public function test_a_journal_cannot_be_reversed_twice(): void
+    {
+        $line = $this->bankLine(['amount' => 1500]);
+        $this->service->record($line, $this->operating->id, null);
+        $journalId = Ledger::find($line->refresh()->matched_transaction_id)->transaction_id;
+        $this->service->reverse($journalId);
+
+        try {
+            $this->service->reverse($journalId);
+            $this->fail('A second mirror would resurrect the movement — it must refuse.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('already reversed', $e->getMessage());
+        }
+
+        // Nothing extra posted: one journal, one mirror, books flat.
+        $this->assertEqualsWithDelta(0.0, $this->balance($this->operating), 0.001);
+        $this->assertSame(1, Transaction::query()->where('reference', 'like', 'XFER-%-REV')->count());
+    }
+
+    public function test_reversing_clears_both_feed_lines_of_one_internal_transfer(): void
+    {
+        $in = $this->bankLine(['amount' => 300, 'description' => 'Transfer in']);
+        $this->service->record($in, $this->operating->id, $this->savings->id);
+        $out = $this->bankLine(['amount' => -300, 'type' => BankTransaction::TYPE_DEBIT, 'description' => 'Transfer out']);
+        $this->service->record($out, $this->savings->id, $this->operating->id);
+        $journalId = Ledger::find($in->refresh()->matched_transaction_id)->transaction_id;
+
+        $this->service->reverse($journalId);
+
+        // Both sides of the shared journal return to pending, and the
+        // books hold neither the movement nor its mirror.
+        $this->assertSame(BankTransaction::STATUS_PENDING, $in->refresh()->status);
+        $this->assertSame(BankTransaction::STATUS_PENDING, $out->refresh()->status);
+        $this->assertEqualsWithDelta(0.0, $this->balance($this->operating), 0.001);
+        $this->assertEqualsWithDelta(0.0, $this->balance($this->savings), 0.001);
+        $this->assertCount(0, app(ReconciliationService::class)->getUnreconciledBankMovements());
+    }
+
+    public function test_reverse_refusals(): void
+    {
+        $line = $this->bankLine(['amount' => 1500]);
+        $this->service->record($line, $this->operating->id, null);
+        $journalId = Ledger::find($line->refresh()->matched_transaction_id)->transaction_id;
+        $reversalId = $this->service->reverse($journalId);
+
+        // Not a transfer journal: unknown id, and the -REV mirror
+        // itself (reversing it would resurrect the movement).
+        foreach ([$reversalId, 999999] as $target) {
+            try {
+                $this->service->reverse($target);
+                $this->fail('A non-XFER journal must refuse.');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('Only a transfer journal', $e->getMessage());
+            }
+        }
+
+        // A journal whose date has since fallen into a locked period.
+        $lockedLine = $this->bankLine(['amount' => 200, 'description' => 'Locked month transfer', 'transaction_date' => Carbon::parse('2026-09-10')]);
+        $this->service->record($lockedLine, $this->operating->id, null);
+        $lockedJournalId = Ledger::find($lockedLine->refresh()->matched_transaction_id)->transaction_id;
+        FiscalPeriod::create([
+            'name' => 'Locked month',
+            'year' => 2026,
+            'period_type' => FiscalPeriod::TYPE_MONTHLY,
+            'start_date' => Carbon::parse('2026-09-01'),
+            'end_date' => Carbon::parse('2026-09-30'),
+            'is_locked' => true,
+            'locked_at' => now(),
+        ]);
+        try {
+            $this->service->reverse($lockedJournalId);
+            $this->fail('A locked period should refuse.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('locked period', $e->getMessage());
+        }
+
+        // Every refusal posted nothing beyond the one legit mirror.
+        $this->assertEqualsWithDelta(200.0, $this->balance($this->operating), 0.001);
+        $this->assertSame(1, Transaction::query()->where('reference', 'like', 'XFER-%-REV')->count());
+    }
+
+    public function test_the_panel_offers_the_reverse_action(): void
+    {
+        // The wrong-journal flow: record, unmatch (the line returns
+        // to pending; the journal stays), then reverse from the
+        // unreconciled-movements panel where the orphaned journal now
+        // sits.
+        $line = $this->bankLine(['amount' => 1500]);
+        $this->service->record($line, $this->operating->id, null);
+        $journalId = Ledger::find($line->refresh()->matched_transaction_id)->transaction_id;
+        app(ReconciliationService::class)->unlinkTransaction($line->refresh());
+
+        $this->actingAs($this->user)
+            ->get(route('reconciliation.index'))
+            ->assertOk()
+            ->assertSee(__('reconciliation.transfer.reverse'), false)
+            ->assertSee('XFER-'.$line->id, false);
+
+        $this->actingAs($this->user)
+            ->post(route('reconciliation.transfers.reverse'), ['journal_id' => $journalId])
+            ->assertRedirect(route('reconciliation.index'))
+            ->assertSessionHas('success');
+
+        $this->assertSame(BankTransaction::STATUS_PENDING, $line->refresh()->status);
+        $this->assertEqualsWithDelta(0.0, $this->balance($this->operating), 0.001);
     }
 }
