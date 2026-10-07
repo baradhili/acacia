@@ -74,14 +74,35 @@ class BackupZip
         $disk = Storage::disk($archive->disk);
 
         $temp = tempnam(sys_get_temp_dir(), 'erp-backup-zip-');
-        $stream = $disk->readStream($archive->path);
-        $target = fopen($temp, 'w+b');
+
+        if ($temp === false) {
+            throw new RuntimeException('Could not create a temp file for the archive copy.');
+        }
 
         try {
-            stream_copy_to_stream($stream, $target);
-        } finally {
-            fclose($stream);
-            fclose($target);
+            $stream = $disk->readStream($archive->path);
+
+            if ($stream === false) {
+                throw new RuntimeException("Could not read {$archive->disk}/{$archive->path} for a local copy.");
+            }
+
+            $target = fopen($temp, 'w+b');
+
+            if ($target === false) {
+                fclose($stream);
+                throw new RuntimeException("Could not open the temp copy of {$archive->name} for writing.");
+            }
+
+            try {
+                stream_copy_to_stream($stream, $target);
+            } finally {
+                fclose($stream);
+                fclose($target);
+            }
+        } catch (\Throwable $e) {
+            File::delete($temp);
+
+            throw $e;
         }
 
         return [$temp, true];

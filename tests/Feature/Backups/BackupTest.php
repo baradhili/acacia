@@ -10,6 +10,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
+use Spatie\Backup\Config\Config;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -41,14 +42,24 @@ class BackupTest extends TestCase
         $this->publicPath = sys_get_temp_dir().'/erp-public-test-'.uniqid();
         File::ensureDirectoryExists($this->publicPath);
 
+        // An .env stand-in inside the temp tree: the real one exists on
+        // dev machines but a bare CI checkout may not have it. It lives
+        // inside the included directory (the real .env sits at the
+        // project root, outside the public disk) so it rides along
+        // without a second include entry — spatie's verify counts
+        // manifest entries against zip entries.
+        file_put_contents($this->publicPath.'/.env', "APP_NAME=backup-test\n");
+
         config([
             'filesystems.disks.backups.root' => $this->backupPath,
             'filesystems.disks.public.root' => $this->publicPath,
             // spatie zips the literal include paths, not the disks, so
             // the redirect has to reach the source list as well.
-            'backup.backup.source.files.include' => [$this->publicPath, base_path('.env')],
+            'backup.backup.source.files.include' => [$this->publicPath],
             'backup.backup.password' => null,
         ]);
+
+        $this->resetSpatieConfig();
     }
 
     protected function tearDown(): void
@@ -57,6 +68,17 @@ class BackupTest extends TestCase
         File::deleteDirectory($this->publicPath);
 
         parent::tearDown();
+    }
+
+    /**
+     * spatie snapshots config('backup') into a scoped Config instance,
+     * so runtime overrides in tests need the binding dropped and
+     * re-registered to take effect deterministically.
+     */
+    protected function resetSpatieConfig(): void
+    {
+        $this->app->forgetInstance(Config::class);
+        $this->app->scoped(Config::class, fn () => Config::fromArray(config('backup')));
     }
 
     protected function admin(): User
