@@ -14,6 +14,7 @@
             <thead class="bg-gray-50">
                 <tr>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">PO Number</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ __('purchase_orders.type') }}</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Client</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Budget</th>
@@ -32,6 +33,11 @@
                                 {{ $po->po_number }}
                             </a>
                             <x-document-icon :count="$po->documents_count" />
+                        </td>
+                        <td class="px-6 py-4">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ $po->isContract() ? 'bg-purple-100 text-purple-800' : 'bg-indigo-100 text-indigo-800' }}">
+                                {{ __($po->isContract() ? 'purchase_orders.contract' : 'purchase_orders.purchase_order') }}
+                            </span>
                         </td>
                         <td class="px-6 py-4 text-gray-900">{{ $po->client->name ?? '-' }}</td>
                         <td class="px-6 py-4 text-gray-900">{{ Str::limit($po->title, 30) }}</td>
@@ -70,7 +76,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="9" class="px-6 py-4 text-center text-gray-500">No purchase orders found.</td>
+                        <td colspan="10" class="px-6 py-4 text-center text-gray-500">No purchase orders found.</td>
                     </tr>
                 @endforelse
             </tbody>

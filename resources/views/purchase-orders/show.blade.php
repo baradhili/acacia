@@ -22,6 +22,11 @@
                     Create Invoice
                 </a>
             @endif
+            @if($purchaseOrder->canBeAmended())
+                <a href="{{ route('purchase-orders.amend', $purchaseOrder) }}" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg">
+                    {{ __('purchase_orders.amend_contract') }}
+                </a>
+            @endif
             @if($purchaseOrder->status === 'draft')
                 <a href="{{ route('purchase-orders.edit', $purchaseOrder) }}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg">
                     Edit PO
@@ -35,7 +40,7 @@
 
     <!-- PO Info -->
     <div class="bg-white rounded-lg shadow p-6 mb-6">
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-6">
             <div>
                 <h3 class="text-sm font-medium text-gray-500">Client</h3>
                 <p class="mt-1 text-gray-900">{{ $purchaseOrder->client->name ?? '-' }}</p>
@@ -43,6 +48,12 @@
             <div>
                 <h3 class="text-sm font-medium text-gray-500">Title</h3>
                 <p class="mt-1 text-gray-900">{{ $purchaseOrder->title }}</p>
+            </div>
+            <div>
+                <h3 class="text-sm font-medium text-gray-500">{{ __('purchase_orders.type') }}</h3>
+                <span class="mt-1 inline-flex px-2 py-1 text-sm font-semibold rounded-full {{ $purchaseOrder->isContract() ? 'bg-purple-100 text-purple-800' : 'bg-indigo-100 text-indigo-800' }}">
+                    {{ __($purchaseOrder->isContract() ? 'purchase_orders.contract' : 'purchase_orders.purchase_order') }}
+                </span>
             </div>
             <div>
                 <h3 class="text-sm font-medium text-gray-500">Status</h3>
@@ -94,6 +105,20 @@
                 <p class="mt-1 text-gray-900">{{ $purchaseOrder->description }}</p>
             </div>
         @endif
+
+        @if($purchaseOrder->isContract())
+            <div class="mt-6 pt-6 border-t">
+                <h3 class="text-sm font-medium text-gray-500">{{ __('purchase_orders.implied_budget') }}</h3>
+                <p class="mt-1 text-gray-900">${{ number_format($purchaseOrder->budgeted_amount, 2) }}</p>
+                <p class="mt-1 text-xs text-gray-500">
+                    {{ __('purchase_orders.implied_budget_formula', [
+                        'days' => $purchaseOrder->business_days,
+                        'rate' => '$'.number_format($purchaseOrder->rate, 2),
+                        'allocation' => rtrim(rtrim(number_format($purchaseOrder->allocation, 2), '0'), '.').'%',
+                    ]) }}
+                </p>
+            </div>
+        @endif
     </div>
 
     <!-- Budget Summary -->
@@ -115,6 +140,54 @@
             <p class="mt-1 text-2xl font-bold text-indigo-600">{{ number_format($purchaseOrder->utilization, 1) }}%</p>
         </div>
     </div>
+
+    <!-- Amendments (contracts only) -->
+    @if($purchaseOrder->isContract())
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">{{ __('purchase_orders.amendments') }}</h3>
+
+            @if($purchaseOrder->amendments->isNotEmpty())
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ __('purchase_orders.amendment') }}</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ __('purchase_orders.recorded_at') }}</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{{ __('purchase_orders.rate') }}</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{{ __('purchase_orders.allocation') }}</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ __('purchase_orders.business_days') }}</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{{ __('purchase_orders.implied_budget') }}</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ __('purchase_orders.amendment_reason') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200">
+                            @foreach($purchaseOrder->amendments as $amendment)
+                                <tr>
+                                    <td class="px-4 py-3 text-sm font-medium text-gray-900">{{ $amendment->amendment_number }}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">
+                                        {{ $amendment->created_at->format('d M Y') }}
+                                        @if($amendment->user)
+                                            <span class="block text-xs text-gray-500">{{ $amendment->user->name }}</span>
+                                        @endif
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-right text-gray-900">${{ number_format($amendment->previous_rate, 2) }} → ${{ number_format($amendment->new_rate, 2) }}</td>
+                                    <td class="px-4 py-3 text-sm text-right text-gray-900">{{ rtrim(rtrim(number_format($amendment->previous_allocation, 2), '0'), '.') }}% → {{ rtrim(rtrim(number_format($amendment->new_allocation, 2), '0'), '.') }}%</td>
+                                    <td class="px-4 py-3 text-xs text-gray-900">
+                                        {{ $amendment->previous_start_date?->format('d M Y') }} – {{ $amendment->previous_end_date?->format('d M Y') }}<br>
+                                        → {{ $amendment->new_start_date->format('d M Y') }} – {{ $amendment->new_end_date->format('d M Y') }}
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-right text-gray-900">${{ number_format($amendment->previous_budgeted_amount, 2) }} → ${{ number_format($amendment->new_budgeted_amount, 2) }}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">{{ $amendment->reason ?? '-' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @else
+                <p class="text-gray-500 text-sm">{{ __('purchase_orders.no_amendments') }}</p>
+            @endif
+        </div>
+    @endif
 
     <!-- Actions -->
     <div class="bg-white rounded-lg shadow p-6 mb-6">
