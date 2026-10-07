@@ -1,536 +1,184 @@
 # Backup & Restore Runbook
 
-This runbook documents the backup and restore procedures for the Professional Services Accounting System.
+The application's backup feature is built on
+[spatie/laravel-backup](https://github.com/spatie/laravel-backup) and
+covers the seven heads of the Tao of Backup. A backup is only as good
+as its weakest head, and a restore is only proven by actually testing
+it — the feature ships both.
 
-## Overview
+| Tao head | How it is covered |
+|---|---|
+| 1. Coverage | One complete unit per run: a single zip holding the database dump, **everything** on the public storage disk (uploads, logos, photos), and `.env`. Only caches/logs/framework state are excluded. |
+| 2. Frequency | Daily at 04:00 via the scheduler, honouring the admin's frequency setting (daily/weekly/monthly); manual "Run Backup Now"; `backups:run --force` for after-significant-change runs. |
+| 3. Separation | Every disk in `BACKUP_DESTINATION_DISKS` receives a full copy — configure the offsite `s3-backups` disk so at least one copy is offsite. |
+| 4. History | Grandfather-father-son retention — everything kept 7 days, then a daily survives 4 weeks, a weekly survives 12 months, a monthly survives 2 years, then one per year (env-tunable, see `config/backup.php`). |
+| 5. Testing | `backups:test-restore` restores the newest archive into a scratch database and verifies it — live data is never touched. |
+| 6. Security | Archives are AES-encrypted (`BACKUP_ARCHIVE_PASSWORD`); every archive is inventoried with a SHA-256 and verified daily — corrupt or missing copies are flagged. |
+| 7. Integrity | `backups:verify` snapshots the source (per-file hashes, per-table counts) daily and reports changes since the previous snapshot, so silent corruption is caught before it flows into backups. |
 
-### What Gets Backed Up
+The admin **Backups** page (profile dropdown → Backups) is the control
+surface: run, verify, test-restore, schedule, and the archive /
+snapshot / restore-test history.
 
-| Component | Location | Frequency | Retention |
-|-----------|----------|-----------|-----------|
-| Database | MySQL/SQLite (the two drivers `backup:create` supports) | Per admin schedule (default daily) | Last 30 backups (configurable) |
-| Files | `storage/app/public/` | Per admin schedule (default daily) | Last 30 backups (configurable) |
-| Configuration | `.env` (encrypted) | Weekly | 90 days |
-| Application | Git repository | N/A (version controlled) | N/A |
+## What a backup contains
 
-### Backup Types
+One zip per destination disk under `{disk-root}/{BACKUP_NAME}/`
+(default name `acacia`), e.g. `/backups/acacia/2026-10-07-04-00-00.zip`:
 
-- **Full Backup**: Complete database + files
-- **Database Only**: SQL dump of all tables
-- **Files Only**: Uploaded documents and attachments
-- **Point-in-Time**: Binary log based (MySQL)
+- `db-dumps/*.sql` — the full database (native PHP sqlite dumper or
+  `mysqldump` for MySQL);
+- `storage/app/public/**` — the public storage disk, verbatim;
+- `.env` — the environment file.
 
----
+Entries are relative to the project root. When a password is
+configured the whole zip is AES-256 encrypted — a stolen copy is
+useless without the key.
 
-## Manual Backup Procedures
+## Configuration
 
-### 1. Database Backup (MySQL)
+```dotenv
+# Local destination — point at dedicated storage (ideally an
+# external volume) so backups survive losing the app disk.
+BACKUP_PATH=/backups
 
-#### Standard Dump
+# Offsite separation: fill the s3-backups disk and add it to the list
+# (requires `composer require league/flysystem-aws-s3-v3`).
+BACKUP_DESTINATION_DISKS=backups
+BACKUP_S3_KEY=...
+BACKUP_S3_SECRET=...
+BACKUP_S3_REGION=ap-southeast-2
+BACKUP_S3_BUCKET=acacia-backups
 
-```bash
-# Local backup
-mysqldump -u root -p psa > backup_$(date +%Y%m%d_%H%M%S).sql
+# Encryption (strongly recommended in production)
+BACKUP_ARCHIVE_PASSWORD=long-random-secret
 
-# With compression
-mysqldump -u root -p psa | gzip > backup_$(date +%Y%m%d_%H%M%S).sql.gz
+# Failure notifications
+BACKUP_NOTIFICATION_EMAIL=admin@example.com
 
-# Remote backup (from local machine)
-ssh user@server "mysqldump -u root -p psa" > backup.sql
+# Retention — spatie's cascading GFS tiers, defaults shown. Everything
+# is kept 7 days; a daily survives 4 weeks; a weekly survives 12
+# months; a monthly survives 2 years; then one per year.
+BACKUP_KEEP_ALL_DAYS=7
+BACKUP_KEEP_DAILY_DAYS=28
+BACKUP_KEEP_WEEKLY_WEEKS=52
+BACKUP_KEEP_MONTHLY_MONTHS=24
+BACKUP_KEEP_YEARLY_YEARS=2
 ```
 
-#### Docker Environment
-
-```bash
-# Backup MySQL container
-docker compose exec -T mysql mysqldump -u psa_user -p psa > backup.sql
-
-# With compression
-docker compose exec -T mysql mysqldump -u psa_user -p psa | gzip > backup.sql.gz
-```
-
-#### Laravel Forge
-
-```bash
-# Use Forge's built-in backup or manual
-forge ssh "mysqldump -u forge -p psa | gzip" > backup.sql.gz
-```
-
-### 2. File Backup
-
-```bash
-# Backup uploads directory
-tar -czvf storage_backup_$(date +%Y%m%d).tar.gz storage/app/public/uploads/
-
-# Sync to remote location
-rsync -avz storage/app/public/uploads/ user@backup-server:/path/to/backups/uploads/
-
-# S3 backup
-aws s3 sync storage/app/public/uploads/ s3://your-bucket/backups/uploads/ \
-    --storage-class STANDARD_IA
-```
-
-### 3. Configuration Backup
-
-```bash
-# Backup .env file (store securely, never in git)
-cp .env .env.backup.$(date +%Y%m%d)
-
-# Backup nginx configuration
-sudo cp /etc/nginx/sites-available/your-site /path/to/backups/nginx/
-
-# Backup SSL certificates
-sudo tar -czvf ssl_backup.tar.gz /etc/letsencrypt/live/ /etc/letsencrypt/archive/
-```
-
----
-
-## Automated Backup Setup
-
-### Option 1: Cron Job (Traditional Server)
-
-```bash
-# Edit crontab
-crontab -e
-
-# Add backup job (daily at 2 AM)
-0 2 * * * /path/to/backup.sh >> /var/log/backup.log 2>&1
-
-# Add MySQL backup
-0 2 * * * mysqldump -u root -p'password' psa | gzip > /backups/db/psa_$(date +\%Y\%m\%d).sql.gz
-
-# Add file backup
-5 2 * * * tar -czvf /backups/files/psa_storage_$(date +\%Y\%m\%d).tar.gz /var/www/psa/storage/app/public/uploads/
-```
-
-### Option 2: Built-in `backup:create` command (recommended)
-
-The application ships its own backup command covering the database and stored files:
-
-```bash
-# Run a backup now, ignoring the schedule
-php artisan backup:create --force
-
-# Run respecting the admin's schedule (skips when not due)
-php artisan backup:create
-
-# Override the retention count for one run
-php artisan backup:create --force --keep=7
-```
-
-What it does:
-
-- Dumps the database to a gzipped archive — `mysqldump` (single
-  transaction, routines included) for MySQL; for SQLite a `VACUUM INTO`
-  binary snapshot (`.sqlite.gz`) or, when that cannot run, a textual
-  dump (`.sql.gz`) — under `{BACKUP_PATH}/db/` (default
-  `storage/app/backups/db/`).
-- Archives everything on the public storage disk (uploads, client and
-  company logos, profile photos) to `{BACKUP_PATH}/files/*.tar.gz`.
-  Module data is covered too: anything a module keeps out of the public
-  disk lives in the database (e.g. the Resumes module stores resume
-  content as `parsed_data` rows and regenerates every export, so there
-  is nothing extra to archive).
-- Prunes old archives beyond the configured retention, per type
-  (database dumps and file archives each keep their own N).
-
-Schedule and retention are managed on the **Backups** page (admin →
-profile dropdown → Backups): frequency (daily / weekly / monthly) and
-the number of backups kept. They live in the `backup_settings` table.
-
-The scheduler runs the command daily at 04:00 (see
-`routes/console.php`); the command itself decides whether a backup is
-due for weekly/monthly frequencies. The scheduler requires the usual
-cron entry on the server:
+The scheduler needs the usual cron entry:
 
 ```bash
 * * * * * cd /var/www/erp && php artisan schedule:run >> /dev/null 2>&1
 ```
 
-Point `BACKUP_PATH` in `.env` at dedicated storage — ideally an
-external volume — so backups survive losing the app disk:
+## Daily operation
 
-```
-BACKUP_PATH=/backups
-```
+- `backups:run` (04:00) — backup + cleanup + inventory + snapshot.
+- `backups:verify` (04:30) — re-hash every archive against its
+  recorded checksum; snapshot the source and report changes. Corrupt
+  or missing archives flip the Backups page red.
+- Backups page → **Test Restore Now** (or `backups:test-restore`)
+  proves the newest archive restores.
 
-Restoring from these archives:
+## Restoring
 
-```bash
-# Database — MySQL (.sql.gz textual dump)
-gunzip < db/erp_20260903_040000_512_9f3ab2.sql.gz | mysql -u root -p erp
-
-# Database — SQLite binary snapshot (.sqlite.gz, from VACUUM INTO):
-# decompress straight over the database file the app is configured
-# with (DB_DATABASE, default database/database.sqlite)
-gunzip -c db/database_20260903_040000_512_9f3ab2.sqlite.gz > database/database.sqlite
-
-# Database — SQLite textual dump (.sql.gz, the VACUUM-INTO-unavailable
-# fallback): rebuild the database file through sqlite3
-gunzip -c db/database_20260903_040000_512_9f3ab2.sql.gz | sqlite3 database/database.sqlite
-
-# Stored files (extract under storage/app)
-tar -xzvf files/files_20260903_040000_512_9f3ab2.tar.gz -C storage/app
-```
-
-Whichever database route you take, stop the app first (queue workers
-and the scheduler hold the old schema/data open), restore, then run
-`php artisan migrate:status` before letting traffic back in.
-
-Out of scope for the built-in command (still handled manually per
-above/below): encrypted `.env` config backups and off-site S3 copies.
-Consider `aws s3 sync {BACKUP_PATH} s3://your-bucket/psa-backups/` from
-the host's crontab for the off-site leg.
-
-### Option 3: Docker Volume Backup
+### Test restore (never touches live data)
 
 ```bash
-#!/bin/bash
-# backup.sh
-
-BACKUP_DIR="/backups"
-DATE=$(date +%Y%m%d_%H%M%S)
-
-# Create backup directory
-mkdir -p $BACKUP_DIR/{db,files,config}
-
-# Backup MySQL data volume
-docker run --rm \
-    -v psa-mysql-data:/var/lib/mysql \
-    -v $BACKUP_DIR/db:/backup \
-    alpine tar -czvf /backup/mysql_$DATE.tar.gz -C /var/lib/mysql .
-
-# Backup uploads
-tar -czvf $BACKUP_DIR/files/uploads_$DATE.tar.gz storage/app/public/uploads/
-
-# Backup .env
-cp .env $BACKUP_DIR/config/.env.$DATE
-
-# Cleanup old backups (keep 30 days)
-find $BACKUP_DIR -mtime +30 -delete
-
-# Upload to S3
-aws s3 sync $BACKUP_DIR s3://your-bucket/psa-backups/ --delete
-
-echo "Backup completed: $DATE"
+php artisan backups:test-restore                 # newest ok archive
+php artisan backups:test-restore --file=2026-10-07-04-00-00.zip
 ```
 
-### Option 4: Laravel Forge (S3 Integration)
+Extracts the dump, rebuilds it into a scratch sqlite database under
+`storage/app/backup-restore/`, runs `PRAGMA integrity_check`, and
+compares row counts against the integrity snapshot taken with that
+backup. Result and details are recorded on the Backups page.
 
-1. Go to **Servers** → **Backups**
-2. Configure S3 bucket
-3. Set retention policy
-4. Forge handles backup scheduling automatically
-
----
-
-## Restore Procedures
-
-### 1. Database Restore
-
-#### Standard Restore (MySQL)
+### Live restore (database)
 
 ```bash
-# Restore from uncompressed backup
-mysql -u root -p psa < backup_20250101_120000.sql
-
-# Restore from compressed backup
-gunzip < backup_20250101_120000.sql.gz | mysql -u root -p psa
-
-# Restore specific table
-mysql -u root -p psa -e "DROP TABLE invoices;"
-mysql -u root -p psa < backup_20250101_120000.sql
+php artisan backups:restore                      # lists recent archives, explains
+php artisan backups:restore --file=2026-10-07-04-00-00.zip          # dry run
+php artisan backups:restore --file=2026-10-07-04-00-00.zip --force  # actually restores
 ```
 
-#### Standard Restore (SQLite)
+The command always takes a **fresh pre-restore backup first** and the
+restorer keeps its own safety copy; a failed restore rolls back to
+that copy. Any retained archive can be chosen — that is the
+point-in-time choice. SQLite restores rebuild into a new database
+file and swap it in after validation; because long-running web/queue
+processes hold the old file open, **restart them after a restore**
+(put the app in maintenance first on a busy system), then run
+`backups:test-restore` and `php artisan migrate:status`.
 
-`backup:create` produces two SQLite archive formats; restore the one
-you have (check the extension):
+MySQL restores import through the `mysql` CLI with the same
+safety-copy-then-verify shape.
+
+### Selective restore (single files)
+
+Zip entries are project-root relative, so one file or subtree comes
+back without a full restore (the zip asks for the password when
+encrypted):
 
 ```bash
-# .sqlite.gz — a consistent binary snapshot (VACUUM INTO): decompress
-# over the database file the app uses (DB_DATABASE). Stop the app
-# first, and keep a copy of the current file until verified.
-cp database/database.sqlite database/database.sqlite.bak
-gunzip -c db/database_20260903_040000_512_9f3ab2.sqlite.gz > database/database.sqlite
-
-# .sql.gz — a textual dump (the fallback when VACUUM INTO cannot run):
-# rebuild the database through sqlite3. Start from a fresh file so old
-# tables don't linger.
-rm database/database.sqlite
-gunzip -c db/database_20260903_040000_512_9f3ab2.sql.gz | sqlite3 database/database.sqlite
-
-# Sanity check either restore
-sqlite3 database/database.sqlite 'PRAGMA integrity_check;'
-php artisan migrate:status
+unzip -j /backups/acacia/2026-10-07-04-00-00.zip 'storage/app/public/uploads/2026/10/*' -d /tmp/restore
+# then copy what you need back under storage/app/public
 ```
 
-#### Docker Restore
+### New server / disaster recovery
+
+1. Provision the host, clone the repository, `composer install`.
+2. Restore `.env` from the archive (or rebuild it; the archive's copy
+   includes the backup password itself — keep that secret safe).
+3. Point `BACKUP_PATH`/disks at the backup location.
+4. `php artisan backups:restore --file=<newest>.zip --force`.
+5. `composer dump-autoload && php artisan migrate:status`, restart
+   workers, spot-check the books.
+
+## Encryption and key rotation
+
+- `BACKUP_ARCHIVE_PASSWORD` encrypts every future archive at rest.
+  The restore tooling reads it from the environment automatically.
+- If the password is compromised: treat old archives as burnt —
+  destroy them at the storage layer, set the new password, run
+  `backups:run --force`. Archives cannot be re-encrypted in place;
+  they are immutable by design.
+
+## Integrity snapshots (source health)
+
+Each `backups:run` and `backups:verify` records a
+`backup_integrity_snapshots` row: per-file SHA-256s across the public
+disk and per-table row counts, plus the diff since the previous
+snapshot. Investigate unexpected diffs (files removed, tables
+shrinking) **before** they propagate into subsequent backups. The
+operational `backup_*` tables themselves are excluded from manifests.
+
+## Legacy archives (pre-Oct 2026, `backup:create`)
+
+Older runs left `.sql.gz`/`.sqlite.gz` dumps under `{BACKUP_PATH}/db/`
+and `.tar.gz` file archives under `{BACKUP_PATH}/files/`. They are not
+in the new inventory; restore them manually:
 
 ```bash
-# Restore database
-cat backup.sql | docker compose exec -T mysql mysql -u psa_user -p psa
-
-# Restore from compressed backup
-gunzip < backup.sql.gz | docker compose exec -T mysql mysql -u psa_user -p psa
+# SQLite snapshot (VACUUM INTO)
+gunzip -c db/database_*.sqlite.gz > database/database.sqlite
+# Textual dump (either engine)
+gunzip -c db/erp_*.sql.gz | mysql -u root -p erp
+# Files
+tar -xzvf files/files_*.tar.gz -C storage/app
 ```
 
-#### Point-in-Time Restore (MySQL)
-
-```bash
-# Enable binary logging (in my.cnf)
-[mysqld]
-log-bin=mysql-bin
-binlog-format=ROW
-
-# Restore to specific point in time
-mysqlbinlog --stop-datetime="2025-01-15 10:00:00" mysql-bin.000001 | mysql -u root -p psa
-```
-
-### 2. Files Restore
-
-```bash
-# Restore uploads directory
-tar -xzvf storage_backup_20250101.tar.gz -C /
-
-# Restore specific file
-tar -xzvf storage_backup_20250101.tar.gz ./storage/app/public/uploads/important.pdf
-
-# Restore from S3
-aws s3 sync s3://your-bucket/backups/uploads/ storage/app/public/uploads/
-```
-
-### 3. Full Restore from Backup
-
-```bash
-#!/bin/bash
-# full_restore.sh
-
-BACKUP_DATE=$1  # e.g., 20250115
-
-if [ -z "$BACKUP_DATE" ]; then
-    echo "Usage: $0 YYYYMMDD"
-    exit 1
-fi
-
-# Stop services
-docker compose down
-
-# Restore MySQL
-gunzip < /backups/db/mysql_$BACKUP_DATE.tar.gz | docker volume rm psa-mysql-data 2>/dev/null
-docker volume create psa-mysql-data
-docker run --rm \
-    -v psa-mysql-data:/var/lib/mysql \
-    -v /backups/db:/backup \
-    alpine tar -xzvf /backup/mysql_$BACKUP_DATE.tar.gz -C /var/lib/mysql
-
-# Restore files
-tar -xzvf /backups/files/uploads_$BACKUP_DATE.tar.gz
-
-# Restore config
-cp /backups/config/.env.$BACKUP_DATE .env
-
-# Start services
-docker compose up -d
-
-# Verify
-docker compose exec app php artisan migrate:status
-```
-
----
-
-## Disaster Recovery
-
-### Scenario 1: Server Failure
-
-1. Provision new server
-2. Install Docker/Nginx + PHP + MySQL
-3. Clone repository
-4. Restore latest backup
-5. Update DNS
-6. Verify functionality
-
-### Scenario 2: Database Corruption
-
-```bash
-# Stop MySQL
-sudo systemctl stop mysql
-
-# Remove corrupted data
-sudo rm -rf /var/lib/mysql/*
-
-# Reinitialize
-sudo mysqld --initialize --user=mysql
-
-# Start MySQL
-sudo systemctl start mysql
-
-# Restore from backup
-mysql -u root -p < latest_backup.sql
-```
-
-### Scenario 3: Ransomware Attack
-
-1. **IMMEDIATELY** isolate the server (disconnect from network)
-2. Identify affected systems
-3. Restore from last known good backup (before infection date)
-4. Investigate vulnerability
-5. Apply security patches
-6. Bring online with enhanced monitoring
-
-### Scenario 4: Accidental Data Deletion
-
-```bash
-# If soft delete used, check for recoverable data
-php artisan tinker
->>> \App\Models\Invoice::withTrashed()->whereNotNull('deleted_at')->restore();
-
-# If permanent delete, restore from backup
-mysql -u root -p psa < backup_before_delete.sql
-```
-
----
-
-## Verification & Testing
-
-### Verify Backup Integrity
-
-```bash
-# Test MySQL backup
-mysql -u root -p -e "SELECT 1" psa
-
-# Check backup file size (shouldn't be empty)
-ls -lh backup.sql
-
-# Test compressed backup
-gunzip -t backup.sql.gz && echo "Valid gzip"
-
-# Verify data in backup
-grep -c "CREATE TABLE" backup.sql
-grep -c "INSERT INTO" backup.sql
-```
-
-### Restore Testing Schedule
-
-| Test | Frequency | Responsible |
-|------|-----------|-------------|
-| Backup file integrity | Weekly | Automated |
-| Full restore to test environment | Monthly | DevOps |
-| Point-in-time recovery drill | Quarterly | Team Lead |
-| Disaster recovery simulation | Annually | Full Team |
-
-### Restore Test Procedure
-
-```bash
-# 1. Create isolated test environment
-docker compose -f docker-compose.test.yml up -d
-
-# 2. Restore backup to test environment
-cat backup.sql | docker compose -f docker-compose.test.yml exec -T mysql mysql -u test -p test
-
-# 3. Verify application works
-curl -I http://localhost:8080
-
-# 4. Check data integrity
-docker compose exec app php artisan tinker --execute="echo \App\Models\Invoice::count();"
-
-# 5. Document results
-echo "Restore test completed: $(date)" >> /var/log/restore_tests.log
-```
-
----
-
-## Backup Storage Best Practices
-
-### 3-2-1 Backup Rule
-
-- **3** copies of data
-- **2** different media types
-- **1** offsite backup
-
-### Recommended Storage
-
-| Backup Type | Primary Location | Secondary Location |
-|-------------|------------------|-------------------|
-| Daily DB | Local `/backups` | S3 Standard-IA |
-| Weekly DB | S3 Standard | Glacier (90 days) |
-| Files | S3 Standard | Secondary S3 bucket |
-| Config | S3 Standard | Encrypted USB |
-
-### Encryption
-
-```bash
-# Encrypt sensitive backups
-gpg --encrypt --recipient backup@example.com backup.sql
-
-# Decrypt and restore
-gpg --decrypt backup.sql.gpg | mysql -u root -p psa
-```
-
----
-
-## Troubleshooting
-
-### Backup Fails: Disk Space
-
-```bash
-# Check disk space
-df -h
-
-# Clean old backups
-find /backups -mtime +7 -delete
-
-# Or compress existing backups
-gzip /backups/*.sql
-```
-
-### Backup Fails: Permission Denied
-
-```bash
-# Fix MySQL dump permissions
-sudo chown mysql:mysql /var/lib/mysql
-sudo chmod 700 /var/lib/mysql
-
-# For Docker
-docker compose exec mysql chown -R mysql:mysql /var/lib/mysql
-```
-
-### Backup Fails: Lock Timeout
-
-```bash
-# MySQL dump with lock timeout
-mysqldump -u root -p --lock-tables=false psa > backup.sql
-
-# Or use single-transaction
-mysqldump -u root -p --single-transaction psa > backup.sql
-```
-
-### Restore Fails: Disk Space
-
-```bash
-# Check space before restore
-df -h
-
-# Clean up
-docker system prune -a
-apt autoremove
-```
-
----
-
-## Emergency Contacts
-
-| Role | Name | Phone | Email |
-|------|------|-------|-------|
-| System Admin | | | |
-| Database Admin | | | |
-| DevOps Lead | | | |
-| Escalation | | | |
-
----
-
-## Documentation History
-
-| Date | Version | Changes | Author |
-|------|---------|---------|--------|
-| 2025-01-15 | 1.0 | Initial version | |
+Archive these directories away once anything depends on them; the new
+engine never writes them.
+
+## Verification schedule
+
+| Test | Frequency | How |
+|---|---|---|
+| Archive checksums + presence | Daily, automatic | `backups:verify` |
+| Source integrity snapshot | Daily, automatic | `backups:verify` |
+| Scratch restore test | After each backup-worthy change; at least monthly | Backups page → Test Restore Now |
+| Full disaster-recovery drill | Annually | New-server runbook above, on a scratch host |
+
+Would you be comfortable erasing your disk right now and restoring
+from backup? If not, run a test restore and find out why.

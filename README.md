@@ -276,6 +276,14 @@ Built on IFRS reports, extended with project/PO reports. The IFRS statements and
 - Period locking (close prior FY)
 - BAS-ready GST report
 
+### Backups & Restore (Tao of Backup)
+
+- spatie/laravel-backup engine: one complete unit per run — database, public storage disk and `.env` in a single zip per destination disk
+- Daily schedule (admin-set frequency), GFS retention (7 daily / 4 weekly / 12 monthly / 2 yearly), optional offsite S3 disk
+- AES-encrypted archives; SHA-256 inventory with daily corrupt/missing detection
+- Source integrity snapshots (file hashes + row counts) with change reports
+- One-click test restore into a scratch database (live data untouched); live `backups:restore` takes a safety backup first and rolls back on failure
+
 ---
 
 ## Technology Stack

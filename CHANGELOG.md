@@ -5,6 +5,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-07
 
+### Added — backups rebuilt on spatie/laravel-backup, covering the Tao of Backup
+
+The homegrown `backup:create` (separate db dump + files tar.gz, local
+path only, count-based retention) is replaced by
+spatie/laravel-backup with the missing heads built on top. Coverage:
+one complete unit per run — database dump, the whole public storage
+disk and `.env` — inside one zip per destination disk. Separation:
+`BACKUP_DESTINATION_DISKS` fans the archive out to multiple disks,
+with an s3 offsite disk ready to configure. History: GFS retention
+(7 daily / 4 weekly / 12 monthly / 2 yearly, env-tunable) via
+spatie's cleanup strategy. Security: archives AES-256-encrypted when
+`BACKUP_ARCHIVE_PASSWORD` is set, with key-rotation guidance in the
+runbook. Testing: `backups:test-restore` restores the newest archive
+into a scratch sqlite database, runs PRAGMA integrity_check and
+compares row counts against the snapshot taken with that backup —
+recorded on the admin Backups page, which gained Run/Verify/Test
+actions plus archive, snapshot and restore-test history. Integrity:
+`backups:verify` (daily) re-hashes every archive against its
+recorded SHA-256 (corrupt/missing detection) and snapshots the
+source data with a change report since the previous snapshot.
+Restore: live `backups:restore --file=… --force` always takes a
+fresh pre-restore backup, keeps a safety copy, validates the rebuild
+before swapping it in and rolls back on failure; selective restores
+unpack single files straight from the zip (runbook). The sqlite
+dumper stays in PHP (spatie's shells out to a sqlite3 CLI the host
+need not have) and reads through the live connection, so :memory:
+databases dump correctly. The admin frequency setting (daily/weekly/
+monthly) survives; retention_count is superseded by the config-driven
+GFS policy. Closes the todo-list "Taobackup" item; the runbook is
+rewritten around the new engine with a legacy-archive escape hatch.
+
 ### Added — contracts: the second purchase-order kind, with implied budgets and numbered amendments
 
 Some clients issue contracts rather than purchase orders. The two

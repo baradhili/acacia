@@ -2,39 +2,46 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BackupArchive;
+use App\Models\BackupIntegritySnapshot;
+use App\Models\BackupRestoreTest;
 use App\Models\BackupSetting;
-use App\Services\BackupService;
+use App\Services\Backups\ArchiveInventory;
+use App\Services\Backups\BackupRunner;
+use App\Services\Backups\RestoreTester;
 use Illuminate\Http\Request;
-use Illuminate\Support\Number;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 /**
- * Admin backups page: run `backup:create` on demand and manage its
- * schedule. The work lives in BackupService so the console command and
- * this controller share one path. Admin only (route middleware).
+ * The admin Backups page: the Tao-of-Backup control surface. Run a
+ * backup now (BackupRunner → spatie), verify archive checksums and
+ * source integrity, fire a test-restore (never touches live data),
+ * and manage the frequency. The heavy lifting lives in the services
+ * so the console commands and this page share one path; live
+ * restores are console-only (`backups:restore`). Admin only (route
+ * middleware).
  */
 class BackupController extends Controller
 {
-    public function __construct(protected BackupService $backups) {}
+    public function __construct(
+        protected BackupRunner $runner,
+        protected ArchiveInventory $inventory,
+        protected RestoreTester $restoreTester,
+    ) {}
 
     public function index()
     {
-        $archives = array_map(
-            fn (array $files) => array_map(
-                fn (array $file) => [
-                    'name' => $file['name'],
-                    'size' => Number::fileSize($file['bytes']),
-                    'at' => $file['at']->format('d M Y H:i'),
-                ],
-                $files,
-            ),
-            $this->backups->list(),
-        );
+        $this->inventory->reconcile();
 
         return view('backups.index', [
             'setting' => BackupSetting::current(),
-            'archives' => $archives,
-            'destination' => config('backups.path'),
+            'archives' => BackupArchive::query()->orderByDesc('backed_up_at')->limit(20)->get(),
+            'snapshots' => BackupIntegritySnapshot::query()->latest('id')->limit(5)->get(),
+            'restoreTests' => BackupRestoreTest::query()->latest('id')->limit(5)->get(),
+            'destinationDisks' => config('backup.backup.destination.disks'),
+            'retention' => $this->retentionSummary(),
+            'encrypted' => config('backup.backup.password') !== null,
         ]);
     }
 
@@ -42,48 +49,84 @@ class BackupController extends Controller
     {
         set_time_limit(0);
 
-        try {
-            ['created' => $created, 'removed' => $removed, 'already_running' => $alreadyRunning] =
-                $this->backups->runAndPrune();
-        } catch (\Throwable $e) {
-            report($e);
+        $result = $this->runner->run(force: true);
 
-            return redirect()->route('backups.index')
-                ->with('error', 'Backup failed: '.$e->getMessage());
+        return match ($result['status']) {
+            'ran' => redirect()->route('backups.index')->with(
+                'success',
+                __('backups.run_created', ['count' => count($result['created'])]),
+            ),
+            'already_running' => redirect()->route('backups.index')->with('error', __('backups.run_already_running')),
+            'skipped' => redirect()->route('backups.index')->with('error', __('backups.run_skipped')),
+            default => $this->reportFailure($result['error'] ?? 'unknown error'),
+        };
+    }
+
+    public function verify()
+    {
+        set_time_limit(0);
+
+        $counts = $this->inventory->verify();
+
+        if ($counts['corrupt'] > 0 || $counts['missing'] > 0) {
+            return redirect()->route('backups.index')->with(
+                'error',
+                __('backups.verify_problems', $counts),
+            );
         }
 
-        if ($alreadyRunning) {
-            return redirect()->route('backups.index')
-                ->with('error', 'A backup is already running — nothing was created. Try again once it finishes.');
-        }
+        return redirect()->route('backups.index')->with(
+            'success',
+            __('backups.verify_clean', ['count' => $counts['ok']]),
+        );
+    }
 
-        $summary = collect($created)
-            ->map(fn (array $file, string $type) => ($type === 'db' ? 'database' : 'files')
-                .' — '.$file['name'].' ('.Number::fileSize($file['bytes']).')')
-            ->implode('; ');
+    public function testRestore()
+    {
+        set_time_limit(0);
 
-        $message = 'Backup created: '.$summary.'.';
-        if ($removed !== []) {
-            $message .= ' Pruned '.count($removed).' old backup(s).';
-        }
+        $test = $this->restoreTester->test();
 
-        return redirect()->route('backups.index')->with('success', $message);
+        return redirect()->route('backups.index')->with(
+            $test->status === 'passed' ? 'success' : 'error',
+            __('backups.test_restore_'.$test->status, ['file' => $test->file, 'message' => $test->message]),
+        );
     }
 
     public function update(Request $request)
     {
         $validated = $request->validate([
             'frequency' => ['required', Rule::in(BackupSetting::FREQUENCIES)],
-            'retention_count' => ['required', 'integer', 'min:1', 'max:365'],
         ]);
 
         BackupSetting::current()->fill($validated)->save();
 
         return redirect()->route('backups.index')
-            ->with('success', sprintf(
-                'Backup schedule saved: %s, keeping the most recent %d backup(s) of each type.',
-                $validated['frequency'],
-                $validated['retention_count'],
-            ));
+            ->with('success', __('backups.settings_saved', ['frequency' => $validated['frequency']]));
+    }
+
+    /**
+     * The GFS retention policy as configured, for the page footer.
+     */
+    protected function retentionSummary(): string
+    {
+        $policy = config('backup.cleanup.default_strategy');
+
+        return sprintf(
+            '%s d / %s w / %s m / %s y',
+            $policy['keep_all_backups_for_days'],
+            $policy['keep_weekly_backups_for_weeks'],
+            $policy['keep_monthly_backups_for_months'],
+            $policy['keep_yearly_backups_for_years'],
+        );
+    }
+
+    protected function reportFailure(string $error)
+    {
+        // Details go to the log; the screen gets the generic wording —
+        // the raw error may carry paths or internals.
+        Log::error('Backup run failed from the admin page', ['error' => $error]);
+
+        return redirect()->route('backups.index')->with('error', __('backups.run_failed'));
     }
 }

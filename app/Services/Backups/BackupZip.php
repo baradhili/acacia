@@ -1,0 +1,133 @@
+<?php
+
+namespace App\Services\Backups;
+
+use App\Models\BackupArchive;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
+use RuntimeException;
+use ZipArchive;
+
+/**
+ * Shared zip plumbing for the restore legs: open a backup archive
+ * (with the configured password when the archives are encrypted) and
+ * pull out the textual database dump spatie stored under db-dumps/.
+ */
+class BackupZip
+{
+    /**
+     * The db-dumps/*.sql member as a string.
+     */
+    public static function readDatabaseDump(string $zipPath): string
+    {
+        $zip = new ZipArchive;
+
+        if (@$zip->open($zipPath) !== true) {
+            throw new RuntimeException('Cannot open the backup archive (corrupt zip, or encrypted with a different password).');
+        }
+
+        // setPassword only works on an opened archive; reading an
+        // encrypted member without it returns false, not an exception.
+        if ($password = config('backup.backup.password')) {
+            $zip->setPassword($password);
+        }
+
+        try {
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $name = (string) $zip->getNameIndex($i);
+
+                if (str_starts_with($name, 'db-dumps/') && str_ends_with($name, '.sql')) {
+                    $sql = $zip->getFromIndex($i);
+
+                    if ($sql === false || $sql === '') {
+                        throw new RuntimeException('Cannot read the database dump from the archive — check BACKUP_ARCHIVE_PASSWORD.');
+                    }
+
+                    return $sql;
+                }
+            }
+
+            throw new RuntimeException('No database dump found in the archive.');
+        } finally {
+            $zip->close();
+        }
+    }
+
+    /**
+     * A local filesystem path for the archive: the real path on local
+     * disks, or a streamed temp copy for remote destinations.
+     *
+     * @return array{0: string, 1: bool} the path and whether it is a temp copy the caller must delete
+     */
+    public static function materialise(BackupArchive $archive): array
+    {
+        // Driver check, not method_exists: every FilesystemAdapter has
+        // a path() method, so only the local driver actually honours
+        // it — anything else (s3 offsite, sftp) needs a local copy for
+        // ZipArchive to open.
+        $isLocal = config("filesystems.disks.{$archive->disk}.driver") === 'local';
+
+        if ($isLocal) {
+            return [Storage::disk($archive->disk)->path($archive->path), false];
+        }
+
+        $disk = Storage::disk($archive->disk);
+
+        $temp = tempnam(sys_get_temp_dir(), 'erp-backup-zip-');
+
+        if ($temp === false) {
+            throw new RuntimeException('Could not create a temp file for the archive copy.');
+        }
+
+        try {
+            $stream = $disk->readStream($archive->path);
+
+            if ($stream === false) {
+                throw new RuntimeException("Could not read {$archive->disk}/{$archive->path} for a local copy.");
+            }
+
+            $target = fopen($temp, 'w+b');
+
+            if ($target === false) {
+                fclose($stream);
+                throw new RuntimeException("Could not open the temp copy of {$archive->name} for writing.");
+            }
+
+            try {
+                stream_copy_to_stream($stream, $target);
+            } finally {
+                fclose($stream);
+                fclose($target);
+            }
+        } catch (\Throwable $e) {
+            File::delete($temp);
+
+            throw $e;
+        }
+
+        return [$temp, true];
+    }
+
+    /**
+     * Run a callback over the archive's database dump, deleting the
+     * streamed temp copy a remote disk needed (local paths are the
+     * archive itself and are left alone).
+     *
+     * @template TReturn
+     *
+     * @param  callable(string): TReturn  $callback
+     * @return TReturn
+     */
+    public static function withDatabaseDump(BackupArchive $archive, callable $callback)
+    {
+        [$zipPath, $isTemp] = static::materialise($archive);
+
+        try {
+            return $callback(static::readDatabaseDump($zipPath));
+        } finally {
+            if ($isTemp) {
+                File::delete($zipPath);
+            }
+        }
+    }
+}

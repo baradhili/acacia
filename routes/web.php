@@ -66,10 +66,13 @@ Route::middleware('auth')->group(function () {
         Route::put('/administration/retention', [AdministrationController::class, 'updateRetention'])->name('administration.retention.update');
     });
 
-    // Backups (admin only) — run backup:create on demand, manage its schedule
+    // Backups (admin only) — run backups, verify integrity, test
+    // restores, and manage the schedule
     Route::middleware('role:admin')->group(function () {
         Route::get('/backups', [BackupController::class, 'index'])->name('backups.index');
         Route::post('/backups/run', [BackupController::class, 'run'])->name('backups.run');
+        Route::post('/backups/verify', [BackupController::class, 'verify'])->name('backups.verify');
+        Route::post('/backups/test-restore', [BackupController::class, 'testRestore'])->name('backups.test-restore');
         Route::put('/backups/settings', [BackupController::class, 'update'])->name('backups.settings.update');
     });
 

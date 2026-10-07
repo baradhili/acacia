@@ -37,7 +37,6 @@ here once their changelog entry lands. Ordered by priority.
   - [ ] Delay until Client portal - Client acceptance portal: tokenised share link where the client reads the proposal, toggles optional lines with totals recalculating, and accepts with a typed/drawn e-signature that locks the document (propsly); the signature feeds the existing accepted state. Oct 2026 laraestimate review: its whole read+toggle flow runs on a bare capability URL (UUID primary key, unauthenticated route, per-estimate `allows_to_select_items` switch + per-item `obligatory` flag — maps straight onto our optional lines), so this piece needs the client-portal go/no-go, not the portal itself; and when built, gate the link properly (optional password + expiry) — laraestimate has both as columns but never enforces them anywhere.
   - [ ] Delay until Client portal - Engagement tracking on sent proposals: open/view notifications and per-section read analytics (propsly's tracking and engagement scores).
 
-- [ ] improve backups based on Taobackup philosophy
 
 - [ ] BankTransferService has no XFER reversal path: an internal transfer journal recorded wrong (wrong accounts or amount) can be unmatch-then-nothing — there is no mirror flow to undo it, only a hand-posted manual journal (the Oct 2026 310→320 consolidation was posted by hand for exactly this class of correction). A reverse() mirroring IfrsPosting::reverseTransaction, clearing any linked bank line's match with it, is the missing piece.
 
