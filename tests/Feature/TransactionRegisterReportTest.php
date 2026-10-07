@@ -73,11 +73,10 @@ class TransactionRegisterReportTest extends TestCase
     }
 
     /**
-     * A posted journal with the bank account as its main (debit) side
-     * and one revenue line item — the minimal two-leg transaction the
-     * register must list once per leg.
+     * The register's two accounts (bank + revenue), created once and
+     * shareable across many posted journals.
      */
-    protected function postJournal(string $reference, float $amount): array
+    protected function registerAccounts(): array
     {
         $bank = Account::create([
             'entity_id' => $this->entity->id,
@@ -93,6 +92,19 @@ class TransactionRegisterReportTest extends TestCase
             'code' => '4100',
             'name' => 'Test Revenue',
         ]);
+
+        return [$bank, $revenue];
+    }
+
+    /**
+     * A posted journal with the bank account as its main (debit) side
+     * and one revenue line item — the minimal two-leg transaction the
+     * register must list once per leg. Pass $accounts to reuse an
+     * existing pair instead of creating fresh ones.
+     */
+    protected function postJournal(string $reference, float $amount, ?array $accounts = null): array
+    {
+        [$bank, $revenue] = $accounts ?? $this->registerAccounts();
 
         $journal = new JournalEntry([
             'transaction_date' => Carbon::now(),
@@ -240,6 +252,35 @@ class TransactionRegisterReportTest extends TestCase
         $dataRows = array_map('str_getcsv', array_slice($csv, 1));
         $this->assertSame('PAY-2026-9003', $dataRows[0][0]);
         $this->assertContains('100.00', $dataRows[0]);
+    }
+
+    public function test_register_screen_is_paginated(): void
+    {
+        // 101 journals = 202 legs: two full pages of 100 plus a stub.
+        $accounts = $this->registerAccounts();
+        for ($i = 0; $i <= 100; $i++) {
+            $this->postJournal(sprintf('PAY-2026-9%03d', $i), 1.0, $accounts);
+        }
+
+        $first = $this->actingAs($this->admin)
+            ->get(route('reports.transaction-register'));
+
+        $first->assertOk();
+        $rows = $first->viewData('rows');
+        $this->assertSame(100, $rows->count());
+        $this->assertSame(202, $rows->total());
+        $this->assertSame(3, $rows->lastPage());
+
+        // The summary cards carry the whole filtered set's totals,
+        // not just the visible page.
+        $this->assertSame(101.0, $first->viewData('totalDebit'));
+        $this->assertSame(101.0, $first->viewData('totalCredit'));
+
+        $last = $this->actingAs($this->admin)
+            ->get(route('reports.transaction-register', ['page' => 3]));
+
+        $last->assertOk();
+        $this->assertSame(2, $last->viewData('rows')->count());
     }
 
     public function test_register_date_filters_scope_the_rows(): void

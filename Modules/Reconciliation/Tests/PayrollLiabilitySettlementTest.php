@@ -467,4 +467,23 @@ class PayrollLiabilitySettlementTest extends TestCase
         $this->assertSame(BankTransaction::STATUS_PENDING, $line->refresh()->status);
         $this->assertEqualsWithDelta(0.0, $this->balance($this->operating), 0.001);
     }
+
+    public function test_an_unexpected_failure_flashes_the_generic_message_not_the_exception(): void
+    {
+        $line = $this->bankLine();
+
+        $this->mock(PayrollLiabilityService::class, function ($mock) {
+            $mock->shouldReceive('settle')
+                ->andThrow(new \RuntimeException('internal details from the storage layer'));
+        });
+
+        $this->actingAs($this->user)
+            ->post(route('reconciliation.settle-payroll', $line), [
+                'bank_account_id' => $this->operating->id,
+                'payable_account_id' => $this->superPayable->id,
+            ])
+            ->assertSessionHas('error', __('reconciliation.action_failed'));
+
+        $this->assertSame(BankTransaction::STATUS_PENDING, $line->refresh()->status);
+    }
 }

@@ -20,6 +20,7 @@ use IFRS\Models\Account;
 use IFRS\Models\Balance;
 use IFRS\Models\Ledger;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Facades\Excel;
 
 /**
@@ -314,62 +315,63 @@ class LedgerReportController extends Controller
     }
 
     /**
-     * IFRS Transaction Ledger Register: every posted ledger leg with
-     * the transaction's reference first, the account the leg posted
-     * to, the debit/credit split and links to any documents attached
-     * to the transaction's source record. One row per ledger leg, so
-     * a multi-leg journal appears once per account it touches — the
-     * debit and credit columns each sum to the period's total
-     * movement and must agree with each other.
+     * The register's base query: ledger legs in posting order with
+     * their transactions eager-loaded, optionally scoped to a date
+     * window (null = unbounded — the register audits everything).
      */
-    protected function buildTransactionRegister(?Carbon $startDate, ?Carbon $endDate): array
+    protected function registerQuery(?Carbon $startDate, ?Carbon $endDate)
     {
-        $accounts = Account::orderBy('code')
-            ->get(['id', 'code', 'name'])
-            ->keyBy('id');
-
-        $entries = Ledger::query()
+        return Ledger::query()
             ->when($startDate, fn ($query, $date) => $query->where('posting_date', '>=', $date))
             ->when($endDate, fn ($query, $date) => $query->where('posting_date', '<=', $date))
             ->with('transaction')
             ->orderBy('posting_date')
-            ->orderBy('id')
-            ->get();
+            ->orderBy('id');
+    }
 
-        $documentsByReference = $this->documentsByReference();
-
-        $rows = collect();
-        $totalDebit = 0.0;
-        $totalCredit = 0.0;
-
-        foreach ($entries as $entry) {
-            $transaction = $entry->transaction;
-            $reference = $transaction->reference ?? '';
-            $account = $accounts[$entry->post_account] ?? null;
-            $isDebit = $entry->entry_type === Balance::DEBIT;
-            $debit = $isDebit ? (float) $entry->amount : 0.0;
-            $credit = $isDebit ? 0.0 : (float) $entry->amount;
-
-            $totalDebit += $debit;
-            $totalCredit += $credit;
-
-            $rows->push([
-                'reference' => $reference,
-                'date' => Carbon::parse($entry->posting_date),
-                'type' => config('ifrs.transactions')[$transaction->transaction_type ?? ''] ?? $transaction->transaction_type ?? '',
-                'account_code' => $account?->code ?? '?',
-                'account_name' => $account?->name ?? __('reports.transaction_register.unknown_account'),
-                'debit' => $debit,
-                'credit' => $credit,
-                'narration' => $transaction->narration ?? '',
-                'documents' => $documentsByReference[$reference] ?? collect(),
-            ]);
-        }
+    /**
+     * One register row per ledger leg: the transaction's reference
+     * first, the account the leg posted to, the debit/credit split
+     * and the documents linked to the transaction's source record.
+     * A multi-leg journal appears once per account it touches.
+     */
+    protected function registerRow(Ledger $entry, $accounts, $documentsByReference): array
+    {
+        $transaction = $entry->transaction;
+        $reference = $transaction->reference ?? '';
+        $account = $accounts[$entry->post_account] ?? null;
+        $isDebit = $entry->entry_type === Balance::DEBIT;
 
         return [
-            'rows' => $rows,
-            'total_debit' => round($totalDebit, 2),
-            'total_credit' => round($totalCredit, 2),
+            'reference' => $reference,
+            'date' => Carbon::parse($entry->posting_date),
+            'type' => config('ifrs.transactions')[$transaction->transaction_type ?? ''] ?? $transaction->transaction_type ?? '',
+            'account_code' => $account?->code ?? '?',
+            'account_name' => $account?->name ?? __('reports.transaction_register.unknown_account'),
+            'debit' => $isDebit ? (float) $entry->amount : 0.0,
+            'credit' => $isDebit ? 0.0 : (float) $entry->amount,
+            'narration' => $transaction->narration ?? '',
+            'documents' => $documentsByReference[$reference] ?? collect(),
+        ];
+    }
+
+    /**
+     * Whole-filtered-set totals for the summary cards and footer: one
+     * aggregate query, exact whatever page the screen is showing. The
+     * debit and credit totals each sum the movement and must agree
+     * with each other — the register's double-entry self-check.
+     */
+    protected function registerTotals($query): array
+    {
+        // Aggregates must not carry the base query's eager load — a
+        // stdClass row has no transaction relation to hydrate. Three
+        // plain aggregates: no raw SQL to keep portable.
+        $base = (clone $query)->reorder()->without('transaction');
+
+        return [
+            'legs' => (int) (clone $base)->count(),
+            'debit' => round((float) (clone $base)->where('entry_type', Balance::DEBIT)->sum('amount'), 2),
+            'credit' => round((float) (clone $base)->where('entry_type', Balance::CREDIT)->sum('amount'), 2),
         ];
     }
 
@@ -386,8 +388,14 @@ class LedgerReportController extends Controller
      * settled. Owners without a number, and documents on
      * non-transaction owners (clients, suppliers), have no reference
      * to match and stay out of the register.
+     *
+     * Pass $references to resolve only those references' documents —
+     * the paginated screen path, bounded to one page's rows (the
+     * settled owners those references reach load too). Null loads
+     * everything: the CSV export path, whose output is the whole map
+     * anyway.
      */
-    protected function documentsByReference()
+    protected function documentsByReference(?Collection $references = null)
     {
         $owners = [
             Payment::class => 'payment_number',
@@ -407,20 +415,66 @@ class LedgerReportController extends Controller
             }
         }
 
-        $documentsByOwner = Document::query()
-            ->whereIn('documentable_type', array_keys($owners))
-            ->get()
-            ->groupBy(fn ($document) => $document->documentable_type.'|'.$document->documentable_id);
+        // Scoped mode: the owner ids behind the requested references,
+        // so only their allocations and documents load.
+        $ownerIdsByClass = null;
+        if ($references !== null) {
+            $wanted = $references->filter(fn ($reference) => $reference !== null && $reference !== '')->flip();
+            $ownerIdsByClass = [];
+            foreach ($numberByOwner as $key => $number) {
+                if ($wanted->has($number)) {
+                    [$class, $id] = explode('|', $key);
+                    $ownerIdsByClass[$class][] = $id;
+                }
+            }
+        }
 
         // Payer owner key => settled owner keys: the allocation tables
-        // say which invoices/bills each payment/bill payment settled.
+        // say which invoices/bills each payment/bill payment settled —
+        // scoped to the in-scope payers when references were given.
         $settledOwners = [];
-        foreach (PaymentAllocation::query()->get(['payment_id', 'invoice_id']) as $link) {
+        $paymentLinks = PaymentAllocation::query()
+            ->when($ownerIdsByClass !== null, fn ($query) => $query->whereIn('payment_id', $ownerIdsByClass[Payment::class] ?? []))
+            ->get(['payment_id', 'invoice_id']);
+        foreach ($paymentLinks as $link) {
             $settledOwners[Payment::class.'|'.$link->payment_id][] = Invoice::class.'|'.$link->invoice_id;
         }
-        foreach (BillPaymentAllocation::query()->get(['bill_payment_id', 'bill_id']) as $link) {
+        $billPaymentLinks = BillPaymentAllocation::query()
+            ->when($ownerIdsByClass !== null, fn ($query) => $query->whereIn('bill_payment_id', $ownerIdsByClass[BillPayment::class] ?? []))
+            ->get(['bill_payment_id', 'bill_id']);
+        foreach ($billPaymentLinks as $link) {
             $settledOwners[BillPayment::class.'|'.$link->bill_payment_id][] = Bill::class.'|'.$link->bill_id;
         }
+
+        // The documents to load: every owner type unscoped; in scoped
+        // mode, the in-scope owners plus the settled owners their
+        // payments reach (an invoice's PDF shows on the paying
+        // payment's rows even when the invoice's own rows are not on
+        // this page).
+        $documentsQuery = Document::query();
+        if ($ownerIdsByClass === null) {
+            $documentsQuery->whereIn('documentable_type', array_keys($owners));
+        } else {
+            $documentOwnersByClass = $ownerIdsByClass;
+            foreach ($settledOwners as $settledKeys) {
+                foreach ($settledKeys as $key) {
+                    [$class, $id] = explode('|', $key);
+                    if (! in_array($id, $documentOwnersByClass[$class] ?? [])) {
+                        $documentOwnersByClass[$class][] = $id;
+                    }
+                }
+            }
+            $documentsQuery->where(function ($query) use ($documentOwnersByClass) {
+                foreach ($documentOwnersByClass as $class => $ids) {
+                    $query->orWhere(function ($classQuery) use ($class, $ids) {
+                        $classQuery->where('documentable_type', $class)
+                            ->whereIn('documentable_id', $ids);
+                    });
+                }
+            });
+        }
+        $documentsByOwner = $documentsQuery->get()
+            ->groupBy(fn ($document) => $document->documentable_type.'|'.$document->documentable_id);
 
         // Keying each reference's list by document id keeps it
         // duplicate-free — a settled invoice's document shows on the
@@ -463,17 +517,41 @@ class LedgerReportController extends Controller
     }
 
     /**
-     * IFRS Transaction Ledger Register screen (admin-only route).
+     * IFRS Transaction Ledger Register screen (admin-only route):
+     * paginated (the ledger grows without bound), with the summary
+     * cards and footer carrying the whole filtered set's totals from
+     * one aggregate query.
      */
     public function transactionRegister(Request $request)
     {
         [$startDate, $endDate] = $this->registerDateRange($request);
-        $register = $this->buildTransactionRegister($startDate, $endDate);
+        $query = $this->registerQuery($startDate, $endDate);
+
+        $page = $query->paginate(100)->withQueryString();
+
+        $accounts = Account::orderBy('code')
+            ->get(['id', 'code', 'name'])
+            ->keyBy('id');
+
+        // Only this page's references resolve documents — bounded to
+        // the page, not the whole ledger.
+        $documentsByReference = $this->documentsByReference(
+            $page->getCollection()->map(fn ($entry) => $entry->transaction->reference ?? '')
+        );
+
+        $rows = $page->setCollection(
+            $page->getCollection()->map(
+                fn ($entry) => $this->registerRow($entry, $accounts, $documentsByReference)
+            )
+        );
+
+        $totals = $this->registerTotals($query);
 
         return view('reports.transaction-register', [
-            'rows' => $register['rows'],
-            'totalDebit' => $register['total_debit'],
-            'totalCredit' => $register['total_credit'],
+            'rows' => $rows,
+            'totalDebit' => $totals['debit'],
+            'totalCredit' => $totals['credit'],
+            'totalLegs' => $totals['legs'],
             'startDate' => $startDate,
             'endDate' => $endDate,
         ]);
@@ -481,15 +559,25 @@ class LedgerReportController extends Controller
 
     /**
      * Export the Transaction Ledger Register to CSV — the same rows
-     * the screen shows, each document as "name absolute-url".
+     * the screen shows, streamed chunk-by-chunk so memory stays at
+     * one chunk whatever the ledger's size (chunk, not lazy()/cursor:
+     * the register's posting-date order must survive, and keyset
+     * streaming would replace it). Documents as "name absolute-url".
      */
     public function exportTransactionRegisterCsv(Request $request)
     {
         [$startDate, $endDate] = $this->registerDateRange($request);
-        $register = $this->buildTransactionRegister($startDate, $endDate);
+
+        $accounts = Account::orderBy('code')
+            ->get(['id', 'code', 'name'])
+            ->keyBy('id');
+
+        // The whole map: the export writes every row, so its document
+        // resolution is bounded by the export's own output.
+        $documentsByReference = $this->documentsByReference();
 
         $keys = 'reports.transaction_register';
-        $rows = [[
+        $header = [
             __("{$keys}.reference"),
             __("{$keys}.date"),
             __("{$keys}.type"),
@@ -498,31 +586,34 @@ class LedgerReportController extends Controller
             __("{$keys}.credit"),
             __("{$keys}.narration"),
             __("{$keys}.documents"),
-        ]];
-
-        foreach ($register['rows'] as $row) {
-            $rows[] = [
-                $row['reference'],
-                $row['date']->format('Y-m-d'),
-                $row['type'],
-                $row['account_code'].' - '.$row['account_name'],
-                number_format($row['debit'], 2, '.', ''),
-                number_format($row['credit'], 2, '.', ''),
-                $row['narration'],
-                $row['documents']
-                    ->map(fn ($document) => $document->name.' '.route('documents.download', $document))
-                    ->implode(' | '),
-            ];
-        }
+        ];
 
         $scope = collect([$startDate?->format('Ymd'), $endDate?->format('Ymd')])->filter()->implode('-');
         $filename = 'Transaction-Ledger-Register'.($scope !== '' ? "_{$scope}" : '').'.csv';
 
-        return response()->streamDownload(function () use ($rows) {
+        return response()->streamDownload(function () use ($header, $startDate, $endDate, $accounts, $documentsByReference) {
             $out = fopen('php://output', 'w');
-            foreach ($rows as $row) {
-                fputcsv($out, $row);
-            }
+            fputcsv($out, $header);
+
+            $this->registerQuery($startDate, $endDate)->chunk(500, function ($entries) use ($out, $accounts, $documentsByReference) {
+                foreach ($entries as $entry) {
+                    $row = $this->registerRow($entry, $accounts, $documentsByReference);
+
+                    fputcsv($out, [
+                        $row['reference'],
+                        $row['date']->format('Y-m-d'),
+                        $row['type'],
+                        $row['account_code'].' - '.$row['account_name'],
+                        number_format($row['debit'], 2, '.', ''),
+                        number_format($row['credit'], 2, '.', ''),
+                        $row['narration'],
+                        $row['documents']
+                            ->map(fn ($document) => $document->name.' '.route('documents.download', $document))
+                            ->implode(' | '),
+                    ]);
+                }
+            });
+
             fclose($out);
         }, $filename, ['Content-Type' => 'text/csv']);
     }

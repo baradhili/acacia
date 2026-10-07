@@ -198,11 +198,14 @@ class ReconciliationController extends Controller
                 (int) $validated['payable_account_id'],
                 $validated['notes'] ?? null,
             );
+        } catch (\InvalidArgumentException $e) {
+            return back()->withInput()
+                ->with('error', $e->getMessage());
         } catch (\Throwable $e) {
             report($e);
 
             return back()->withInput()
-                ->with('error', $e->getMessage());
+                ->with('error', __('reconciliation.action_failed'));
         }
 
         return redirect()->route('reconciliation.index')
@@ -229,11 +232,14 @@ class ReconciliationController extends Controller
                 (int) $validated['bank_account_id'],
                 $validated['notes'] ?? null,
             );
+        } catch (\InvalidArgumentException $e) {
+            return back()->withInput()
+                ->with('error', $e->getMessage());
         } catch (\Throwable $e) {
             report($e);
 
             return back()->withInput()
-                ->with('error', $e->getMessage());
+                ->with('error', __('reconciliation.action_failed'));
         }
 
         return redirect()->route('reconciliation.index')
@@ -266,11 +272,14 @@ class ReconciliationController extends Controller
                 $counterpart !== null && $counterpart !== '' ? (int) $counterpart : null,
                 $validated['notes'] ?? null,
             );
+        } catch (\InvalidArgumentException $e) {
+            return back()->withInput()
+                ->with('error', $e->getMessage());
         } catch (\Throwable $e) {
             report($e);
 
             return back()->withInput()
-                ->with('error', $e->getMessage());
+                ->with('error', __('reconciliation.action_failed'));
         }
 
         return redirect()->route('reconciliation.index')
