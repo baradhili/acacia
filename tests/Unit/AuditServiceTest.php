@@ -4,6 +4,7 @@ namespace Tests\Unit;
 
 use App\Models\Client;
 use App\Models\Invoice;
+use App\Models\User;
 use App\Services\AuditService;
 use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
@@ -15,7 +16,7 @@ class AuditServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new AuditService();
+        $this->service = new AuditService;
     }
 
     protected function createClient(array $attributes = []): Client
@@ -32,7 +33,7 @@ class AuditServiceTest extends TestCase
             ->with('syslog')
             ->once()
             ->andReturnSelf();
-        
+
         Log::shouldReceive('info')
             ->once()
             ->withArgs(function ($message, $context) {
@@ -53,7 +54,7 @@ class AuditServiceTest extends TestCase
             ->with('syslog')
             ->once()
             ->andReturnSelf();
-        
+
         Log::shouldReceive('info')
             ->once()
             ->withArgs(function ($message, $context) use ($client) {
@@ -76,7 +77,7 @@ class AuditServiceTest extends TestCase
             ->with('syslog')
             ->once()
             ->andReturnSelf();
-        
+
         Log::shouldReceive('info')
             ->once()
             ->withArgs(function ($message, $context) use ($clientId) {
@@ -96,7 +97,7 @@ class AuditServiceTest extends TestCase
             ->with('syslog')
             ->once()
             ->andReturnSelf();
-        
+
         Log::shouldReceive('info')
             ->once()
             ->withArgs(function ($message, $context) {
@@ -117,7 +118,7 @@ class AuditServiceTest extends TestCase
 
     public function test_should_audit_returns_false_for_unconfigured_models(): void
     {
-        $this->assertFalse($this->service->shouldAudit(\App\Models\User::class));
+        $this->assertFalse($this->service->shouldAudit(User::class));
     }
 
     public function test_ignores_updated_at_field(): void
@@ -128,14 +129,15 @@ class AuditServiceTest extends TestCase
             ->with('syslog')
             ->once()
             ->andReturnSelf();
-        
+
         Log::shouldReceive('info')
             ->once()
             ->withArgs(function ($message, $context) {
                 // updated_at should NOT be in changed_fields
                 $changedFields = $context['changes']['changed_fields'] ?? [];
+
                 return in_array('name', $changedFields)
-                    && !in_array('updated_at', $changedFields);
+                    && ! in_array('updated_at', $changedFields);
             });
 
         $client->update([
@@ -146,14 +148,14 @@ class AuditServiceTest extends TestCase
 
     public function test_audit_entry_captures_user_info(): void
     {
-        $user = \App\Models\User::factory()->create();
+        $user = User::factory()->create();
         $this->actingAs($user);
 
         Log::shouldReceive('channel')
             ->with('syslog')
             ->once()
             ->andReturnSelf();
-        
+
         Log::shouldReceive('info')
             ->once()
             ->withArgs(function ($message, $context) use ($user) {
@@ -170,7 +172,7 @@ class AuditServiceTest extends TestCase
             ->with('syslog')
             ->once()
             ->andReturnSelf();
-        
+
         Log::shouldReceive('info')
             ->once()
             ->withArgs(function ($message, $context) {
@@ -183,13 +185,13 @@ class AuditServiceTest extends TestCase
 
     public function test_audit_entry_contains_request_info(): void
     {
-        $this->actingAs(\App\Models\User::factory()->create());
+        $this->actingAs(User::factory()->create());
 
         Log::shouldReceive('channel')
             ->with('syslog')
             ->once()
             ->andReturnSelf();
-        
+
         Log::shouldReceive('info')
             ->once()
             ->withArgs(function ($message, $context) {

@@ -18,10 +18,15 @@ use Tests\TestCase;
 class JournalEntryTest extends TestCase
 {
     protected User $user;
+
     protected Currency $currency;
+
     protected Entity $entity;
+
     protected Account $expenseAccount;
+
     protected Account $bankAccount;
+
     protected ReportingPeriod $period;
 
     protected function setUp(): void
@@ -37,9 +42,9 @@ class JournalEntryTest extends TestCase
         ]);
 
         // Create user and authenticate
-        $this->user = new User();
+        $this->user = new User;
         $this->user->name = 'Test User';
-        $this->user->email = 'test' . uniqid() . '@example.com';
+        $this->user->email = 'test'.uniqid().'@example.com';
         $this->user->email_verified_at = now();
         $this->user->password = Hash::make('password');
         $this->user->remember_token = Str::random(10);
@@ -183,7 +188,7 @@ class JournalEntryTest extends TestCase
 
         $this->assertNotNull($creditEntry->id);
         $this->assertNotNull($debitEntry->id);
-        
+
         // Use closingBalance for IFRS accounts with date for 2025
         // Bank account credited = positive balance, expense account debited = negative (IFRS convention)
         $bankBalance = $this->bankAccount->closingBalance($testDate->endOfYear(), $this->currency->id);
