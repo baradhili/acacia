@@ -61,11 +61,17 @@ class BackupZip
      */
     public static function materialise(BackupArchive $archive): array
     {
-        $disk = Storage::disk($archive->disk);
+        // Driver check, not method_exists: every FilesystemAdapter has
+        // a path() method, so only the local driver actually honours
+        // it — anything else (s3 offsite, sftp) needs a local copy for
+        // ZipArchive to open.
+        $isLocal = config("filesystems.disks.{$archive->disk}.driver") === 'local';
 
-        if (method_exists($disk, 'path')) {
-            return [$disk->path($archive->path), false];
+        if ($isLocal) {
+            return [Storage::disk($archive->disk)->path($archive->path), false];
         }
+
+        $disk = Storage::disk($archive->disk);
 
         $temp = tempnam(sys_get_temp_dir(), 'erp-backup-zip-');
         $stream = $disk->readStream($archive->path);

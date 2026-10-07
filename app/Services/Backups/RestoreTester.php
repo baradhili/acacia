@@ -43,7 +43,7 @@ class RestoreTester
             [$pdo, $scratchPath] = $this->freshScratch();
 
             try {
-                $this->importSql($pdo, $sql);
+                SqlDumpImport::import($pdo, $sql);
 
                 $checks['integrity_check'] = (string) $pdo->query('PRAGMA integrity_check')->fetchColumn();
 
@@ -80,32 +80,6 @@ class RestoreTester
             return $this->record($archive, $archive->disk, $passed ? 'passed' : 'failed', $checks, $message, $started, $archive->name);
         } catch (Throwable $e) {
             return $this->record($archive, $archive->disk, 'failed', $checks, $e->getMessage(), $started, $archive->name);
-        }
-    }
-
-    /**
-     * Execute a textual sqlite dump (one statement per line, as both
-     * sqlite3's .dump and our native dumper emit) into the connection.
-     */
-    protected function importSql(\PDO $pdo, string $sql): void
-    {
-        $buffer = '';
-
-        foreach (preg_split('/\r?\n/', $sql) ?: [] as $line) {
-            $buffer .= $line."\n";
-
-            if (str_ends_with(rtrim($line), ';')) {
-                $statement = rtrim($buffer);
-                $buffer = '';
-
-                if ($statement !== '') {
-                    $pdo->exec($statement);
-                }
-            }
-        }
-
-        if (trim($buffer) !== '') {
-            $pdo->exec(rtrim($buffer));
         }
     }
 

@@ -52,13 +52,13 @@ return [
     'col_result' => 'Result',
     'col_duration' => 'Duration',
     'col_message' => 'Outcome',
-    'restore_is_cli' => 'Live restores run from the console: php artisan backups:restore --file=… --force (a safety backup is taken first).',
+    'restore_is_cli' => 'The Test Restore button never touches live data. Live restores are console-only: php artisan backups:restore --file=… --force (a safety backup runs first, with rollback on failure).',
 
     // Flash messages
     'run_created' => 'Backup created (:count archive(s) recorded, checksummed and snapshotted).',
     'run_already_running' => 'A backup is already running — nothing was created. Try again once it finishes.',
     'run_skipped' => 'The schedule says a backup is not due; use the console (--force) to override.',
-    'run_failed' => 'Backup failed: :error',
+    'run_failed' => 'Backup failed — the error was logged. Check the logs, or run `php artisan backups:run --force` from the console for the full output.',
     'verify_clean' => 'All :count archive(s) verified — checksums match and every copy is present.',
     'verify_problems' => 'Problems found: :corrupt corrupt, :missing missing. See the archives table below.',
     'test_restore_passed' => 'Restore test passed on :file — :message',

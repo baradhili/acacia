@@ -26,13 +26,19 @@ class NativeSqliteDumper extends Sqlite
 {
     public function dumpToFile(string $dumpFile): void
     {
-        $sql = $this->dumpViaConnection($this->resolveConnection());
+        $handle = @fopen($dumpFile, 'w+b');
 
-        if (@file_put_contents($dumpFile, $sql) === false) {
-            throw new RuntimeException("Could not write the sqlite dump to {$dumpFile}.");
+        if ($handle === false) {
+            throw new RuntimeException("Could not open the sqlite dump target {$dumpFile}.");
         }
 
-        if (! str_contains($sql, 'CREATE TABLE')) {
+        try {
+            $tables = $this->writeDump($this->resolveConnection(), $handle);
+        } finally {
+            fclose($handle);
+        }
+
+        if ($tables === 0) {
             throw new RuntimeException('The sqlite dump contains no tables — refusing to ship an empty backup.');
         }
     }
@@ -57,7 +63,15 @@ class NativeSqliteDumper extends Sqlite
         ]);
     }
 
-    protected function dumpViaConnection(\PDO $pdo): string
+    /**
+     * Write the dump incrementally — table DDL and row INSERTs one
+     * line at a time, then indexes/triggers/views, then COMMIT — and
+     * return the number of tables written. Nothing accumulates: the
+     * whole database never sits in memory.
+     *
+     * @param  resource  $handle
+     */
+    protected function writeDump(\PDO $pdo, $handle): int
     {
         // Tables first with their data; indexes, triggers and views
         // come after the rows they belong to — the same order
@@ -75,10 +89,10 @@ class NativeSqliteDumper extends Sqlite
             ." WHERE type IN ('index', 'trigger', 'view') AND sql IS NOT NULL"
         )->fetchAll(\PDO::FETCH_COLUMN);
 
-        $dump = "PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n";
+        fwrite($handle, "PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n");
 
         foreach ($tables as $table) {
-            $dump .= $table->sql.";\n";
+            fwrite($handle, $table->sql.";\n");
 
             $rows = $pdo->query('SELECT * FROM "'.$table->name.'"');
             $columns = null;
@@ -97,16 +111,18 @@ class NativeSqliteDumper extends Sqlite
                     array_values($row),
                 );
 
-                $dump .= 'INSERT INTO "'.$table->name.'" ("'
-                    .implode('", "', $columns).'") VALUES ('.implode(', ', $values).");\n";
+                fwrite($handle, 'INSERT INTO "'.$table->name.'" ("'
+                    .implode('", "', $columns).'") VALUES ('.implode(', ', $values).");\n");
             }
         }
 
         foreach ($laterObjects as $ddl) {
-            $dump .= $ddl.";\n";
+            fwrite($handle, $ddl.";\n");
         }
 
-        return $dump."COMMIT;\n";
+        fwrite($handle, "COMMIT;\n");
+
+        return count($tables);
     }
 
     /**

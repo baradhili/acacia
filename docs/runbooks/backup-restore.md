@@ -11,7 +11,7 @@ it — the feature ships both.
 | 1. Coverage | One complete unit per run: a single zip holding the database dump, **everything** on the public storage disk (uploads, logos, photos), and `.env`. Only caches/logs/framework state are excluded. |
 | 2. Frequency | Daily at 04:00 via the scheduler, honouring the admin's frequency setting (daily/weekly/monthly); manual "Run Backup Now"; `backups:run --force` for after-significant-change runs. |
 | 3. Separation | Every disk in `BACKUP_DESTINATION_DISKS` receives a full copy — configure the offsite `s3-backups` disk so at least one copy is offsite. |
-| 4. History | Grandfather-father-son retention: 7 daily / 4 weekly / 12 monthly / 2 yearly (env-tunable, see `config/backup.php`). |
+| 4. History | Grandfather-father-son retention — everything kept 7 days, then a daily survives 4 weeks, a weekly survives 12 months, a monthly survives 2 years, then one per year (env-tunable, see `config/backup.php`). |
 | 5. Testing | `backups:test-restore` restores the newest archive into a scratch database and verifies it — live data is never touched. |
 | 6. Security | Archives are AES-encrypted (`BACKUP_ARCHIVE_PASSWORD`); every archive is inventoried with a SHA-256 and verified daily — corrupt or missing copies are flagged. |
 | 7. Integrity | `backups:verify` snapshots the source (per-file hashes, per-table counts) daily and reports changes since the previous snapshot, so silent corruption is caught before it flows into backups. |

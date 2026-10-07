@@ -66,7 +66,7 @@ class Restorer
             $fresh = $targetPath.'.restore-'.bin2hex(random_bytes(4));
             $pdo = new \PDO('sqlite:'.$fresh, null, null, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
 
-            $this->importSql($pdo, $sql);
+            SqlDumpImport::import($pdo, $sql);
 
             $integrity = (string) $pdo->query('PRAGMA integrity_check')->fetchColumn();
             if ($integrity !== 'ok') {
@@ -95,7 +95,16 @@ class Restorer
             return ['safety_copy' => $safetyCopy, 'tables' => $tables, 'driver' => 'sqlite'];
         } catch (Throwable $e) {
             if ($swapped) {
-                @copy($safetyCopy, $targetPath);
+                // The rollback itself must not fail silently — if the
+                // safety copy cannot be replayed the operator needs
+                // to know exactly where it still lives.
+                if (! @copy($safetyCopy, $targetPath)) {
+                    throw new RuntimeException(
+                        "Rollback failed: the pre-restore safety copy at {$safetyCopy} could not be restored onto {$targetPath}.",
+                        0,
+                        $e,
+                    );
+                }
             } elseif ($fresh !== null) {
                 // Failed before the swap — drop the half-built rebuild.
                 File::delete($fresh);
@@ -162,27 +171,6 @@ class Restorer
             return ['safety_copy' => $safetyCopy, 'tables' => (int) reset($count)->c, 'driver' => 'mysql'];
         } finally {
             File::delete($sqlFile);
-        }
-    }
-
-    /**
-     * Execute a textual sqlite dump one statement per line.
-     */
-    protected function importSql(\PDO $pdo, string $sql): void
-    {
-        $buffer = '';
-
-        foreach (preg_split('/\r?\n/', $sql) ?: [] as $line) {
-            $buffer .= $line."\n";
-
-            if (str_ends_with(rtrim($line), ';')) {
-                $statement = rtrim($buffer);
-                $buffer = '';
-
-                if ($statement !== '') {
-                    $pdo->exec($statement);
-                }
-            }
         }
     }
 

@@ -37,7 +37,10 @@ class ArchiveInventory
                     continue;
                 }
 
-                $present[$diskName.'|'.$file] = true;
+                // Presence is keyed by disk + name — the row's identity
+                // columns — so a file moving under a different path
+                // never reads as a missing archive.
+                $present[$diskName.'|'.basename($file)] = true;
                 $bytes = $disk->size($file);
 
                 $archive = BackupArchive::firstOrNew([
@@ -77,7 +80,7 @@ class ArchiveInventory
         $missing = BackupArchive::query()
             ->where('status', '!=', 'missing')
             ->get()
-            ->filter(fn (BackupArchive $archive) => ! isset($present[$archive->disk.'|'.$archive->path]))
+            ->filter(fn (BackupArchive $archive) => ! isset($present[$archive->disk.'|'.$archive->name]))
             ->each(fn (BackupArchive $archive) => $archive->update(['status' => 'missing']))
             ->all();
 

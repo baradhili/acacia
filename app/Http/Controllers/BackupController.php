@@ -123,8 +123,10 @@ class BackupController extends Controller
 
     protected function reportFailure(string $error)
     {
+        // Details go to the log; the screen gets the generic wording —
+        // the raw error may carry paths or internals.
         Log::error('Backup run failed from the admin page', ['error' => $error]);
 
-        return redirect()->route('backups.index')->with('error', __('backups.run_failed', ['error' => $error]));
+        return redirect()->route('backups.index')->with('error', __('backups.run_failed'));
     }
 }

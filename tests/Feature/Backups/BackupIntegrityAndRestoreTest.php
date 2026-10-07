@@ -12,6 +12,7 @@ use App\Services\Backups\IntegrityService;
 use App\Services\Backups\Restorer;
 use App\Services\Backups\RestoreTester;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Backup\Config\Config;
@@ -259,6 +260,40 @@ class BackupIntegrityAndRestoreTest extends TestCase
                 "SELECT name FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL",
             )->fetchAll(\PDO::FETCH_COLUMN);
             $this->assertContains('backup_settings_singleton_key_unique', $indexes);
+            $check = null;
+        } finally {
+            @unlink($target);
+            foreach (glob($target.'.*') ?: [] as $leftover) {
+                @unlink($leftover);
+            }
+        }
+    }
+
+    public function test_trigger_definitions_round_trip_through_a_restore(): void
+    {
+        // A trigger body spans lines and carries its own semicolons —
+        // the naive line-based importer would shred it.
+        DB::statement(
+            "CREATE TRIGGER clients_guard BEFORE DELETE ON clients\n"
+            ."BEGIN\n"
+            ."  SELECT RAISE(ABORT, 'clients are append-only');\n"
+            .'END;'
+        );
+
+        $archive = $this->runBackup();
+        $this->assertSame('passed', app(RestoreTester::class)->test($archive)->status);
+
+        $target = sys_get_temp_dir().'/erp-trigger-'.uniqid().'.sqlite';
+        file_put_contents($target, 'stale');
+
+        try {
+            app(Restorer::class)->restore($archive, $target);
+
+            $check = new \PDO('sqlite:'.$target);
+            $trigger = $check->query(
+                "SELECT name FROM sqlite_master WHERE type = 'trigger' AND name = 'clients_guard'",
+            )->fetchColumn();
+            $this->assertSame('clients_guard', $trigger);
             $check = null;
         } finally {
             @unlink($target);
