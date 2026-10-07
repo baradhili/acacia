@@ -91,6 +91,17 @@ class PurchaseOrderContractTest extends TestCase
             Carbon::parse('2026-10-09'), Carbon::parse('2026-10-05'))); // reversed
     }
 
+    public function test_business_days_does_not_mutate_the_callers_dates(): void
+    {
+        $start = Carbon::parse('2026-10-07 15:30:00');
+        $end = Carbon::parse('2026-10-09 09:00:00');
+
+        $this->assertSame(3, PurchaseOrder::businessDaysInclusive($start, $end));
+
+        $this->assertSame('2026-10-07 15:30:00', $start->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-10-09 09:00:00', $end->format('Y-m-d H:i:s'));
+    }
+
     public function test_contract_budget_is_implied_from_its_terms(): void
     {
         $contract = $this->makeContract();

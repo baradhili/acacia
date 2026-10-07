@@ -156,7 +156,9 @@ class PurchaseOrder extends Model
      */
     public static function businessDaysInclusive(CarbonInterface $start, CarbonInterface $end): int
     {
-        if ($end->startOfDay()->lt($start->startOfDay())) {
+        // startOfDay() mutates in place — compare on copies so the
+        // caller's Carbon instances (model cast attributes) are safe.
+        if ($end->copy()->startOfDay()->lt($start->copy()->startOfDay())) {
             return 0;
         }
 

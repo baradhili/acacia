@@ -168,8 +168,8 @@
         document.getElementById('contract-preview').classList.toggle('hidden', !isContract);
 
         document.getElementById('po-submit-label').textContent = isContract
-            ? "{{ __('purchase_orders.create_button', ['type' => __('purchase_orders.contract')]) }}"
-            : "{{ __('purchase_orders.create_button', ['type' => __('purchase_orders.purchase_order')]) }}";
+            ? @js(__('purchase_orders.create_button', ['type' => __('purchase_orders.contract')]))
+            : @js(__('purchase_orders.create_button', ['type' => __('purchase_orders.purchase_order')]));
     }
 
     function poBusinessDays(start, end) {
