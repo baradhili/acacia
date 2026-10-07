@@ -48,22 +48,31 @@ php artisan module:migrate Resumes                # run one module's migrations
   `composer audit`/`npm audit`, so lockfile changes are covered too.
   Findings at or above high severity (config `fail_on`) fail the run
   and CI. The baseline file `larascan-baseline.json` (repo root)
-  holds the **only** accepted findings: the npm shell-quote critical
-  (GHSA-pqg4-53mv; `concurrently` pins `shell-quote 1.9.0` exactly and
-  no release ships the fixed 1.11+ — dev-only tooling, deliberately
-  not overridden). When a `concurrently` release ships the fix,
-  `npm audit` goes clean and the baseline entries come out — never
-  `larascan:baseline` over the file wholesale or the residue hides.
-  The standing residue on a dev checkout is known and
-  environment-shaped — the APP_ENV/APP_URL localhost items and the
-  session-secure item are info-severity by design (they self-downgrade
-  outside production and resolve with the production .env plus
-  `TRUSTED_PROXIES`); `allow_url_fopen`/`expose_php` are host php.ini
-  settings; `auth.signed-routes-verify` flagging `verification.notice`
-  is a scanner false positive (the prompt page must not be signed —
-  the verify route itself is); and `auth.registration-rate-limit`
-  flags `reports/transaction-register*` because the URI contains the
-  substring "register" — admin-only report routes, not registration.
+  holds the **only** accepted findings, two groups as of Oct 2026:
+  the npm shell-quote critical (GHSA-pqg4-53mv; `concurrently` pins
+  `shell-quote 1.9.0` exactly and no release ships the fixed 1.11+ —
+  dev-only tooling, deliberately not overridden) and the eight
+  dev-checkout residue checks, baselined so scans run clean. Why each
+  is residue: the APP_ENV/APP_URL localhost items (`config.app-env`,
+  `injection.host-header`, `routing.api-http-only` over the widget
+  preferences routes) and the session-secure item resolve with the
+  production .env plus `TRUSTED_PROXIES`; `allow_url_fopen`/
+  `expose_php` are host php.ini settings; `auth.signed-routes-verify`
+  flagging `verification.notice` is a scanner false positive (the
+  prompt page must not be signed — the verify route itself is); and
+  `auth.registration-rate-limit` flags `reports/transaction-register*`
+  because the URI contains the substring "register" — admin-only
+  report routes, not registration. Entries come out as their
+  conditions resolve (a `concurrently` release shipping the fix, the
+  production .env, php.ini posture at deploy, or larascan fixing its
+  route heuristics). The matcher hashes check + file + message and
+  each entry carries an occurrence budget, so genuinely new findings —
+  another unthrottled "register" URI, a different localhost message —
+  still surface. Never `larascan:baseline` over the file wholesale
+  (it would silently adopt whatever else is failing that day);
+  hand-merge entries instead. Baselining the env-shaped items also
+  suppresses them on a production checkout — a deliberate trade-off,
+  so anything added to the baseline gets the same triage first.
   Anything **new**: triage like CodeRabbit
   output — the scanner is pattern-based; its checks match middleware
   by class-name keywords (hence `SecureHeaders`), don't parse

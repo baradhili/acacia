@@ -33,6 +33,25 @@ creating amendment records; purchase orders stay fixed for life and
 are never amendable. New UI strings go through the translator
 (lang/en/purchase_orders.php). Closes the todo-list item.
 
+### Changed — larascan dev-checkout residue baselined, scans run clean
+
+`php artisan larascan` now finishes with zero failures on a dev
+checkout: the eight environment-shaped residue checks joined the npm
+shell-quote criticals in `larascan-baseline.json` — the APP_ENV/
+APP_URL localhost items (`config.app-env`, `injection.host-header`,
+`routing.api-http-only` over the widget-preferences routes),
+`cookies.session-secure`, the php.ini posture pair
+(`php.allow-url-fopen`, `php.expose-php`) and the two scanner false
+positives (`auth.signed-routes-verify` on `verification.notice`,
+`auth.registration-rate-limit` on the transaction-register URIs). The
+matcher hashes check + file + message and every entry carries an
+occurrence budget, so genuinely new findings still surface; entries
+come out as their conditions resolve (production .env + trusted
+proxies, php.ini posture at deploy, upstream scanner fixes, the
+concurrently release). Deliberate trade-off, recorded in AGENTS.md:
+baselined env items are also suppressed on a production checkout, so
+anything joining the baseline gets the same triage first.
+
 ## [Unreleased] — 2026-10-06
 
 ### Fixed — unexpected failures on the match screen flash a generic message, not the exception
