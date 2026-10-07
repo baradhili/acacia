@@ -6,10 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\UniqueConstraintViolationException;
 
 /**
- * Instance-wide backup schedule settings for `backup:create`. Exactly
+ * Instance-wide backup schedule settings for `backups:run`. Exactly
  * one persisted row, keyed by SINGLETON_KEY under a unique index:
  * BackupSetting::current() fetch-or-creates it atomically so the
  * scheduled command and the admin page always share the same row.
+ * Retention is deliberately not here — it is the GFS policy in
+ * config/backup.php, not a per-instance admin knob.
  */
 class BackupSetting extends Model
 {
@@ -17,19 +19,15 @@ class BackupSetting extends Model
 
     public const DEFAULT_FREQUENCY = 'daily';
 
-    public const DEFAULT_RETENTION = 30;
-
     /** The only value singleton_key ever holds — the index is the guard. */
     public const SINGLETON_KEY = 'default';
 
     protected $fillable = [
         'frequency',
-        'retention_count',
         'last_backup_at',
     ];
 
     protected $casts = [
-        'retention_count' => 'integer',
         'last_backup_at' => 'datetime',
     ];
 
@@ -38,10 +36,7 @@ class BackupSetting extends Model
         try {
             return static::query()->firstOrCreate(
                 ['singleton_key' => static::SINGLETON_KEY],
-                [
-                    'frequency' => static::DEFAULT_FREQUENCY,
-                    'retention_count' => static::DEFAULT_RETENTION,
-                ],
+                ['frequency' => static::DEFAULT_FREQUENCY],
             );
         } catch (UniqueConstraintViolationException) {
             // A concurrent caller won the insert race — the unique

@@ -14,6 +14,7 @@ use App\Nav\CoreNav;
 use App\Observers\AuditObserver;
 use App\Observers\InvoiceObserver;
 use App\Observers\TimeEntryObserver;
+use App\Services\Backups\NativeSqliteDumper;
 use App\Support\Nav;
 use App\Support\WidgetLayout;
 use App\Support\Widgets;
@@ -23,6 +24,7 @@ use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
+use Spatie\Backup\Tasks\Backup\DbDumperFactory;
 
 /**
  * Owns the boot-time wiring: the per-IP auth rate limiters
@@ -69,6 +71,11 @@ class AppServiceProvider extends ServiceProvider
         // is registered, filtered to the viewer's roles.
         CoreNav::register($this->app->make(Nav::class));
         CoreNav::registerWidgets($this->app->make(Widgets::class));
+
+        // spatie/laravel-backup's built-in sqlite dumper shells out to
+        // the sqlite3 CLI; this dumper stays inside PHP (and handles
+        // :memory: databases), so it takes over the sqlite driver.
+        DbDumperFactory::extend('sqlite', fn () => new NativeSqliteDumper);
 
         View::composer('layouts.navigation', fn ($view) => $view->with('sidebarNav', $this->app->make(Nav::class)->sidebar()));
         View::composer('layouts.topbar', fn ($view) => $view->with('topbarNav', $this->app->make(Nav::class)->topbar()));

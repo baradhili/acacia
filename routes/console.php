@@ -52,13 +52,23 @@ Schedule::command('dividends:send-statements')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/dividend-statements.log'));
 
-// Back up the database and stored files. Scheduled daily; the command's
+// Back up the whole application unit (database + public disk + .env,
+// one zip per destination disk). Scheduled daily; the command's
 // internal due-check honours the admin's weekly/monthly frequency, so
 // cached routes can never desync the schedule from the settings.
-Schedule::command('backup:create')
+Schedule::command('backups:run')
     ->dailyAt('04:00')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/backups.log'));
+
+// Daily integrity sweep: re-hash every archive against its recorded
+// checksum (corrupt/missing detection) and snapshot the source data
+// with a change report (docs/runbooks/backup-restore.md, Tao heads
+// 6 + 7).
+Schedule::command('backups:verify')
+    ->dailyAt('04:30')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/backup-integrity.log'));
 
 // Prune closed-year ledger transactions past the retention window
 // (writes an opening-balance snapshot at the boundary first)

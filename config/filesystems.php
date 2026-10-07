@@ -60,6 +60,32 @@ return [
             'report' => false,
         ],
 
+        // Backup destinations (spatie/laravel-backup writes one zip
+        // per run under {root}/{BACKUP_NAME}/). `backups` is the
+        // local copy — point BACKUP_PATH at dedicated storage,
+        // ideally an external volume, so backups survive losing the
+        // app disk. `s3-backups` is the offsite leg (separation, Tao
+        // head 3): fill its env vars, composer require
+        // league/flysystem-aws-s3-v3, and set
+        // BACKUP_DESTINATION_DISKS=backups,s3-backups. The s3 disk
+        // above is unrelated (document attachments).
+        'backups' => [
+            'driver' => 'local',
+            'root' => env('BACKUP_PATH', storage_path('app/backups')),
+            'throw' => true,
+        ],
+
+        's3-backups' => [
+            'driver' => 's3',
+            'key' => env('BACKUP_S3_KEY'),
+            'secret' => env('BACKUP_S3_SECRET'),
+            'region' => env('BACKUP_S3_REGION'),
+            'bucket' => env('BACKUP_S3_BUCKET'),
+            'endpoint' => env('BACKUP_S3_ENDPOINT'),
+            'use_path_style_endpoint' => env('BACKUP_S3_USE_PATH_STYLE_ENDPOINT', false),
+            'throw' => true,
+        ],
+
     ],
 
     /*

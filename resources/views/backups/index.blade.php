@@ -1,9 +1,9 @@
 @extends('layouts.app')
-@section('title', 'Backups')
+@section('title', __('backups.heading'))
 @section('content')
 
     <div class="mb-6 flex justify-between items-center">
-        <h1 class="text-2xl font-bold text-gray-800">Backups</h1>
+        <h1 class="text-2xl font-bold text-gray-800">{{ __('backups.heading') }}</h1>
     </div>
 
     @if (session('success'))
@@ -22,83 +22,174 @@
         </div>
     @endif
 
-    <div class="bg-white rounded-lg shadow p-6 max-w-3xl mb-6">
-        <div class="flex justify-between items-start gap-4 mb-4">
+    {{-- Status cards --}}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 max-w-5xl">
+        <div class="bg-white rounded-lg shadow p-5">
+            <h3 class="text-sm font-medium text-gray-500">{{ __('backups.last_backup') }}</h3>
+            <p class="mt-1 text-lg font-semibold text-gray-900">{{ $setting->last_backup_at?->format('d M Y H:i') ?? __('backups.never') }}</p>
+            <p class="mt-1 text-sm text-gray-500">{{ __('backups.schedule') }}: {{ $setting->frequency }}</p>
+        </div>
+        <div class="bg-white rounded-lg shadow p-5">
+            <h3 class="text-sm font-medium text-gray-500">{{ __('backups.destinations') }}</h3>
+            <p class="mt-1 text-lg font-semibold text-gray-900">{{ implode(', ', $destinationDisks) }}</p>
+            <p class="mt-1 text-xs {{ count($destinationDisks) > 1 ? 'text-gray-500' : 'text-yellow-600' }}">
+                {{ count($destinationDisks) > 1 ? __('backups.destinations_help') : __('backups.offsite_pending') }}
+            </p>
+        </div>
+        <div class="bg-white rounded-lg shadow p-5">
+            <h3 class="text-sm font-medium text-gray-500">{{ __('backups.encryption') }}</h3>
+            <p class="mt-1 text-lg font-semibold {{ $encrypted ? 'text-green-600' : 'text-yellow-600' }}">
+                {{ __($encrypted ? 'backups.encryption_on' : 'backups.encryption_off') }}
+            </p>
+            <p class="mt-1 text-sm text-gray-500">{{ __('backups.retention') }}: <code>{{ $retention }}</code></p>
+        </div>
+    </div>
+
+    {{-- Actions --}}
+    <div class="bg-white rounded-lg shadow p-6 max-w-5xl mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
-                <h2 class="text-lg font-semibold text-gray-800 mb-1">Backup now</h2>
-                <p class="text-sm text-gray-500">
-                    Creates a gzipped database dump in <code>db/</code> and a tar.gz of the stored
-                    files (uploads, logos, profile photos) in <code>files/</code> under
-                    <code>{{ $destination }}</code>, then prunes old archives per the schedule
-                    below. Restore procedures are in the backup &amp; restore runbook.
-                </p>
+                <h2 class="text-lg font-semibold text-gray-800 mb-1">{{ __('backups.run_now') }}</h2>
+                <p class="text-sm text-gray-500 mb-3">{{ __('backups.run_now_help') }}</p>
+                <form method="POST" action="{{ route('backups.run') }}">
+                    @csrf
+                    <button type="submit"
+                        class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700">
+                        {{ __('backups.run_now') }}
+                    </button>
+                </form>
             </div>
-            <form method="POST" action="{{ route('backups.run') }}" class="shrink-0">
-                @csrf
-                <button type="submit"
-                    class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 shrink-0">
-                    Run Backup Now
-                </button>
-            </form>
+            <div>
+                <h2 class="text-lg font-semibold text-gray-800 mb-1">{{ __('backups.verify_now') }}</h2>
+                <p class="text-sm text-gray-500 mb-3">{{ __('backups.verify_now_help') }}</p>
+                <form method="POST" action="{{ route('backups.verify') }}">
+                    @csrf
+                    <button type="submit"
+                        class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700">
+                        {{ __('backups.verify_now') }}
+                    </button>
+                </form>
+            </div>
+            <div>
+                <h2 class="text-lg font-semibold text-gray-800 mb-1">{{ __('backups.test_restore') }}</h2>
+                <p class="text-sm text-gray-500 mb-3">{{ __('backups.test_restore_help') }}</p>
+                <form method="POST" action="{{ route('backups.test-restore') }}">
+                    @csrf
+                    <button type="submit"
+                        class="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-md hover:bg-purple-700">
+                        {{ __('backups.test_restore') }}
+                    </button>
+                </form>
+            </div>
         </div>
 
-        <dl class="grid grid-cols-2 gap-4 text-sm border-y border-gray-100 py-4 mb-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-gray-100 mt-6 pt-4">
             <div>
-                <dt class="font-medium text-gray-700">Last successful backup</dt>
-                <dd class="text-gray-500">{{ $setting->last_backup_at?->format('d M Y H:i') ?? 'never' }}</dd>
+                <h3 class="text-sm font-medium text-gray-700 mb-1">{{ __('backups.last_restore_test') }}</h3>
+                @if ($restoreTests->isNotEmpty())
+                    @php $latestTest = $restoreTests->first(); @endphp
+                    <p class="text-sm {{ $latestTest->status === 'passed' ? 'text-green-600' : 'text-red-600' }}">
+                        {{ $latestTest->created_at->format('d M Y H:i') }} — {{ strtoupper($latestTest->status) }} ({{ $latestTest->duration_ms }} ms)
+                    </p>
+                @else
+                    <p class="text-sm text-yellow-600">{{ __('backups.no_restore_tests') }}</p>
+                @endif
             </div>
             <div>
-                <dt class="font-medium text-gray-700">Schedule</dt>
-                <dd class="text-gray-500">
-                    {{ $setting->frequency }} — the scheduler runs daily and the backup itself
-                    decides when it is due
-                </dd>
+                <h3 class="text-sm font-medium text-gray-700 mb-1">&nbsp;</h3>
+                <p class="text-xs text-gray-500 font-mono">{{ __('backups.restore_is_cli') }}</p>
             </div>
-        </dl>
+        </div>
+    </div>
 
-        <h3 class="text-sm font-semibold text-gray-700 mb-2">Existing backups</h3>
-        @if (count($archives['db']) + count($archives['files']) === 0)
-            <p class="text-sm text-gray-500">No backups yet — run one above or wait for the schedule.</p>
+    {{-- Archives --}}
+    <div class="bg-white rounded-lg shadow p-6 max-w-5xl mb-6">
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">{{ __('backups.archives') }}</h2>
+        @if ($archives->isEmpty())
+            <p class="text-sm text-gray-500">{{ __('backups.no_archives') }}</p>
         @else
-            <table class="w-full text-sm">
-                <thead>
-                    <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
-                        <th class="py-2 pr-4">Type</th>
-                        <th class="py-2 pr-4">File</th>
-                        <th class="py-2 pr-4">Size</th>
-                        <th class="py-2">Created</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-100">
-                    @foreach (['db' => 'Database', 'files' => 'Files'] as $type => $label)
-                        @foreach ($archives[$type] as $file)
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                            <th class="py-2 pr-4">{{ __('backups.col_disk') }}</th>
+                            <th class="py-2 pr-4">{{ __('backups.col_file') }}</th>
+                            <th class="py-2 pr-4">{{ __('backups.col_size') }}</th>
+                            <th class="py-2 pr-4">{{ __('backups.col_created') }}</th>
+                            <th class="py-2 pr-4">{{ __('backups.col_status') }}</th>
+                            <th class="py-2">{{ __('backups.col_verified') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        @foreach ($archives as $archive)
                             <tr>
-                                <td class="py-2 pr-4 text-gray-700">{{ $label }}</td>
-                                <td class="py-2 pr-4 font-mono text-xs text-gray-600">{{ $file['name'] }}</td>
-                                <td class="py-2 pr-4 text-gray-600">{{ $file['size'] }}</td>
-                                <td class="py-2 text-gray-600">{{ $file['at'] }}</td>
+                                <td class="py-2 pr-4 text-gray-700">{{ $archive->disk }}</td>
+                                <td class="py-2 pr-4 font-mono text-xs text-gray-600">{{ $archive->name }}</td>
+                                <td class="py-2 pr-4 text-gray-600">{{ \Illuminate\Support\Number::fileSize($archive->bytes) }}</td>
+                                <td class="py-2 pr-4 text-gray-600">{{ $archive->backed_up_at?->format('d M Y H:i') ?? '-' }}</td>
+                                <td class="py-2 pr-4">
+                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                                        {{ $archive->status === 'ok' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
+                                        {{ $archive->status }}
+                                    </span>
+                                </td>
+                                <td class="py-2 text-gray-600">{{ $archive->verified_at?->format('d M Y H:i') ?? '-' }}</td>
                             </tr>
                         @endforeach
-                    @endforeach
-                </tbody>
-            </table>
+                    </tbody>
+                </table>
+            </div>
         @endif
     </div>
 
-    <div class="bg-white rounded-lg shadow p-6 max-w-3xl">
-        <h2 class="text-lg font-semibold text-gray-800 mb-1">Schedule &amp; retention</h2>
-        <p class="text-sm text-gray-500 mb-4">
-            How often the scheduled backup runs, and how many archives of each type (database
-            dump, files archive) are kept — the oldest beyond that are deleted after each run.
-            Requires the server's <code>schedule:run</code> cron entry.
-        </p>
+    {{-- Integrity snapshots + restore tests --}}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl mb-6">
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">{{ __('backups.integrity_snapshots') }}</h2>
+            @if ($snapshots->isEmpty())
+                <p class="text-sm text-gray-500">{{ __('backups.no_snapshots') }}</p>
+            @else
+                <ul class="divide-y divide-gray-100">
+                    @foreach ($snapshots as $snapshot)
+                        <li class="py-2">
+                            <p class="text-xs text-gray-400">{{ __('backups.col_snapshot') }} #{{ $snapshot->id }} — {{ $snapshot->created_at->format('d M Y H:i') }}</p>
+                            <p class="text-sm text-gray-700">{{ $snapshot->summary }}</p>
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">{{ __('backups.restore_tests') }}</h2>
+            @if ($restoreTests->isEmpty())
+                <p class="text-sm text-gray-500">{{ __('backups.no_restore_tests_yet') }}</p>
+            @else
+                <ul class="divide-y divide-gray-100">
+                    @foreach ($restoreTests as $test)
+                        <li class="py-2">
+                            <p class="text-xs text-gray-400">{{ $test->created_at->format('d M Y H:i') }} — {{ $test->file }}</p>
+                            <p class="text-sm {{ $test->status === 'passed' ? 'text-green-600' : 'text-red-600' }}">
+                                {{ strtoupper($test->status) }} ({{ $test->duration_ms }} ms): {{ $test->message }}
+                            </p>
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
+        </div>
+    </div>
+
+    {{-- Schedule settings --}}
+    <div class="bg-white rounded-lg shadow p-6 max-w-5xl">
+        <h2 class="text-lg font-semibold text-gray-800 mb-1">{{ __('backups.schedule') }}</h2>
+        <p class="text-sm text-gray-500 mb-4">{{ __('backups.schedule_help') }}</p>
 
         <form method="POST" action="{{ route('backups.settings.update') }}" class="flex items-end gap-3">
             @csrf
             @method('PUT')
 
             <div>
-                <label for="frequency" class="block text-sm font-medium text-gray-700 mb-1">Frequency</label>
+                <label for="frequency" class="block text-sm font-medium text-gray-700 mb-1">{{ __('backups.frequency') }}</label>
                 <select name="frequency" id="frequency"
                     class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                     @foreach (\App\Models\BackupSetting::FREQUENCIES as $frequency)
@@ -111,17 +202,9 @@
                 @error('frequency') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
             </div>
 
-            <div>
-                <label for="retention_count" class="block text-sm font-medium text-gray-700 mb-1">Backups kept (of each type)</label>
-                <input type="number" name="retention_count" id="retention_count" min="1" max="365"
-                    value="{{ old('retention_count', $setting->retention_count) }}"
-                    class="mt-1 block w-40 rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
-                @error('retention_count') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
-            </div>
-
             <button type="submit"
                 class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 shrink-0">
-                Save
+                {{ __('backups.save') }}
             </button>
         </form>
     </div>
