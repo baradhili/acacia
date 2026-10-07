@@ -24,16 +24,20 @@ An admin-only audit view over the whole books: one row per posted
 ledger leg — the transaction's reference first, then date, type, the
 account the leg posted to, the debit/credit split and narration —
 with links to the attached documents and a CSV export carrying the
-same rows (documents as name + download URL). Documents resolve two
-hops: the record whose number the reference carries (payments, bill
-payments, reimbursement payments, invoices, bills, purchase orders)
-and, through the allocation tables, everything a payment settled —
-an invoice's or bill's PDF surfaces on the payment that paid it, so
-a supplier-payment row shows the bills' documents (live: 62 legs
-linked documents before the hop, 290 after). The debit and credit
-columns each total the movement and must agree with each other.
-Blank date filters mean all time. Route, nav item and CSV export
-are role-gated to admin.
+same rows (documents as name + download URL). The screen paginates
+(100 rows a page, filters carried across pages) while the summary
+cards and footer keep the whole filtered set's leg count and
+debit/credit totals from one aggregate query, and the export streams
+chunk-by-chunk so memory stays flat whatever the ledger's size.
+Documents resolve two hops: the record whose number the reference
+carries (payments, bill payments, reimbursement payments, invoices,
+bills, purchase orders) and, through the allocation tables,
+everything a payment settled — an invoice's or bill's PDF surfaces on
+the payment that paid it, so a supplier-payment row shows the bills'
+documents (live: 62 legs linked documents before the hop, 290 after);
+the screen resolves documents only for the page it is showing. The
+debit and credit columns each total the movement and must agree with
+each other. Route, nav item and CSV export are role-gated to admin.
 
 ### Fixed — the HSBC account joined the books; the transfers reclassified to what they always were
 

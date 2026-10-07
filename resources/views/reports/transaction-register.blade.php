@@ -57,11 +57,11 @@
                     </a>
                 </div>
 
-                <!-- Summary -->
+                <!-- Summary: whole filtered set, not just this page -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                     <div class="bg-gray-50 rounded-lg p-4">
                         <p class="text-sm font-medium text-gray-500">{{ __('reports.transaction_register.leg_count') }}</p>
-                        <p class="text-lg font-semibold text-gray-900">{{ number_format($rows->count()) }}</p>
+                        <p class="text-lg font-semibold text-gray-900">{{ number_format($totalLegs) }}</p>
                     </div>
                     <div class="bg-gray-50 rounded-lg p-4">
                         <p class="text-sm font-medium text-gray-500">{{ __('reports.transaction_register.total_debit') }}</p>
@@ -113,13 +113,16 @@
                             </tbody>
                             <tfoot>
                                 <tr>
-                                    <td colspan="4">{{ __('reports.transaction_register.leg_count') }}: {{ number_format($rows->count()) }}</td>
+                                    <td colspan="4">{{ __('reports.transaction_register.leg_count') }}: {{ number_format($totalLegs) }}</td>
                                     <td style="text-align: right">${{ number_format($totalDebit, 2) }}</td>
                                     <td style="text-align: right">${{ number_format($totalCredit, 2) }}</td>
                                     <td colspan="2"></td>
                                 </tr>
                             </tfoot>
                         </table>
+                    </div>
+                    <div class="mt-4">
+                        {{ $rows->links() }}
                     </div>
                 @else
                     <p class="text-sm text-gray-500">{{ __('reports.transaction_register.no_rows') }}</p>
