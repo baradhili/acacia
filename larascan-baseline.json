@@ -1,20 +1,97 @@
 {
-  "version": 1,
-  "generated_at": "2026-10-07T05:08:02+00:00",
-  "findings": [
-    {
-      "check": "dependencies.npm-audit",
-      "file": null,
-      "message": "concurrently >=9.2.3 — Vulnerability in concurrently",
-      "severity": "critical",
-      "count": 1
-    },
-    {
-      "check": "dependencies.npm-audit",
-      "file": null,
-      "message": "shell-quote 1.8.4 - 1.10.0 — shell-quote: `quote()` command injection via a line terminator in a token after a `{ comment }` token",
-      "severity": "critical",
-      "count": 1
-    }
-  ]
+    "version": 1,
+    "generated_at": "2026-10-07T06:32:35+00:00",
+    "findings": [
+        {
+            "check": "auth.registration-rate-limit",
+            "file": null,
+            "message": "Registration route reports/export/transaction-register/csv has no throttle middleware \u2014 automated signups unmitigated. Add ->middleware('throttle:5,1').",
+            "severity": "info",
+            "count": 1
+        },
+        {
+            "check": "auth.registration-rate-limit",
+            "file": null,
+            "message": "Registration route reports/transaction-register has no throttle middleware \u2014 automated signups unmitigated. Add ->middleware('throttle:5,1').",
+            "severity": "info",
+            "count": 1
+        },
+        {
+            "check": "auth.signed-routes-verify",
+            "file": null,
+            "message": "Email verification route 'verification.notice' (verify-email) is missing 'signed' middleware \u2014 URL parameters can be tampered with.",
+            "severity": "low",
+            "count": 1
+        },
+        {
+            "check": "config.app-env",
+            "file": null,
+            "message": "APP_ENV is 'local' \u2014 leaks development-mode behavior in production.",
+            "severity": "info",
+            "count": 1
+        },
+        {
+            "check": "cookies.session-secure",
+            "file": null,
+            "message": "SESSION_SECURE_COOKIE is false \u2014 sessions cookies will be sent over HTTP and can be hijacked on shared networks.",
+            "severity": "info",
+            "count": 1
+        },
+        {
+            "check": "dependencies.npm-audit",
+            "file": null,
+            "message": "concurrently >=9.2.3 \u2014 Vulnerability in concurrently",
+            "severity": "critical",
+            "count": 1
+        },
+        {
+            "check": "dependencies.npm-audit",
+            "file": null,
+            "message": "shell-quote 1.8.4 - 1.10.0 \u2014 shell-quote: `quote()` command injection via a line terminator in a token after a `{ comment }` token",
+            "severity": "critical",
+            "count": 1
+        },
+        {
+            "check": "injection.host-header",
+            "file": null,
+            "message": "app.url is not set or points to localhost \u2014 host header injection can redirect users, set cookies, generate signed URLs, and poison password reset emails.",
+            "severity": "info",
+            "count": 1
+        },
+        {
+            "check": "php.allow-url-fopen",
+            "file": null,
+            "message": "allow_url_fopen is on \u2014 file functions can be tricked into reading remote URLs, enabling SSRF and credential exfiltration via file:// or http:// wrappers.",
+            "severity": "medium",
+            "count": 1
+        },
+        {
+            "check": "php.expose-php",
+            "file": null,
+            "message": "expose_php is on \u2014 server response headers (X-Powered-By) leak the PHP version, helping attackers fingerprint your stack.",
+            "severity": "low",
+            "count": 1
+        },
+        {
+            "check": "routing.api-http-only",
+            "file": null,
+            "message": "API route api/widget-preferences has no HTTPS-enforcing middleware and APP_URL is http://localhost. Add 'force.https' middleware or set APP_URL to https://.",
+            "severity": "info",
+            "count": 3
+        },
+        {
+            "check": "routing.api-http-only",
+            "file": null,
+            "message": "API route api/widget-preferences/hidden-widgets has no HTTPS-enforcing middleware and APP_URL is http://localhost. Add 'force.https' middleware or set APP_URL to https://.",
+            "severity": "info",
+            "count": 1
+        },
+        {
+            "check": "routing.api-http-only",
+            "file": null,
+            "message": "API route api/widget-preferences/reset has no HTTPS-enforcing middleware and APP_URL is http://localhost. Add 'force.https' middleware or set APP_URL to https://.",
+            "severity": "info",
+            "count": 1
+        }
+    ]
 }
