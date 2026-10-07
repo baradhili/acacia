@@ -60,7 +60,7 @@
                 </div>
 
                 <div>
-                    <label for="start_date" class="block text-sm font-medium text-gray-700">Start Date *</label>
+                    <label for="start_date" class="block text-sm font-medium text-gray-700">{{ __('purchase_orders.start_date') }} *</label>
                     <input type="date" name="start_date" id="start_date" value="{{ old('start_date', $purchaseOrder->start_date?->format('Y-m-d')) }}" required onchange="poUpdatePreview()"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                     @error('start_date')
@@ -69,7 +69,7 @@
                 </div>
 
                 <div>
-                    <label for="end_date" class="block text-sm font-medium text-gray-700">End Date *</label>
+                    <label for="end_date" class="block text-sm font-medium text-gray-700">{{ __('purchase_orders.end_date') }} *</label>
                     <input type="date" name="end_date" id="end_date" value="{{ old('end_date', $purchaseOrder->end_date?->format('Y-m-d')) }}" required onchange="poUpdatePreview()"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
                     @error('end_date')
@@ -99,7 +99,7 @@
 
             <div class="mt-6 flex justify-end gap-3">
                 <a href="{{ route('purchase-orders.show', $purchaseOrder) }}" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-lg">
-                    Cancel
+                    {{ __('purchase_orders.cancel') }}
                 </a>
                 <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg">
                     {{ __('purchase_orders.amend_contract') }}
@@ -133,7 +133,9 @@
         const start = document.getElementById('start_date').value;
         const end = document.getElementById('end_date').value;
 
-        if (!rate || !allocation || !start || !end || new Date(start) > new Date(end)) {
+        // A $0.00 rate is valid (server rule is min:0) — only reject
+        // values that are not numbers; allocation 0 is invalid (min:0.01).
+        if (isNaN(rate) || !allocation || !start || !end || new Date(start) > new Date(end)) {
             value.textContent = '—';
             detail.textContent = '';
             return;

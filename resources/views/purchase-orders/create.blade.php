@@ -194,7 +194,9 @@
         const start = document.getElementById('start_date').value;
         const end = document.getElementById('end_date').value;
 
-        if (!rate || !allocation || !start || !end || new Date(start) > new Date(end)) {
+        // A $0.00 rate is valid (server rule is min:0) — only reject
+        // values that are not numbers; allocation 0 is invalid (min:0.01).
+        if (isNaN(rate) || !allocation || !start || !end || new Date(start) > new Date(end)) {
             value.textContent = '—';
             detail.textContent = '';
             return;
