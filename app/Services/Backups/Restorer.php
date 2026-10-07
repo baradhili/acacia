@@ -58,9 +58,10 @@ class Restorer
         }
 
         $swapped = false;
+        $fresh = null;
 
         try {
-            $sql = BackupZip::readDatabaseDump(BackupZip::materialise($archive));
+            $sql = BackupZip::withDatabaseDump($archive, fn (string $dump) => $dump);
 
             $fresh = $targetPath.'.restore-'.bin2hex(random_bytes(4));
             $pdo = new \PDO('sqlite:'.$fresh, null, null, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
@@ -95,6 +96,9 @@ class Restorer
         } catch (Throwable $e) {
             if ($swapped) {
                 @copy($safetyCopy, $targetPath);
+            } elseif ($fresh !== null) {
+                // Failed before the swap — drop the half-built rebuild.
+                File::delete($fresh);
             }
 
             throw $e;
@@ -118,7 +122,7 @@ class Restorer
         $sqlFile = dirname($safetyCopy).'/import-'.bin2hex(random_bytes(4)).'.sql';
         File::ensureDirectoryExists(dirname($safetyCopy));
 
-        $sql = BackupZip::readDatabaseDump(BackupZip::materialise($archive));
+        $sql = BackupZip::withDatabaseDump($archive, fn (string $dump) => $dump);
         file_put_contents($sqlFile, $sql);
 
         $connection = ! empty($config['unix_socket'])

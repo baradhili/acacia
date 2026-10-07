@@ -117,6 +117,16 @@ class BackupIntegrityAndRestoreTest extends TestCase
 
         $this->assertSame(1, $counts['missing']);
         $this->assertSame(BackupArchive::STATUS_MISSING, $archive->refresh()->status);
+
+        // A copy that comes back (restored volume, reattached disk) is
+        // re-hashed and cleared even though its size never changed —
+        // recreate it directly; zipPath asserts existence.
+        touch(Storage::disk($archive->disk)->path($archive->path));
+
+        app(ArchiveInventory::class)->reconcile();
+
+        $this->assertSame(BackupArchive::STATUS_OK, $archive->refresh()->status);
+        $this->assertNotNull($archive->verified_at);
     }
 
     public function test_integrity_snapshots_report_source_changes(): void
@@ -212,6 +222,43 @@ class BackupIntegrityAndRestoreTest extends TestCase
             )->fetchAll(\PDO::FETCH_COLUMN);
             $this->assertNotContains('stale', $tables);
             $this->assertContains('clients', $tables);
+            $check = null;
+        } finally {
+            @unlink($target);
+            foreach (glob($target.'.*') ?: [] as $leftover) {
+                @unlink($leftover);
+            }
+        }
+    }
+
+    public function test_a_restore_round_trips_multiline_values_and_constraints(): void
+    {
+        $notes = "line one\r\nline 'quoted' two\n\ntrailing";
+        Client::factory()->create(['notes' => $notes]);
+
+        $archive = $this->runBackup();
+        $this->assertSame('passed', app(RestoreTester::class)->test($archive)->status);
+
+        // The restorer swaps onto an existing file; give it a stale one.
+        $target = sys_get_temp_dir().'/erp-roundtrip-'.uniqid().'.sqlite';
+        file_put_contents($target, 'not a database');
+
+        try {
+            app(Restorer::class)->restore($archive, $target);
+
+            $check = new \PDO('sqlite:'.$target);
+
+            // Multiline text survives byte-for-byte (the dump joins
+            // lines with char(10), never raw newlines).
+            $restored = $check->query('SELECT notes FROM clients LIMIT 1')->fetchColumn();
+            $this->assertSame($notes, $restored);
+
+            // Explicit indexes survive — the singleton guard's unique
+            // index still enforces after a restore.
+            $indexes = $check->query(
+                "SELECT name FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL",
+            )->fetchAll(\PDO::FETCH_COLUMN);
+            $this->assertContains('backup_settings_singleton_key_unique', $indexes);
             $check = null;
         } finally {
             @unlink($target);

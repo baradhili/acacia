@@ -153,17 +153,18 @@ return [
     'cleanup' => [
         'strategy' => DefaultStrategy::class,
 
-        // History (head 4): grandfather-father-son. The spec's example
-        // retention: 7 daily / 4 weekly / 12 monthly / 2 yearly —
-        // keep_all covers the daily window, and the yearly entries
-        // catch month-end stragglers (a pure 12-month monthly window
-        // would keep no year-old copy at all).
+        // History (head 4): grandfather-father-son. The documented
+        // policy — 7 daily / 4 weekly / 12 monthly / 2 yearly — maps
+        // onto spatie's cascading tiers: everything for 7 days, a
+        // daily through 4 weeks (the weekly tier), a weekly through
+        // 12 months (the monthly tier), a monthly through 2 years,
+        // then one per year.
         'default_strategy' => [
-            'keep_all_backups_for_days' => env('BACKUP_KEEP_DAILY', 7),
-            'keep_daily_backups_for_days' => env('BACKUP_KEEP_WEEKLY', 28),
-            'keep_weekly_backups_for_weeks' => env('BACKUP_KEEP_MONTHLY', 12),
-            'keep_monthly_backups_for_months' => env('BACKUP_KEEP_YEARLY', 24),
-            'keep_yearly_backups_for_years' => env('BACKUP_KEEP_ARCHIVAL', 2),
+            'keep_all_backups_for_days' => env('BACKUP_KEEP_ALL_DAYS', 7),
+            'keep_daily_backups_for_days' => env('BACKUP_KEEP_DAILY_DAYS', 28),
+            'keep_weekly_backups_for_weeks' => env('BACKUP_KEEP_WEEKLY_WEEKS', 52),
+            'keep_monthly_backups_for_months' => env('BACKUP_KEEP_MONTHLY_MONTHS', 24),
+            'keep_yearly_backups_for_years' => env('BACKUP_KEEP_YEARLY_YEARS', 2),
             'delete_oldest_backups_when_using_more_megabytes_than' => env('BACKUP_MONITOR_MAX_STORAGE_MB', 5000),
         ],
 

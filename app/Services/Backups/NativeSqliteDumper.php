@@ -13,8 +13,14 @@ use Spatie\DbDumper\Databases\Sqlite;
  * live PDO connection — which also makes :memory: test databases
  * dumpable at all, and sees committed data still sitting in the WAL
  * that a raw file copy would miss. Produces the same textual SQL as
- * sqlite3's .dump: PRAGMA + BEGIN, CREATE TABLE, INSERTs, COMMIT.
- * Registered over the 'sqlite' driver from AppServiceProvider::boot.
+ * sqlite3's .dump: PRAGMA + BEGIN, CREATE TABLE, INSERTs, then the
+ * indexes/triggers/views, then COMMIT. Registered over the 'sqlite'
+ * driver from AppServiceProvider::boot.
+ *
+ * Two invariants the restore parsers depend on: one INSERT per line
+ * (values containing newlines are emitted as quoted segments joined
+ * with char(10), never raw line breaks), and rows streamed row by row
+ * rather than accumulated in memory.
  */
 class NativeSqliteDumper extends Sqlite
 {
@@ -53,19 +59,37 @@ class NativeSqliteDumper extends Sqlite
 
     protected function dumpViaConnection(\PDO $pdo): string
     {
+        // Tables first with their data; indexes, triggers and views
+        // come after the rows they belong to — the same order
+        // sqlite3's .dump uses and restorers expect. Explicit indexes
+        // carry business constraints (e.g. the backup-settings
+        // singleton guard), so dropping them would restore a database
+        // that no longer enforces them.
         $tables = $pdo->query(
             'SELECT name, sql FROM sqlite_master'
             ." WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND sql IS NOT NULL"
         )->fetchAll(\PDO::FETCH_OBJ);
+
+        $laterObjects = $pdo->query(
+            'SELECT sql FROM sqlite_master'
+            ." WHERE type IN ('index', 'trigger', 'view') AND sql IS NOT NULL"
+        )->fetchAll(\PDO::FETCH_COLUMN);
 
         $dump = "PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n";
 
         foreach ($tables as $table) {
             $dump .= $table->sql.";\n";
 
-            $rows = $pdo->query('SELECT * FROM "'.$table->name.'"')->fetchAll(\PDO::FETCH_ASSOC);
-            foreach ($rows as $row) {
-                $columns = array_keys($row);
+            $rows = $pdo->query('SELECT * FROM "'.$table->name.'"');
+            $columns = null;
+
+            while ($row = $rows->fetch(\PDO::FETCH_ASSOC)) {
+                // Column order comes from the row itself; it cannot be
+                // assumed stable across ALTER TABLEs.
+                if ($columns === null) {
+                    $columns = array_keys($row);
+                }
+
                 $values = array_map(
                     fn ($value) => $value === null
                         ? 'NULL'
@@ -78,17 +102,30 @@ class NativeSqliteDumper extends Sqlite
             }
         }
 
+        foreach ($laterObjects as $ddl) {
+            $dump .= $ddl.";\n";
+        }
+
         return $dump."COMMIT;\n";
     }
 
     /**
-     * Binary-safe: anything that is not valid UTF-8 goes in as a hex
-     * blob literal instead of a quoted string.
+     * Exact-value, single-line serialization. Binary or non-UTF-8
+     * content goes in as a hex blob literal; text containing newlines
+     * is emitted as quoted segments joined with char(10) so the
+     * INSERT never spans lines (the restore parsers split on lines);
+     * everything else is a plain quoted string.
      */
     protected function quoteValue(\PDO $pdo, string $value): string
     {
         if (str_contains($value, "\0") || ! mb_check_encoding($value, 'UTF-8')) {
             return "X'".bin2hex($value)."'";
+        }
+
+        if (str_contains($value, "\n")) {
+            return collect(explode("\n", $value))
+                ->map(fn (string $segment) => $pdo->quote($segment))
+                ->implode('||char(10)||');
         }
 
         return $pdo->quote($value);

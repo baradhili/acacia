@@ -37,7 +37,7 @@ class RestoreTester
         $checks = [];
 
         try {
-            $sql = BackupZip::readDatabaseDump(BackupZip::materialise($archive));
+            $sql = BackupZip::withDatabaseDump($archive, fn (string $dump) => $dump);
             $checks['dump_bytes'] = strlen($sql);
 
             [$pdo, $scratchPath] = $this->freshScratch();
@@ -50,7 +50,7 @@ class RestoreTester
                 $restoredCounts = $this->scratchTableCounts($pdo);
                 $checks['tables_restored'] = count($restoredCounts);
 
-                $reference = BackupIntegritySnapshot::nearestTo($archive->backed_up_at ?? now());
+                $reference = BackupIntegritySnapshot::referenceFor($archive);
                 $differences = [];
 
                 if ($reference !== null) {

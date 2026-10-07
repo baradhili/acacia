@@ -33,9 +33,21 @@ class BackupIntegritySnapshot extends Model
     }
 
     /**
-     * The snapshot closest to (and not after) the given time — the
-     * reference a restore test compares its imported row counts
-     * against.
+     * The reference a restore test compares its imported row counts
+     * against: the snapshot taken with that very archive when one is
+     * linked, else the closest snapshot at-or-before the archive's
+     * time (for archives predating archive-linked snapshots).
+     */
+    public static function referenceFor(BackupArchive $archive): ?self
+    {
+        return static::query()
+            ->where('backup_archive_id', $archive->id)
+            ->first()
+            ?? static::nearestTo($archive->backed_up_at ?? now());
+    }
+
+    /**
+     * The snapshot closest to (and not after) the given time.
      */
     public static function nearestTo(mixed $time): ?self
     {

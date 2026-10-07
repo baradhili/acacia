@@ -47,13 +47,17 @@ class ArchiveInventory
 
                 $isNew = ! $archive->exists;
                 $resized = ! $isNew && $archive->bytes !== $bytes;
+                // A file marked missing that is present again (restored
+                // volume, reattached offsite disk) needs re-hashing and
+                // its status cleared even when the size is unchanged.
+                $returned = ! $isNew && $archive->status === BackupArchive::STATUS_MISSING;
 
                 $archive->path = $file;
                 $archive->bytes = $bytes;
 
-                if ($isNew || $resized) {
+                if ($isNew || $resized || $returned) {
                     $archive->sha256 = $this->hash($diskName, $file);
-                    $archive->status = BackupArchive::STATUS_OK; // covered by casts? no — constants below
+                    $archive->status = BackupArchive::STATUS_OK;
                     $archive->verified_at = now();
                 }
 

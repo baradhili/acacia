@@ -89,8 +89,12 @@ class BackupRunner
 
             // The snapshot is tied to the newest archive so a restore
             // test can compare its imported counts against the state
-            // this backup captured.
-            $this->integrity->snapshot($reconciled['new'][0] ?? null);
+            // this backup captured. With several destination disks the
+            // run created one row per disk — identical copies, so any
+            // would do, but pick the newest by backed_up_at rather
+            // than disk order.
+            $newest = collect($reconciled['new'])->sortByDesc('backed_up_at')->first();
+            $this->integrity->snapshot($newest);
 
             return ['status' => 'ran', 'created' => $reconciled['new'], 'error' => null, 'output' => $output];
         } catch (Throwable $e) {

@@ -55,11 +55,14 @@ BACKUP_ARCHIVE_PASSWORD=long-random-secret
 # Failure notifications
 BACKUP_NOTIFICATION_EMAIL=admin@example.com
 
-# Retention (defaults shown; days/weeks/months/years, GFS)
-BACKUP_KEEP_DAILY=7
-BACKUP_KEEP_WEEKLY=12
-BACKUP_KEEP_MONTHLY=24
-BACKUP_KEEP_YEARLY=2
+# Retention — spatie's cascading GFS tiers, defaults shown. Everything
+# is kept 7 days; a daily survives 4 weeks; a weekly survives 12
+# months; a monthly survives 2 years; then one per year.
+BACKUP_KEEP_ALL_DAYS=7
+BACKUP_KEEP_DAILY_DAYS=28
+BACKUP_KEEP_WEEKLY_WEEKS=52
+BACKUP_KEEP_MONTHLY_MONTHS=24
+BACKUP_KEEP_YEARLY_YEARS=2
 ```
 
 The scheduler needs the usual cron entry:

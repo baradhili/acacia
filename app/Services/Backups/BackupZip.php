@@ -3,6 +3,7 @@
 namespace App\Services\Backups;
 
 use App\Models\BackupArchive;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use ZipArchive;
@@ -55,13 +56,15 @@ class BackupZip
     /**
      * A local filesystem path for the archive: the real path on local
      * disks, or a streamed temp copy for remote destinations.
+     *
+     * @return array{0: string, 1: bool} the path and whether it is a temp copy the caller must delete
      */
-    public static function materialise(BackupArchive $archive): string
+    public static function materialise(BackupArchive $archive): array
     {
         $disk = Storage::disk($archive->disk);
 
         if (method_exists($disk, 'path')) {
-            return $disk->path($archive->path);
+            return [$disk->path($archive->path), false];
         }
 
         $temp = tempnam(sys_get_temp_dir(), 'erp-backup-zip-');
@@ -75,6 +78,29 @@ class BackupZip
             fclose($target);
         }
 
-        return $temp;
+        return [$temp, true];
+    }
+
+    /**
+     * Run a callback over the archive's database dump, deleting the
+     * streamed temp copy a remote disk needed (local paths are the
+     * archive itself and are left alone).
+     *
+     * @template TReturn
+     *
+     * @param  callable(string): TReturn  $callback
+     * @return TReturn
+     */
+    public static function withDatabaseDump(BackupArchive $archive, callable $callback)
+    {
+        [$zipPath, $isTemp] = static::materialise($archive);
+
+        try {
+            return $callback(static::readDatabaseDump($zipPath));
+        } finally {
+            if ($isTemp) {
+                File::delete($zipPath);
+            }
+        }
     }
 }
