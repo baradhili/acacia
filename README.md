@@ -159,10 +159,13 @@ Running Acacia in a production environment and need guaranteed response times, c
 - Bulk import from Rich Skills Descriptor (RSD) JSON files, idempotent on the RSD id
 - Browsing open to all signed-in staff; editing limited to admins/accountants
 
-### Purchase Orders (Internal Budgets)
+### Purchase Orders & Contracts (Client-Issued Budgets)
 
-- Create POs for a client/project with a budgeted amount
-- Allocate time entries against the PO
+- Two document kinds on one pipeline: purchase orders (fixed budget, fixed period) and contracts
+- Contract budgets are implied — rate inc GST × business days × allocation % × 8h — recomputed on every save
+- Contracts amendable while live: numbered amendments (`CT-2026-0001-A1`) snapshot terms and budget before → after
+- Numbering `PO-YYYY-NNNN` / `CT-YYYY-NNNN` per year and per kind
+- Allocate time entries against the document
 - Real-time used vs remaining budget
 - Status: `draft → open → partially_used → completed → cancelled`
 - One-click convert PO → invoice, or invoice partially
@@ -427,9 +430,10 @@ Add the following to your server's crontab:
 - Submit weekly timesheet for approval
 - Approved entries are eligible for invoicing
 
-### Purchase Orders
+### Purchase Orders & Contracts
 
-- Create PO with budget for a client/project
+- Create a PO (fixed budget) or contract (implied budget from rate × business days × allocation × 8h) for a client/project
+- Amend live contracts; every amendment is numbered and snapshotted
 - Allocate time entries; system tracks used vs remaining
 - Notify at 80% / 100% consumed
 - Mark PO complete when fully utilised

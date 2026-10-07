@@ -2,20 +2,32 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Facades\DB;
 
 /**
- * A purchase order a client issues to the firm: a billing budget
- * drawn down by the invoices issued against it — used_amount is the
- * sum of non-draft/non-cancelled invoice totals, kept in step by
- * InvoiceObserver; po:check-utilization notifies admins at 80%/100%.
- * Status machine draft → open → partially_used → completed/cancelled.
- * At most one project may claim a PO: unique index on
- * projects.purchase_order_id, claimed under a row lock.
+ * A commercial document a client issues to the firm — the billing
+ * budget invoices are drawn down against. Two kinds share this one
+ * pipeline (invoice used_amount sync, 80%/100% utilization sweeps,
+ * project claiming): a purchase_order has a fixed period and fixed
+ * budgeted_amount, while a contract's budget is implied from its
+ * terms — rate (hourly, inc GST) × business days (Mon–Fri, inclusive
+ * of both start and end) × allocation% × 8 — recomputed on every save
+ * so budgeted_amount is always the current terms' value, in inc-GST
+ * dollars to match the invoice totals used_amount sums. Contracts may
+ * be amended while open/partially_used (each amendment snapshotting
+ * old → new terms in PurchaseOrderAmendment); purchase orders are
+ * editable in draft only. used_amount is the sum of non-draft/
+ * non-cancelled invoice totals, kept in step by InvoiceObserver;
+ * po:check-utilization notifies admins at 80%/100%. Status machine
+ * draft → open → partially_used → completed/cancelled. At most one
+ * project may claim a PO: unique index on projects.purchase_order_id,
+ * claimed under a row lock.
  */
 class PurchaseOrder extends Model
 {
@@ -23,9 +35,12 @@ class PurchaseOrder extends Model
 
     protected $fillable = [
         'po_number',
+        'type',
         'title',
         'description',
         'budgeted_amount',
+        'rate',
+        'allocation',
         'used_amount',
         'status',
         'start_date',
@@ -36,12 +51,24 @@ class PurchaseOrder extends Model
 
     protected $casts = [
         'budgeted_amount' => 'decimal:2',
+        'rate' => 'decimal:2',
+        'allocation' => 'decimal:2',
         'used_amount' => 'decimal:2',
         'start_date' => 'date',
         'end_date' => 'date',
         'utilization_notified_80' => 'boolean',
         'utilization_notified_100' => 'boolean',
     ];
+
+    // Document-type constants (a contract's budget is implied from
+    // rate × business days × allocation × 8; a purchase order's is fixed)
+    const TYPE_PURCHASE_ORDER = 'purchase_order';
+
+    const TYPE_CONTRACT = 'contract';
+
+    // Standard working day used to convert a contract's business days
+    // into budgetable hours.
+    const HOURS_PER_DAY = 8;
 
     // Status constants
     const STATUS_DRAFT = 'draft';
@@ -69,29 +96,121 @@ class PurchaseOrder extends Model
 
         static::creating(function ($po) {
             if (empty($po->po_number)) {
-                $po->po_number = self::generatePoNumber();
+                $po->po_number = self::generatePoNumber($po->type ?: self::TYPE_PURCHASE_ORDER);
             }
             if (empty($po->status)) {
                 $po->status = self::STATUS_DRAFT;
             }
         });
+
+        // A contract's budgeted_amount is never entered — it is always
+        // the current terms' implied value, whatever writes them (form,
+        // amendment, tinker).
+        static::saving(function ($po) {
+            if ($po->type === self::TYPE_CONTRACT
+                && $po->rate !== null
+                && $po->allocation !== null
+                && $po->start_date !== null
+                && $po->end_date !== null) {
+                $po->budgeted_amount = $po->implied_budget;
+            }
+        });
     }
 
-    public static function generatePoNumber(): string
+    /**
+     * Next document number for the given type, sequenced per prefix
+     * per year: PO-YYYY-NNNN for purchase orders, CT-YYYY-NNNN for
+     * contracts. Sorts by suffix length before value so the sequence
+     * keeps advancing once the zero-padding overflows past 9999.
+     */
+    public static function generatePoNumber(?string $type = null): string
     {
+        $prefix = $type === self::TYPE_CONTRACT ? 'CT' : 'PO';
         $year = date('Y');
-        $lastPo = self::whereYear('created_at', $year)
-            ->orderBy('id', 'desc')
+        $lastPo = self::where('po_number', 'like', $prefix.'-'.$year.'-%')
+            ->orderByRaw('LENGTH(po_number) DESC, po_number DESC')
             ->first();
 
+        $nextNumber = 1;
         if ($lastPo) {
-            preg_match('/PO-'.$year.'-(\d+)/', $lastPo->po_number, $matches);
-            $nextNumber = isset($matches[1]) ? ((int) $matches[1]) + 1 : 1;
-        } else {
-            $nextNumber = 1;
+            preg_match('/'.$prefix.'-'.$year.'-(\d+)/', $lastPo->po_number, $matches);
+            if (isset($matches[1])) {
+                $nextNumber = ((int) $matches[1]) + 1;
+            }
         }
 
-        return sprintf('PO-%s-%04d', $year, $nextNumber);
+        return sprintf('%s-%s-%04d', $prefix, $year, $nextNumber);
+    }
+
+    public function isContract(): bool
+    {
+        return $this->type === self::TYPE_CONTRACT;
+    }
+
+    /**
+     * Weekdays (Mon–Fri) from start through end, both endpoints
+     * included — e.g. a Monday to the following Monday is 6 business
+     * days. A plain day-walk, not week arithmetic: contract spans are
+     * at most a few thousand days and obvious correctness beats the
+     * closed-form version here.
+     */
+    public static function businessDaysInclusive(CarbonInterface $start, CarbonInterface $end): int
+    {
+        // startOfDay() mutates in place — compare on copies so the
+        // caller's Carbon instances (model cast attributes) are safe.
+        if ($end->copy()->startOfDay()->lt($start->copy()->startOfDay())) {
+            return 0;
+        }
+
+        $days = 0;
+        $cursor = $start->copy()->startOfDay();
+        $lastDay = $end->copy()->startOfDay();
+
+        while ($cursor->lessThanOrEqualTo($lastDay)) {
+            if (! $cursor->isWeekend()) {
+                $days++;
+            }
+            $cursor->addDay();
+        }
+
+        return $days;
+    }
+
+    /**
+     * Business days spanned by the current start/end dates (null when
+     * either date is missing — purchase orders may have none).
+     */
+    public function getBusinessDaysAttribute(): ?int
+    {
+        if (! $this->start_date || ! $this->end_date) {
+            return null;
+        }
+
+        return self::businessDaysInclusive($this->start_date, $this->end_date);
+    }
+
+    /**
+     * The contract's implied budget from its current terms:
+     * rate (inc GST) × business days × allocation% × 8 hours.
+     * Returns 0 for incomplete terms — validation keeps contracts
+     * from being saved that way, so this only guards stray writes.
+     */
+    public function getImpliedBudgetAttribute(): float
+    {
+        if (! $this->isContract()
+            || $this->rate === null
+            || $this->allocation === null
+            || ! $this->start_date
+            || ! $this->end_date) {
+            return 0.0;
+        }
+
+        $days = self::businessDaysInclusive($this->start_date, $this->end_date);
+
+        return round(
+            (float) $this->rate * $days * ((float) $this->allocation / 100) * self::HOURS_PER_DAY,
+            2
+        );
     }
 
     public function client(): BelongsTo
@@ -123,6 +242,15 @@ class PurchaseOrder extends Model
     public function documents(): MorphMany
     {
         return $this->morphMany(Document::class, 'documentable');
+    }
+
+    /**
+     * The amendments recorded against this contract, oldest first —
+     * empty for purchase-order-type documents (never amendable).
+     */
+    public function amendments(): HasMany
+    {
+        return $this->hasMany(PurchaseOrderAmendment::class)->orderBy('id');
     }
 
     /**
@@ -222,6 +350,80 @@ class PurchaseOrder extends Model
     public function canBeInvoiced(): bool
     {
         return in_array($this->status, [self::STATUS_OPEN, self::STATUS_PARTIALLY_USED]);
+    }
+
+    /**
+     * Only contracts can be amended, and only while live — a draft
+     * contract is edited in place instead, and completed/cancelled
+     * documents must be reopened first. Purchase orders are never
+     * amendable; their budget is fixed for life.
+     */
+    public function canBeAmended(): bool
+    {
+        return $this->isContract()
+            && in_array($this->status, [self::STATUS_OPEN, self::STATUS_PARTIALLY_USED]);
+    }
+
+    /**
+     * Amend a live contract's terms: snapshot old → new rate,
+     * allocation, period and implied budget into a numbered amendment
+     * record ({po_number}-A1, -A2, …), apply the new terms (the saving
+     * hook recomputes budgeted_amount) and re-evaluate status against
+     * the new budget — all under the parent's row lock. Returns null
+     * when the document is not amendable; caller-side validation
+     * supplies the terms.
+     *
+     * @param  array{rate: mixed, allocation: mixed, start_date: mixed, end_date: mixed}  $terms
+     */
+    public function amend(array $terms, ?string $reason = null, ?User $user = null): ?PurchaseOrderAmendment
+    {
+        if (! $this->canBeAmended()) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($terms, $reason, $user) {
+            // Lock the parent row so concurrent amendments (and the
+            // project-claiming lock in ProjectController) serialise on
+            // it; the re-read instance carries the current terms for
+            // the snapshot, and the re-guard keeps the invariant if
+            // another writer changed the status first.
+            $contract = static::whereKey($this->getKey())->lockForUpdate()->firstOrFail();
+            if (! $contract->canBeAmended()) {
+                return null;
+            }
+
+            $previous = [
+                'previous_rate' => $contract->rate,
+                'previous_allocation' => $contract->allocation,
+                'previous_start_date' => $contract->start_date,
+                'previous_end_date' => $contract->end_date,
+                'previous_budgeted_amount' => $contract->budgeted_amount,
+            ];
+
+            $contract->fill([
+                'rate' => $terms['rate'],
+                'allocation' => $terms['allocation'],
+                'start_date' => $terms['start_date'],
+                'end_date' => $terms['end_date'],
+            ]);
+
+            $amendment = $contract->amendments()->create($previous + [
+                'amendment_number' => $contract->po_number.'-A'.($contract->amendments()->count() + 1),
+                'new_rate' => $contract->rate,
+                'new_allocation' => $contract->allocation,
+                'new_start_date' => $contract->start_date,
+                'new_end_date' => $contract->end_date,
+                'new_budgeted_amount' => $contract->implied_budget,
+                'reason' => $reason,
+            ]);
+            $amendment->user_id = $user?->id;
+            $amendment->save();
+
+            $contract->save();
+            $contract->updateStatus();
+
+            return $amendment;
+        });
     }
 
     /**

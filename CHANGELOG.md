@@ -3,6 +3,36 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] — 2026-10-07
+
+### Added — contracts: the second purchase-order kind, with implied budgets and numbered amendments
+
+Some clients issue contracts rather than purchase orders. The two
+kinds now share the one purchase-order pipeline (project claiming,
+invoice drawdown, 80%/100% utilisation sweeps, dashboard widget)
+behind a `type` column, and neither kind posts to the IFRS ledger —
+they stay budget envelopes while invoices and payments carry the
+money, as before. A `purchase_order` keeps its fixed budget and
+fixed period; a `contract` instead carries a rate (hourly, inc GST),
+an allocation % and a mandatory period, and its budgeted_amount is
+implied — rate × business days (Mon–Fri, both endpoints included) ×
+allocation × 8h — recomputed on every save so the stored budget
+always matches the current terms, in inc-GST dollars to match the
+invoice totals used_amount sums. Contracts number CT-YYYY-NNNN
+alongside PO-YYYY-NNNN (sequence per prefix per year), and payloads
+with no type default to purchase orders so existing clients see no
+change.
+
+Contracts are amendable while open or partially_used: each amendment
+writes a numbered record ({document}-A1, -A2, …) snapshotting the
+rate, allocation, period and implied budget before and after, with an
+optional reason and who recorded it, then re-evaluates status against
+the new budget (a budget shrunk below what is already invoiced
+completes the contract). Draft contracts edit in place without
+creating amendment records; purchase orders stay fixed for life and
+are never amendable. New UI strings go through the translator
+(lang/en/purchase_orders.php). Closes the todo-list item.
+
 ## [Unreleased] — 2026-10-06
 
 ### Fixed — unexpected failures on the match screen flash a generic message, not the exception

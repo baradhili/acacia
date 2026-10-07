@@ -168,6 +168,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/purchase-orders/{purchaseOrder}/cancel', [PurchaseOrderController::class, 'cancel'])->name('purchase-orders.cancel');
     Route::post('/purchase-orders/{purchaseOrder}/complete', [PurchaseOrderController::class, 'complete'])->name('purchase-orders.complete');
     Route::post('/purchase-orders/{purchaseOrder}/reopen', [PurchaseOrderController::class, 'reopen'])->name('purchase-orders.reopen');
+    Route::get('/purchase-orders/{purchaseOrder}/amend', [PurchaseOrderController::class, 'amendForm'])->name('purchase-orders.amend');
+    Route::post('/purchase-orders/{purchaseOrder}/amend', [PurchaseOrderController::class, 'amendStore'])->name('purchase-orders.amend.store');
     Route::get('/purchase-orders/{purchaseOrder}/create-invoice', [InvoiceController::class, 'createFromPurchaseOrder'])->name('purchase-orders.create-invoice');
     Route::post('/purchase-orders/{purchaseOrder}/create-invoice', [InvoiceController::class, 'storeFromPurchaseOrder'])->name('purchase-orders.create-invoice.store');
 

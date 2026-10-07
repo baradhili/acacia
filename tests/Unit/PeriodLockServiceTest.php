@@ -17,7 +17,7 @@ class PeriodLockServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new PeriodLockService();
+        $this->service = new PeriodLockService;
     }
 
     public function test_creates_monthly_periods_for_fiscal_year(): void

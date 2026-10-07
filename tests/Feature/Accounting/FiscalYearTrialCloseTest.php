@@ -3,6 +3,7 @@
 namespace Tests\Feature\Accounting;
 
 use App\Models\FiscalYearClose;
+use App\Models\User;
 use App\Services\FiscalYearService;
 use App\Services\IfrsPosting;
 use Carbon\Carbon;
@@ -22,9 +23,13 @@ class FiscalYearTrialCloseTest extends TestCase
     use RefreshDatabase;
 
     protected Entity $entity;
+
     protected FiscalYearService $service;
+
     protected Account $bank;
+
     protected Account $revenue;
+
     protected Account $expense;
 
     protected function setUp(): void
@@ -34,10 +39,10 @@ class FiscalYearTrialCloseTest extends TestCase
         $this->seed(RoleSeeder::class);
         $this->seed(UserSeeder::class);
         $this->seed(IFRSSeeder::class);
-        $this->actingAs(\App\Models\User::where('email', 'admin@example.com')->first());
+        $this->actingAs(User::where('email', 'admin@example.com')->first());
 
         $this->entity = Entity::first();
-        $this->service = new FiscalYearService();
+        $this->service = new FiscalYearService;
         $this->bank = Account::where('code', 320)->where('entity_id', $this->entity->id)->first();
         $this->revenue = Account::where('code', 4100)->where('entity_id', $this->entity->id)->first();
         $this->expense = Account::where('code', 5100)->where('entity_id', $this->entity->id)->first();
@@ -48,7 +53,7 @@ class FiscalYearTrialCloseTest extends TestCase
      * debit), line items always take the opposite side — the same shape
      * Payment::postToIFRS() uses.
      */
-    protected function postJournal(string $date, Account $main, bool $credited, array $lines, string $reference = null): JournalEntry
+    protected function postJournal(string $date, Account $main, bool $credited, array $lines, ?string $reference = null): JournalEntry
     {
         IfrsPosting::ensureReportingPeriod($date, $this->entity);
 
@@ -85,8 +90,8 @@ class FiscalYearTrialCloseTest extends TestCase
         $year = $this->closableYear();
 
         // FY activity: 10,000 revenue in, 4,000 expenses out.
-        $this->postJournal($year . '-09-15', $this->bank, false, [[$this->revenue, 10000]]);
-        $this->postJournal(($year + 1) . '-01-10', $this->bank, true, [[$this->expense, 4000]]);
+        $this->postJournal($year.'-09-15', $this->bank, false, [[$this->revenue, 10000]]);
+        $this->postJournal(($year + 1).'-01-10', $this->bank, true, [[$this->expense, 4000]]);
 
         $trial = $this->service->trialClose($this->entity, $year);
 
@@ -116,9 +121,9 @@ class FiscalYearTrialCloseTest extends TestCase
         $year = $this->closableYear();
 
         // Activity dated two FYs back, never closed.
-        $this->postJournal(($year - 1) . '-08-15', $this->bank, false, [[$this->revenue, 7000]]);
+        $this->postJournal(($year - 1).'-08-15', $this->bank, false, [[$this->revenue, 7000]]);
         // Activity in the year being closed.
-        $this->postJournal($year . '-10-20', $this->bank, false, [[$this->revenue, 3000]]);
+        $this->postJournal($year.'-10-20', $this->bank, false, [[$this->revenue, 3000]]);
 
         $trial = $this->service->trialClose($this->entity, $year);
 
@@ -138,7 +143,7 @@ class FiscalYearTrialCloseTest extends TestCase
 
         // Old activity, already closed out by a hand-posted FY-CLOSE entry
         // dated the prior FY's year end.
-        $this->postJournal(($year - 1) . '-08-15', $this->bank, false, [[$this->revenue, 7000]]);
+        $this->postJournal(($year - 1).'-08-15', $this->bank, false, [[$this->revenue, 7000]]);
         $re = Account::where('code', 3200)->where('entity_id', $this->entity->id)->first();
         $priorEnd = ReportingPeriod::periodEnd(Carbon::create($year - 1, 7, 1), $this->entity);
         $this->postJournal(
@@ -146,11 +151,11 @@ class FiscalYearTrialCloseTest extends TestCase
             $re,
             true, // Cr RE; line items Dr revenue
             [[$this->revenue, 7000]],
-            'FY-CLOSE-' . ($year - 1)
+            'FY-CLOSE-'.($year - 1)
         );
 
         // This year's activity.
-        $this->postJournal($year . '-10-20', $this->bank, false, [[$this->revenue, 2500]]);
+        $this->postJournal($year.'-10-20', $this->bank, false, [[$this->revenue, 2500]]);
 
         $trial = $this->service->trialClose($this->entity, $year);
 
@@ -172,7 +177,7 @@ class FiscalYearTrialCloseTest extends TestCase
     public function test_store_trial_saves_workflow_row(): void
     {
         $year = $this->closableYear();
-        $this->postJournal($year . '-09-15', $this->bank, false, [[$this->revenue, 1000]]);
+        $this->postJournal($year.'-09-15', $this->bank, false, [[$this->revenue, 1000]]);
 
         $trial = $this->service->storeTrial($this->entity, $year);
         $again = $this->service->storeTrial($this->entity, $year);
@@ -190,7 +195,7 @@ class FiscalYearTrialCloseTest extends TestCase
     public function test_trial_command_defaults_to_last_ended_year(): void
     {
         $year = $this->closableYear();
-        $this->postJournal($year . '-09-15', $this->bank, false, [[$this->revenue, 5000]]);
+        $this->postJournal($year.'-09-15', $this->bank, false, [[$this->revenue, 5000]]);
 
         $this->artisan('fiscal-year:trial')
             ->expectsOutputToContain("Trial close — FY {$year}")

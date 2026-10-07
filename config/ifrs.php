@@ -2,7 +2,7 @@
 
 /**
  * Laravel IFRS Accounting Configuration
- * 
+ *
  * Configured for Australian Professional Services Company
  * - Currency: Australian Dollar (AUD)
  * - Tax: GST 10%
@@ -11,13 +11,12 @@
 
 use IFRS\Models\Account;
 use IFRS\Models\Balance;
-use IFRS\Models\Transaction;
 use IFRS\Models\ReportingPeriod;
-
-use IFRS\Reports\IncomeStatement;
+use IFRS\Models\Transaction;
 use IFRS\Reports\BalanceSheet;
-use IFRS\Reports\TrialBalance;
 use IFRS\Reports\CashFlowStatement;
+use IFRS\Reports\IncomeStatement;
+use IFRS\Reports\TrialBalance;
 
 return [
 
@@ -41,7 +40,7 @@ return [
      |
      */
     'user_model' => 'App\Models\User',
-    
+
     /*
      |--------------------------------------------------------------------------
      | Locales
@@ -61,7 +60,7 @@ return [
      | Forex scale
      |--------------------------------------------------------------------------
      |
-     | The number of decimal places to consider when calculating the difference between two 
+     | The number of decimal places to consider when calculating the difference between two
      | exchange rates
      |
      */
@@ -72,12 +71,12 @@ return [
      | Single Currency account types
      |--------------------------------------------------------------------------
      |
-     | Accounts of the types defined here will reject balances and transactions of a currency  
+     | Accounts of the types defined here will reject balances and transactions of a currency
      | different from the their own
      |
      */
     'single_currency' => [
-        Account::BANK
+        Account::BANK,
     ],
 
     /*
@@ -89,8 +88,8 @@ return [
      |
      */
     'table_prefix' => 'ifrs_',
-	
-	/*
+
+    /*
      |--------------------------------------------------------------------------
      | DB load migrations
      |--------------------------------------------------------------------------
@@ -98,9 +97,9 @@ return [
      | Database load migrations automatic
      |
      */
-     'load_migrations' => true,
+    'load_migrations' => true,
 
-	/*
+    /*
      |--------------------------------------------------------------------------
      | DB load factories
      |--------------------------------------------------------------------------
@@ -108,8 +107,8 @@ return [
      | Database load factories automatic
      |
      */
-     'load_factories' => true,
-	 
+    'load_factories' => true,
+
     /*
      |--------------------------------------------------------------------------
      | Hashing Algorithm
@@ -129,12 +128,12 @@ return [
      |
      */
     'aging_schedule_brackets' => [
-        'current'           => 30,
-        '31 - 90 days'      => 90,
-        '91 - 180 days'     => 180,
-        '181 - 270 days'    => 270,
-        '271 - 365 days'    => 365,
-        '365+ (bad debts)' =>  null,
+        'current' => 30,
+        '31 - 90 days' => 90,
+        '91 - 180 days' => 180,
+        '181 - 270 days' => 270,
+        '271 - 365 days' => 365,
+        '365+ (bad debts)' => null,
     ],
 
     /*
@@ -148,7 +147,7 @@ return [
 
     'account_codes' => [
 
-        // BALANCE SHEET 
+        // BALANCE SHEET
         // =============
 
         // Asset Accounts
@@ -168,7 +167,7 @@ return [
         // Equity Accounts
         Account::EQUITY => 3000, // 3000 - 3999
 
-        // INCOME STATEMENT 
+        // INCOME STATEMENT
         // ================
 
         // Operating Revenue Accounts
@@ -185,7 +184,7 @@ return [
         Account::OVERHEAD_EXPENSE => 7000, // 7000 - 7999
         Account::OTHER_EXPENSE => 8000, // 8000 - 8999
 
-        // RECONCILIATION 
+        // RECONCILIATION
         // ================
 
         // Reconciliation Accounts
@@ -238,7 +237,7 @@ return [
         Transaction::CN => 'Credit Note',
         Transaction::RC => 'Client Receipt',
 
-        //Supplier Transactions
+        // Supplier Transactions
         Transaction::CP => 'Cash Purchase',
         Transaction::BL => 'Supplier Bill',
         Transaction::DN => 'Debit Note',
@@ -340,10 +339,10 @@ return [
         Account::PAYABLE,
     ],
     BalanceSheet::EQUITY => [
-        Account::EQUITY
+        Account::EQUITY,
     ],
     BalanceSheet::RECONCILIATION => [
-        Account::RECONCILIATION
+        Account::RECONCILIATION,
     ],
 
     /*
@@ -356,18 +355,18 @@ return [
      */
 
     IncomeStatement::OPERATING_REVENUES => [
-        Account::OPERATING_REVENUE
+        Account::OPERATING_REVENUE,
     ],
     IncomeStatement::NON_OPERATING_REVENUES => [
-        Account::NON_OPERATING_REVENUE
+        Account::NON_OPERATING_REVENUE,
     ],
     IncomeStatement::OPERATING_EXPENSES => [
-        Account::OPERATING_EXPENSE
+        Account::OPERATING_EXPENSE,
     ],
     IncomeStatement::NON_OPERATING_EXPENSES => [
         Account::DIRECT_EXPENSE,
         Account::OVERHEAD_EXPENSE,
-        Account::OTHER_EXPENSE
+        Account::OTHER_EXPENSE,
     ],
 
     /*
@@ -380,35 +379,35 @@ return [
      */
 
     CashFlowStatement::PROVISIONS => [
-        Account::CONTRA_ASSET
+        Account::CONTRA_ASSET,
     ],
     CashFlowStatement::RECEIVABLES => [
-        Account::RECEIVABLE
+        Account::RECEIVABLE,
     ],
     CashFlowStatement::PAYABLES => [
-        Account::PAYABLE
+        Account::PAYABLE,
     ],
     CashFlowStatement::CURRENT_ASSETS => [
         Account::INVENTORY,
-        Account::CURRENT_ASSET
+        Account::CURRENT_ASSET,
     ],
     CashFlowStatement::CURRENT_LIABILITIES => [
         Account::CURRENT_LIABILITY,
-        Account::RECONCILIATION
+        Account::RECONCILIATION,
     ],
     CashFlowStatement::TAXATION => [
-        Account::CONTROL
+        Account::CONTROL,
     ],
     CashFlowStatement::NON_CURRENT_ASSETS => [
-        Account::NON_CURRENT_ASSET
+        Account::NON_CURRENT_ASSET,
     ],
     CashFlowStatement::NON_CURRENT_LIABILITIES => [
-        Account::NON_CURRENT_LIABILITY
+        Account::NON_CURRENT_LIABILITY,
     ],
     CashFlowStatement::EQUITY => [
-        Account::EQUITY
+        Account::EQUITY,
     ],
     CashFlowStatement::NET_CASH_FLOW => [
-        Account::BANK
+        Account::BANK,
     ],
 ];
