@@ -5,6 +5,13 @@
 // overrides only keys that differ in Australian English — none here.
 return [
 
+    // Unexpected failures on the record-action endpoints (settle a
+    // liability, record a charge, record a transfer): the user sees
+    // this generic flash while the real exception goes to the log —
+    // only the services' InvalidArgumentException refusals carry
+    // user-facing wording of their own.
+    'action_failed' => 'The action could not be completed — the error has been logged.',
+
     'index' => [
         'intro' => 'Import a bank statement — CSV, MT940 or camt.053 XML, the format is detected automatically — then match each movement against invoices, payments and bills.',
         'empty_pending' => 'Nothing pending — import a statement to bring in new bank movements.',

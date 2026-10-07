@@ -5,6 +5,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-06
 
+### Fixed — unexpected failures on the match screen flash a generic message, not the exception
+
+The record-action endpoints (settle a payroll liability, record a
+bank charge, record a transfer) flashed the raw message of whatever
+they caught — an unexpected storage or infrastructure error would put
+its internals on the user's screen. The services' validation
+refusals are InvalidArgumentException by design and still carry
+their user-facing wording; anything else is now reported to the log
+and the user sees one generic translated message
+(reconciliation.action_failed). Regression-tested: a mocked
+RuntimeException flashes the generic message only, and the bank line
+stays pending.
+
 ### Added — the Transaction Ledger Register: every posting, where it went, and its documents
 
 An admin-only audit view over the whole books: one row per posted
