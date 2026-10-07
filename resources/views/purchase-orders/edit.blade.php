@@ -93,7 +93,7 @@
                         <p class="text-sm text-indigo-800">
                             <strong>{{ __('purchase_orders.implied_budget') }}:</strong> ${{ number_format($purchaseOrder->implied_budget, 2) }}
                         </p>
-                        <p class="mt-1 text-xs text-indigo-600">{{ __('purchase_orders.implied_budget_formula', ['days' => $purchaseOrder->business_days, 'rate' => '$'.number_format($purchaseOrder->rate, 2), 'allocation' => number_format($purchaseOrder->allocation, 0).'%']) }}</p>
+                        <p class="mt-1 text-xs text-indigo-600">{{ __('purchase_orders.implied_budget_formula', ['days' => $purchaseOrder->business_days, 'rate' => '$'.number_format($purchaseOrder->rate, 2), 'allocation' => rtrim(rtrim(number_format($purchaseOrder->allocation, 2), '0'), '.').'%']) }}</p>
                     </div>
                 @else
                     <div>

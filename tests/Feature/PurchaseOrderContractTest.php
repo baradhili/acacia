@@ -8,6 +8,7 @@ use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderAmendment;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -380,5 +381,39 @@ class PurchaseOrderContractTest extends TestCase
             ->assertSee(__('purchase_orders.document_type'))
             ->assertSee(__('purchase_orders.purchase_order'))
             ->assertSee(__('purchase_orders.contract'));
+    }
+
+    public function test_a_non_string_type_is_rejected_by_validation_not_a_500(): void
+    {
+        $this->actingAs($this->user)->post(route('purchase-orders.store'), [
+            'type' => ['purchase_order'],
+            'client_id' => $this->client->id,
+            'title' => 'Malformed payload',
+            'budgeted_amount' => 100,
+        ])->assertSessionHasErrors('type');
+
+        $this->assertSame(0, PurchaseOrder::count());
+    }
+
+    public function test_amendment_numbers_are_unique_per_contract(): void
+    {
+        $contract = $this->makeContract();
+        $snapshot = [
+            'amendment_number' => $contract->po_number.'-A1',
+            'previous_rate' => 110,
+            'previous_allocation' => 50,
+            'previous_start_date' => '2026-10-05',
+            'previous_end_date' => '2026-10-09',
+            'previous_budgeted_amount' => 2200,
+            'new_rate' => 132,
+            'new_allocation' => 75,
+            'new_start_date' => '2026-10-05',
+            'new_end_date' => '2026-10-16',
+            'new_budgeted_amount' => 7920,
+        ];
+        $contract->amendments()->create($snapshot);
+
+        $this->expectException(QueryException::class);
+        $contract->amendments()->create($snapshot);
     }
 }

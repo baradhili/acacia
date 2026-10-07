@@ -73,9 +73,12 @@ class PurchaseOrderController extends Controller
     {
         // `sometimes`: a payload with no type is a purchase order, the
         // column default — anything else must name one of the two kinds.
+        // A non-string type (e.g. array) falls back to the purchase-order
+        // branch so the `in:` rule rejects it instead of a TypeError.
+        $requestedType = $request->input('type');
         $validated = $request->validate(
             ['type' => 'sometimes|in:purchase_order,contract']
-            + $this->rulesFor($request->input('type', PurchaseOrder::TYPE_PURCHASE_ORDER))
+            + $this->rulesFor(is_string($requestedType) ? $requestedType : PurchaseOrder::TYPE_PURCHASE_ORDER)
         );
 
         // client_id is an unfillable FK — assign it explicitly.

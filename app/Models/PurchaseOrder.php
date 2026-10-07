@@ -120,14 +120,15 @@ class PurchaseOrder extends Model
     /**
      * Next document number for the given type, sequenced per prefix
      * per year: PO-YYYY-NNNN for purchase orders, CT-YYYY-NNNN for
-     * contracts.
+     * contracts. Sorts by suffix length before value so the sequence
+     * keeps advancing once the zero-padding overflows past 9999.
      */
     public static function generatePoNumber(?string $type = null): string
     {
         $prefix = $type === self::TYPE_CONTRACT ? 'CT' : 'PO';
         $year = date('Y');
         $lastPo = self::where('po_number', 'like', $prefix.'-'.$year.'-%')
-            ->orderByDesc('po_number')
+            ->orderByRaw('LENGTH(po_number) DESC, po_number DESC')
             ->first();
 
         $nextNumber = 1;
@@ -366,8 +367,9 @@ class PurchaseOrder extends Model
      * allocation, period and implied budget into a numbered amendment
      * record ({po_number}-A1, -A2, …), apply the new terms (the saving
      * hook recomputes budgeted_amount) and re-evaluate status against
-     * the new budget — all atomically. Returns null when the document
-     * is not amendable; caller-side validation supplies the terms.
+     * the new budget — all under the parent's row lock. Returns null
+     * when the document is not amendable; caller-side validation
+     * supplies the terms.
      *
      * @param  array{rate: mixed, allocation: mixed, start_date: mixed, end_date: mixed}  $terms
      */
@@ -378,35 +380,45 @@ class PurchaseOrder extends Model
         }
 
         return DB::transaction(function () use ($terms, $reason, $user) {
+            // Lock the parent row so concurrent amendments (and the
+            // project-claiming lock in ProjectController) serialise on
+            // it; the re-read instance carries the current terms for
+            // the snapshot, and the re-guard keeps the invariant if
+            // another writer changed the status first.
+            $contract = static::whereKey($this->getKey())->lockForUpdate()->firstOrFail();
+            if (! $contract->canBeAmended()) {
+                return null;
+            }
+
             $previous = [
-                'previous_rate' => $this->rate,
-                'previous_allocation' => $this->allocation,
-                'previous_start_date' => $this->start_date,
-                'previous_end_date' => $this->end_date,
-                'previous_budgeted_amount' => $this->budgeted_amount,
+                'previous_rate' => $contract->rate,
+                'previous_allocation' => $contract->allocation,
+                'previous_start_date' => $contract->start_date,
+                'previous_end_date' => $contract->end_date,
+                'previous_budgeted_amount' => $contract->budgeted_amount,
             ];
 
-            $this->fill([
+            $contract->fill([
                 'rate' => $terms['rate'],
                 'allocation' => $terms['allocation'],
                 'start_date' => $terms['start_date'],
                 'end_date' => $terms['end_date'],
             ]);
 
-            $amendment = $this->amendments()->create($previous + [
-                'amendment_number' => $this->po_number.'-A'.($this->amendments()->count() + 1),
-                'new_rate' => $this->rate,
-                'new_allocation' => $this->allocation,
-                'new_start_date' => $this->start_date,
-                'new_end_date' => $this->end_date,
-                'new_budgeted_amount' => $this->implied_budget,
+            $amendment = $contract->amendments()->create($previous + [
+                'amendment_number' => $contract->po_number.'-A'.($contract->amendments()->count() + 1),
+                'new_rate' => $contract->rate,
+                'new_allocation' => $contract->allocation,
+                'new_start_date' => $contract->start_date,
+                'new_end_date' => $contract->end_date,
+                'new_budgeted_amount' => $contract->implied_budget,
                 'reason' => $reason,
             ]);
             $amendment->user_id = $user?->id;
             $amendment->save();
 
-            $this->save();
-            $this->updateStatus();
+            $contract->save();
+            $contract->updateStatus();
 
             return $amendment;
         });

@@ -40,7 +40,7 @@ return new class extends Migration
             $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
             $table->timestamps();
 
-            $table->index('amendment_number');
+            $table->unique(['purchase_order_id', 'amendment_number']);
         });
     }
 
