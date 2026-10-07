@@ -109,6 +109,9 @@ class CoreNav
                 $link('Account Statement', 'reports.account-statement', ['reports.account-statement'], 26),
                 $link('Account Schedule', 'reports.account-schedule', ['reports.account-schedule'], 27),
                 $link('Prepayment Schedule', 'reports.prepayment-schedule', ['reports.prepayment-schedule'], 30),
+                // Admin-only full-books audit register (role-gated to
+                // match its admin-only route).
+                ['type' => 'link', 'label' => __('reports.transaction_register.nav'), 'route' => 'reports.transaction-register', 'active' => ['reports.transaction-register'], 'roles' => ['admin'], 'position' => 31],
             ]],
 
             ['type' => 'dropdown', 'label' => 'Accounting', 'position' => 20, 'roles' => $gated,

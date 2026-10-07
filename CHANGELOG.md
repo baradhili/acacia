@@ -5,6 +5,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-06
 
+### Added — the Transaction Ledger Register: every posting, where it went, and its documents
+
+An admin-only audit view over the whole books: one row per posted
+ledger leg — the transaction's reference first, then date, type, the
+account the leg posted to, the debit/credit split and narration —
+with links to the attached documents and a CSV export carrying the
+same rows (documents as name + download URL). Documents resolve two
+hops: the record whose number the reference carries (payments, bill
+payments, reimbursement payments, invoices, bills, purchase orders)
+and, through the allocation tables, everything a payment settled —
+an invoice's or bill's PDF surfaces on the payment that paid it, so
+a supplier-payment row shows the bills' documents (live: 62 legs
+linked documents before the hop, 290 after). The debit and credit
+columns each total the movement and must agree with each other.
+Blank date filters mean all time. Route, nav item and CSV export
+are role-gated to admin.
+
 ### Fixed — the HSBC account joined the books; the transfers reclassified to what they always were
 
 The 69,560.89 "Final bus transfer" was never funds introduced — it
