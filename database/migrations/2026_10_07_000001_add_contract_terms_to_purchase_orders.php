@@ -40,7 +40,11 @@ return new class extends Migration
             $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
             $table->timestamps();
 
-            $table->unique(['purchase_order_id', 'amendment_number']);
+            // Explicit name: Laravel's generated one runs to 71
+            // characters, over MySQL's 64-char identifier limit
+            // (sqlite, the test driver, has no such limit — this bit
+            // the first MySQL migrate).
+            $table->unique(['purchase_order_id', 'amendment_number'], 'po_amendments_po_id_number_unique');
         });
     }
 
