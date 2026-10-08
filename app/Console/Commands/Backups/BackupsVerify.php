@@ -45,6 +45,13 @@ class BackupsVerify extends Command
             ));
         }
 
+        if ($verification['inaccessible'] > 0) {
+            $this->warn(sprintf(
+                '%d archive(s) sit on disks that could not be reached (connection or credentials failed) and were not verified.',
+                $verification['inaccessible'],
+            ));
+        }
+
         $this->line('Source snapshot: '.$snapshot->summary);
 
         return ($verification['corrupt'] > 0 || $verification['missing'] > 0)

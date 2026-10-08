@@ -15,7 +15,7 @@ return [
     'schedule_help' => 'The scheduler runs daily and the backup itself decides when it is due.',
     'destinations' => 'Destinations',
     'destinations_help' => 'Every destination disk receives a full copy; at least one should be offsite (see the runbook).',
-    'offsite_pending' => 'local only — add an offsite disk via BACKUP_DESTINATION_DISKS',
+    'offsite_pending' => 'local only — configure the offsite disk in the Offsite Destination card below (or via BACKUP_DESTINATION_DISKS)',
     'encryption' => 'Encryption',
     'encryption_on' => 'enabled (AES)',
     'encryption_off' => 'disabled — set BACKUP_ARCHIVE_PASSWORD',
