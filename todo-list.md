@@ -22,8 +22,6 @@ here once their changelog entry lands. Ordered by priority.
 
 - [ ] cucumber tests via behat — plan reviewed and refreshed 2026-09-28: .zcode/plans/behat-migration-plan.md (scope renewal with maintainer is the first step; suite has grown to 55 feature files + the Modules suite since the original approval).
 
-- [ ] Expand backups to allow using a SFTP path
-
 - [ ] Freeform dashboard resize: drag handles/heights beyond the column-span cycling the layout management ships (Sep 2026) — gridstack is already in package.json if this lands.
 
 - [ ] property rental management module - the company is a landlord

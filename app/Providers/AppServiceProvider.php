@@ -15,6 +15,7 @@ use App\Observers\AuditObserver;
 use App\Observers\InvoiceObserver;
 use App\Observers\TimeEntryObserver;
 use App\Services\Backups\NativeSqliteDumper;
+use App\Services\Backups\OffsiteDisk;
 use App\Support\Nav;
 use App\Support\WidgetLayout;
 use App\Support\Widgets;
@@ -25,6 +26,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Spatie\Backup\Tasks\Backup\DbDumperFactory;
+use Throwable;
 
 /**
  * Owns the boot-time wiring: the per-IP auth rate limiters
@@ -76,6 +78,22 @@ class AppServiceProvider extends ServiceProvider
         // the sqlite3 CLI; this dumper stays inside PHP (and handles
         // :memory: databases), so it takes over the sqlite driver.
         DbDumperFactory::extend('sqlite', fn () => new NativeSqliteDumper);
+
+        // The GUI-configured offsite destination (Backups page) is
+        // stored in the DB, not .env, so it merges into the
+        // filesystems + spatie destination config at boot. booted()
+        // rather than here: nothing may touch the disks before all
+        // providers have registered, and a DB that is not migrated
+        // yet (fresh checkout, pre-deploy) must not take the app
+        // down with it.
+        $this->app->booted(function () {
+            try {
+                $this->app->make(OffsiteDisk::class)->sync();
+            } catch (Throwable) {
+                // pre-migration or DB hiccup — the Backups page and
+                // its warnings still work without the offsite disk.
+            }
+        });
 
         View::composer('layouts.navigation', fn ($view) => $view->with('sidebarNav', $this->app->make(Nav::class)->sidebar()));
         View::composer('layouts.topbar', fn ($view) => $view->with('topbarNav', $this->app->make(Nav::class)->topbar()));

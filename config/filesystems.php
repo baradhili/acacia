@@ -67,9 +67,10 @@ return [
         // app disk. A missing, blanked or null BACKUP_PATH all fall
         // back to storage/app/backups (env()'s second argument alone
         // would pass a blanked `BACKUP_PATH=` through as root '').
-        // `s3-backups` is the offsite leg (separation, Tao head 3):
-        // fill its env vars, composer require
-        // league/flysystem-aws-s3-v3, and set
+        // The offsite leg (separation, Tao head 3) is configured from
+        // the admin Backups page: OffsiteDisk publishes the DB-stored
+        // destination as the `offsite` disk. `s3-backups` is the
+        // file-based alternative — fill its env vars and set
         // BACKUP_DESTINATION_DISKS=backups,s3-backups. The s3 disk
         // above is unrelated (document attachments).
         'backups' => [

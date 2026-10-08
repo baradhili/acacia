@@ -40,6 +40,20 @@
         </div>
     @endif
 
+    {{-- A destination that threw on access (dead credentials,
+         detached volume): reported, not fatal, and its archives are
+         not marked missing. --}}
+    @if ($inaccessibleDisks !== [])
+        <div class="mb-6 max-w-5xl bg-orange-50 border border-orange-300 text-orange-900 px-4 py-3 rounded-lg">
+            <p class="font-semibold">{{ __('backups.inaccessible_warning_title') }}</p>
+            @foreach ($inaccessibleDisks as $broken)
+                <p class="mt-2 text-sm">
+                    {{ __('backups.inaccessible_warning_body', ['disk' => $broken['disk'], 'error' => $broken['error']]) }}
+                </p>
+            @endforeach
+        </div>
+    @endif
+
     {{-- Status cards --}}
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 max-w-5xl">
         <div class="bg-white rounded-lg shadow p-5">
@@ -195,6 +209,143 @@
                 </ul>
             @endif
         </div>
+    </div>
+
+    {{-- Offsite destination (Tao head 3 — separation): every backup
+         run also lands on this remote disk. Credentials are encrypted
+         at rest; the save always connection-tests, and enabling is
+         gated on the test passing. --}}
+    <div class="bg-white rounded-lg shadow p-6 max-w-5xl mb-6" x-data="{ driver: '{{ old('driver', $offsiteDisk->driver) }}' }">
+        <h2 class="text-lg font-semibold text-gray-800 mb-1">{{ __('backups.offsite_heading') }}</h2>
+        <p class="text-sm text-gray-500 mb-4">{{ __('backups.offsite_help') }}</p>
+
+        @if ($offsiteUnavailable)
+            <div class="mb-4 bg-orange-50 border border-orange-300 text-orange-900 px-4 py-3 rounded-lg text-sm">
+                {{ __('backups.offsite_unavailable_warning') }}
+            </div>
+        @endif
+
+        <form method="POST" action="{{ route('backups.offsite.update') }}" class="space-y-4">
+            @csrf
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label for="driver" class="block text-sm font-medium text-gray-700 mb-1">{{ __('backups.offsite_driver') }}</label>
+                    <select name="driver" id="driver" x-model="driver"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
+                        @foreach ($offsiteDrivers as $name => $meta)
+                            <option value="{{ $name }}"
+                                @unless($meta['available']) disabled @endunless
+                                {{ $name === old('driver', $offsiteDisk->driver) ? 'selected' : '' }}>
+                                {{ $meta['label'] }}@unless($meta['available']) — {{ __('backups.offsite_driver_unavailable', ['install' => $meta['install']]) }}@endunless
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label for="root" class="block text-sm font-medium text-gray-700 mb-1">{{ __('backups.offsite_root') }}</label>
+                    <input type="text" name="root" id="root" value="{{ old('root', $offsiteDisk->root) }}"
+                        placeholder="/srv/backups/acacia"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
+                    <p class="mt-1 text-xs text-gray-500">{{ __('backups.offsite_root_help') }}</p>
+                </div>
+                <div class="flex items-end pb-1">
+                    <label class="flex items-center gap-2 text-sm text-gray-700">
+                        <input type="checkbox" name="enabled" value="1"
+                            @checked(old('enabled', $offsiteDisk->enabled))
+                            class="rounded border-gray-300 text-indigo-600 shadow-xs focus:ring-indigo-500">
+                        {{ __('backups.offsite_enabled') }}
+                    </label>
+                </div>
+            </div>
+
+            {{-- S3 credentials --}}
+            <div x-show="driver === 's3'" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label for="key" class="block text-sm font-medium text-gray-700 mb-1">{{ __('backups.offsite_f_key') }}</label>
+                    <input type="text" name="key" id="key" value="{{ old('key', $offsiteDisk->config['key'] ?? '') }}"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label for="secret" class="block text-sm font-medium text-gray-700 mb-1">{{ __('backups.offsite_f_secret') }}</label>
+                    <input type="password" name="secret" id="secret" value="" autocomplete="new-password"
+                        placeholder="{{ ($offsiteDisk->config['secret'] ?? null) ? __('backups.offsite_secret_keep') : '' }}"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label for="region" class="block text-sm font-medium text-gray-700 mb-1">{{ __('backups.offsite_f_region') }}</label>
+                    <input type="text" name="region" id="region" value="{{ old('region', $offsiteDisk->config['region'] ?? '') }}"
+                        placeholder="ap-southeast-2"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label for="bucket" class="block text-sm font-medium text-gray-700 mb-1">{{ __('backups.offsite_f_bucket') }}</label>
+                    <input type="text" name="bucket" id="bucket" value="{{ old('bucket', $offsiteDisk->config['bucket'] ?? '') }}"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label for="endpoint" class="block text-sm font-medium text-gray-700 mb-1">{{ __('backups.offsite_f_endpoint') }}</label>
+                    <input type="text" name="endpoint" id="endpoint" value="{{ old('endpoint', $offsiteDisk->config['endpoint'] ?? '') }}"
+                        placeholder="https://s3.example.internal"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div class="flex items-end pb-1">
+                    <label class="flex items-center gap-2 text-sm text-gray-700">
+                        <input type="checkbox" name="use_path_style_endpoint" value="1"
+                            @checked(old('use_path_style_endpoint', $offsiteDisk->config['use_path_style_endpoint'] ?? false))
+                            class="rounded border-gray-300 text-indigo-600 shadow-xs focus:ring-indigo-500">
+                        {{ __('backups.offsite_f_path_style') }}
+                    </label>
+                </div>
+            </div>
+
+            {{-- SFTP credentials --}}
+            <div x-show="driver === 'sftp'" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label for="host" class="block text-sm font-medium text-gray-700 mb-1">{{ __('backups.offsite_f_host') }}</label>
+                    <input type="text" name="host" id="host" value="{{ old('host', $offsiteDisk->config['host'] ?? '') }}"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label for="port" class="block text-sm font-medium text-gray-700 mb-1">{{ __('backups.offsite_f_port') }}</label>
+                    <input type="number" name="port" id="port" value="{{ old('port', $offsiteDisk->config['port'] ?? 22) }}"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label for="username" class="block text-sm font-medium text-gray-700 mb-1">{{ __('backups.offsite_f_username') }}</label>
+                    <input type="text" name="username" id="username" value="{{ old('username', $offsiteDisk->config['username'] ?? '') }}"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-700 mb-1">{{ __('backups.offsite_f_password') }}</label>
+                    <input type="password" name="password" id="password" value="" autocomplete="new-password"
+                        placeholder="{{ ($offsiteDisk->config['password'] ?? null) ? __('backups.offsite_secret_keep') : '' }}"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div class="md:col-span-2">
+                    <label for="private_key" class="block text-sm font-medium text-gray-700 mb-1">{{ __('backups.offsite_f_private_key') }}</label>
+                    <textarea name="private_key" id="private_key" rows="3"
+                        placeholder="{{ ($offsiteDisk->config['private_key'] ?? null) ? __('backups.offsite_secret_keep') : __('backups.offsite_f_private_key_help') }}"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 font-mono text-xs"></textarea>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <button type="submit"
+                    class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700">
+                    {{ __('backups.offsite_save') }}
+                </button>
+                @if ($offsiteDisk->last_test_at)
+                    <p class="text-sm {{ $offsiteDisk->lastTestPassed() ? 'text-green-600' : 'text-red-600' }}">
+                        {{ __('backups.offsite_last_test', [
+                            'status' => __($offsiteDisk->lastTestPassed() ? 'backups.offsite_last_test_passed' : 'backups.offsite_last_test_failed'),
+                            'when' => $offsiteDisk->last_test_at->format('d M Y H:i'),
+                        ]) }}
+                        @if ($offsiteDisk->last_test_message)— {{ $offsiteDisk->last_test_message }}@endif
+                    </p>
+                @endif
+            </div>
+        </form>
     </div>
 
     {{-- Schedule settings --}}

@@ -3,13 +3,16 @@
 namespace Tests\Feature\Backups;
 
 use App\Models\BackupArchive;
+use App\Models\BackupOffsiteDisk;
 use App\Models\BackupSetting;
 use App\Models\User;
 use App\Services\Backups\BackupRunner;
 use App\Services\Backups\DiskAccess;
+use App\Services\Backups\OffsiteDisk;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Backup\Config\Config;
@@ -402,5 +405,149 @@ class BackupTest extends TestCase
                 }
             }
         }
+    }
+
+    public function test_the_offsite_destination_card_renders_for_admin(): void
+    {
+        $this->actingAs($this->admin())
+            ->get('/backups')
+            ->assertOk()
+            ->assertSeeText(__('backups.offsite_heading'))
+            ->assertSeeText(__('backups.offsite_driver_s3'))
+            ->assertSeeText(__('backups.offsite_driver_sftp'))
+            // A healthy page carries no inaccessible-disk warning.
+            ->assertDontSeeText(__('backups.inaccessible_warning_title'));
+    }
+
+    public function test_saving_an_offsite_destination_encrypts_credentials_and_enables_it(): void
+    {
+        $this->app->instance(OffsiteDisk::class, new StubOffsiteDisk(true));
+
+        $this->actingAs($this->admin())
+            ->post('/backups/offsite', [
+                'driver' => 'sftp',
+                'host' => 'offsite.example.test',
+                'port' => 22,
+                'username' => 'acacia',
+                'password' => 'sftp-secret-passphrase',
+                'root' => '/srv/backups/acacia',
+                'enabled' => '1',
+            ])
+            ->assertRedirect(route('backups.index'))
+            ->assertSessionHas('success', __('backups.offsite_saved_enabled'));
+
+        $row = BackupOffsiteDisk::current();
+        $this->assertTrue($row->enabled);
+        $this->assertSame('sftp', $row->driver);
+        $this->assertSame('sftp-secret-passphrase', $row->config['password']);
+
+        // The credential bundle is encrypted at rest — the raw
+        // column never carries the plaintext.
+        $this->assertStringNotContainsString(
+            'sftp-secret-passphrase',
+            (string) DB::table('backup_offsite_disks')->where('id', $row->id)->value('config'),
+        );
+
+        // Published into the runtime config for the next run.
+        $this->assertSame('offsite.example.test', config('filesystems.disks.offsite.host'));
+        $this->assertSame('/srv/backups/acacia', config('filesystems.disks.offsite.root'));
+        $this->assertContains('offsite', config('backup.backup.destination.disks'));
+    }
+
+    public function test_enabling_an_offsite_destination_is_refused_when_the_test_fails(): void
+    {
+        $this->app->instance(OffsiteDisk::class, new StubOffsiteDisk(false));
+
+        $this->actingAs($this->admin())
+            ->post('/backups/offsite', [
+                'driver' => 's3',
+                'key' => 'aki',
+                'secret' => 'sak',
+                'bucket' => 'acacia-backups',
+                'enabled' => '1',
+            ])
+            ->assertRedirect(route('backups.index'))
+            ->assertSessionHas('error', __('backups.offsite_enable_refused', ['error' => 'stubbed connection test']));
+
+        // Saved but parked: enabled stays false and nothing is
+        // published, so scheduled backups keep running local-only.
+        $row = BackupOffsiteDisk::current();
+        $this->assertFalse($row->enabled);
+        $this->assertSame('failed', $row->last_test_status);
+        $this->assertNotContains('offsite', config('backup.backup.destination.disks'));
+    }
+
+    public function test_an_offsite_driver_without_its_adapter_package_is_rejected(): void
+    {
+        $this->app->instance(OffsiteDisk::class, new StubOffsiteDisk(null, unavailable: ['sftp']));
+
+        $this->actingAs($this->admin())
+            ->post('/backups/offsite', [
+                'driver' => 'sftp',
+                'host' => 'offsite.example.test',
+                'username' => 'acacia',
+            ])
+            ->assertRedirect(route('backups.index'))
+            ->assertSessionHas('error', __('backups.offsite_driver_missing', [
+                'driver' => 'sftp',
+                'install' => 'composer require league/flysystem-sftp-v3',
+            ]));
+
+        $this->assertDatabaseCount('backup_offsite_disks', 0);
+    }
+
+    public function test_a_destination_that_throws_on_access_is_reported_not_fatal(): void
+    {
+        config([
+            'filesystems.disks.offsite' => ['driver' => 'no-such-adapter'],
+            'backup.backup.destination.disks' => ['backups', 'offsite'],
+        ]);
+
+        $archive = BackupArchive::create([
+            'disk' => 'offsite',
+            'name' => '2026-10-08-04-00-acacia.zip',
+            'path' => 'acacia/2026-10-08-04-00-acacia.zip',
+            'bytes' => 1024,
+            'sha256' => hash('sha256', 'offsite'),
+            'status' => BackupArchive::STATUS_OK,
+            'backed_up_at' => Carbon::parse('2026-10-08 04:00:00'),
+        ]);
+
+        $this->actingAs($this->admin())
+            ->get('/backups')
+            ->assertOk()
+            ->assertSeeText(__('backups.inaccessible_warning_title'));
+
+        // Unseen is not missing: a disk that throws keeps its
+        // archives' status intact.
+        $this->assertSame(BackupArchive::STATUS_OK, $archive->fresh()->status);
+
+        $this->actingAs($this->admin())
+            ->post('/backups/verify')
+            ->assertRedirect(route('backups.index'))
+            ->assertSessionHas('error', __('backups.verify_inaccessible', ['count' => 1]));
+    }
+}
+
+/**
+ * OffsiteDisk with a pinned probe outcome (and optionally pinned
+ * unavailable drivers), so the controller's save-and-test flows run
+ * without touching a real remote destination.
+ */
+class StubOffsiteDisk extends OffsiteDisk
+{
+    public function __construct(
+        protected readonly ?bool $probeOk,
+        protected readonly array $unavailable = [],
+    ) {}
+
+    public function probe(BackupOffsiteDisk $disk): array
+    {
+        return ['ok' => (bool) $this->probeOk, 'message' => 'stubbed connection test'];
+    }
+
+    public function driverAvailable(string $driver): bool
+    {
+        return ! in_array($driver, $this->unavailable, true);
     }
 }

@@ -4,7 +4,10 @@ namespace App\Services\Backups;
 
 use App\Models\BackupArchive;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Throwable;
 
 /**
  * The archive inventory (Tao head 6): one BackupArchive row per zip
@@ -16,15 +19,17 @@ use Illuminate\Support\Facades\Storage;
  * the backups themselves), `missing` when a disk no longer holds a
  * file it used to (theft, cleanup gone wrong, a detached offsite
  * volume). Disks unreachable under PHP's open_basedir restriction are
- * skipped entirely (DiskAccess) — unseen is not missing, and touching
- * such a disk would throw from the adapter itself.
+ * skipped entirely (DiskAccess), and a disk that throws on access
+ * (dead offsite credentials, detached volume) is reported as
+ * `inaccessible` — unseen is not missing, and neither may kill the
+ * page that renders the inventory.
  */
 class ArchiveInventory
 {
     public function __construct(protected DiskAccess $diskAccess) {}
 
     /**
-     * @return array{new: list<BackupArchive>, missing: list<BackupArchive>, unreachable: list<array{disk: string, root: string, allowed: string}>}
+     * @return array{new: list<BackupArchive>, missing: list<BackupArchive>, unreachable: list<array{disk: string, root: string, allowed: string}>, inaccessible: list<array{disk: string, error: string}>}
      */
     public function reconcile(): array
     {
@@ -37,14 +42,22 @@ class ArchiveInventory
             'disk',
         );
 
+        $inaccessible = [];
+
         foreach ($this->destinationDisks() as $diskName) {
             if (isset($unreachable[$diskName])) {
                 continue;
             }
 
-            $disk = Storage::disk($diskName);
-            $prefix = (string) config('backup.backup.name');
-            $files = $disk->exists($prefix) ? $disk->files($prefix) : [];
+            try {
+                $disk = Storage::disk($diskName);
+                $prefix = (string) config('backup.backup.name');
+                $files = $disk->exists($prefix) ? $disk->files($prefix) : [];
+            } catch (Throwable $e) {
+                $inaccessible[$diskName] = ['disk' => $diskName, 'error' => (string) Str::limit($e->getMessage(), 200)];
+
+                continue;
+            }
 
             foreach ($files as $file) {
                 if (! str_ends_with($file, '.zip')) {
@@ -95,6 +108,7 @@ class ArchiveInventory
             ->where('status', '!=', 'missing')
             ->get()
             ->filter(fn (BackupArchive $archive) => ! isset($unreachable[$archive->disk])
+                && ! isset($inaccessible[$archive->disk])
                 && ! isset($present[$archive->disk.'|'.$archive->name]))
             ->each(fn (BackupArchive $archive) => $archive->update(['status' => 'missing']))
             ->all();
@@ -103,19 +117,21 @@ class ArchiveInventory
             'new' => $new,
             'missing' => array_values($missing),
             'unreachable' => array_values($unreachable),
+            'inaccessible' => array_values($inaccessible),
         ];
     }
 
     /**
      * Re-hash every non-missing archive against its recorded
      * checksum. Archives on open_basedir-blocked disks are counted,
-     * not verified — their checksums are unknown, not wrong.
+     * not verified — their checksums are unknown, not wrong; the
+     * same for archives whose disk throws on access.
      *
-     * @return array{ok: int, corrupt: int, missing: int, unreachable: int}
+     * @return array{ok: int, corrupt: int, missing: int, unreachable: int, inaccessible: int}
      */
     public function verify(): array
     {
-        $counts = ['ok' => 0, 'corrupt' => 0, 'missing' => 0, 'unreachable' => 0];
+        $counts = ['ok' => 0, 'corrupt' => 0, 'missing' => 0, 'unreachable' => 0, 'inaccessible' => 0];
 
         foreach (BackupArchive::query()->where('status', '!=', 'missing')->get() as $archive) {
             if (! $this->diskAccess->diskIsReachable($archive->disk)) {
@@ -124,16 +140,27 @@ class ArchiveInventory
                 continue;
             }
 
-            $disk = Storage::disk($archive->disk);
+            try {
+                $disk = Storage::disk($archive->disk);
 
-            if (! $disk->exists($archive->path)) {
-                $archive->update(['status' => 'missing', 'verified_at' => now()]);
-                $counts['missing']++;
+                if (! $disk->exists($archive->path)) {
+                    $archive->update(['status' => 'missing', 'verified_at' => now()]);
+                    $counts['missing']++;
+
+                    continue;
+                }
+
+                $actual = $this->hash($archive->disk, $archive->path);
+            } catch (Throwable $e) {
+                Log::warning('Backup verify could not access a disk', [
+                    'disk' => $archive->disk,
+                    'error' => Str::limit($e->getMessage(), 200),
+                ]);
+                $counts['inaccessible']++;
 
                 continue;
             }
 
-            $actual = $this->hash($archive->disk, $archive->path);
             $corrupt = $archive->sha256 !== null && $actual !== $archive->sha256;
 
             $archive->update([

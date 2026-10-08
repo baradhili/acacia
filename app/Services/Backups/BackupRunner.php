@@ -30,6 +30,7 @@ class BackupRunner
         protected ArchiveInventory $inventory,
         protected IntegrityService $integrity,
         protected DiskAccess $diskAccess,
+        protected OffsiteDisk $offsiteDisk,
     ) {}
 
     /**
@@ -88,6 +89,11 @@ class BackupRunner
 
                 return ['status' => 'unreachable_disks', 'created' => [], 'error' => $error, 'output' => ''];
             }
+
+            // spatie snapshots config('backup') at boot; an offsite
+            // destination enabled since (saved from the Backups page)
+            // needs the snapshot refreshed or this run would skip it.
+            $this->offsiteDisk->refreshSpatieConfig();
 
             $exit = Artisan::call('backup:run', ['--no-interaction' => true]);
             $output = Artisan::output();

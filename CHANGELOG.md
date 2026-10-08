@@ -5,6 +5,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased] — 2026-10-08
 
+### Added — offsite backup destination configured from the Backups page (S3 or SFTP)
+
+The offsite leg of the backups (Tao head 3 — separation) previously
+meant editing `.env` by hand: filling the `BACKUP_S3_*` vars and
+enlarging `BACKUP_DESTINATION_DISKS`, then re-deploying. The Backups
+page now carries an Offsite Destination card where the admin picks a
+driver — **S3 / S3-compatible** or **SFTP** — enters the credentials
+and a path/prefix, and hits Save & Test Connection. Credentials live
+in a new `backup_offsite_disks` singleton row, encrypted at rest with
+APP_KEY (`encrypted:array`), and masked inputs never round-trip
+secrets back to the browser (blank means keep). Saving always runs a
+round-trip probe (write, read back, delete) over the destination, and
+`enabled` only sticks when the probe passes — an unreachable offsite
+disk would otherwise fail every scheduled backup run. The saved row is
+published at boot (and re-published before each run) as the `offsite`
+filesystems disk appended to spatie's destination list; spatie's
+boot-time config snapshot is refreshed around it. Both adapter
+packages (`league/flysystem-aws-s3-v3`,
+`league/flysystem-sftp-v3`) are now shipped, and a driver whose
+package is missing degrades to a disabled option with the composer
+line rather than a broken disk. Destination disks that throw on
+access (expired credentials, detached volume) are reported by name on
+the page and by Verify instead of crashing the screen, and their
+archives are not marked missing — unseen is not missing. The env
+route (`BACKUP_S3_*` + `s3-backups`) keeps working unchanged; closes
+the "Expand backups to allow using a SFTP path" todo.
+
 ### Fixed — backup destinations outside PHP's open_basedir explain themselves instead of erroring
 
 Pointing `BACKUP_PATH` outside the paths PHP's `open_basedir`

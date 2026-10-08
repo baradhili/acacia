@@ -280,7 +280,7 @@ Built on IFRS reports, extended with project/PO reports. The IFRS statements and
 ### Backups & Restore (Tao of Backup)
 
 - spatie/laravel-backup engine: one complete unit per run — database, public storage disk and `.env` in a single zip per destination disk
-- Daily schedule (admin-set frequency), GFS retention (7 daily / 4 weekly / 12 monthly / 2 yearly), optional offsite S3 disk
+- Daily schedule (admin-set frequency), GFS retention (7 daily / 4 weekly / 12 monthly / 2 yearly), optional offsite disk (S3 or SFTP) configured from the admin Backups page with an encrypted credential store and a connection test gating activation
 - AES-encrypted archives; SHA-256 inventory with daily corrupt/missing detection
 - Source integrity snapshots (file hashes + row counts) with change reports
 - One-click test restore into a scratch database (live data untouched); live `backups:restore` takes a safety backup first and rolls back on failure

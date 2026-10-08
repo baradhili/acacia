@@ -10,7 +10,7 @@ it — the feature ships both.
 |---|---|
 | 1. Coverage | One complete unit per run: a single zip holding the database dump, **everything** on the public storage disk (uploads, logos, photos), and `.env`. Only caches/logs/framework state are excluded. |
 | 2. Frequency | Daily at 04:00 via the scheduler, honouring the admin's frequency setting (daily/weekly/monthly); manual "Run Backup Now"; `backups:run --force` for after-significant-change runs. |
-| 3. Separation | Every disk in `BACKUP_DESTINATION_DISKS` receives a full copy — configure the offsite `s3-backups` disk so at least one copy is offsite. |
+| 3. Separation | Every disk in `BACKUP_DESTINATION_DISKS` receives a full copy — configure the offsite destination (S3 or SFTP) from the Backups page, or the env-driven `s3-backups` disk, so at least one copy is offsite. |
 | 4. History | Grandfather-father-son retention — everything kept 7 days, then a daily survives 4 weeks, a weekly survives 12 months, a monthly survives 2 years, then one per year (env-tunable, see `config/backup.php`). |
 | 5. Testing | `backups:test-restore` restores the newest archive into a scratch database and verifies it — live data is never touched. |
 | 6. Security | Archives are AES-encrypted (`BACKUP_ARCHIVE_PASSWORD`); every archive is inventoried with a SHA-256 and verified daily — corrupt or missing copies are flagged. |
@@ -47,8 +47,12 @@ useless without the key.
 # restart php-fpm).
 BACKUP_PATH=/backups
 
-# Offsite separation: fill the s3-backups disk and add it to the list
-# (requires `composer require league/flysystem-aws-s3-v3`).
+# Offsite separation: configure the offsite destination from the
+# admin Backups page (S3 or SFTP; credentials are encrypted at rest,
+# saving runs a connection test and enabling only sticks once the
+# test passes — it publishes the `offsite` disk into
+# BACKUP_DESTINATION_DISKS automatically). The env route below
+# remains as the file-based alternative for it.
 BACKUP_DESTINATION_DISKS=backups
 BACKUP_S3_KEY=...
 BACKUP_S3_SECRET=...

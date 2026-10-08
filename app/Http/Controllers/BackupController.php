@@ -4,11 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\BackupArchive;
 use App\Models\BackupIntegritySnapshot;
+use App\Models\BackupOffsiteDisk;
 use App\Models\BackupRestoreTest;
 use App\Models\BackupSetting;
 use App\Services\Backups\ArchiveInventory;
 use App\Services\Backups\BackupRunner;
 use App\Services\Backups\DiskAccess;
+use App\Services\Backups\OffsiteDisk;
 use App\Services\Backups\RestoreTester;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -18,9 +20,11 @@ use Illuminate\Validation\Rule;
  * The admin Backups page: the Tao-of-Backup control surface. Run a
  * backup now (BackupRunner → spatie), verify archive checksums and
  * source integrity, fire a test-restore (never touches live data),
- * and manage the frequency. The heavy lifting lives in the services
- * so the console commands and this page share one path; live
- * restores are console-only (`backups:restore`). Admin only (route
+ * manage the frequency, and configure the offsite destination (s3 or
+ * sftp, credentials encrypted at rest — OffsiteDisk publishes it as
+ * the `offsite` disk). The heavy lifting lives in the services so
+ * the console commands and this page share one path; live restores
+ * are console-only (`backups:restore`). Admin only (route
  * middleware).
  */
 class BackupController extends Controller
@@ -30,11 +34,13 @@ class BackupController extends Controller
         protected ArchiveInventory $inventory,
         protected RestoreTester $restoreTester,
         protected DiskAccess $diskAccess,
+        protected OffsiteDisk $offsiteDisk,
     ) {}
 
     public function index()
     {
-        $this->inventory->reconcile();
+        $reconciled = $this->inventory->reconcile();
+        $offsite = BackupOffsiteDisk::current();
 
         return view('backups.index', [
             'setting' => BackupSetting::current(),
@@ -43,6 +49,10 @@ class BackupController extends Controller
             'restoreTests' => BackupRestoreTest::query()->latest('id')->limit(5)->get(),
             'destinationDisks' => config('backup.backup.destination.disks'),
             'unreachableDisks' => $this->diskAccess->unreachableDestinationDisks(),
+            'inaccessibleDisks' => $reconciled['inaccessible'],
+            'offsiteDisk' => $offsite,
+            'offsiteDrivers' => $this->offsiteDisk->drivers(),
+            'offsiteUnavailable' => $offsite->enabled && ! $this->offsiteDisk->driverAvailable($offsite->driver),
             'retention' => $this->retentionSummary(),
             'encrypted' => config('backup.backup.password') !== null,
         ]);
@@ -79,6 +89,13 @@ class BackupController extends Controller
             );
         }
 
+        if ($counts['inaccessible'] > 0) {
+            return redirect()->route('backups.index')->with(
+                'error',
+                __('backups.verify_inaccessible', ['count' => $counts['inaccessible']]),
+            );
+        }
+
         if ($counts['unreachable'] > 0) {
             return redirect()->route('backups.index')->with(
                 'error',
@@ -89,6 +106,104 @@ class BackupController extends Controller
         return redirect()->route('backups.index')->with(
             'success',
             __('backups.verify_clean', ['count' => $counts['ok']]),
+        );
+    }
+
+    /**
+     * Save the offsite destination and immediately connection-test
+     * it. Blank credential inputs keep the stored values (masked
+     * secrets never round-trip through the browser), and `enabled`
+     * only sticks when the probe passed — an unreachable offsite
+     * disk would fail every scheduled backup run, so the gate lives
+     * here, not in the admin's discipline.
+     */
+    public function updateOffsite(Request $request)
+    {
+        $validated = $request->validate([
+            'driver' => ['required', Rule::in(BackupOffsiteDisk::DRIVERS)],
+            'enabled' => ['nullable', 'boolean'],
+            'root' => ['nullable', 'string', 'max:255'],
+            // sftp
+            'host' => ['nullable', 'string', 'max:255'],
+            'port' => ['nullable', 'integer', 'between:1,65535'],
+            'username' => ['nullable', 'string', 'max:255'],
+            'password' => ['nullable', 'string', 'max:1024'],
+            'private_key' => ['nullable', 'string', 'max:16384'],
+            // s3
+            'key' => ['nullable', 'string', 'max:255'],
+            'secret' => ['nullable', 'string', 'max:255'],
+            'region' => ['nullable', 'string', 'max:64'],
+            'bucket' => ['nullable', 'string', 'max:255'],
+            'endpoint' => ['nullable', 'url', 'max:255'],
+            'use_path_style_endpoint' => ['nullable', 'boolean'],
+        ]);
+
+        if (! $this->offsiteDisk->driverAvailable($validated['driver'])) {
+            return redirect()->route('backups.index')->with(
+                'error',
+                __('backups.offsite_driver_missing', [
+                    'driver' => $validated['driver'],
+                    'install' => $this->offsiteDisk->drivers()[$validated['driver']]['install'],
+                ]),
+            );
+        }
+
+        $row = BackupOffsiteDisk::current();
+        $existing = $row->config ?? [];
+
+        // Only the chosen driver's fields carry over; switching
+        // drivers drops the other bundle's stale entries.
+        $fields = $validated['driver'] === 's3'
+            ? ['key', 'secret', 'region', 'bucket', 'endpoint']
+            : ['host', 'port', 'username', 'password', 'private_key'];
+
+        $config = [];
+        foreach ($fields as $field) {
+            $submitted = $validated[$field] ?? null;
+            $value = ($submitted !== null && $submitted !== '') ? $submitted : ($existing[$field] ?? null);
+
+            if ($value !== null && $value !== '') {
+                $config[$field] = $value;
+            }
+        }
+
+        if ($validated['driver'] === 's3') {
+            $config['use_path_style_endpoint'] = (bool) ($validated['use_path_style_endpoint'] ?? false);
+        }
+
+        $required = $validated['driver'] === 's3' ? ['key', 'secret', 'bucket'] : ['host', 'username'];
+        $missing = array_values(array_filter($required, fn (string $field) => empty($config[$field])));
+
+        if ($missing !== []) {
+            return redirect()->route('backups.index')->withErrors([
+                'offsite' => __('backups.offsite_missing_fields', ['fields' => implode(', ', $missing)]),
+            ]);
+        }
+
+        $row->driver = $validated['driver'];
+        $row->root = ($validated['root'] ?? null) !== null && $validated['root'] !== '' ? $validated['root'] : null;
+        $row->config = $config;
+
+        $probe = $this->offsiteDisk->probe($row);
+
+        $row->last_test_at = now();
+        $row->last_test_status = $probe['ok'] ? 'passed' : 'failed';
+        $row->last_test_message = $probe['message'];
+        $row->enabled = (bool) ($validated['enabled'] ?? false) && $probe['ok'];
+        $row->save();
+
+        $this->offsiteDisk->sync();
+
+        if (! $probe['ok']) {
+            return redirect()->route('backups.index')->with(
+                'error',
+                __('backups.offsite_enable_refused', ['error' => $probe['message']]),
+            );
+        }
+
+        return redirect()->route('backups.index')->with(
+            'success',
+            $row->enabled ? __('backups.offsite_saved_enabled') : __('backups.offsite_saved_disabled'),
         );
     }
 

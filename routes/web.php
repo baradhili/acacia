@@ -67,13 +67,15 @@ Route::middleware('auth')->group(function () {
     });
 
     // Backups (admin only) — run backups, verify integrity, test
-    // restores, and manage the schedule
+    // restores, manage the schedule, and configure the offsite
+    // destination
     Route::middleware('role:admin')->group(function () {
         Route::get('/backups', [BackupController::class, 'index'])->name('backups.index');
         Route::post('/backups/run', [BackupController::class, 'run'])->name('backups.run');
         Route::post('/backups/verify', [BackupController::class, 'verify'])->name('backups.verify');
         Route::post('/backups/test-restore', [BackupController::class, 'testRestore'])->name('backups.test-restore');
         Route::put('/backups/settings', [BackupController::class, 'update'])->name('backups.settings.update');
+        Route::post('/backups/offsite', [BackupController::class, 'updateOffsite'])->name('backups.offsite.update');
     });
 
     // Modules (admin only) — the module management screen
