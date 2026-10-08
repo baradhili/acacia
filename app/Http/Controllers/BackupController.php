@@ -8,6 +8,7 @@ use App\Models\BackupRestoreTest;
 use App\Models\BackupSetting;
 use App\Services\Backups\ArchiveInventory;
 use App\Services\Backups\BackupRunner;
+use App\Services\Backups\DiskAccess;
 use App\Services\Backups\RestoreTester;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -28,6 +29,7 @@ class BackupController extends Controller
         protected BackupRunner $runner,
         protected ArchiveInventory $inventory,
         protected RestoreTester $restoreTester,
+        protected DiskAccess $diskAccess,
     ) {}
 
     public function index()
@@ -40,6 +42,7 @@ class BackupController extends Controller
             'snapshots' => BackupIntegritySnapshot::query()->latest('id')->limit(5)->get(),
             'restoreTests' => BackupRestoreTest::query()->latest('id')->limit(5)->get(),
             'destinationDisks' => config('backup.backup.destination.disks'),
+            'unreachableDisks' => $this->diskAccess->unreachableDestinationDisks(),
             'retention' => $this->retentionSummary(),
             'encrypted' => config('backup.backup.password') !== null,
         ]);
@@ -58,6 +61,7 @@ class BackupController extends Controller
             ),
             'already_running' => redirect()->route('backups.index')->with('error', __('backups.run_already_running')),
             'skipped' => redirect()->route('backups.index')->with('error', __('backups.run_skipped')),
+            'unreachable_disks' => redirect()->route('backups.index')->with('error', __('backups.run_failed_unreachable')),
             default => $this->reportFailure($result['error'] ?? 'unknown error'),
         };
     }
@@ -72,6 +76,13 @@ class BackupController extends Controller
             return redirect()->route('backups.index')->with(
                 'error',
                 __('backups.verify_problems', $counts),
+            );
+        }
+
+        if ($counts['unreachable'] > 0) {
+            return redirect()->route('backups.index')->with(
+                'error',
+                __('backups.verify_unreachable', ['count' => $counts['unreachable']]),
             );
         }
 

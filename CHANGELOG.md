@@ -3,6 +3,32 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] — 2026-10-08
+
+### Fixed — backup destinations outside PHP's open_basedir explain themselves instead of erroring
+
+Pointing `BACKUP_PATH` outside the paths PHP's `open_basedir`
+restriction allows (e.g. `/home/bret/backups` on a host allowing only
+`/var/www/erp/`, `/usr/lib/php/`, `/tmp/`) crashed the Backups page
+with an `ErrorException` from Flysystem's local adapter — the adapter
+stats the disk root the moment it is resolved, so merely opening the
+page died, and Verify/Test Restore/Run Now would fail the same way
+mid-action. A new `App\Services\Backups\DiskAccess` guard checks each
+destination root against the restriction before any disk is resolved
+(a component-wise prefix match mirroring PHP's own semantics;
+undecidable cases read as reachable so it never false-alarms). The
+Backups page now renders a warning naming the blocked root and the
+allowed paths, with both fixes: move `BACKUP_PATH` inside the allowed
+paths, or widen `open_basedir` in the php.ini php-fpm and the CLI
+share and restart php-fpm. Backups fail fast with that explanation
+instead of starting spatie; the inventory and Verify skip a blocked
+disk rather than reading it as empty (unseen is not missing — its
+archives keep their status and are reported as unverified); a restore
+test against a blocked archive records a clear failure; and
+`backups:restore` refuses the archive up front. The runbook and
+`.env.example` now note the constraint where `BACKUP_PATH` is
+documented.
+
 ## [Unreleased] — 2026-10-07
 
 ### Added — transfer journal reversal (the XFER undo path)

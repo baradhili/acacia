@@ -35,6 +35,16 @@ class BackupsVerify extends Command
             count($counts['new']),
         ));
 
+        // Not an exit-code failure — the Backups page carries the
+        // persistent warning and the fix — but the sweep must say it
+        // could not see those archives at all.
+        if ($verification['unreachable'] > 0) {
+            $this->warn(sprintf(
+                '%d archive(s) sit on disks unreachable under PHP\'s open_basedir restriction and were not verified.',
+                $verification['unreachable'],
+            ));
+        }
+
         $this->line('Source snapshot: '.$snapshot->summary);
 
         return ($verification['corrupt'] > 0 || $verification['missing'] > 0)

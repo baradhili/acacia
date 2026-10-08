@@ -4,6 +4,7 @@ namespace App\Console\Commands\Backups;
 
 use App\Models\BackupArchive;
 use App\Services\Backups\BackupRunner;
+use App\Services\Backups\DiskAccess;
 use App\Services\Backups\Restorer;
 use Illuminate\Console\Command;
 
@@ -25,7 +26,7 @@ class BackupsRestore extends Command
 
     protected $description = 'Restore the database from a backup archive, taking a safety backup first';
 
-    public function handle(BackupRunner $runner, Restorer $restorer): int
+    public function handle(BackupRunner $runner, Restorer $restorer, DiskAccess $diskAccess): int
     {
         if (! $this->option('file')) {
             $this->explain();
@@ -47,6 +48,14 @@ class BackupsRestore extends Command
 
         if ($archive->status !== BackupArchive::STATUS_OK) {
             $this->error("Refusing to restore from a {$archive->status} archive (run backups:verify to re-check it).");
+
+            return Command::FAILURE;
+        }
+
+        if (! $diskAccess->diskIsReachable($archive->disk)) {
+            $root = (string) config("filesystems.disks.{$archive->disk}.root");
+
+            $this->error("Disk {$archive->disk}'s root {$root} is outside the paths PHP's open_basedir restriction allows ({$diskAccess->allowedPaths()}) — fix BACKUP_PATH or the ini before restoring.");
 
             return Command::FAILURE;
         }

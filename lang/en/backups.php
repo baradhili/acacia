@@ -54,6 +54,15 @@ return [
     'col_message' => 'Outcome',
     'restore_is_cli' => 'The Test Restore button never touches live data. Live restores are console-only: php artisan backups:restore --file=… --force (a safety backup runs first, with rollback on failure).',
 
+    // Destination outside PHP's open_basedir paths
+    'basedir_warning_title' => 'A backup destination is unreachable under PHP\'s open_basedir restriction',
+    'basedir_warning_body' => 'The disk :disk root :root is outside the paths PHP allows (:allowed), so the app can neither read nor write backups there — every backup, verification and restore test involving it fails until one of the fixes below is applied.',
+    'basedir_option_env' => 'Move the destination inside the allowed paths: point BACKUP_PATH at a directory under one of them — e.g. the default storage/app/backups under the app root, or an external volume mounted under it — then clear the config cache.',
+    'basedir_option_ini' => 'Or keep the location and widen PHP: add the backup root to open_basedir in the php.ini both php-fpm and the CLI use, then restart php-fpm.',
+    'run_failed_unreachable' => 'Backup not started: a destination disk\'s root is outside the paths PHP\'s open_basedir restriction allows — see the configuration warning on this page for the two fixes.',
+    'verify_unreachable' => ':count archive(s) sit on a disk unreachable under PHP\'s open_basedir restriction and were not verified — see the configuration warning on this page.',
+    'test_restore_disk_unreachable' => 'its disk :disk is unreachable under PHP\'s open_basedir restriction — fix the disk root or open_basedir before this archive can be tested.',
+
     // Flash messages
     'run_created' => 'Backup created (:count archive(s) recorded, checksummed and snapshotted).',
     'run_already_running' => 'A backup is already running — nothing was created. Try again once it finishes.',

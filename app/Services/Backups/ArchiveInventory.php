@@ -15,19 +15,33 @@ use Illuminate\Support\Facades\Storage;
  * flips statuses — `corrupt` on a checksum mismatch (silent rot of
  * the backups themselves), `missing` when a disk no longer holds a
  * file it used to (theft, cleanup gone wrong, a detached offsite
- * volume).
+ * volume). Disks unreachable under PHP's open_basedir restriction are
+ * skipped entirely (DiskAccess) — unseen is not missing, and touching
+ * such a disk would throw from the adapter itself.
  */
 class ArchiveInventory
 {
+    public function __construct(protected DiskAccess $diskAccess) {}
+
     /**
-     * @return array{new: list<BackupArchive>, missing: list<BackupArchive>}
+     * @return array{new: list<BackupArchive>, missing: list<BackupArchive>, unreachable: list<array{disk: string, root: string, allowed: string}>}
      */
     public function reconcile(): array
     {
         $new = [];
         $present = [];
 
+        $unreachable = array_column(
+            $this->diskAccess->unreachableDestinationDisks(),
+            null,
+            'disk',
+        );
+
         foreach ($this->destinationDisks() as $diskName) {
+            if (isset($unreachable[$diskName])) {
+                continue;
+            }
+
             $disk = Storage::disk($diskName);
             $prefix = (string) config('backup.backup.name');
             $files = $disk->exists($prefix) ? $disk->files($prefix) : [];
@@ -76,27 +90,40 @@ class ArchiveInventory
             }
         }
 
-        // Anything inventoried that no disk holds any more.
+        // Anything inventoried that no reachable disk holds any more.
         $missing = BackupArchive::query()
             ->where('status', '!=', 'missing')
             ->get()
-            ->filter(fn (BackupArchive $archive) => ! isset($present[$archive->disk.'|'.$archive->name]))
+            ->filter(fn (BackupArchive $archive) => ! isset($unreachable[$archive->disk])
+                && ! isset($present[$archive->disk.'|'.$archive->name]))
             ->each(fn (BackupArchive $archive) => $archive->update(['status' => 'missing']))
             ->all();
 
-        return ['new' => $new, 'missing' => array_values($missing)];
+        return [
+            'new' => $new,
+            'missing' => array_values($missing),
+            'unreachable' => array_values($unreachable),
+        ];
     }
 
     /**
-     * Re-hash every non-missing archive against its recorded checksum.
+     * Re-hash every non-missing archive against its recorded
+     * checksum. Archives on open_basedir-blocked disks are counted,
+     * not verified — their checksums are unknown, not wrong.
      *
-     * @return array{ok: int, corrupt: int, missing: int}
+     * @return array{ok: int, corrupt: int, missing: int, unreachable: int}
      */
     public function verify(): array
     {
-        $counts = ['ok' => 0, 'corrupt' => 0, 'missing' => 0];
+        $counts = ['ok' => 0, 'corrupt' => 0, 'missing' => 0, 'unreachable' => 0];
 
         foreach (BackupArchive::query()->where('status', '!=', 'missing')->get() as $archive) {
+            if (! $this->diskAccess->diskIsReachable($archive->disk)) {
+                $counts['unreachable']++;
+
+                continue;
+            }
+
             $disk = Storage::disk($archive->disk);
 
             if (! $disk->exists($archive->path)) {

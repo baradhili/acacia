@@ -29,6 +29,7 @@ class BackupRunner
     public function __construct(
         protected ArchiveInventory $inventory,
         protected IntegrityService $integrity,
+        protected DiskAccess $diskAccess,
     ) {}
 
     /**
@@ -48,8 +49,11 @@ class BackupRunner
     /**
      * Full run under an exclusive cross-process lock. Returns one of:
      * `ran` (archives created — with their inventory rows and a fresh
-     * integrity snapshot), `skipped` (not due), `already_running`, or
-     * `failed` (error message attached; nothing partial is trusted).
+     * integrity snapshot), `skipped` (not due), `already_running`,
+     * `unreachable_disks` (a local destination root sits outside
+     * PHP's open_basedir paths — spatie is never invoked; fix
+     * BACKUP_PATH or the ini first), or `failed` (error message
+     * attached; nothing partial is trusted).
      *
      * @return array{status: string, created: list<BackupArchive>, error: ?string, output: string}
      */
@@ -66,6 +70,23 @@ class BackupRunner
 
             if (! $force && ! $this->isDue($setting)) {
                 return ['status' => 'skipped', 'created' => [], 'error' => null, 'output' => ''];
+            }
+
+            // Before spatie is invoked at all: a blocked destination
+            // would throw from the adapter mid-run, so refuse up front
+            // with a reason the admin can act on.
+            if (($unreachable = $this->diskAccess->unreachableDestinationDisks()) !== []) {
+                $error = implode(' ', array_map(
+                    fn (array $disk) => sprintf(
+                        "destination disk %s's root %s is outside the paths PHP's open_basedir restriction allows (%s)",
+                        $disk['disk'],
+                        $disk['root'],
+                        $disk['allowed'],
+                    ),
+                    $unreachable,
+                ));
+
+                return ['status' => 'unreachable_disks', 'created' => [], 'error' => $error, 'output' => ''];
             }
 
             $exit = Artisan::call('backup:run', ['--no-interaction' => true]);

@@ -6,6 +6,8 @@ use App\Models\BackupArchive;
 use App\Models\BackupSetting;
 use App\Models\User;
 use App\Services\Backups\BackupRunner;
+use App\Services\Backups\DiskAccess;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
@@ -21,6 +23,9 @@ use Tests\TestCase;
  * archive inventory with checksums, and the post-run integrity
  * snapshot. The backup destination and the public storage disk are
  * redirected to temp directories so real storage is never touched.
+ * Destination roots outside PHP's open_basedir paths (the DiskAccess
+ * guards) are exercised through a faked restriction, so the suite
+ * runs on hosts whose own ini is unrestricted.
  */
 class BackupTest extends TestCase
 {
@@ -91,6 +96,28 @@ class BackupTest extends TestCase
         return tap(User::factory()->create())->assignRole('staff');
     }
 
+    /**
+     * Pin DiskAccess to a fake open_basedir so the reachability guards
+     * fire on hosts whose own ini is unrestricted.
+     *
+     * @param  list<string>  $allowed
+     */
+    protected function restrictOpenBasedirTo(array $allowed): void
+    {
+        $this->app->instance(
+            DiskAccess::class,
+            new class(implode(PATH_SEPARATOR, $allowed)) extends DiskAccess
+            {
+                public function __construct(private readonly string $restriction) {}
+
+                protected function openBasedir(): string
+                {
+                    return $this->restriction;
+                }
+            },
+        );
+    }
+
     public function test_backups_page_is_gated_to_admin(): void
     {
         $this->actingAs($this->staff())->get('/backups')->assertForbidden();
@@ -99,7 +126,97 @@ class BackupTest extends TestCase
             ->get('/backups')
             ->assertOk()
             ->assertSee(__('backups.run_now'))
-            ->assertSee(__('backups.test_restore'));
+            ->assertSee(__('backups.test_restore'))
+            // A healthy destination renders no open_basedir warning.
+            ->assertDontSeeText(__('backups.basedir_warning_title'));
+    }
+
+    /**
+     * Point the backups disk at a root the fake restriction excludes —
+     * the misconfiguration the guards exist for (BACKUP_PATH outside
+     * every open_basedir path). Nothing may resolve that disk
+     * afterwards: the adapter itself throws at construction.
+     */
+    protected function blockBackupsDestination(): void
+    {
+        config(['filesystems.disks.backups.root' => '/home/bret/backups']);
+        $this->restrictOpenBasedirTo([base_path(), sys_get_temp_dir()]);
+    }
+
+    protected function blockedArchive(): BackupArchive
+    {
+        return BackupArchive::create([
+            'disk' => 'backups',
+            'name' => '2026-10-07-04-00-acacia.zip',
+            'path' => 'acacia/2026-10-07-04-00-acacia.zip',
+            'bytes' => 1024,
+            'sha256' => hash('sha256', 'seed'),
+            'status' => BackupArchive::STATUS_OK,
+            'backed_up_at' => Carbon::parse('2026-10-07 04:00:00'),
+        ]);
+    }
+
+    public function test_the_page_warns_when_a_destination_root_is_outside_open_basedir(): void
+    {
+        $this->blockBackupsDestination();
+        $archive = $this->blockedArchive();
+
+        $this->actingAs($this->admin())
+            ->get('/backups')
+            ->assertOk()
+            ->assertSeeText(__('backups.basedir_warning_title'))
+            ->assertSeeText(__('backups.basedir_option_ini'))
+            ->assertSee('/home/bret/backups');
+
+        // Unseen is not missing: the blocked disk is skipped rather
+        // than read as empty, so its archives keep their status.
+        $this->assertSame(BackupArchive::STATUS_OK, $archive->fresh()->status);
+    }
+
+    public function test_running_a_backup_fails_fast_when_a_destination_is_unreachable(): void
+    {
+        $this->blockBackupsDestination();
+
+        $this->actingAs($this->admin())
+            ->post('/backups/run')
+            ->assertRedirect(route('backups.index'))
+            ->assertSessionHas('error', __('backups.run_failed_unreachable'));
+
+        // spatie was never invoked: no archive, no success timestamp.
+        $this->assertDatabaseCount('backup_archives', 0);
+        $this->assertNull(BackupSetting::current()->last_backup_at);
+    }
+
+    public function test_verify_reports_unreachable_archives_without_marking_them_missing(): void
+    {
+        $this->blockBackupsDestination();
+        $archive = $this->blockedArchive();
+
+        $this->actingAs($this->admin())
+            ->post('/backups/verify')
+            ->assertRedirect(route('backups.index'))
+            ->assertSessionHas('error', __('backups.verify_unreachable', ['count' => 1]));
+
+        $this->assertSame(BackupArchive::STATUS_OK, $archive->fresh()->status);
+    }
+
+    public function test_a_restore_test_on_an_unreachable_archive_records_a_clear_failure(): void
+    {
+        $this->blockBackupsDestination();
+        $archive = $this->blockedArchive();
+
+        $this->actingAs($this->admin())
+            ->post('/backups/test-restore')
+            ->assertRedirect(route('backups.index'))
+            ->assertSessionHas('error', __('backups.test_restore_failed', [
+                'file' => $archive->name,
+                'message' => __('backups.test_restore_disk_unreachable', ['disk' => 'backups']),
+            ]));
+
+        $this->assertDatabaseHas('backup_restore_tests', [
+            'status' => 'failed',
+            'backup_archive_id' => $archive->id,
+        ]);
     }
 
     public function test_admin_can_update_the_schedule_settings(): void

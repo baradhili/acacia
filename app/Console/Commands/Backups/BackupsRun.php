@@ -31,6 +31,7 @@ class BackupsRun extends Command
         return match ($result['status']) {
             'skipped' => $this->info('Backup not due — use --force to run anyway.') ?: Command::SUCCESS,
             'already_running' => $this->warn('Another backup is already running; this run did nothing.') ?: Command::SUCCESS,
+            'unreachable_disks' => $this->reportFailure($result),
             'failed' => $this->reportFailure($result),
             default => $this->reportSuccess($result),
         };

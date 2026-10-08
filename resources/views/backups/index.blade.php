@@ -22,6 +22,24 @@
         </div>
     @endif
 
+    {{-- A destination root outside PHP's open_basedir paths: nothing
+         on this page can reach that disk, so say so and how to fix it
+         instead of failing mid-action. --}}
+    @if ($unreachableDisks !== [])
+        <div class="mb-6 max-w-5xl bg-orange-50 border border-orange-300 text-orange-900 px-4 py-3 rounded-lg">
+            <p class="font-semibold">{{ __('backups.basedir_warning_title') }}</p>
+            @foreach ($unreachableDisks as $blocked)
+                <p class="mt-2 text-sm">
+                    {{ __('backups.basedir_warning_body', ['disk' => $blocked['disk'], 'root' => $blocked['root'], 'allowed' => $blocked['allowed']]) }}
+                </p>
+            @endforeach
+            <ul class="mt-2 list-disc list-inside text-sm">
+                <li>{{ __('backups.basedir_option_env') }}</li>
+                <li>{{ __('backups.basedir_option_ini') }}</li>
+            </ul>
+        </div>
+    @endif
+
     {{-- Status cards --}}
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 max-w-5xl">
         <div class="bg-white rounded-lg shadow p-5">

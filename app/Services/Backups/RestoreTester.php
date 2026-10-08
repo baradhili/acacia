@@ -15,9 +15,13 @@ use Throwable;
  * PRAGMA integrity_check, and compares the imported row counts
  * against the integrity snapshot taken with that archive. Every run
  * records a BackupRestoreTest row for the admin page and history.
+ * Archives on open_basedir-blocked disks fail with an explanation
+ * rather than the adapter's ErrorException.
  */
 class RestoreTester
 {
+    public function __construct(protected DiskAccess $diskAccess) {}
+
     /**
      * Test the given archive, or the newest ok one when null.
      */
@@ -32,6 +36,10 @@ class RestoreTester
 
         if ($archive === null) {
             return $this->record(null, null, 'failed', [], 'No backup archive is available to test.', $started);
+        }
+
+        if (! $this->diskAccess->diskIsReachable($archive->disk)) {
+            return $this->record($archive, $archive->disk, 'failed', [], __('backups.test_restore_disk_unreachable', ['disk' => $archive->disk]), $started, $archive->name);
         }
 
         $checks = [];

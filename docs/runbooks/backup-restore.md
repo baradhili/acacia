@@ -39,6 +39,12 @@ useless without the key.
 ```dotenv
 # Local destination — point at dedicated storage (ideally an
 # external volume) so backups survive losing the app disk.
+# When PHP runs with open_basedir, the root must sit inside one of
+# its allowed paths — an outside root makes every read and write of
+# the disk throw, so the Backups page warns and runs refuse until
+# BACKUP_PATH moves inside the allowed paths or the ini is widened
+# (add the root to open_basedir for both php-fpm and the CLI, then
+# restart php-fpm).
 BACKUP_PATH=/backups
 
 # Offsite separation: fill the s3-backups disk and add it to the list
