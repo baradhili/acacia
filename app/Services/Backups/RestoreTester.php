@@ -109,13 +109,12 @@ class RestoreTester
     }
 
     /**
-     * The engine the archive's dump speaks — spatie dumps the
-     * connections configured in backup.backup.source.databases,
-     * which tracks the app connection. (An archive predating a
-     * driver switch would be relabelled; recording the driver per
-     * archive is future work.)
+     * The connection spatie dumps — the first of
+     * backup.backup.source.databases, falling back to the default
+     * connection. (An archive predating a connection switch would be
+     * relabelled; recording the source per archive is future work.)
      */
-    protected function sourceDriver(): string
+    protected function sourceConnection(): string
     {
         $databases = (array) config('backup.backup.source.databases');
 
@@ -123,10 +122,26 @@ class RestoreTester
     }
 
     /**
+     * The engine the archive's dump speaks, resolved from the source
+     * connection's own driver — the config list holds connection
+     * names, which need not spell their driver. Laravel's mariadb
+     * driver speaks the MySQL protocol, so it shares the mysql
+     * scratch.
+     */
+    protected function sourceDriver(): string
+    {
+        $source = $this->sourceConnection();
+        $driver = (string) (config("database.connections.{$source}.driver") ?? $source);
+
+        return $driver === 'mariadb' ? 'mysql' : $driver;
+    }
+
+    /**
      * A throwaway database for the scratch restore, disposed by the
      * caller's finally: a sqlite file, or a MySQL database created
-     * and dropped on the configured server (needs CREATE/DROP
-     * privilege for the app's DB user — the failure message says so).
+     * and dropped on the source connection's server (needs CREATE/
+     * DROP privilege for that connection's user — the failure
+     * message says so).
      *
      * @return array{pdo: PDO, dispose: callable(): void}
      */
@@ -143,7 +158,7 @@ class RestoreTester
             return ['pdo' => $pdo, 'dispose' => fn () => File::delete($path)];
         }
 
-        $config = (array) config('database.connections.mysql');
+        $config = (array) config('database.connections.'.$this->sourceConnection());
         $name = 'erp_restore_test_'.now()->format('YmdHis').'_'.bin2hex(random_bytes(3));
 
         $server = new PDO($this->mysqlDsn($config, null), $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
@@ -156,7 +171,16 @@ class RestoreTester
             throw new RuntimeException('Could not create the scratch database — the app DB user may lack CREATE privilege: '.$e->getMessage(), 0, $e);
         }
 
-        $pdo = new PDO($this->mysqlDsn($config, $name), $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+        try {
+            $pdo = new PDO($this->mysqlDsn($config, $name), $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+        } catch (Throwable $e) {
+            // The database was created but the caller has no dispose
+            // yet — drop it here or it orphans on the server.
+            $server->exec("DROP DATABASE IF EXISTS `{$name}`");
+            $server = null;
+
+            throw $e;
+        }
 
         $dispose = function () use ($server, $name): void {
             try {

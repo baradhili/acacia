@@ -198,6 +198,22 @@ class BackupIntegrityAndRestoreTest extends TestCase
         $this->assertStringContainsString('dump dialect', $test->message);
     }
 
+    public function test_the_scratch_dialect_resolves_from_the_named_source_connection(): void
+    {
+        $tester = app(RestoreTester::class);
+        $driver = new \ReflectionMethod($tester, 'sourceDriver');
+        $driver->setAccessible(true);
+
+        // The backup config holds connection names, which need not
+        // spell their driver — and mariadb speaks the MySQL protocol.
+        config([
+            'backup.backup.source.databases' => ['erp_source'],
+            'database.connections.erp_source' => ['driver' => 'mariadb', 'host' => '127.0.0.1'],
+        ]);
+
+        $this->assertSame('mysql', $driver->invoke($tester));
+    }
+
     public function test_the_restore_test_fails_cleanly_on_a_corrupt_archive(): void
     {
         $archive = $this->runBackup();
