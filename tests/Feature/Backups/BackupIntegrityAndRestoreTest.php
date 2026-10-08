@@ -182,6 +182,22 @@ class BackupIntegrityAndRestoreTest extends TestCase
         $this->assertEmpty(glob(storage_path('app/backup-restore/*.sqlite')));
     }
 
+    public function test_the_restore_test_refuses_drivers_it_cannot_scratch(): void
+    {
+        $archive = $this->runBackup();
+
+        // The scratch database matches the dump's engine; a dialect
+        // the tester cannot stand up must fail with an explanation,
+        // not die importing foreign SQL.
+        config(['backup.backup.source.databases' => ['pgsql']]);
+
+        $test = app(RestoreTester::class)->test($archive);
+
+        $this->assertSame('failed', $test->status);
+        $this->assertStringContainsString('pgsql', $test->message);
+        $this->assertStringContainsString('dump dialect', $test->message);
+    }
+
     public function test_the_restore_test_fails_cleanly_on_a_corrupt_archive(): void
     {
         $archive = $this->runBackup();

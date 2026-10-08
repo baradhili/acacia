@@ -115,10 +115,26 @@ php artisan backups:test-restore                 # newest ok archive
 php artisan backups:test-restore --file=2026-10-07-04-00-00.zip
 ```
 
-Extracts the dump, rebuilds it into a scratch sqlite database under
-`storage/app/backup-restore/`, runs `PRAGMA integrity_check`, and
-compares row counts against the integrity snapshot taken with that
-backup. Result and details are recorded on the Backups page.
+Extracts the dump and rebuilds it into a scratch database of the
+dump's own engine — a sqlite file under `storage/app/backup-restore/`
+(`PRAGMA integrity_check`) when the app runs sqlite, or a
+create-and-drop `erp_restore_test_*` database on the configured
+MySQL server (`CHECK TABLE` over every restored table) when it runs
+MySQL: a mysqldump file cannot be imported into sqlite (the dialects
+differ from the first `unsigned`). Row counts are compared against
+the integrity snapshot taken with that backup; results and details
+are recorded on the Backups page.
+
+MySQL hosts need a one-time, narrowly-scoped grant so the app user
+can create and drop the scratch databases (as root):
+
+```sql
+GRANT CREATE, DROP ON `erp_restore_test_%`.* TO '<db-user>'@'<db-host>';
+FLUSH PRIVILEGES;
+```
+
+Without it the test fails cleanly with "the app DB user may lack
+CREATE privilege" and nothing else is affected.
 
 ### Live restore (database)
 

@@ -22,6 +22,8 @@ here once their changelog entry lands. Ordered by priority.
 
 - [ ] cucumber tests via behat — plan reviewed and refreshed 2026-09-28: .zcode/plans/behat-migration-plan.md (scope renewal with maintainer is the first step; suite has grown to 55 feature files + the Modules suite since the original approval).
 
+- [ ] Live restore (`backups:restore`) is sqlite-only — on MySQL hosts the Restorer's safety-copy/swap flow cannot run; extend it the way the restore test was extended (scratch/import per engine, then a swap strategy for MySQL) or gate it with a clear refusal. (Oct 2026: the restore test learned the mysql scratch path; the live leg has not.)
+
 - [ ] Freeform dashboard resize: drag handles/heights beyond the column-span cycling the layout management ships (Sep 2026) — gridstack is already in package.json if this lands.
 
 - [ ] property rental management module - the company is a landlord

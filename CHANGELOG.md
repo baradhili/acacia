@@ -74,6 +74,23 @@ public` (0755 directories — nothing under storage/ is web-served),
 and the runbook's dual-user troubleshooting note covers the
 destination tree alongside the staging directory.
 
+### Fixed — the restore test works on MySQL, not just sqlite hosts
+
+The restore test imports the archive's database dump into a scratch
+database — which was always a scratch **sqlite** file, so on MySQL
+hosts (a mysqldump file) it died on the first MySQL-only token
+("near \"unsigned\": syntax error"). The scratch now matches the
+dump's engine: sqlite file as before, or a create-and-drop
+`erp_restore_test_*` database on the configured MySQL server, with
+`CHECK TABLE` standing in for sqlite's `PRAGMA integrity_check` and
+the scratch created/dropped per run (a one-time, narrowly-scoped
+`GRANT CREATE, DROP ON erp_restore_test_%.*` for the app's DB user
+is documented in the runbook; without it the test fails cleanly with
+the reason). Dump dialects the tester cannot scratch fail with an
+explanation instead of an import error. Live restores
+(`backups:restore`) remain sqlite-only and are now flagged on the
+todo list for the MySQL path.
+
 ### Fixed — a blank BACKUP_PATH falls back to the storage default
 
 `env()`'s default only applies when the key is absent, so a blanked

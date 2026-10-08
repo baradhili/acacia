@@ -6,20 +6,29 @@ use App\Models\BackupArchive;
 use App\Models\BackupIntegritySnapshot;
 use App\Models\BackupRestoreTest;
 use Illuminate\Support\Facades\File;
+use PDO;
+use RuntimeException;
 use Throwable;
 
 /**
  * The restore test (Tao head 5): an untested backup is not a backup.
  * This restores the database dump from a chosen archive into a
- * scratch sqlite database — live data is never touched — runs
- * PRAGMA integrity_check, and compares the imported row counts
- * against the integrity snapshot taken with that archive. Every run
- * records a BackupRestoreTest row for the admin page and history.
- * Archives on open_basedir-blocked disks fail with an explanation
- * rather than the adapter's ErrorException.
+ * scratch database — live data is never touched — checks the
+ * engine's integrity verdict, and compares the imported row counts
+ * against the integrity snapshot taken with that archive. The
+ * scratch matches the dump's engine: a sqlite file for the sqlite
+ * driver, or a create-and-drop MySQL database on the configured
+ * server for the mysql driver (a mysqldump file cannot be imported
+ * into sqlite — the dialects differ from the first `unsigned`).
+ * Every run records a BackupRestoreTest row for the admin page and
+ * history. Archives on open_basedir-blocked disks fail with an
+ * explanation rather than the adapter's ErrorException.
  */
 class RestoreTester
 {
+    /** Scratch engines the tester can stand up, keyed by source driver. */
+    protected const SCRATCH_DRIVERS = ['sqlite', 'mysql'];
+
     public function __construct(protected DiskAccess $diskAccess) {}
 
     /**
@@ -42,20 +51,29 @@ class RestoreTester
             return $this->record($archive, $archive->disk, 'failed', [], __('backups.test_restore_disk_unreachable', ['disk' => $archive->disk]), $started, $archive->name);
         }
 
+        $driver = $this->sourceDriver();
+
+        if (! in_array($driver, self::SCRATCH_DRIVERS, true)) {
+            return $this->record($archive, $archive->disk, 'failed', [], "Restore testing does not support the {$driver} driver's dump dialect yet.", $started, $archive->name);
+        }
+
         $checks = [];
 
         try {
             $sql = BackupZip::withDatabaseDump($archive, fn (string $dump) => $dump);
             $checks['dump_bytes'] = strlen($sql);
+            $checks['scratch_driver'] = $driver;
 
-            [$pdo, $scratchPath] = $this->freshScratch();
+            $scratch = $this->freshScratch($driver);
 
             try {
-                SqlDumpImport::import($pdo, $sql);
+                SqlDumpImport::import($scratch['pdo'], $sql);
 
-                $checks['integrity_check'] = (string) $pdo->query('PRAGMA integrity_check')->fetchColumn();
+                $checks['integrity_check'] = $driver === 'mysql'
+                    ? $this->mysqlTablesHealthy($scratch['pdo'])
+                    : (string) $scratch['pdo']->query('PRAGMA integrity_check')->fetchColumn();
 
-                $restoredCounts = $this->scratchTableCounts($pdo);
+                $restoredCounts = $this->scratchTableCounts($scratch['pdo'], $driver);
                 $checks['tables_restored'] = count($restoredCounts);
 
                 $reference = BackupIntegritySnapshot::referenceFor($archive);
@@ -81,8 +99,7 @@ class RestoreTester
                         ? 'The restored database failed its integrity check.'
                         : 'Restored, but row counts differ from the snapshot taken with this backup.');
             } finally {
-                $pdo = null;
-                File::delete($scratchPath);
+                $scratch['dispose']();
             }
 
             return $this->record($archive, $archive->disk, $passed ? 'passed' : 'failed', $checks, $message, $started, $archive->name);
@@ -92,33 +109,122 @@ class RestoreTester
     }
 
     /**
-     * @return array{\PDO, string} the connection and its scratch file path
+     * The engine the archive's dump speaks — spatie dumps the
+     * connections configured in backup.backup.source.databases,
+     * which tracks the app connection. (An archive predating a
+     * driver switch would be relabelled; recording the driver per
+     * archive is future work.)
      */
-    protected function freshScratch(): array
+    protected function sourceDriver(): string
     {
-        $dir = storage_path('app/backup-restore');
-        File::ensureDirectoryExists($dir);
+        $databases = (array) config('backup.backup.source.databases');
 
-        $path = $dir.'/test-'.now()->format('Ymd_His').'-'.bin2hex(random_bytes(3)).'.sqlite';
+        return (string) ($databases[0] ?? config('database.default'));
+    }
 
-        $pdo = new \PDO('sqlite:'.$path, null, null, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
+    /**
+     * A throwaway database for the scratch restore, disposed by the
+     * caller's finally: a sqlite file, or a MySQL database created
+     * and dropped on the configured server (needs CREATE/DROP
+     * privilege for the app's DB user — the failure message says so).
+     *
+     * @return array{pdo: PDO, dispose: callable(): void}
+     */
+    protected function freshScratch(string $driver): array
+    {
+        if ($driver !== 'mysql') {
+            $dir = storage_path('app/backup-restore');
+            File::ensureDirectoryExists($dir);
 
-        return [$pdo, $path];
+            $path = $dir.'/test-'.now()->format('Ymd_His').'-'.bin2hex(random_bytes(3)).'.sqlite';
+
+            $pdo = new PDO('sqlite:'.$path, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+
+            return ['pdo' => $pdo, 'dispose' => fn () => File::delete($path)];
+        }
+
+        $config = (array) config('database.connections.mysql');
+        $name = 'erp_restore_test_'.now()->format('YmdHis').'_'.bin2hex(random_bytes(3));
+
+        $server = new PDO($this->mysqlDsn($config, null), $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+
+        try {
+            $server->exec("CREATE DATABASE `{$name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+        } catch (Throwable $e) {
+            $server = null;
+
+            throw new RuntimeException('Could not create the scratch database — the app DB user may lack CREATE privilege: '.$e->getMessage(), 0, $e);
+        }
+
+        $pdo = new PDO($this->mysqlDsn($config, $name), $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+
+        $dispose = function () use ($server, $name): void {
+            try {
+                $server->exec("DROP DATABASE IF EXISTS `{$name}`");
+            } finally {
+                $server = null;
+            }
+        };
+
+        return ['pdo' => $pdo, 'dispose' => $dispose];
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     */
+    protected function mysqlDsn(array $config, ?string $database): string
+    {
+        $dsn = isset($config['unix_socket']) && $config['unix_socket'] !== ''
+            ? 'unix_socket='.$config['unix_socket']
+            : 'host='.($config['host'] ?? '127.0.0.1').(isset($config['port']) ? ';port='.$config['port'] : '');
+
+        return 'mysql:'.$dsn.($database !== null ? ';dbname='.$database : '').';charset=utf8mb4';
+    }
+
+    /**
+     * MySQL has no PRAGMA integrity_check — CHECK TABLE over every
+     * restored table is the engine's own verdict. 'ok' when every
+     * table reports OK, otherwise the offending messages.
+     */
+    protected function mysqlTablesHealthy(PDO $pdo): string
+    {
+        $problems = [];
+
+        foreach ($this->scratchTableNames($pdo, 'mysql') as $table) {
+            $verdict = $pdo->query("CHECK TABLE `{$table}`")->fetch(PDO::FETCH_ASSOC);
+
+            if (is_array($verdict) && strcasecmp((string) ($verdict['Msg_text'] ?? ''), 'ok') !== 0) {
+                $problems[] = "{$table}: ".($verdict['Msg_text'] ?? 'unknown verdict');
+            }
+        }
+
+        return $problems === [] ? 'ok' : implode('; ', $problems);
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function scratchTableNames(PDO $pdo, string $driver): array
+    {
+        $rows = $pdo->query(
+            $driver === 'mysql'
+                ? 'SHOW TABLES'
+                : "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+        )->fetchAll(PDO::FETCH_COLUMN);
+
+        return array_map('strval', $rows);
     }
 
     /**
      * @return array<string, int>
      */
-    protected function scratchTableCounts(\PDO $pdo): array
+    protected function scratchTableCounts(PDO $pdo, string $driver): array
     {
         $counts = [];
+        $quote = $driver === 'mysql' ? '`' : '"';
 
-        $tables = $pdo->query(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
-        )->fetchAll(\PDO::FETCH_COLUMN);
-
-        foreach ($tables as $table) {
-            $counts[(string) $table] = (int) $pdo->query('SELECT COUNT(*) FROM "'.$table.'"')->fetchColumn();
+        foreach ($this->scratchTableNames($pdo, $driver) as $table) {
+            $counts[$table] = (int) $pdo->query("SELECT COUNT(*) FROM {$quote}{$table}{$quote}")->fetchColumn();
         }
 
         ksort($counts);
