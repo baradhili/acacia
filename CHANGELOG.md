@@ -60,6 +60,20 @@ test against a blocked archive records a clear failure; and
 `.env.example` now note the constraint where `BACKUP_PATH` is
 documented.
 
+### Fixed — backup destination directories no longer lock out the other backup user
+
+Backups run under two unix users (the web user for the Run Now
+button, the console user for the scheduler and artisan), but
+flysystem creates destination directories with the disk's visibility
+mode — private by default, 0700 — so whichever user first created
+`{root}/acacia/` locked the other out of even listing it: the
+Backups page reported the local disk unreachable ("Failed to open
+directory: Permission denied") while the archives sat safely at the
+destination. The `backups` disk now sets `directory_visibility:
+public` (0755 directories — nothing under storage/ is web-served),
+and the runbook's dual-user troubleshooting note covers the
+destination tree alongside the staging directory.
+
 ### Fixed — a blank BACKUP_PATH falls back to the storage default
 
 `env()`'s default only applies when the key is absent, so a blanked

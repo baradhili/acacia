@@ -54,7 +54,14 @@ BACKUP_PATH=/backups
 #   setfacl -m u:www-data:rwx,u:<console-user>:rwx storage/app/backup-temp
 #   setfacl -d -m u:www-data:rwx,u:<console-user>:rwx storage/app/backup-temp
 # Symptom of getting it wrong: "mkdir(): Permission denied" from
-# spatie/temporary-directory the moment a backup starts.
+# spatie/temporary-directory the moment a backup starts. The same
+# dual-user dynamic applies to the destination tree itself: the
+# backups disk creates directories 0755 (directory_visibility), but
+# only the creating user (plus ACL grants) can write into a
+# destination dir — if the Backups page ever reports the local disk
+# as unreachable ("Failed to open directory: Permission denied"),
+# re-run the setfacl pair (with -R, as the owning user or root) on
+# {BACKUP_PATH} and the {name}/ directory inside it.
 
 # Offsite separation: configure the offsite destination from the
 # admin Backups page (S3 or SFTP; credentials are encrypted at rest,

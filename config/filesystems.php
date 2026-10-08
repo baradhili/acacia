@@ -76,6 +76,15 @@ return [
         'backups' => [
             'driver' => 'local',
             'root' => env('BACKUP_PATH') ?: storage_path('app/backups'),
+            // flysystem creates destination directories with the
+            // visibility mode itself, and the private default (0700)
+            // means whichever of the web user / console user creates
+            // {root}/{name}/ locks the other out of listing it —
+            // public directory visibility (0755) keeps both reading
+            // what either wrote (nothing under storage/ is web-served;
+            // encrypt archives for confidentiality). File visibility
+            // stays private.
+            'directory_visibility' => 'public',
             'throw' => true,
         ],
 
