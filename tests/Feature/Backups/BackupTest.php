@@ -38,6 +38,8 @@ class BackupTest extends TestCase
 
     protected string $publicPath;
 
+    protected string $tempPath;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -48,6 +50,11 @@ class BackupTest extends TestCase
 
         $this->backupPath = sys_get_temp_dir().'/erp-backup-test-'.uniqid();
         $this->publicPath = sys_get_temp_dir().'/erp-public-test-'.uniqid();
+        // spatie stages the zip in backup.temporary_directory before
+        // copying to the destination disks — redirect it too, or the
+        // suite leaves CLI-user-owned dirs in real storage that block
+        // the web user's backup runs (mkdir permission denied).
+        $this->tempPath = sys_get_temp_dir().'/erp-backup-temp-'.uniqid();
         File::ensureDirectoryExists($this->publicPath);
 
         // An .env stand-in inside the temp tree: the real one exists on
@@ -64,6 +71,7 @@ class BackupTest extends TestCase
             // spatie zips the literal include paths, not the disks, so
             // the redirect has to reach the source list as well.
             'backup.backup.source.files.include' => [$this->publicPath],
+            'backup.backup.temporary_directory' => $this->tempPath,
             'backup.backup.password' => null,
         ]);
 
@@ -74,6 +82,7 @@ class BackupTest extends TestCase
     {
         File::deleteDirectory($this->backupPath);
         File::deleteDirectory($this->publicPath);
+        File::deleteDirectory($this->tempPath);
 
         parent::tearDown();
     }

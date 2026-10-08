@@ -47,6 +47,15 @@ useless without the key.
 # restart php-fpm).
 BACKUP_PATH=/backups
 
+# Troubleshooting: backups run both as the web user (the Run Now
+# button, php-fpm) and the console user (scheduler, artisan) — spatie
+# stages the zip in storage/app/backup-temp, so whoever creates that
+# dir first must not lock the other out:
+#   setfacl -m u:www-data:rwx,u:<console-user>:rwx storage/app/backup-temp
+#   setfacl -d -m u:www-data:rwx,u:<console-user>:rwx storage/app/backup-temp
+# Symptom of getting it wrong: "mkdir(): Permission denied" from
+# spatie/temporary-directory the moment a backup starts.
+
 # Offsite separation: configure the offsite destination from the
 # admin Backups page (S3 or SFTP; credentials are encrypted at rest,
 # saving runs a connection test and enabling only sticks once the
