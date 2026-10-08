@@ -496,6 +496,43 @@ class BackupTest extends TestCase
         $this->assertDatabaseCount('backup_offsite_disks', 0);
     }
 
+    public function test_a_failed_edit_keeps_a_working_offsite_destination_untouched(): void
+    {
+        // An enabled destination is a known-good config whose secrets
+        // the masked form cannot give back — a failing replacement
+        // (typo in the new host) must not overwrite it or disable the
+        // offsite leg.
+        BackupOffsiteDisk::current()->fill([
+            'enabled' => true,
+            'driver' => 'sftp',
+            'root' => '/srv/backups',
+            'config' => ['host' => 'good.example.test', 'username' => 'acacia', 'password' => 'good-secret'],
+        ])->save();
+        // Mirror production, where the boot-time sync published the
+        // enabled destination before the admin ever opened the page.
+        app(OffsiteDisk::class)->sync();
+
+        $this->app->instance(OffsiteDisk::class, new StubOffsiteDisk(false));
+
+        $this->actingAs($this->admin())
+            ->post('/backups/offsite', [
+                'driver' => 'sftp',
+                'host' => 'typo.example.test',
+                'username' => 'acacia',
+                'password' => 'replacement-secret',
+                'enabled' => '1',
+            ])
+            ->assertRedirect(route('backups.index'))
+            ->assertSessionHas('error', __('backups.offsite_edit_refused', ['error' => 'stubbed connection test']));
+
+        $row = BackupOffsiteDisk::current();
+        $this->assertTrue($row->enabled);
+        $this->assertSame('good.example.test', $row->config['host']);
+        $this->assertSame('good-secret', $row->config['password']);
+        $this->assertNull($row->last_test_status);
+        $this->assertContains('offsite', config('backup.backup.destination.disks'));
+    }
+
     public function test_a_destination_that_throws_on_access_is_reported_not_fatal(): void
     {
         config([

@@ -115,7 +115,10 @@ class BackupController extends Controller
      * secrets never round-trip through the browser), and `enabled`
      * only sticks when the probe passed — an unreachable offsite
      * disk would fail every scheduled backup run, so the gate lives
-     * here, not in the admin's discipline.
+     * here, not in the admin's discipline. A failing probe against
+     * an already-enabled destination changes nothing at all: the
+     * working config's secrets are unrecoverable through the masked
+     * form, so a typo must not destroy them.
      */
     public function updateOffsite(Request $request)
     {
@@ -180,11 +183,29 @@ class BackupController extends Controller
             ]);
         }
 
-        $row->driver = $validated['driver'];
-        $row->root = ($validated['root'] ?? null) !== null && $validated['root'] !== '' ? $validated['root'] : null;
-        $row->config = $config;
+        // Probe the candidate before touching the stored row. An
+        // enabled destination is a known-working config whose secrets
+        // the masked inputs cannot give back — a failing replacement
+        // (typo, not-yet-live rotated password) must leave it exactly
+        // as it is, not overwrite it and silently drop the offsite
+        // leg from every future backup.
+        $candidate = $row->replicate();
+        $candidate->driver = $validated['driver'];
+        $candidate->root = ($validated['root'] ?? null) !== null && $validated['root'] !== '' ? $validated['root'] : null;
+        $candidate->config = $config;
 
-        $probe = $this->offsiteDisk->probe($row);
+        $probe = $this->offsiteDisk->probe($candidate);
+
+        if (! $probe['ok'] && $row->enabled) {
+            return redirect()->route('backups.index')->with(
+                'error',
+                __('backups.offsite_edit_refused', ['error' => $probe['message']]),
+            );
+        }
+
+        $row->driver = $candidate->driver;
+        $row->root = $candidate->root;
+        $row->config = $config;
 
         $row->last_test_at = now();
         $row->last_test_status = $probe['ok'] ? 'passed' : 'failed';

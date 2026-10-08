@@ -28,9 +28,13 @@ package is missing degrades to a disabled option with the composer
 line rather than a broken disk. Destination disks that throw on
 access (expired credentials, detached volume) are reported by name on
 the page and by Verify instead of crashing the screen, and their
-archives are not marked missing — unseen is not missing. The env
-route (`BACKUP_S3_*` + `s3-backups`) keeps working unchanged; closes
-the "Expand backups to allow using a SFTP path" todo.
+archives are not marked missing — unseen is not missing. A failing
+connection test against an already-enabled destination changes
+nothing at all — the working config's secrets are unrecoverable
+through the masked form, so a typo'd replacement must not destroy
+them. The env route (`BACKUP_S3_*` + `s3-backups`) keeps working
+unchanged; closes the "Expand backups to allow using a SFTP path"
+todo.
 
 ### Fixed — backup destinations outside PHP's open_basedir explain themselves instead of erroring
 

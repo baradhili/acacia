@@ -101,6 +101,7 @@ return [
     'offsite_probe_corrupt' => 'the probe file was written but read back differently — the destination is not behaving like storage.',
     'offsite_missing_fields' => 'The offsite destination still needs: :fields.',
     'offsite_enable_refused' => 'Configuration saved, but the connection test failed so the destination was NOT enabled: :error',
+    'offsite_edit_refused' => 'The new configuration failed its connection test (:error), so the working offsite destination was left untouched. Disable it first if you really want to replace it.',
     'offsite_saved_enabled' => 'Offsite destination saved and enabled — the connection test passed.',
     'offsite_saved_disabled' => 'Offsite destination saved (not enabled) — the connection test passed.',
     'offsite_unavailable_warning' => 'The offsite destination is enabled but its adapter package is missing on this server, so backups are running local-only. Install the package or disable the destination below.',
