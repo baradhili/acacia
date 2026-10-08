@@ -170,6 +170,12 @@ class BackupController extends Controller
             }
         }
 
+        // The integer rule validates but does not cast, and forms
+        // submit strings — SftpConnectionProvider declares int $port.
+        if (isset($config['port'])) {
+            $config['port'] = (int) $config['port'];
+        }
+
         if ($validated['driver'] === 's3') {
             $config['use_path_style_endpoint'] = (bool) ($validated['use_path_style_endpoint'] ?? false);
         }

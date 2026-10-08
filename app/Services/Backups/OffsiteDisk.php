@@ -85,7 +85,10 @@ class OffsiteDisk
             'sftp' => array_filter([
                 'driver' => 'sftp',
                 'host' => $config['host'] ?? null,
-                'port' => $config['port'] ?? null,
+                // Forms deliver numeric strings and SftpConnectionProvider
+                // declares int — cast here so even a row stored before
+                // this normalisation probes cleanly.
+                'port' => (int) ($config['port'] ?? 22),
                 'username' => $config['username'] ?? null,
                 'password' => $config['password'] ?? null,
                 'privateKey' => $config['private_key'] ?? null,

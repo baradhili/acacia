@@ -427,7 +427,10 @@ class BackupTest extends TestCase
             ->post('/backups/offsite', [
                 'driver' => 'sftp',
                 'host' => 'offsite.example.test',
-                'port' => 22,
+                // The string a browser actually submits; the stored
+                // config must carry an int (SftpConnectionProvider
+                // declares int $port).
+                'port' => '22',
                 'username' => 'acacia',
                 'password' => 'sftp-secret-passphrase',
                 'root' => '/srv/backups/acacia',
@@ -439,6 +442,7 @@ class BackupTest extends TestCase
         $row = BackupOffsiteDisk::current();
         $this->assertTrue($row->enabled);
         $this->assertSame('sftp', $row->driver);
+        $this->assertSame(22, $row->config['port']);
         $this->assertSame('sftp-secret-passphrase', $row->config['password']);
 
         // The credential bundle is encrypted at rest — the raw
@@ -531,6 +535,26 @@ class BackupTest extends TestCase
         $this->assertSame('good-secret', $row->config['password']);
         $this->assertNull($row->last_test_status);
         $this->assertContains('offsite', config('backup.backup.destination.disks'));
+    }
+
+    /**
+     * SftpConnectionProvider declares int $port, while forms and any
+     * row saved before the cast existed carry numeric strings — the
+     * definition must normalise both, and default to 22.
+     */
+    public function test_the_sftp_port_is_normalised_to_an_integer_in_the_disk_definition(): void
+    {
+        $service = app(OffsiteDisk::class);
+
+        $row = BackupOffsiteDisk::current();
+        $row->fill(['driver' => 'sftp', 'root' => '/srv/backups']);
+        $row->config = ['host' => 'sftp.example.test', 'username' => 'acacia', 'port' => '2222'];
+
+        $this->assertSame(2222, $service->definition($row)['port']);
+
+        $row->config = ['host' => 'sftp.example.test', 'username' => 'acacia'];
+
+        $this->assertSame(22, $service->definition($row)['port']);
     }
 
     public function test_a_destination_that_throws_on_access_is_reported_not_fatal(): void
