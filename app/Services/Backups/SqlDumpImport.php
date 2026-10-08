@@ -3,14 +3,22 @@
 namespace App\Services\Backups;
 
 /**
- * Executes a textual sqlite dump into a PDO connection — the one
- * importer shared by the restore tester and the live restorer.
+ * Executes a textual dump into a PDO connection — the one importer
+ * shared by the restore tester and the live restorer, for sqlite
+ * dumps and mysqldump files alike.
  *
  * Statements are line-oriented as both our dumper and sqlite3's
  * .dump emit them, with one exception the parser must honour:
  * CREATE TRIGGER bodies span lines and contain their own
  * semicolons, so once a trigger starts the accumulator only
  * completes on a line that is exactly its closing END;.
+ *
+ * mysqldump's LOCK TABLES / UNLOCK TABLES pairs are skipped: a
+ * concurrent-dump optimisation, meaningless in a throwaway
+ * single-session scratch, absent from sqlite's syntax, and MariaDB
+ * reports a missing db-level LOCK TABLES privilege as 1044 "access
+ * denied to database" — running them would demand rights the
+ * scratch user has no reason to hold.
  */
 class SqlDumpImport
 {
@@ -36,7 +44,7 @@ class SqlDumpImport
                 $buffer = '';
                 $inTrigger = false;
 
-                if ($statement !== '') {
+                if ($statement !== '' && ! preg_match('/^\s*(LOCK TABLES|UNLOCK TABLES)\b/i', $statement)) {
                     $pdo->exec($statement);
                 }
             }

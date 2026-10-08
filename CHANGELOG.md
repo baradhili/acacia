@@ -83,10 +83,15 @@ hosts (a mysqldump file) it died on the first MySQL-only token
 dump's engine: sqlite file as before, or a create-and-drop
 `erp_restore_test_*` database on the configured MySQL server, with
 `CHECK TABLE` standing in for sqlite's `PRAGMA integrity_check` and
-the scratch created/dropped per run (a one-time, narrowly-scoped
-`GRANT CREATE, DROP ON erp_restore_test_%.*` for the app's DB user
+the scratch created/dropped per run (a one-time grant of ALL on the
+`erp_restore_test_%` pattern for the app's DB user — the import
+itself needs CREATE/INSERT/SELECT/ALTER/INDEX inside the scratch —
 is documented in the runbook; without it the test fails cleanly with
-the reason). Dump dialects the tester cannot scratch fail with an
+the reason). The shared importer now skips mysqldump's `LOCK
+TABLES`/`UNLOCK TABLES` pairs — a concurrent-dump optimisation that
+a throwaway scratch neither needs nor (under MariaDB, which reports
+the missing db-level right as 1044 "access denied to database")
+tolerates. Dump dialects the tester cannot scratch fail with an
 explanation instead of an import error. Live restores
 (`backups:restore`) remain sqlite-only and are now flagged on the
 todo list for the MySQL path.

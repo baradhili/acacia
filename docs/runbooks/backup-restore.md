@@ -126,15 +126,20 @@ the integrity snapshot taken with that backup; results and details
 are recorded on the Backups page.
 
 MySQL hosts need a one-time, narrowly-scoped grant so the app user
-can create and drop the scratch databases (as root):
+can create, drop and — crucially — import into the scratch
+databases (the dump's own `LOCK TABLES` pairs are skipped by the
+importer, but the tables themselves need CREATE/INSERT/SELECT/ALTER/
+INDEX inside the scratch; MariaDB reports such shortfalls as 1044
+"access denied to database"). As root:
 
 ```sql
-GRANT CREATE, DROP ON `erp_restore_test_%`.* TO '<db-user>'@'<db-host>';
+GRANT ALL PRIVILEGES ON `erp_restore_test_%`.* TO '<db-user>'@'<db-host>';
 FLUSH PRIVILEGES;
 ```
 
-Without it the test fails cleanly with "the app DB user may lack
-CREATE privilege" and nothing else is affected.
+The pattern reaches only the throwaway `erp_restore_test_*`
+databases — never real data. Without it the test fails cleanly with
+the reason and nothing else is affected.
 
 ### Live restore (database)
 
