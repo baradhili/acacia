@@ -79,7 +79,7 @@ return [
     'offsite_root' => 'Path / prefix',
     'offsite_root_help' => 'SFTP directory (e.g. /srv/backups/acacia) or S3 key prefix — optional.',
     'offsite_save' => 'Save & Test Connection',
-    'offsite_last_test' => 'Last connection test: :status (:when)',
+    'offsite_last_test' => 'Last connection test: :status',
     'offsite_last_test_passed' => 'passed',
     'offsite_last_test_failed' => 'failed',
     'offsite_secret_keep' => 'leave blank to keep the stored value',

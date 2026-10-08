@@ -371,7 +371,13 @@ php artisan sail:install
 ### Required `.env` keys
 
 ```dotenv
-APP_TIMEZONE=Australia/Sydney
+# Timestamps are stored as UTC (leave APP_TIMEZONE alone); the UI
+# renders them in the VIEWER'S OWN browser timezone (client-side JS).
+# APP_DISPLAY_TIMEZONE is the server-rendered fallback for the first
+# paint and no-JS contexts, with the zone abbreviation
+# (AEST/AEDT/AWST/UTC) attached.
+APP_TIMEZONE=UTC
+APP_DISPLAY_TIMEZONE=Australia/Sydney
 APP_LOCALE=en_AU
 
 # Database

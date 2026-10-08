@@ -58,7 +58,7 @@
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 max-w-5xl">
         <div class="bg-white rounded-lg shadow p-5">
             <h3 class="text-sm font-medium text-gray-500">{{ __('backups.last_backup') }}</h3>
-            <p class="mt-1 text-lg font-semibold text-gray-900">{{ $setting->last_backup_at?->format('d M Y H:i') ?? __('backups.never') }}</p>
+            <p class="mt-1 text-lg font-semibold text-gray-900"><x-display-time :time="$setting->last_backup_at" :fallback="__('backups.never')"/></p>
             <p class="mt-1 text-sm text-gray-500">{{ __('backups.schedule') }}: {{ $setting->frequency }}</p>
         </div>
         <div class="bg-white rounded-lg shadow p-5">
@@ -121,7 +121,7 @@
                 @if ($restoreTests->isNotEmpty())
                     @php $latestTest = $restoreTests->first(); @endphp
                     <p class="text-sm {{ $latestTest->status === 'passed' ? 'text-green-600' : 'text-red-600' }}">
-                        {{ $latestTest->created_at->format('d M Y H:i') }} — {{ strtoupper($latestTest->status) }} ({{ $latestTest->duration_ms }} ms)
+                        <x-display-time :time="$latestTest->created_at"/> — {{ strtoupper($latestTest->status) }} ({{ $latestTest->duration_ms }} ms)
                     </p>
                 @else
                     <p class="text-sm text-yellow-600">{{ __('backups.no_restore_tests') }}</p>
@@ -158,14 +158,14 @@
                                 <td class="py-2 pr-4 text-gray-700">{{ $archive->disk }}</td>
                                 <td class="py-2 pr-4 font-mono text-xs text-gray-600">{{ $archive->name }}</td>
                                 <td class="py-2 pr-4 text-gray-600">{{ \Illuminate\Support\Number::fileSize($archive->bytes) }}</td>
-                                <td class="py-2 pr-4 text-gray-600">{{ $archive->backed_up_at?->format('d M Y H:i') ?? '-' }}</td>
+                                <td class="py-2 pr-4 text-gray-600"><x-display-time :time="$archive->backed_up_at"/></td>
                                 <td class="py-2 pr-4">
                                     <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
                                         {{ $archive->status === 'ok' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
                                         {{ $archive->status }}
                                     </span>
                                 </td>
-                                <td class="py-2 text-gray-600">{{ $archive->verified_at?->format('d M Y H:i') ?? '-' }}</td>
+                                <td class="py-2 text-gray-600"><x-display-time :time="$archive->verified_at"/></td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -184,7 +184,7 @@
                 <ul class="divide-y divide-gray-100">
                     @foreach ($snapshots as $snapshot)
                         <li class="py-2">
-                            <p class="text-xs text-gray-400">{{ __('backups.col_snapshot') }} #{{ $snapshot->id }} — {{ $snapshot->created_at->format('d M Y H:i') }}</p>
+                            <p class="text-xs text-gray-400">{{ __('backups.col_snapshot') }} #{{ $snapshot->id }} — <x-display-time :time="$snapshot->created_at"/></p>
                             <p class="text-sm text-gray-700">{{ $snapshot->summary }}</p>
                         </li>
                     @endforeach
@@ -200,7 +200,7 @@
                 <ul class="divide-y divide-gray-100">
                     @foreach ($restoreTests as $test)
                         <li class="py-2">
-                            <p class="text-xs text-gray-400">{{ $test->created_at->format('d M Y H:i') }} — {{ $test->file }}</p>
+                            <p class="text-xs text-gray-400"><x-display-time :time="$test->created_at"/> — {{ $test->file }}</p>
                             <p class="text-sm {{ $test->status === 'passed' ? 'text-green-600' : 'text-red-600' }}">
                                 {{ strtoupper($test->status) }} ({{ $test->duration_ms }} ms): {{ $test->message }}
                             </p>
@@ -339,8 +339,8 @@
                     <p class="text-sm {{ $offsiteDisk->lastTestPassed() ? 'text-green-600' : 'text-red-600' }}">
                         {{ __('backups.offsite_last_test', [
                             'status' => __($offsiteDisk->lastTestPassed() ? 'backups.offsite_last_test_passed' : 'backups.offsite_last_test_failed'),
-                            'when' => $offsiteDisk->last_test_at->format('d M Y H:i'),
                         ]) }}
+                        (<x-display-time :time="$offsiteDisk->last_test_at"/>)
                         @if ($offsiteDisk->last_test_message)— {{ $offsiteDisk->last_test_message }}@endif
                     </p>
                 @endif

@@ -231,6 +231,47 @@ class BackupTest extends TestCase
         ]);
     }
 
+    public function test_the_page_renders_backup_times_in_the_display_timezone(): void
+    {
+        // Stored UTC, displayed converted and labelled: a winter and a
+        // summer archive at 04:00 UTC must read 14:00 AEST and 15:00
+        // AEDT — never the raw UTC wall-clock, never an unlabelled
+        // time (the abbreviation tracks DST by itself).
+        foreach ([
+            ['2026-07-01-04-00-acacia.zip', '2026-07-01 04:00:00', '01 Jul 2026 14:00 AEST'],
+            ['2026-12-01-04-00-acacia.zip', '2026-12-01 04:00:00', '01 Dec 2026 15:00 AEDT'],
+        ] as [$name, $storedAt, $displayed]) {
+            BackupArchive::create([
+                'disk' => 'backups',
+                'name' => $name,
+                'path' => 'acacia/'.$name,
+                'bytes' => 1024,
+                'sha256' => hash('sha256', $name),
+                'status' => BackupArchive::STATUS_OK,
+                'backed_up_at' => Carbon::parse($storedAt),
+            ]);
+        }
+        BackupSetting::current()->update(['last_backup_at' => Carbon::parse('2026-12-01 04:00:00')]);
+        // The offsite card's last-test stamp converts with the rest
+        // of the screen.
+        BackupOffsiteDisk::current()->fill([
+            'last_test_status' => 'passed',
+            'last_test_at' => Carbon::parse('2026-12-01 04:00:00'),
+        ])->save();
+
+        $this->actingAs($this->admin())
+            ->get('/backups')
+            ->assertOk()
+            ->assertSee('01 Jul 2026 14:00 AEST')
+            ->assertSee('01 Dec 2026 15:00 AEDT')
+            // The stamps are <time> elements carrying the UTC
+            // instant, which display-time.js re-renders in the
+            // viewer's browser timezone.
+            ->assertSee('data-display-time')
+            // The settings card converts too, not just the tables.
+            ->assertSee(__('backups.last_backup'));
+    }
+
     public function test_admin_can_update_the_schedule_settings(): void
     {
         $this->actingAs($this->admin())

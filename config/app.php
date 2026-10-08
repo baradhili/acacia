@@ -96,9 +96,32 @@ return [
     | will be used by the PHP date and date-time functions. The timezone
     | is set to "UTC" by default as it is suitable for most use cases.
     |
+    | This is the STORAGE timezone — timestamps are written as UTC and
+    | APP_TIMEZONE stays UTC. Which zone the UI renders them in is the
+    | separate display_timezone below.
+    |
     */
 
     'timezone' => 'UTC',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Application Display Timezone
+    |--------------------------------------------------------------------------
+    |
+    | The timezone the UI's server-rendered fallback text shows stored
+    | UTC timestamps in, with the zone's own abbreviation attached
+    | (AEST/AEDT/AWST/UTC/... — derived per moment, so a
+    | DST-shifting zone labels itself correctly year-round). Viewers
+    | with JavaScript see times in their own browser timezone instead
+    | (resources/js/display-time.js converts the <time> elements
+    | App\Support\DisplayTime emits); this zone covers the first
+    | paint and no-JS rendering, and falls back to UTC on an invalid
+    | value.
+    |
+    */
+
+    'display_timezone' => env('APP_DISPLAY_TIMEZONE', 'Australia/Sydney'),
 
     /*
     |--------------------------------------------------------------------------

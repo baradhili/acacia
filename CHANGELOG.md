@@ -70,6 +70,29 @@ long-standing documented default); a set value still wins.
 
 ## [Unreleased] — 2026-10-07
 
+### Changed — times render in the viewer's own timezone, labelled
+
+The Backups page showed raw UTC wall-clock times (storage runs UTC),
+which reads half a day off for an Australian firm. Timestamps are
+still written as UTC — that invariant is now pinned in `.env.example`
+and the README (`APP_TIMEZONE=UTC`) — and every screen time now
+renders in the **viewer's own browser timezone**: the new
+`App\Support\DisplayTime` helper and a tiny Blade component
+(`<x-display-time>`) emit `<time>` elements carrying the UTC
+instant, and a small JS pass (`resources/js/display-time.js`, built
+on `Intl`) re-renders each one in the browser's local zone with
+its environment's offset label (EST, GMT+11, … — modern ICU reports
+offsets rather than AEST/AEDT-style abbreviations for many zones).
+The new `APP_DISPLAY_TIMEZONE` (`app.display_timezone`, defaulting
+to Australia/Sydney) supplies the server-rendered text those
+elements start with — the first paint and the no-JS fallback — with
+its abbreviation derived from the rendered moment, so a
+DST-shifting zone labels itself AEST over winter and AEDT over
+summer with no config change; an invalid zone value falls back to UTC
+rather than failing the screen. The Backups page (all seven stamps)
+is converted; other screens can adopt `<x-display-time>`
+incrementally.
+
 ### Added — transfer journal reversal (the XFER undo path)
 
 A bank transfer recorded wrong (wrong accounts, wrong amount) could be
