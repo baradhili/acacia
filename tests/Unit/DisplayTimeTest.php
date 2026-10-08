@@ -18,6 +18,10 @@ class DisplayTimeTest extends TestCase
 {
     public function test_renders_in_the_display_timezone_with_its_abbreviation(): void
     {
+        // Pin the zone the expectations assume — the host env's
+        // APP_DISPLAY_TIMEZONE must not decide this test.
+        config(['app.display_timezone' => 'Australia/Sydney']);
+
         // Winter: Sydney runs AEST (UTC+10).
         $this->assertSame(
             '01 Jul 2026 14:00 AEST',

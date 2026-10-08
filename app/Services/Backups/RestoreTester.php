@@ -99,6 +99,11 @@ class RestoreTester
                         ? 'The restored database failed its integrity check.'
                         : 'Restored, but row counts differ from the snapshot taken with this backup.');
             } finally {
+                // Release the scratch connection before its database
+                // is dropped — dispose's server-side DROP is cleaner
+                // with no sessions attached (it closes the server
+                // handle itself).
+                $scratch['pdo'] = null;
                 $scratch['dispose']();
             }
 
