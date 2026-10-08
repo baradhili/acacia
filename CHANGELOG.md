@@ -29,6 +29,14 @@ test against a blocked archive records a clear failure; and
 `.env.example` now note the constraint where `BACKUP_PATH` is
 documented.
 
+### Fixed — a blank BACKUP_PATH falls back to the storage default
+
+`env()`'s default only applies when the key is absent, so a blanked
+`BACKUP_PATH=` in `.env` resolved the backups disk root to an empty
+string — every touch of the disk then died in the adapter. Missing,
+blank and null values now all resolve to `storage/app/backups` (the
+long-standing documented default); a set value still wins.
+
 ## [Unreleased] — 2026-10-07
 
 ### Added — transfer journal reversal (the XFER undo path)

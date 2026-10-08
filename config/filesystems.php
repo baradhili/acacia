@@ -64,14 +64,17 @@ return [
         // per run under {root}/{BACKUP_NAME}/). `backups` is the
         // local copy — point BACKUP_PATH at dedicated storage,
         // ideally an external volume, so backups survive losing the
-        // app disk. `s3-backups` is the offsite leg (separation, Tao
-        // head 3): fill its env vars, composer require
+        // app disk. A missing, blanked or null BACKUP_PATH all fall
+        // back to storage/app/backups (env()'s second argument alone
+        // would pass a blanked `BACKUP_PATH=` through as root '').
+        // `s3-backups` is the offsite leg (separation, Tao head 3):
+        // fill its env vars, composer require
         // league/flysystem-aws-s3-v3, and set
         // BACKUP_DESTINATION_DISKS=backups,s3-backups. The s3 disk
         // above is unrelated (document attachments).
         'backups' => [
             'driver' => 'local',
-            'root' => env('BACKUP_PATH', storage_path('app/backups')),
+            'root' => env('BACKUP_PATH') ?: storage_path('app/backups'),
             'throw' => true,
         ],
 

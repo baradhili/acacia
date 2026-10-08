@@ -342,4 +342,65 @@ class BackupTest extends TestCase
             ->assertOk()
             ->assertDontSee('Backups');
     }
+
+    /**
+     * env()'s default only covers an absent key — a blanked
+     * `BACKUP_PATH=` would otherwise resolve the disk root to '' and
+     * the adapter dies at construction. Missing, blank and null must
+     * all collapse to the storage default, while a set value wins.
+     */
+    public function test_backup_path_falls_back_to_the_storage_default(): void
+    {
+        $default = storage_path('app/backups');
+
+        $cases = [
+            'absent' => ['absent', null, $default],
+            'blanked' => ['set', '', $default],
+            'null' => ['set', null, $default],
+            'set wins' => ['set', '/opt/elsewhere', '/opt/elsewhere'],
+        ];
+
+        foreach ($cases as $label => [$mode, $value, $expected]) {
+            $snapshot = [
+                $_ENV['BACKUP_PATH'] ?? null,
+                $_SERVER['BACKUP_PATH'] ?? null,
+                getenv('BACKUP_PATH') ?: null,
+            ];
+
+            if ($mode === 'absent') {
+                unset($_ENV['BACKUP_PATH'], $_SERVER['BACKUP_PATH']);
+                putenv('BACKUP_PATH');
+            } else {
+                $_ENV['BACKUP_PATH'] = $value;
+                $_SERVER['BACKUP_PATH'] = $value;
+                putenv('BACKUP_PATH='.$value);
+            }
+
+            try {
+                $disks = require config_path('filesystems.php');
+
+                $this->assertSame($expected, $disks['disks']['backups']['root'], "BACKUP_PATH {$label} resolved the wrong root");
+            } finally {
+                [$envValue, $serverValue, $putenvValue] = $snapshot;
+
+                if ($envValue === null) {
+                    unset($_ENV['BACKUP_PATH']);
+                } else {
+                    $_ENV['BACKUP_PATH'] = $envValue;
+                }
+
+                if ($serverValue === null) {
+                    unset($_SERVER['BACKUP_PATH']);
+                } else {
+                    $_SERVER['BACKUP_PATH'] = $serverValue;
+                }
+
+                if ($putenvValue === null) {
+                    putenv('BACKUP_PATH');
+                } else {
+                    putenv('BACKUP_PATH='.$putenvValue);
+                }
+            }
+        }
+    }
 }
