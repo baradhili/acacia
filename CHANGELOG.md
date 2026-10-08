@@ -50,8 +50,10 @@ destination root against the restriction before any disk is resolved
 undecidable cases read as reachable so it never false-alarms). The
 Backups page now renders a warning naming the blocked root and the
 allowed paths, with both fixes: move `BACKUP_PATH` inside the allowed
-paths, or widen `open_basedir` in the php.ini php-fpm and the CLI
-share and restart php-fpm. Backups fail fast with that explanation
+paths, or widen `open_basedir` for every PHP SAPI that runs the app —
+php-fpm and the CLI each read their own php.ini on Debian/Ubuntu, so
+change both (or a shared conf.d drop-in) — then restart php-fpm.
+Backups fail fast with that explanation
 instead of starting spatie; the inventory and Verify skip a blocked
 disk rather than reading it as empty (unseen is not missing — its
 archives keep their status and are reported as unverified); a restore
