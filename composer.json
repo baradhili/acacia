@@ -53,7 +53,7 @@
         "laravel/tinker": "^3.0",
         "league/flysystem-aws-s3-v3": "^3.35",
         "league/flysystem-sftp-v3": "^3.36",
-        "maatwebsite/excel": "^3.1",
+        "maatwebsite/excel": "^4.0",
         "nwidart/laravel-modules": "^13.0",
         "phpoffice/phpword": "^1.4",
         "spatie/laravel-backup": "^10.3",
