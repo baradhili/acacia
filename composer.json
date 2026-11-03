@@ -46,7 +46,7 @@
         "arrilot/laravel-widgets": "^3.15",
         "barryvdh/laravel-dompdf": "^3.0",
         "doctrine/dbal": "^3.1|^4.2",
-        "ekmungai/eloquent-ifrs": "^6.0",
+        "ekmungai/eloquent-ifrs": "^7.2",
         "justinrainbow/json-schema": "^6.7",
         "laravel/breeze": "^2.0",
         "laravel/framework": "^13.8",
